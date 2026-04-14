@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,13 +57,13 @@ export default function PracticePage() {
       }));
     } catch (error) {
       console.error("상대 찾기 실패:", error);
-      setPhase("map");
     }
   };
 
   const handleStartGame = async () => {
     if (!gameState.gameId) return;
     setPhase("playing");
+    setCurrentTurnIndex(0);
 
     try {
       const result = await playGameMutation.mutateAsync({
@@ -78,8 +78,7 @@ export default function PracticePage() {
         turns: result.turns || [],
         finalScore: result.finalScore,
       }));
-      setCurrentTurnIndex(0);
-      setPhase("result");
+      // playing 페이즈에 머물러서 사용자가 턴을 볼 수 있도록 함
     } catch (error) {
       console.error("게임 실행 실패:", error);
       setPhase("opponent");
@@ -137,7 +136,7 @@ export default function PracticePage() {
             <Card className="bg-slate-800 border-slate-700 hover:border-red-500 cursor-pointer transition-all" onClick={() => handleSelectDifficulty("advanced")}>
               <CardHeader>
                 <CardTitle className="text-red-400">고수방</CardTitle>
-                <CardDescription className="text-slate-400">B ~ S 등급</CardDescription>
+                <CardDescription className="text-slate-400">B ~ A 등급</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2 text-sm text-slate-300">
@@ -158,135 +157,133 @@ export default function PracticePage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
         <div className="max-w-4xl mx-auto">
-          <div className="flex items-center justify-between mb-8">
-            <h1 className="text-3xl font-bold text-white">맵 선택</h1>
-            <Button variant="outline" onClick={() => setPhase("difficulty")}>
-              뒤로가기
-            </Button>
+          <div className="text-center mb-12">
+            <h1 className="text-4xl font-bold text-white mb-2">맵 선택</h1>
+            <p className="text-slate-400">게임을 진행할 맵을 선택하세요</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {mapsQuery.data?.map((map) => (
-              <Card 
-                key={map.id} 
-                className="bg-slate-800 border-slate-700 hover:border-cyan-500 cursor-pointer transition-all"
-                onClick={() => handleSelectMap(map.id)}
-              >
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-white">{map.name}</CardTitle>
-                      <CardDescription className="text-slate-400">{map.description}</CardDescription>
+          {mapsQuery.isLoading ? (
+            <div className="text-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-400 mx-auto" />
+              <p className="text-slate-400 mt-4">맵 목록을 불러오는 중...</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {mapsQuery.data?.map((map) => (
+                <Card
+                  key={map.id}
+                  className="bg-slate-800 border-slate-700 hover:border-amber-500 cursor-pointer transition-all"
+                  onClick={() => handleSelectMap(map.id)}
+                >
+                  <CardHeader>
+                    <CardTitle className="text-white">{map.name}</CardTitle>
+                    <CardDescription className="text-slate-400">{map.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 text-sm text-slate-300">
+                      <p>• 종족 유불리: 테란 {map.raceAdvantage?.terran || 50}%</p>
+                      <p>• 저그 {map.raceAdvantage?.zerg || 50}%</p>
+                      <p>• 프로토스 {map.raceAdvantage?.protoss || 50}%</p>
                     </div>
-                    <span className="text-3xl">{map.iconEmoji}</span>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-3 gap-2 text-sm">
-                      <div className="bg-slate-700 p-2 rounded">
-                        <p className="text-slate-400">러쉬거리</p>
-                        <p className="text-white font-bold">{map.rushDistance}</p>
-                      </div>
-                      <div className="bg-slate-700 p-2 rounded">
-                        <p className="text-slate-400">자원</p>
-                        <p className="text-white font-bold">{map.resources}</p>
-                      </div>
-                      <div className="bg-slate-700 p-2 rounded">
-                        <p className="text-slate-400">복잡도</p>
-                        <p className="text-white font-bold">{map.complexity}</p>
-                      </div>
-                    </div>
-                    <div className="text-xs text-slate-400">
-                      <p>종족 유불리: 테란 {typeof map.raceAdvantage === 'string' ? JSON.parse(map.raceAdvantage).terran : map.raceAdvantage.terran}% / 저그 {typeof map.raceAdvantage === 'string' ? JSON.parse(map.raceAdvantage).zerg : map.raceAdvantage.zerg}% / 프로토스 {typeof map.raceAdvantage === 'string' ? JSON.parse(map.raceAdvantage).protoss : map.raceAdvantage.protoss}%</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
-  // 상대 정보 및 게임 시작
+  // 상대 선택 화면
   if (phase === "opponent") {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
         <div className="max-w-2xl mx-auto">
-          <div className="flex items-center justify-between mb-8">
-            <h1 className="text-3xl font-bold text-white">상대 정보</h1>
-            <Button variant="outline" onClick={() => setPhase("map")}>
-              맵 다시 선택
-            </Button>
+          <div className="text-center mb-12">
+            <h1 className="text-4xl font-bold text-white mb-2">상대 정보</h1>
+            <p className="text-slate-400">게임을 시작하시겠습니까?</p>
           </div>
 
-          <Card className="bg-slate-800 border-slate-700 mb-6">
-            <CardHeader>
-              <CardTitle className="text-white">매칭된 상대</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-slate-400 text-sm">상대 선수</p>
-                  <p className="text-white text-xl font-bold">{gameState.opponentName}</p>
-                </div>
-                <div className="text-right">
-                  <Badge style={{ backgroundColor: RACE_COLORS[gameState.opponentRace || "terran"] }}>
-                    {RACE_LABELS[gameState.opponentRace || "terran"]}
+          {findOpponentMutation.isPending ? (
+            <Card className="bg-slate-800 border-slate-700">
+              <CardContent className="p-8 text-center">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-400 mx-auto mb-4" />
+                <p className="text-slate-300">상대를 찾는 중...</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="bg-slate-800 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-white">{gameState.opponentName}</CardTitle>
+                <CardDescription className="text-slate-400">
+                  <Badge className={`${RACE_COLORS[gameState.opponentRace as "terran" | "zerg" | "protoss"]} text-white`}>
+                    {RACE_LABELS[gameState.opponentRace as "terran" | "zerg" | "protoss"]}
                   </Badge>
-                </div>
-              </div>
-
-              <div className="bg-slate-700 p-4 rounded">
-                <p className="text-slate-400 text-sm mb-2">승률 예측</p>
-                <div className="flex items-center gap-4">
-                  <div className="flex-1">
-                    <div className="bg-slate-600 rounded-full h-2">
-                      <div 
-                        className="bg-green-500 h-2 rounded-full transition-all"
-                        style={{ width: `${gameState.winProbability || 50}%` }}
-                      />
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="bg-slate-900 p-4 rounded-lg">
+                  <p className="text-slate-400 text-sm mb-2">승률</p>
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1">
+                      <div className="bg-slate-700 rounded-full h-3">
+                        <div
+                          className="bg-blue-500 h-3 rounded-full"
+                          style={{ width: `${gameState.winProbability}%` }}
+                        />
+                      </div>
                     </div>
+                    <span className="text-white font-bold text-lg">{gameState.winProbability}%</span>
                   </div>
-                  <span className="text-white font-bold w-12 text-right">{gameState.winProbability || 50}%</span>
                 </div>
-              </div>
 
-              <Button 
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-6 text-lg"
-                onClick={handleStartGame}
-                disabled={playGameMutation.isPending}
-              >
-                {playGameMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    게임 진행 중...
-                  </>
-                ) : (
-                  "게임 시작"
-                )}
-              </Button>
-            </CardContent>
-          </Card>
+                <div className="flex gap-4">
+                  <Button
+                    className="flex-1 bg-slate-700 hover:bg-slate-600"
+                    onClick={() => setPhase("map")}
+                  >
+                    맵 다시 선택
+                  </Button>
+                  <Button
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    onClick={handleStartGame}
+                  >
+                    게임 시작
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     );
   }
 
-  // 게임 진� 중
+  // 게임 진행 중
   if (phase === "playing") {
     const turns = gameState.turns || [];
     const currentTurn = turns?.[currentTurnIndex];
-    
+    const isLoading = playGameMutation.isPending;
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-white">게임 진� 중...</h1>
+            <h1 className="text-3xl font-bold text-white">게임 진행 중...</h1>
             <p className="text-slate-400 mt-2">턴 {currentTurnIndex + 1} / {turns.length}</p>
           </div>
+
+          {isLoading && (
+            <Card className="bg-slate-800 border-slate-700 mb-6">
+              <CardContent className="p-6 text-center">
+                <div className="flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
+                  <p className="text-slate-300">게임 시뮬레이션 중...</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {currentTurn && (
             <Card className="bg-slate-800 border-slate-700 mb-6">
@@ -311,8 +308,8 @@ export default function PracticePage() {
                     <p className="text-slate-400 text-sm">병력</p>
                     <div className="flex items-center gap-2">
                       <div className="flex-1 bg-slate-700 rounded-full h-2">
-                        <div 
-                          className="bg-blue-500 h-2 rounded-full"
+                        <div
+                          className="bg-blue-500 h-2 rounded-full transition-all"
                           style={{ width: `${Math.min(currentTurn.player1Supply / 200 * 100, 100)}%` }}
                         />
                       </div>
@@ -323,8 +320,8 @@ export default function PracticePage() {
                     <p className="text-slate-400 text-sm">자원</p>
                     <div className="flex items-center gap-2">
                       <div className="flex-1 bg-slate-700 rounded-full h-2">
-                        <div 
-                          className="bg-yellow-500 h-2 rounded-full"
+                        <div
+                          className="bg-yellow-500 h-2 rounded-full transition-all"
                           style={{ width: `${Math.min(currentTurn.player1Resources / 500 * 100, 100)}%` }}
                         />
                       </div>
@@ -335,8 +332,8 @@ export default function PracticePage() {
                     <p className="text-slate-400 text-sm">체력</p>
                     <div className="flex items-center gap-2">
                       <div className="flex-1 bg-slate-700 rounded-full h-2">
-                        <div 
-                          className="bg-green-500 h-2 rounded-full"
+                        <div
+                          className="bg-green-500 h-2 rounded-full transition-all"
                           style={{ width: `${currentTurn.player1Health}%` }}
                         />
                       </div>
@@ -349,43 +346,43 @@ export default function PracticePage() {
               {/* 플레이어 2 상태 */}
               <Card className="bg-slate-800 border-slate-700">
                 <CardHeader>
-                  <CardTitle className="text-purple-400">플레이어 2</CardTitle>
+                  <CardTitle className="text-red-400">플레이어 2</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
                     <p className="text-slate-400 text-sm">병력</p>
                     <div className="flex items-center gap-2">
+                      <span className="text-white font-bold w-12 text-right">{currentTurn.player2Supply}</span>
                       <div className="flex-1 bg-slate-700 rounded-full h-2">
-                        <div 
-                          className="bg-purple-500 h-2 rounded-full"
+                        <div
+                          className="bg-red-500 h-2 rounded-full transition-all"
                           style={{ width: `${Math.min(currentTurn.player2Supply / 200 * 100, 100)}%` }}
                         />
                       </div>
-                      <span className="text-white font-bold w-12">{currentTurn.player2Supply}</span>
                     </div>
                   </div>
                   <div>
                     <p className="text-slate-400 text-sm">자원</p>
                     <div className="flex items-center gap-2">
+                      <span className="text-white font-bold w-12 text-right">{currentTurn.player2Resources}</span>
                       <div className="flex-1 bg-slate-700 rounded-full h-2">
-                        <div 
-                          className="bg-orange-500 h-2 rounded-full"
+                        <div
+                          className="bg-orange-500 h-2 rounded-full transition-all"
                           style={{ width: `${Math.min(currentTurn.player2Resources / 500 * 100, 100)}%` }}
                         />
                       </div>
-                      <span className="text-white font-bold w-12">{currentTurn.player2Resources}</span>
                     </div>
                   </div>
                   <div>
                     <p className="text-slate-400 text-sm">체력</p>
                     <div className="flex items-center gap-2">
+                      <span className="text-white font-bold w-12 text-right">{currentTurn.player2Health}%</span>
                       <div className="flex-1 bg-slate-700 rounded-full h-2">
-                        <div 
-                          className="bg-red-500 h-2 rounded-full"
+                        <div
+                          className="bg-pink-500 h-2 rounded-full transition-all"
                           style={{ width: `${currentTurn.player2Health}%` }}
                         />
                       </div>
-                      <span className="text-white font-bold w-12">{currentTurn.player2Health}%</span>
                     </div>
                   </div>
                 </CardContent>
@@ -394,23 +391,24 @@ export default function PracticePage() {
           )}
 
           <div className="flex gap-4">
-            <Button 
+            <Button
               className="flex-1 bg-slate-700 hover:bg-slate-600"
               onClick={() => setCurrentTurnIndex(Math.max(0, currentTurnIndex - 1))}
-              disabled={currentTurnIndex === 0}
+              disabled={currentTurnIndex === 0 || isLoading}
             >
               이전 턴
             </Button>
-            <Button 
+            <Button
               className="flex-1 bg-blue-600 hover:bg-blue-700"
               onClick={() => setCurrentTurnIndex(Math.min(turns.length - 1, currentTurnIndex + 1))}
-              disabled={currentTurnIndex === turns.length - 1}
+              disabled={currentTurnIndex === turns.length - 1 || isLoading}
             >
               다음 턴
             </Button>
-            <Button 
+            <Button
               className="flex-1 bg-green-600 hover:bg-green-700"
               onClick={() => setPhase("result")}
+              disabled={isLoading}
             >
               결과 보기
             </Button>
@@ -420,46 +418,44 @@ export default function PracticePage() {
     );
   }
 
-  // 게임 결과
+  // 게임 결과 화면
   if (phase === "result") {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
         <div className="max-w-2xl mx-auto">
-          <div className="text-center mb-8">
+          <div className="text-center mb-12">
             <h1 className={`text-4xl font-bold mb-2 ${gameState.isWinner ? "text-green-400" : "text-red-400"}`}>
-              {gameState.isWinner ? "승리!" : "패배"}
+              {gameState.isWinner ? "승리!" : "패배!"}
             </h1>
-            <p className="text-slate-400">게임이 종료되었습니다</p>
+            <p className="text-slate-400">최종 점수: {gameState.finalScore}</p>
           </div>
 
           <Card className="bg-slate-800 border-slate-700 mb-6">
             <CardHeader>
-              <CardTitle className="text-white">게임 결과</CardTitle>
+              <CardTitle className="text-white">보상</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-slate-700 p-4 rounded">
-                  <p className="text-slate-400 text-sm">경험치</p>
-                  <p className="text-white text-2xl font-bold">+{gameState.expGained}</p>
-                </div>
-                <div className="bg-slate-700 p-4 rounded">
-                  <p className="text-slate-400 text-sm">골드</p>
-                  <p className="text-white text-2xl font-bold">+{gameState.goldGained}</p>
-                </div>
+              <div className="flex items-center justify-between p-3 bg-slate-900 rounded">
+                <span className="text-slate-300">경험치</span>
+                <span className={`font-bold ${gameState.isWinner ? "text-green-400" : "text-orange-400"}`}>
+                  {gameState.isWinner ? "+" : ""}{gameState.expGained}
+                </span>
               </div>
-              <div className="bg-slate-700 p-4 rounded">
-                <p className="text-slate-400 text-sm">피로도 소모</p>
-                <p className="text-white text-2xl font-bold">-{gameState.fatigueUsed}</p>
+              <div className="flex items-center justify-between p-3 bg-slate-900 rounded">
+                <span className="text-slate-300">골드</span>
+                <span className={`font-bold ${gameState.isWinner ? "text-yellow-400" : "text-orange-400"}`}>
+                  {gameState.isWinner ? "+" : ""}{gameState.goldGained}
+                </span>
               </div>
-              <div className="bg-slate-700 p-4 rounded">
-                <p className="text-slate-400 text-sm">최종 점수</p>
-                <p className="text-white text-2xl font-bold">{gameState.finalScore}</p>
+              <div className="flex items-center justify-between p-3 bg-slate-900 rounded">
+                <span className="text-slate-300">피로도</span>
+                <span className="font-bold text-red-400">-{gameState.fatigueUsed}</span>
               </div>
             </CardContent>
           </Card>
 
-          <Button 
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-6 text-lg"
+          <Button
+            className="w-full bg-green-600 hover:bg-green-700 text-lg py-6"
             onClick={handlePlayAgain}
           >
             다시 플레이

@@ -36,6 +36,8 @@ import {
   getPlayerGameHistory,
   findOpponentByDifficulty,
   getDb,
+  updatePlayerExp,
+  updatePlayerGold,
 } from "./db";
 import { eq } from "drizzle-orm";
 import { players } from "../drizzle/schema";
@@ -471,6 +473,11 @@ const practiceRouter = router({
         statChanges,
         fatigueUsed,
       });
+
+      // 리워드 적용 - 경뗘치, 골드, 피로도 업데이트
+      await updatePlayerExp(player.id, expGained);
+      await updatePlayerGold(player.id, goldGained);
+      await addFatigueCost(player.id, fatigueUsed);
 
       return { 
         isWinner, 
