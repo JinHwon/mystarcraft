@@ -8,7 +8,7 @@ import {
   calcTotalStats,
   calcEffectiveStatsWithFatigue,
 } from "@shared/gameConstants";
-import { getPlayerStats, getActiveEvents } from "./db";
+import { getPlayerStats } from "./db";
 import { type MapCharacteristic } from "./buildSystem";
 import {
   initializeGameState,
@@ -105,7 +105,7 @@ export async function simulateGame(
     player2Fatigue
   );
 
-  // 게임 상태 초기화
+   // 게임 진행
   const gameState = initializeGameState(
     player1Id,
     player1Name,
@@ -115,25 +115,20 @@ export async function simulateGame(
     player2Race
   );
 
-  // 초반 빌드 선택 해설
-  gameState.allCommentaries.push(`[중립] ${player1Name} 선수 초반 빌드를 선택합니다`);
-  gameState.allCommentaries.push(`[중립] ${player2Name} 선수 초반 빌드를 선택합니다`);
-  gameState.allCommentaries.push(`[중립] 양 선수 모두 초반 빌드를 선택했습니다. 게임이 시작됩니다!`);
-
   // 게임 진행
   const turns: GameTurn[] = [];
 
-  while (!gameState.gameEnded && gameState.turn < 50) {
+  while (!gameState.gameEnded) {
     progressTurn(gameState);
     turns.push(gameStateToTurnData(gameState));
   }
 
   // 최종 스코어 계산
   const player1FinalScore = Math.round(
-    (gameState.player1.supply + gameState.player1.resources / 5 + gameState.player1.health) / 3
+    gameState.player1.supply * 2 + gameState.player1.resources / 10 + gameState.player1.health
   );
   const player2FinalScore = Math.round(
-    (gameState.player2.supply + gameState.player2.resources / 5 + gameState.player2.health) / 3
+    gameState.player2.supply * 2 + gameState.player2.resources / 10 + gameState.player2.health
   );
 
   return {

@@ -1,34 +1,35 @@
 /**
- * 동적 게임 시뮬레이션 엔진
- * 실제 게임 흐름을 반영하여 턴별로 동적으로 진행
+ * 동적 게임 엔진
+ * 게임 상태를 관리하고 턴별로 게임을 진행
  */
 
-import { selectBuildOrder, recommendUnit, getUnitCounters, unitStats, type Race } from "./starcraftData";
+import { generateTurnCommentary, generateGameEndCommentary } from "./conciseCommentary";
 
-export interface GameState {
-  turn: number;
-  player1: PlayerState;
-  player2: PlayerState;
-  allCommentaries: string[];
-  gameEnded: boolean;
-  winner?: number;
+export interface PlayerAction {
+  type: "unit_produced" | "building_built" | "tech_upgraded" | "multi_taken" | "attack";
+  data: string;
 }
 
 export interface PlayerState {
-  playerId: number;
+  id: number;
   name: string;
-  race: Race;
-  resources: number;
+  race: "terran" | "zerg" | "protoss";
   supply: number;
+  resources: number;
   health: number;
-  units: UnitInventory;
-  lastCommentaries: string[];
-  buildOrder: string[];
-  techLevel: number;
+  multiCount: number;
+  unitsProduced: string[];
+  lastAction?: PlayerAction;
 }
 
-export interface UnitInventory {
-  [unitName: string]: number;
+export interface GameState {
+  turn: number;
+  gameEnded: boolean;
+  winner?: number;
+  player1: PlayerState;
+  player2: PlayerState;
+  player1Advantage: number;
+  allCommentaries: string[];
 }
 
 /**
@@ -37,209 +38,232 @@ export interface UnitInventory {
 export function initializeGameState(
   player1Id: number,
   player1Name: string,
-  player1Race: Race,
+  player1Race: "terran" | "zerg" | "protoss",
   player2Id: number,
   player2Name: string,
-  player2Race: Race
+  player2Race: "terran" | "zerg" | "protoss"
 ): GameState {
   return {
     turn: 0,
+    gameEnded: false,
     player1: {
-      playerId: player1Id,
+      id: player1Id,
       name: player1Name,
       race: player1Race,
-      resources: 50,
-      supply: 12,
+      supply: 50,
+      resources: 200,
       health: 100,
-      units: {},
-      lastCommentaries: [],
-      buildOrder: selectBuildOrder(player1Race, player2Race, "intermediate").techPath,
-      techLevel: 0,
+      multiCount: 1,
+      unitsProduced: [],
     },
     player2: {
-      playerId: player2Id,
+      id: player2Id,
       name: player2Name,
       race: player2Race,
-      resources: 50,
-      supply: 12,
+      supply: 50,
+      resources: 200,
       health: 100,
-      units: {},
-      lastCommentaries: [],
-      buildOrder: selectBuildOrder(player2Race, player1Race, "intermediate").techPath,
-      techLevel: 0,
+      multiCount: 1,
+      unitsProduced: [],
     },
+    player1Advantage: 50,
     allCommentaries: [],
-    gameEnded: false,
   };
 }
 
 /**
- * 턴 진행 - 동적으로 게임 상태 업데이트
+ * 턴 진행
  */
-export function progressTurn(gameState: GameState): GameState {
+export function progressTurn(gameState: GameState): void {
   gameState.turn++;
-  const turnPhase = gameState.turn / 50; // 최대 50턴 기준
 
-  // 플레이어 1 턴 진행
-  progressPlayerTurn(gameState, gameState.player1, gameState.player2, turnPhase);
-  
-  // 플레이어 2 턴 진행
-  progressPlayerTurn(gameState, gameState.player2, gameState.player1, turnPhase);
+  // 플레이어 1 액션
+  const player1Action = generatePlayerAction(gameState.player1, gameState.player2);
+  if (player1Action) {
+    gameState.player1.lastAction = player1Action;
+    applyAction(gameState.player1, player1Action);
+  }
 
-  // 병력 교전 시뮬레이션
-  simulateCombat(gameState);
+  // 플레이어 2 액션
+  const player2Action = generatePlayerAction(gameState.player2, gameState.player1);
+  if (player2Action) {
+    gameState.player2.lastAction = player2Action;
+    applyAction(gameState.player2, player2Action);
+  }
+
+  // 자원 생성
+  gameState.player1.resources += 10 * gameState.player1.multiCount;
+  gameState.player2.resources += 10 * gameState.player2.multiCount;
+
+  // 병력 자동 증가
+  gameState.player1.supply += Math.floor(gameState.player1.resources / 100);
+  gameState.player2.supply += Math.floor(gameState.player2.resources / 100);
+
+  // 유불리 계산
+  calculateAdvantage(gameState);
+
+  // 해설 생성
+  const commentaries = generateTurnCommentary(gameState, gameState.player1.name, gameState.player2.name);
+  gameState.allCommentaries.push(...commentaries);
 
   // 게임 종료 판정
   checkGameEnd(gameState);
-
-  return gameState;
 }
 
 /**
- * 플레이어 턴 진행
+ * 플레이어 액션 생성
  */
-function progressPlayerTurn(
-  gameState: GameState,
-  player: PlayerState,
-  opponent: PlayerState,
-  turnPhase: number
-): void {
-  const commentaries: string[] = [];
+function generatePlayerAction(player: PlayerState, opponent: PlayerState): PlayerAction | null {
+  const actions: PlayerAction[] = [];
 
-  // 1. 자원 생성
-  const resourceGain = 10 + Math.floor(turnPhase * 20);
-  player.resources += resourceGain;
-  commentaries.push(`${player.name} 선수 자원 ${resourceGain}을 획득했습니다`);
-
-  // 2. 멀티 확장 (게임 중반 이후)
-  if (turnPhase > 0.3 && turnPhase < 0.7 && player.resources > 200) {
-    if (Math.random() < 0.3) {
-      player.resources += 30;
-      commentaries.push(`${player.name} 선수 멀티지역 리소스를 확보했습니다!`);
-    }
+  // 자원이 충분하면 유닛 생산
+  if (player.resources > 50) {
+    const units = getAvailableUnits(player.race);
+    const unit = units[Math.floor(Math.random() * units.length)];
+    actions.push({ type: "unit_produced", data: unit });
   }
 
-  // 3. 상대 유닛 분석 및 유닛 생산
-  const recommendedUnit = recommendUnit(
-    Object.keys(opponent.units).filter(u => opponent.units[u] > 0),
-    player.resources,
-    player.race
-  );
-
-  if (recommendedUnit && unitStats[recommendedUnit]) {
-    const unitCost = unitStats[recommendedUnit].cost;
-    const unitSupply = unitStats[recommendedUnit].supply;
-
-    if (player.resources >= unitCost && player.supply + unitSupply <= 200) {
-      player.resources -= unitCost;
-      player.units[recommendedUnit] = (player.units[recommendedUnit] || 0) + 1;
-      player.supply += unitSupply;
-      commentaries.push(`${player.name} 선수 ${recommendedUnit}을(를) 생산했습니다`);
-
-      // 상대 유닛 카운터 해설
-      const counters = getUnitCounters(recommendedUnit);
-      if (counters.length > 0) {
-        commentaries.push(`${player.name} 선수 ${counters.join(", ")}을(를) 카운터합니다`);
-      }
-    }
+  // 자원이 충분하면 건물 건설
+  if (player.resources > 100 && Math.random() < 0.3) {
+    const buildings = getAvailableBuildings(player.race);
+    const building = buildings[Math.floor(Math.random() * buildings.length)];
+    actions.push({ type: "building_built", data: building });
   }
 
-  // 4. 기본 유닛 생산 (자원이 충분하면)
-  if (player.resources > 100 && player.supply < 150) {
-    const basicUnit = player.race === "terran" ? "마린" : player.race === "protoss" ? "질럿" : "저글링";
-    const unitCost = unitStats[basicUnit].cost;
-    const unitSupply = unitStats[basicUnit].supply;
-
-    if (player.resources >= unitCost && player.supply + unitSupply <= 200) {
-      player.resources -= unitCost;
-      player.units[basicUnit] = (player.units[basicUnit] || 0) + 1;
-      player.supply += unitSupply;
-      commentaries.push(`${player.name} 선수 ${basicUnit}을(를) 추가 생산했습니다`);
-    }
+  // 기술 업그레이드
+  if (player.resources > 150 && Math.random() < 0.2) {
+    const techs = getAvailableTechs(player.race);
+    const tech = techs[Math.floor(Math.random() * techs.length)];
+    actions.push({ type: "tech_upgraded", data: tech });
   }
 
-  // 5. 기술 업그레이드
-  if (turnPhase > 0.5 && player.techLevel < 3 && player.resources > 150) {
-    if (Math.random() < 0.3) {
+  // 멀티 확장
+  if (player.resources > 200 && player.multiCount < 3 && Math.random() < 0.15) {
+    actions.push({ type: "multi_taken", data: (player.multiCount + 1).toString() });
+  }
+
+  // 공격
+  if (player.supply > opponent.supply * 1.3 && Math.random() < 0.3) {
+    const targets = ["멀티 넥서스", "해처리", "커맨드센터", "앞마당"];
+    const target = targets[Math.floor(Math.random() * targets.length)];
+    actions.push({ type: "attack", data: target });
+  }
+
+  return actions.length > 0 ? actions[Math.floor(Math.random() * actions.length)] : null;
+}
+
+/**
+ * 액션 적용
+ */
+function applyAction(player: PlayerState, action: PlayerAction): void {
+  switch (action.type) {
+    case "unit_produced":
+      player.resources -= 50;
+      player.unitsProduced.push(action.data);
+      break;
+    case "building_built":
       player.resources -= 100;
-      player.techLevel++;
-      commentaries.push(`${player.name} 선수 기술 레벨을 ${player.techLevel}로 업그레이드했습니다`);
-    }
+      break;
+    case "tech_upgraded":
+      player.resources -= 150;
+      break;
+    case "multi_taken":
+      player.resources -= 200;
+      player.multiCount = parseInt(action.data as any) || player.multiCount + 1;
+      break;
+    case "attack":
+      player.resources -= 30;
+      break;
   }
-
-  // 자원이 0이 되면 게임 패배
-  if (player.resources <= 0 && player.supply === 0) {
-    commentaries.push(`${player.name} 선수 자원이 부족하여 더 이상 유닛을 생산할 수 없습니다`);
-    gameState.gameEnded = true;
-    gameState.winner = opponent.playerId;
-  }
-
-  // 해설 누적
-  player.lastCommentaries = commentaries;
-  gameState.allCommentaries.push(...commentaries);
 }
 
 /**
- * 병력 교전 시뮬레이션
+ * 사용 가능한 유닛
  */
-function simulateCombat(gameState: GameState): void {
-  const player1Units = Object.entries(gameState.player1.units).filter(([_, count]) => count > 0);
-  const player2Units = Object.entries(gameState.player2.units).filter(([_, count]) => count > 0);
+function getAvailableUnits(race: string): string[] {
+  const units: Record<string, string[]> = {
+    terran: ["마린", "배럭", "팩토리", "벌쳐", "탱크", "골리앗", "배틀크루저"],
+    zerg: ["저글링", "뮤탈리스크", "히드라", "울트라", "러커", "디파일러", "가디언"],
+    protoss: ["질럿", "드래군", "다크템플러", "하이템플러", "리버", "아칸", "케리어"],
+  };
+  return units[race] || [];
+}
 
-  if (player1Units.length === 0 || player2Units.length === 0) {
-    return;
-  }
+/**
+ * 사용 가능한 건물
+ */
+function getAvailableBuildings(race: string): string[] {
+  const buildings: Record<string, string[]> = {
+    terran: ["커맨드센터", "배럭", "팩토리", "스타포트", "터렛", "번커"],
+    zerg: ["해처리", "스포닝풀", "하이드라덴", "스파이어", "울트라리스크 캐번", "디파일러 마운드"],
+    protoss: ["넥서스", "게이트웨이", "포지", "로보틱스", "스타게이트", "템플러 아카이브"],
+  };
+  return buildings[race] || [];
+}
 
-  // 병력 규모 비교
-  const player1TotalSupply = gameState.player1.supply;
-  const player2TotalSupply = gameState.player2.supply;
+/**
+ * 사용 가능한 기술
+ */
+function getAvailableTechs(race: string): string[] {
+  const techs: Record<string, string[]> = {
+    terran: ["공격력 업", "방어력 업", "속도 업", "무기고 업"],
+    zerg: ["공격력 업", "방어력 업", "속도 업", "카라팩"],
+    protoss: ["공격력 업", "방어력 업", "속도 업", "플라즈마 실드"],
+  };
+  return techs[race] || [];
+}
 
-  if (player1TotalSupply > player2TotalSupply * 1.5) {
-    // 플레이어 1이 압도적으로 우위
-    const damage = Math.floor((player1TotalSupply - player2TotalSupply) * 0.2);
-    gameState.player2.supply = Math.max(0, gameState.player2.supply - damage);
-    gameState.player2.resources = Math.max(0, gameState.player2.resources - damage * 3);
-    gameState.allCommentaries.push(`[중립] ${gameState.player1.name} 선수의 병력이 ${gameState.player2.name} 선수를 압박합니다!`);
-  } else if (player2TotalSupply > player1TotalSupply * 1.5) {
-    // 플레이어 2가 압도적으로 우위
-    const damage = Math.floor((player2TotalSupply - player1TotalSupply) * 0.2);
-    gameState.player1.supply = Math.max(0, gameState.player1.supply - damage);
-    gameState.player1.resources = Math.max(0, gameState.player1.resources - damage * 3);
-    gameState.allCommentaries.push(`[중립] ${gameState.player2.name} 선수의 병력이 ${gameState.player1.name} 선수를 압박합니다!`);
-  } else {
-    // 균형잡힌 교전
-    gameState.allCommentaries.push(`[중립] 양 선수의 병력이 팽팽한 교전을 벌이고 있습니다`);
-  }
+/**
+ * 유불리 계산
+ */
+function calculateAdvantage(gameState: GameState): void {
+  const player1Score = gameState.player1.supply * 2 + gameState.player1.resources / 10 + gameState.player1.health;
+  const player2Score = gameState.player2.supply * 2 + gameState.player2.resources / 10 + gameState.player2.health;
+
+  const totalScore = player1Score + player2Score;
+  gameState.player1Advantage = Math.round((player1Score / totalScore) * 100);
 }
 
 /**
  * 게임 종료 판정
  */
 function checkGameEnd(gameState: GameState): void {
-  const player1HasUnits = gameState.player1.supply > 0;
-  const player2HasUnits = gameState.player2.supply > 0;
+  // 자원이 0 이하면 패배
+  if (gameState.player1.resources <= 0) {
+    gameState.gameEnded = true;
+    gameState.winner = gameState.player2.id;
+    const commentaries = generateGameEndCommentary(gameState.player2.name, gameState.player1.name);
+    gameState.allCommentaries.push(...commentaries);
+    return;
+  }
 
-  // 한 플레이어가 병력이 0이고 자원도 부족하면 게임 종료
-  if (!player1HasUnits && gameState.player1.resources <= 0) {
+  if (gameState.player2.resources <= 0) {
     gameState.gameEnded = true;
-    gameState.winner = gameState.player2.playerId;
-    gameState.allCommentaries.push(`[중립] ${gameState.player2.name} 선수 상대의 허점을 놓치지 않아요`);
-    gameState.allCommentaries.push(`[중립] ${gameState.player2.name} 선수 역시 이길 줄 아는 선수입니다`);
-    gameState.allCommentaries.push(`[중립] ${gameState.player1.name} 선수 GG를 칠 수 밖에 없네요.`);
-  } else if (!player2HasUnits && gameState.player2.resources <= 0) {
+    gameState.winner = gameState.player1.id;
+    const commentaries = generateGameEndCommentary(gameState.player1.name, gameState.player2.name);
+    gameState.allCommentaries.push(...commentaries);
+    return;
+  }
+
+  // 유불리가 70% 이상 차이나면 게임 종료
+  if (gameState.player1Advantage >= 70 || gameState.player1Advantage <= 30) {
     gameState.gameEnded = true;
-    gameState.winner = gameState.player1.playerId;
-    gameState.allCommentaries.push(`[중립] ${gameState.player1.name} 선수 상대의 허점을 놓치지 않아요`);
-    gameState.allCommentaries.push(`[중립] ${gameState.player1.name} 선수 역시 이길 줄 아는 선수입니다`);
-    gameState.allCommentaries.push(`[중립] ${gameState.player2.name} 선수 GG를 칠 수 밖에 없네요.`);
-  } else if (gameState.turn >= 50) {
-    // 최대 턴 도달
+    gameState.winner = gameState.player1Advantage >= 70 ? gameState.player1.id : gameState.player2.id;
+    const winnerName = gameState.player1Advantage >= 70 ? gameState.player1.name : gameState.player2.name;
+    const loserName = gameState.player1Advantage >= 70 ? gameState.player2.name : gameState.player1.name;
+    const commentaries = generateGameEndCommentary(winnerName, loserName);
+    gameState.allCommentaries.push(...commentaries);
+    return;
+  }
+
+  // 최대 50턴 도달 시 게임 종료
+  if (gameState.turn >= 50) {
     gameState.gameEnded = true;
-    if (gameState.player1.supply > gameState.player2.supply) {
-      gameState.winner = gameState.player1.playerId;
-    } else {
-      gameState.winner = gameState.player2.playerId;
-    }
+    gameState.winner = gameState.player1Advantage >= 50 ? gameState.player1.id : gameState.player2.id;
+    const winnerName = gameState.player1Advantage >= 50 ? gameState.player1.name : gameState.player2.name;
+    const loserName = gameState.player1Advantage >= 50 ? gameState.player2.name : gameState.player1.name;
+    const commentaries = generateGameEndCommentary(winnerName, loserName);
+    gameState.allCommentaries.push(...commentaries);
   }
 }
 
@@ -249,14 +273,14 @@ function checkGameEnd(gameState: GameState): void {
 export function gameStateToTurnData(gameState: GameState) {
   return {
     turn: gameState.turn,
-    player1Commentary: gameState.player1.lastCommentaries,
-    player2Commentary: gameState.player2.lastCommentaries,
+    player1Commentary: gameState.player1.lastAction ? [gameState.allCommentaries[gameState.allCommentaries.length - 3]] : [],
+    player2Commentary: gameState.player2.lastAction ? [gameState.allCommentaries[gameState.allCommentaries.length - 2]] : [],
     player1Supply: gameState.player1.supply,
     player1Resources: gameState.player1.resources,
     player2Supply: gameState.player2.supply,
     player2Resources: gameState.player2.resources,
     player1Health: gameState.player1.health,
     player2Health: gameState.player2.health,
-    allCommentaries: [...gameState.allCommentaries],
+    allCommentaries: gameState.allCommentaries,
   };
 }
