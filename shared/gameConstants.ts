@@ -99,3 +99,77 @@ export const RARITY_LABELS: Record<string, string> = {
   epic: "영웅",
   legendary: "전설",
 };
+
+// 피로도 시스템
+export const FATIGUE_MAX = 100;
+export const FATIGUE_NORMAL_THRESHOLD = 90; // 90 이상은 정상
+
+/**
+ * 피로도에 따른 능력치 패널티 계산
+ * 90~100: 0% (정상)
+ * 80~89: 5% 차감
+ * 70~79: 10% 차감
+ * 60~69: 15% 차감
+ * 50~59: 20% 차감
+ * 40~49: 25% 차감
+ * 30~39: 30% 차감
+ * 20~29: 35% 차감
+ * 10~19: 40% 차감
+ * 0~9: 50% 차감
+ */
+export function calcFatigueStatPenalty(fatigue: number): number {
+  if (fatigue >= 90) return 0;
+  if (fatigue >= 80) return 0.05;
+  if (fatigue >= 70) return 0.1;
+  if (fatigue >= 60) return 0.15;
+  if (fatigue >= 50) return 0.2;
+  if (fatigue >= 40) return 0.25;
+  if (fatigue >= 30) return 0.3;
+  if (fatigue >= 20) return 0.35;
+  if (fatigue >= 10) return 0.4;
+  return 0.5;
+}
+
+/**
+ * 피로도에 따른 실제 능력치 계산
+ */
+export function calcEffectiveStatWithFatigue(
+  baseStat: number,
+  fatigue: number
+): number {
+  const penalty = calcFatigueStatPenalty(fatigue);
+  return Math.floor(baseStat * (1 - penalty));
+}
+
+/**
+ * 피로도에 따른 총 능력치 패널티 계산 (모든 능력치에 적용)
+ */
+export function calcEffectiveStatsWithFatigue(
+  stats: Record<StatKey, number>,
+  fatigue: number
+): Record<StatKey, number> {
+  const penalty = calcFatigueStatPenalty(fatigue);
+  const result: Record<StatKey, number> = {} as Record<StatKey, number>;
+  STAT_KEYS.forEach((key) => {
+    result[key] = Math.floor(stats[key] * (1 - penalty));
+  });
+  return result;
+}
+
+/**
+ * 매일 자정에 피로도 회복 여부 확인
+ */
+export function shouldRecoverFatigue(lastRecoveryTime: Date): boolean {
+  const now = new Date();
+  const lastRecovery = new Date(lastRecoveryTime);
+
+  // 같은 날짜인지 확인 (자정 기준)
+  const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const lastDate = new Date(
+    lastRecovery.getFullYear(),
+    lastRecovery.getMonth(),
+    lastRecovery.getDate()
+  );
+
+  return nowDate.getTime() > lastDate.getTime();
+}

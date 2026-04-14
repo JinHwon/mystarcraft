@@ -36,6 +36,8 @@ export const players = mysqlTable("players", {
   expToNext: int("expToNext").default(100).notNull(),
   statPoints: int("statPoints").default(0).notNull(), // 미배분 포인트
   gold: int("gold").default(1000).notNull(), // 게임 내 재화
+  fatigue: int("fatigue").default(100).notNull(), // 피로도 (0-100)
+  lastFatigueRecovery: timestamp("lastFatigueRecovery").defaultNow().notNull(), // 마지막 회복 시간
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -70,6 +72,7 @@ export const items = mysqlTable("items", {
   rarity: mysqlEnum("rarity", ["common", "rare", "epic", "legendary"]).default("common").notNull(),
   // 능력치 보너스 JSON: { sense, control, attack, harass, strategy, supply, defense, scout }
   statBoosts: json("statBoosts").notNull(),
+  fatigueRecover: int("fatigueRecover").default(0).notNull(), // 피로도 회복량 (0이면 능력치 보너스만)
   iconEmoji: varchar("iconEmoji", { length: 10 }).default("⚔️").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });

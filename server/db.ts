@@ -221,3 +221,57 @@ export async function seedItemsIfEmpty() {
     await db.insert(items).values(item);
   }
 }
+
+// ── Fatigue Management ────────────────────────────────────────────
+
+export async function recoverFatigueIfNeeded(playerId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  const player = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
+  if (player.length === 0) return;
+
+  const p = player[0];
+  const now = new Date();
+  const lastRecovery = p.lastFatigueRecovery ? new Date(p.lastFatigueRecovery) : null;
+
+  // 자정 기준으로 회복 여부 판단
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const lastRecoveryDate = lastRecovery ? new Date(lastRecovery.getFullYear(), lastRecovery.getMonth(), lastRecovery.getDate()) : null;
+
+  if (!lastRecoveryDate || lastRecoveryDate < today) {
+    // 새로운 날이므로 피로도 회복
+    await db
+      .update(players)
+      .set({ fatigue: 100, lastFatigueRecovery: now })
+      .where(eq(players.id, playerId));
+  }
+}
+
+export async function addFatigueCost(playerId: number, cost: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  const player = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
+  if (player.length === 0) return;
+
+  const newFatigue = Math.max(0, player[0].fatigue - cost);
+  await db
+    .update(players)
+    .set({ fatigue: newFatigue })
+    .where(eq(players.id, playerId));
+}
+
+export async function updateFatigue(playerId: number, amount: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  const player = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
+  if (player.length === 0) return;
+
+  const newFatigue = Math.min(100, Math.max(0, player[0].fatigue + amount));
+  await db
+    .update(players)
+    .set({ fatigue: newFatigue })
+    .where(eq(players.id, playerId));
+}

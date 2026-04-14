@@ -15,6 +15,9 @@ import {
   seedItemsIfEmpty,
   toggleEquipItem,
   updatePlayerPhoto,
+  recoverFatigueIfNeeded,
+  addFatigueCost,
+  updateFatigue,
 } from "./db";
 import { storagePut } from "./storage";
 
@@ -110,6 +113,32 @@ const playerRouter = router({
 
       await db.update(players).set({ exp, level, expToNext, statPoints }).where(eq(players.id, player.id));
       return { level, exp, expToNext, statPoints, leveledUp, levelsGained };
+    }),
+
+  recoverFatigue: protectedProcedure.mutation(async ({ ctx }) => {
+    const player = await getPlayerByUserId(ctx.user.id);
+    if (!player) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
+    const recovered = await recoverFatigueIfNeeded(player.id);
+    return { recovered };
+  }),
+
+  addFatigueCost: protectedProcedure
+    .input(z.object({ cost: z.number().int().min(1).max(50) }))
+    .mutation(async ({ ctx, input }) => {
+      const player = await getPlayerByUserId(ctx.user.id);
+      if (!player) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
+      const newFatigue = await addFatigueCost(player.id, input.cost);
+      return { fatigue: newFatigue };
+    }),
+
+  addFatigue: protectedProcedure
+    .input(z.object({ amount: z.number().int().min(1).max(100) }))
+    .mutation(async ({ ctx, input }) => {
+      const player = await getPlayerByUserId(ctx.user.id);
+      if (!player) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
+      const newFatigue = Math.min(100, player.fatigue + input.amount);
+      await updateFatigue(player.id, newFatigue);
+      return { fatigue: newFatigue };
     }),
 });
 

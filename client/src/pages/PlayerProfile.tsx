@@ -19,6 +19,9 @@ import {
   GRADES,
   GRADE_BASE,
   GRADE_STEP,
+  FATIGUE_MAX,
+  FATIGUE_NORMAL_THRESHOLD,
+  calcFatigueStatPenalty,
 } from "../../../shared/gameConstants";
 import type { StatKey } from "../../../shared/gameConstants";
 
@@ -296,6 +299,35 @@ export default function PlayerProfile() {
                   </div>
                 </div>
               )}
+
+              {/* 피로도 */}
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">피로도</p>
+                    <p className="text-lg font-black text-foreground">{playerData.fatigue} / {FATIGUE_MAX}</p>
+                  </div>
+                  {playerData.fatigue < FATIGUE_NORMAL_THRESHOLD && (
+                    <div className="text-right">
+                      <p className="text-xs text-yellow-500 font-semibold mb-1">능력치 패널티</p>
+                      <p className="text-lg font-black text-yellow-500">{Math.round(calcFatigueStatPenalty(playerData.fatigue) * 100)}%</p>
+                    </div>
+                  )}
+                </div>
+                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-700"
+                    style={{
+                      width: `${(playerData.fatigue / FATIGUE_MAX) * 100}%`,
+                      background: playerData.fatigue >= FATIGUE_NORMAL_THRESHOLD
+                        ? "oklch(0.65 0.18 140)"
+                        : playerData.fatigue >= 50
+                        ? "oklch(0.65 0.18 50)"
+                        : "oklch(0.65 0.18 0)"
+                    }}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
