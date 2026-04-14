@@ -1,6 +1,6 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, items, playerItems, players, playerStats, users, events } from "../drizzle/schema";
+import { InsertUser, items, playerItems, players, playerStats, users, events, maps, games, gameResults } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -413,3 +413,197 @@ export async function getPlayerWithUser(playerId: number) {
   const user = await db.select().from(users).where(eq(users.id, player.userId)).limit(1);
   return { player, user: user[0] ?? null };
 }
+
+
+// ── 맵 관련 함수 ────────────────────────────────────────────────────────────
+
+export async function seedMapsIfEmpty() {
+  const db = await getDb();
+  if (!db) return;
+  const existing = await db.select().from(maps).limit(1);
+  if (existing.length > 0) return;
+  
+  const mapsData = [
+    {
+      name: "네오일드트릭셋",
+      description: "균형잡힌 맵",
+      raceAdvantage: JSON.stringify({ terran: 50, zerg: 50, protoss: 50 }),
+      rushDistance: 50,
+      resources: 50,
+      complexity: 50,
+      iconEmoji: "🗺️",
+    },
+    {
+      name: "스카이 테라스",
+      description: "높이 차이가 많은 맵",
+      raceAdvantage: JSON.stringify({ terran: 55, zerg: 45, protoss: 50 }),
+      rushDistance: 60,
+      resources: 45,
+      complexity: 65,
+      iconEmoji: "⛰️",
+    },
+    {
+      name: "용암 분화구",
+      description: "자원이 풍부한 맵",
+      raceAdvantage: JSON.stringify({ terran: 48, zerg: 52, protoss: 50 }),
+      rushDistance: 40,
+      resources: 70,
+      complexity: 45,
+      iconEmoji: "🌋",
+    },
+    {
+      name: "얼음 계곡",
+      description: "좁은 통로, 빠른 러쉬",
+      raceAdvantage: JSON.stringify({ terran: 45, zerg: 55, protoss: 50 }),
+      rushDistance: 30,
+      resources: 40,
+      complexity: 60,
+      iconEmoji: "❄️",
+    },
+  ];
+  
+  for (const mapData of mapsData) {
+    await db.insert(maps).values(mapData as any);
+  }
+}
+
+export async function getAllMaps() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(maps);
+}
+
+// ── 게임 관련 함수 ────────────────────────────────────────────────────────────
+
+export async function createGame(gameData: {
+  player1Id: number;
+  player2Id: number;
+  mapId: number;
+  difficulty: "beginner" | "intermediate" | "advanced";
+  player1Race: "terran" | "zerg" | "protoss";
+  player2Race: "terran" | "zerg" | "protoss";
+  player1WinProbability: number;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.insert(games).values(gameData as any);
+  return result;
+}
+
+export async function getGameById(gameId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(games).where(eq(games.id, gameId)).limit(1);
+  return result[0] ?? null;
+}
+
+export async function completeGame(gameId: number, winnerId: number, player1Score: number, player2Score: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(games).set({
+    winnerId,
+    player1ActualScore: player1Score,
+    player2ActualScore: player2Score,
+    completedAt: new Date(),
+  }).where(eq(games.id, gameId));
+}
+
+export async function createGameResult(resultData: {
+  gameId: number;
+  playerId: number;
+  isWinner: boolean;
+  expGained: number;
+  goldGained: number;
+  statChanges: Record<string, number>;
+  fatigueUsed: number;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.insert(gameResults).values({
+    ...resultData,
+    statChanges: JSON.stringify(resultData.statChanges),
+  } as any);
+  return result;
+}
+
+export async function getPlayerGameHistory(playerId: number, limit: number = 10) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(gameResults)
+    .where(eq(gameResults.playerId, playerId))
+    .limit(limit);
+}
+
+// 난이도별 상대 찾기
+export async function findOpponentByDifficulty(
+  currentPlayerId: number,
+  difficulty: "beginner" | "intermediate" | "advanced",
+  gradeIndex: number
+) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  // 난이도별 등급 범위
+  const ranges = {
+    beginner: { min: 0, max: 2 },
+    intermediate: { min: 2, max: 4 },
+    advanced: { min: 4, max: 7 },
+  };
+  
+  const range = ranges[difficulty];
+  
+  // 같은 난이도 범위의 다른 선수 찾기
+  const allPlayers = await db.select().from(players);
+  const candidates = allPlayers.filter(p => p.id !== currentPlayerId);
+  
+  // 필터링: 난이도 범위에 맞는 선수 찾기
+  // (실제 등급 계산은 클라이언트에서 수행)
+  return candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : null;
+}
+
+
+// ── 연습게임 관련 함수 ────────────────────────────────────────────────────────
+
+export async function getAllPlayers() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(players);
+}
+
+export async function updatePlayerExp(playerId: number, expGain: number) {
+  const db = await getDb();
+  if (!db) return;
+  
+  const player = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
+  if (!player.length) return;
+  
+  const currentPlayer = player[0];
+  let newExp = currentPlayer.exp + expGain;
+  let newLevel = currentPlayer.level;
+  let newStatPoints = currentPlayer.statPoints;
+  
+  // 레벨업 처리
+  while (newExp >= currentPlayer.expToNext) {
+    newExp -= currentPlayer.expToNext;
+    newLevel += 1;
+    newStatPoints += 20; // 레벨당 20포인트
+  }
+  
+  await db.update(players).set({
+    exp: newExp,
+    level: newLevel,
+    statPoints: newStatPoints,
+  }).where(eq(players.id, playerId));
+}
+
+export async function updatePlayerGold(playerId: number, goldGain: number) {
+  const db = await getDb();
+  if (!db) return;
+  
+  const player = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
+  if (!player.length) return;
+  
+  const newGold = Math.max(0, player[0].gold + goldGain);
+  await db.update(players).set({ gold: newGold }).where(eq(players.id, playerId));
+}
+

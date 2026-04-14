@@ -173,3 +173,72 @@ export function shouldRecoverFatigue(lastRecoveryTime: Date): boolean {
 
   return nowDate.getTime() > lastDate.getTime();
 }
+
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 맵 데이터
+// ──────────────────────────────────────────────────────────────────────────────
+
+export const MAPS = [
+  {
+    id: 1,
+    name: "네오일드트릭셋",
+    description: "균형잡힌 맵",
+    raceAdvantage: { terran: 50, zerg: 50, protoss: 50 },
+    rushDistance: 50,
+    resources: 50,
+    complexity: 50,
+    iconEmoji: "🗺️",
+  },
+  {
+    id: 2,
+    name: "스카이 테라스",
+    description: "높이 차이가 많은 맵",
+    raceAdvantage: { terran: 55, zerg: 45, protoss: 50 },
+    rushDistance: 60,
+    resources: 45,
+    complexity: 65,
+    iconEmoji: "⛰️",
+  },
+  {
+    id: 3,
+    name: "용암 분화구",
+    description: "자원이 풍부한 맵",
+    raceAdvantage: { terran: 48, zerg: 52, protoss: 50 },
+    rushDistance: 40,
+    resources: 70,
+    complexity: 45,
+    iconEmoji: "🌋",
+  },
+  {
+    id: 4,
+    name: "얼음 계곡",
+    description: "좁은 통로, 빠른 러쉬",
+    raceAdvantage: { terran: 45, zerg: 55, protoss: 50 },
+    rushDistance: 30,
+    resources: 40,
+    complexity: 60,
+    iconEmoji: "❄️",
+  },
+];
+
+// 난이도별 등급 범위
+export const DIFFICULTY_RANGES = {
+  beginner: { minGrade: "F", maxGrade: "D", minIndex: 0, maxIndex: 2 },
+  intermediate: { minGrade: "D", maxGrade: "B", minIndex: 2, maxIndex: 4 },
+  advanced: { minGrade: "B", maxGrade: "S", minIndex: 4, maxIndex: 7 },
+};
+
+// 게임 보상 (난이도별)
+export const GAME_REWARDS = {
+  beginner: { expWin: 50, expLose: 20, goldWin: 100, goldLose: 30 },
+  intermediate: { expWin: 100, expLose: 50, goldWin: 200, goldLose: 80 },
+  advanced: { expWin: 200, expLose: 100, goldWin: 400, goldLose: 150 },
+};
+
+// 피로도 사용 (난이도별)
+export const FATIGUE_COST = {
+  beginner: 10,
+  intermediate: 15,
+  advanced: 20,
+};

@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -28,9 +27,19 @@ import {
   getActiveEvents,
   updateUserRole,
   getPlayerWithUser,
+  seedMapsIfEmpty,
+  getAllMaps,
+  createGame,
+  getGameById,
+  completeGame,
+  createGameResult,
+  getPlayerGameHistory,
+  findOpponentByDifficulty,
 } from "./db";
 import { storagePut } from "./storage";
 import { TRPCError } from "@trpc/server";
+import { z } from "zod";
+import { DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, MAPS, calcGradeIndex, calcTotalStats, STAT_KEYS } from "@shared/gameConstants";
 
 // ── Player Router ────────────────────────────────────────────────
 
@@ -317,6 +326,105 @@ const eventRouter = router({
     }),
 });
 
+// appRouter는 아래에서 정의됨
+
+// ── Practice Game Router ────────────────────────────────────────
+
+const practiceRouter = router({
+  getMaps: publicProcedure.query(async () => {
+    await seedMapsIfEmpty();
+    return await getAllMaps();
+  }),
+
+  findOpponent: protectedProcedure
+    .input(z.object({
+      difficulty: z.enum(["beginner", "intermediate", "advanced"]),
+      mapId: z.number().int(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const player = await getPlayerByUserId(ctx.user.id);
+      if (!player) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
+      
+      if (player.fatigue < FATIGUE_COST[input.difficulty]) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "피로도가 부족합니다" });
+      }
+
+      // 상대 찾기
+      const opponent = await findOpponentByDifficulty(player.id, input.difficulty, 0);
+      if (!opponent) throw new TRPCError({ code: "NOT_FOUND", message: "상대를 찾을 수 없습니다" });
+
+      // 선수 능력치 조회
+      const playerStats = await getPlayerStats(player.id);
+      const opponentStats = await getPlayerStats(opponent.id);
+      if (!playerStats || !opponentStats) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "능력치 조회 실패" });
+
+      // 게임 생성
+      const gameResult = await createGame({
+        player1Id: player.id,
+        player2Id: opponent.id,
+        mapId: input.mapId,
+        difficulty: input.difficulty,
+        player1Race: player.race as "terran" | "zerg" | "protoss",
+        player2Race: opponent.race as "terran" | "zerg" | "protoss",
+        player1WinProbability: 50, // 기본값, 나중에 계산
+      });
+
+      return { gameId: 1, opponent }; // TODO: 실제 게임 ID 반환
+    }),
+
+  playGame: protectedProcedure
+    .input(z.object({
+      gameId: z.number().int(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const game = await getGameById(input.gameId);
+      if (!game) throw new TRPCError({ code: "NOT_FOUND", message: "게임을 찾을 수 없습니다" });
+
+      const player = await getPlayerByUserId(ctx.user.id);
+      if (!player || (player.id !== game.player1Id && player.id !== game.player2Id)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "이 게임에 참여할 수 없습니다" });
+      }
+
+      // 게임 결과 계산 (간단한 로직: 50% 확률)
+      const isPlayer1 = player.id === game.player1Id;
+      const winnerId = Math.random() < 0.5 ? game.player1Id : game.player2Id;
+      const isWinner = winnerId === player.id;
+
+      // 보상 계산
+      const rewards = GAME_REWARDS[game.difficulty];
+      const expGained = isWinner ? rewards.expWin : rewards.expLose;
+      const goldGained = isWinner ? rewards.goldWin : rewards.goldLose;
+      const fatigueUsed = FATIGUE_COST[game.difficulty];
+
+      // 게임 완료
+      await completeGame(input.gameId, winnerId, 60, 40);
+
+      // 게임 결과 저장
+      const statChanges: Record<string, number> = {};
+      STAT_KEYS.forEach(key => {
+        statChanges[key] = isWinner ? 10 : -5; // 승리 시 +10, 패배 시 -5
+      });
+
+      await createGameResult({
+        gameId: input.gameId,
+        playerId: player.id,
+        isWinner,
+        expGained,
+        goldGained,
+        statChanges,
+        fatigueUsed,
+      });
+
+      return { isWinner, expGained, goldGained, fatigueUsed };
+    }),
+
+  getGameHistory: protectedProcedure.query(async ({ ctx }) => {
+    const player = await getPlayerByUserId(ctx.user.id);
+    if (!player) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
+    return await getPlayerGameHistory(player.id, 10);
+  }),
+});
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -331,6 +439,9 @@ export const appRouter = router({
   shop: shopRouter,
   admin: adminRouter,
   event: eventRouter,
+  practice: practiceRouter,
 });
 
 export type AppRouter = typeof appRouter;
+
+

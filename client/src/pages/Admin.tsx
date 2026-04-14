@@ -1,12 +1,17 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { Search, ChevronLeft, ChevronRight } from "lucide-react";
+
+const ITEMS_PER_PAGE = 20;
 
 export default function Admin() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<number | null>(null);
   const [editData, setEditData] = useState({ gold: 0, level: 1, exp: 0, statPoints: 0, fatigue: 100 });
@@ -21,6 +26,38 @@ export default function Admin() {
     { playerId: selectedPlayerId ?? 0 },
     { enabled: !!selectedPlayerId }
   );
+
+  // Dialog가 열릴 때 DB 데이터 자동 로드
+  useEffect(() => {
+    if (getPlayerInfoQuery.data) {
+      setEditData({
+        gold: getPlayerInfoQuery.data.gold,
+        level: getPlayerInfoQuery.data.level,
+        exp: getPlayerInfoQuery.data.exp,
+        statPoints: getPlayerInfoQuery.data.statPoints,
+        fatigue: getPlayerInfoQuery.data.fatigue,
+      });
+    }
+  }, [getPlayerInfoQuery.data]);
+
+  // 검색 필터링
+  const filteredUsers = useMemo(() => {
+    if (!usersQuery.data) return [];
+    return usersQuery.data.filter((user) => {
+      const query = searchQuery.toLowerCase();
+      return (
+        (user.name?.toLowerCase() || "").includes(query) ||
+        (user.email?.toLowerCase() || "").includes(query)
+      );
+    });
+  }, [usersQuery.data, searchQuery]);
+
+  // 페이지네이션
+  const totalPages = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE);
+  const paginatedUsers = useMemo(() => {
+    const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredUsers.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+  }, [filteredUsers, currentPage]);
 
   const handleUpdatePlayer = async () => {
     if (!selectedPlayerId) return;
@@ -71,6 +108,10 @@ export default function Admin() {
     }
   };
 
+  const handleManageUser = (userId: number) => {
+    setSelectedPlayerId(userId);
+  };
+
   if (usersQuery.isLoading) return <div className="p-8">로딩 중...</div>;
 
   return (
@@ -80,25 +121,41 @@ export default function Admin() {
         <p className="text-gray-400">사용자 정보 관리 및 게임 설정</p>
       </div>
 
-      <Card className="bg-slate-900 border-amber-600">
-        <CardHeader>
-          <CardTitle className="text-amber-400">사용자 목록</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {usersQuery.data?.map((user) => (
-              <div key={user.id} className="flex items-center justify-between p-3 bg-slate-800 rounded border border-amber-700">
+      {/* 검색 바 */}
+      <div className="relative">
+        <Search className="absolute left-3 top-3 w-4 h-4 text-gray-500" />
+        <Input
+          placeholder="사용자 이름 또는 이메일로 검색..."
+          value={searchQuery}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
+            setCurrentPage(1);
+          }}
+          className="pl-10 bg-slate-800 border-amber-600 text-white"
+        />
+      </div>
+
+      {/* 사용자 그리드 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {paginatedUsers.map((user) => (
+          <Card key={user.id} className="bg-slate-900 border-amber-600 hover:border-amber-500 transition">
+            <CardContent className="p-4">
+              <div className="space-y-3">
                 <div>
-                  <p className="font-semibold text-white">{user.name || "이름 없음"}</p>
-                  <p className="text-sm text-gray-400">{user.email}</p>
-                  <p className="text-xs text-amber-400">{user.role === "admin" ? "관리자" : "일반 사용자"}</p>
+                  <p className="font-semibold text-white truncate">{user.name || "이름 없음"}</p>
+                  <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs px-2 py-1 bg-amber-900 text-amber-300 rounded">
+                    {user.role === "admin" ? "관리자" : "일반"}
+                  </span>
                 </div>
                 <div className="flex gap-2">
                   <Dialog>
                     <DialogTrigger asChild>
                       <Button
                         size="sm"
-                        className="bg-blue-600 hover:bg-blue-700"
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-xs"
                         onClick={() => {
                           setSelectedUserId(user.id);
                           setUserRole(user.role);
@@ -145,8 +202,8 @@ export default function Admin() {
                     <DialogTrigger asChild>
                       <Button
                         size="sm"
-                        className="bg-amber-600 hover:bg-amber-700"
-                        onClick={() => setSelectedPlayerId(user.id)}
+                        className="flex-1 bg-amber-600 hover:bg-amber-700 text-xs"
+                        onClick={() => handleManageUser(user.id)}
                       >
                         관리
                       </Button>
@@ -236,10 +293,44 @@ export default function Admin() {
                   </Dialog>
                 </div>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* 페이지네이션 */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(currentPage - 1)}
+            className="border-amber-600 text-amber-400 hover:bg-amber-900"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <span className="text-sm text-gray-400">
+            페이지 {currentPage} / {totalPages}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage(currentPage + 1)}
+            className="border-amber-600 text-amber-400 hover:bg-amber-900"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+      )}
+
+      {/* 검색 결과 없음 */}
+      {filteredUsers.length === 0 && (
+        <div className="text-center py-12">
+          <p className="text-gray-400">검색 결과가 없습니다</p>
+        </div>
+      )}
     </div>
   );
 }

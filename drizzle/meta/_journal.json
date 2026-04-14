@@ -36,6 +36,20 @@
       "when": 1776170601508,
       "tag": "0004_special_roulette",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1776172291987,
+      "tag": "0005_colossal_hawkeye",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1776173303201,
+      "tag": "0006_military_mandarin",
+      "breakpoints": true
     }
   ]
 }

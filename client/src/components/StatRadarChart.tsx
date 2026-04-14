@@ -12,7 +12,7 @@ export function StatRadarChart({
   stats,
   grade,
   gradeColor = "#4A9EFF",
-  size = 280,
+  size = 240,
 }: StatRadarChartProps) {
   const statColors: Record<StatKey, string> = {
     sense: "#4A9EFF",
