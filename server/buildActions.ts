@@ -228,24 +228,26 @@ export function generateGameCommentary(
 ): string {
   const commentaries: string[] = [];
   
+  // 플레이어 1 해설
   commentaries.push(player1Action.description);
+  // 플레이어 2 해설
   commentaries.push(player2Action.description);
   
-  // 액션 조합에 따른 상황 설명
+  // 액션 조합에 따른 상황 설명 (중립 해설)
   if (player1Action.action === "attack" && player2Action.action === "defend") {
-    commentaries.push(`${player1Action.playerName} 선수의 공격에 ${player2Action.playerName} 선수가 방어하고 있습니다.`);
+    commentaries.push(`[중립] ${player1Action.playerName} 선수의 공격에 ${player2Action.playerName} 선수가 방어하고 있습니다.`);
   } else if (player1Action.action === "defend" && player2Action.action === "attack") {
-    commentaries.push(`${player2Action.playerName} 선수의 공격에 ${player1Action.playerName} 선수가 방어하고 있습니다.`);
+    commentaries.push(`[중립] ${player2Action.playerName} 선수의 공격에 ${player1Action.playerName} 선수가 방어하고 있습니다.`);
   } else if (player1Action.action === "attack" && player2Action.action === "attack") {
-    commentaries.push(`양 선수 모두 공격적인 플레이를 펼치고 있습니다. 병력들이 돌도 도는 눈치싸움이 치열합니다.`);
+    commentaries.push(`[중립] 양 선수 모두 공격적인 플레이를 펼치고 있습니다. 병력들이 돌도 도는 눈치싸움이 치열합니다.`);
   } else if (player1Action.action === "macro" && player2Action.action === "macro") {
-    commentaries.push(`양 선수 모두 경제력 확보에 집중하고 있습니다. 게임의 흐름이 천천히 진행되고 있습니다.`);
+    commentaries.push(`[중립] 양 선수 모두 경제력 확보에 집중하고 있습니다. 게임의 흐름이 천천히 진행되고 있습니다.`);
   } else if (player1Action.action === "harass" || player2Action.action === "harass") {
-    commentaries.push(`견제 플레이가 이어지고 있습니다. 긴장감 있는 경기입니다.`);
+    commentaries.push(`[중립] 견제 플레이가 이어지고 있습니다. 긴장감 있는 경기입니다.`);
   } else if (player1Action.action === "rush" || player2Action.action === "rush") {
-    commentaries.push(`초반 러쉬 전략이 펼쳐지고 있습니다. 게임의 승패가 결정될 중요한 순간입니다.`);
+    commentaries.push(`[중립] 초반 러쉬 전략이 펼쳐지고 있습니다. 게임의 승패가 결정될 중요한 순간입니다.`);
   } else if (player1Action.action === "all-in" || player2Action.action === "all-in") {
-    commentaries.push(`올인 공격으로 게임을 끝내려는 시도가 있습니다. 이 전투의 결과가 게임을 좌우할 것 같습니다.`);
+    commentaries.push(`[중립] 올인 공격으로 게임을 끝내려는 시도가 있습니다. 이 전투의 결과가 게임을 좌우할 것 같습니다.`);
   }
   
   return commentaries.join("\n");
