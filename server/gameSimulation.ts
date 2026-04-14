@@ -8,7 +8,7 @@ import {
   calcTotalStats,
   calcEffectiveStatsWithFatigue,
 } from "@shared/gameConstants";
-import { getPlayerStats } from "./db";
+import { getPlayerStats, getActiveEvents } from "./db";
 import { determineBuild, generateBuildCommentary, type MapCharacteristic } from "./buildSystem";
 import { generateDynamicCommentary, calculateActionImpact, type PlayerActionInfo, type GameAction } from "./dynamicCommentary";
 
@@ -113,14 +113,6 @@ export async function simulateGame(
     mapRaceAdvantage
   );
   
-  // 난이도별 턴 수
-  const turnCounts = {
-    beginner: 8,
-    intermediate: 12,
-    advanced: 15,
-  };
-  const maxTurns = turnCounts[difficulty];
-  
   // 게임 시뮬레이션
   const turns: GameTurn[] = [];
   let player1Supply = 12;
@@ -137,10 +129,42 @@ export async function simulateGame(
   // buildActions 임포트
   const { generatePlayerActions: genActions, shouldGameEnd } = await import("./buildActions");
   
-  // 게임 진행 시뮬레이션
+  // 이벤트 확인
+  const events = await getActiveEvents();
+  const event = events?.[0];
+  let expMultiplier = 1;
+  let goldMultiplier = 1;
+  let fatigueMultiplier = 1;
+  
+  if (event) {
+    if (event.type === "exp_double") {
+      expMultiplier = 2;
+    }
+    if (event.type === "gold_double") {
+      goldMultiplier = 2;
+    }
+    if (event.type === "fatigue_unlimited") {
+      fatigueMultiplier = 0;
+    }
+  }
+  
+  // 게임 진행 시뮬레이션 - 무제한 턴
   const allCommentaries: string[] = [];
-  for (let turn = 1; turn <= maxTurns; turn++) {
-    const turnPhase = turn / maxTurns;
+  let turn = 0;
+  const maxTurnsForPhase = 50; // 게임 진행 단계를 위한 최대 턴
+  
+  // 초반 빌드 선택 해설
+  const buildTypeLabel1 = player1Build.type === "macro" ? "경제 중심" : player1Build.type === "aggressive" ? "공격 중심" : "균형";
+  const buildTypeLabel2 = player2Build.type === "macro" ? "경제 중심" : player2Build.type === "aggressive" ? "공격 중심" : "균형";
+  allCommentaries.push(`[중립] ${player1Name} 선수 초반 빌드를 선택합니다`);
+  allCommentaries.push(`[중립] ${buildTypeLabel1} 빌드를 선택했습니다`);
+  allCommentaries.push(`[중립] ${player2Name} 선수 초반 빌드를 선택합니다`);
+  allCommentaries.push(`[중립] ${buildTypeLabel2} 빌드를 선택했습니다`);
+  allCommentaries.push(`[중립] 양 선수 모두 초반 빌드를 선택했습니다. 게임이 시작됩니다!`);
+  
+  while (turn < maxTurnsForPhase) {
+    turn++;
+    const turnPhase = turn / maxTurnsForPhase;
     
     // 빌드 기반 플레이어 액션 생성
     const player1ActionData = genActions(
@@ -148,7 +172,7 @@ export async function simulateGame(
       player1Race,
       player1Build.type,
       turn,
-      maxTurns
+      maxTurnsForPhase
     );
     
     const player2ActionData = genActions(
@@ -156,7 +180,7 @@ export async function simulateGame(
       player2Race,
       player2Build.type,
       turn,
-      maxTurns
+      maxTurnsForPhase
     );
     
     // 동적 해설 생성
@@ -167,7 +191,7 @@ export async function simulateGame(
       action: player1ActionData.action as GameAction,
       stats: player1EffectiveStats,
       turn,
-      maxTurns,
+      maxTurns: maxTurnsForPhase,
     };
     
     const player2ActionInfo: PlayerActionInfo = {
@@ -177,7 +201,7 @@ export async function simulateGame(
       action: player2ActionData.action as GameAction,
       stats: player2EffectiveStats,
       turn,
-      maxTurns,
+      maxTurns: maxTurnsForPhase,
     };
     
     // 플레이어별 동적 해설
