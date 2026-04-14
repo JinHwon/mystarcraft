@@ -35,7 +35,7 @@ export function determineBuild(
 ): BuildInfo {
   // 능력치 분류
   const macroStats = (stats.sense || 0) + (stats.control || 0) + (stats.supply || 0) + (stats.defense || 0);
-  const aggressiveStats = (stats.attack || 0) + (stats.harassment || 0) + (stats.strategy || 0) + (stats.scout || 0);
+  const aggressiveStats = (stats.attack || 0) + (stats.harass || 0) + (stats.strategy || 0) + (stats.scout || 0);
   
   const totalStats = macroStats + aggressiveStats;
   const macroRatio = totalStats > 0 ? macroStats / totalStats : 0.5;
