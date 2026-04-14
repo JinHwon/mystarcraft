@@ -127,12 +127,17 @@ export default function PracticePage() {
 
   // 해설 색상 결정
   const getCommentaryColor = (commentary: string): string => {
-    if (commentary.includes(player1Name)) {
-      return "border-l-4 border-cyan-400 bg-cyan-950/30";
+    if (commentary.includes("[중립]")) {
+      // 중립 해설 - 하얀색
+      return "border-l-4 border-slate-400 bg-slate-900/50 text-slate-100";
+    } else if (commentary.includes(player1Name)) {
+      // 플레이어 1 해설 - 하늘색
+      return "border-l-4 border-cyan-400 bg-cyan-950/30 text-cyan-100";
     } else if (commentary.includes(player2Name)) {
-      return "border-l-4 border-red-500 bg-red-950/30";
+      // 플레이어 2 해설 - 다홍색
+      return "border-l-4 border-red-500 bg-red-950/30 text-red-100";
     }
-    return "border-l-4 border-slate-500 bg-slate-900";
+    return "border-l-4 border-slate-500 bg-slate-900 text-slate-100";
   };
 
   // 난이도 선택 화면

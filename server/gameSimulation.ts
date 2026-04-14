@@ -50,21 +50,21 @@ export function calculateWinProbability(
   const player1Total = calcTotalStats(player1Stats);
   const player2Total = calcTotalStats(player2Stats);
   
-  const baseWinProb = player1Total / (player1Total + player2Total);
+  // 기본 승률 계산
+  let player1WinProb = (player1Total / (player1Total + player2Total)) * 100;
   
-  // 맵 유불리 적용 (±5%)
-  const player1MapBonus = (mapRaceAdvantage[player1Race] - 50) / 1000;
-  const player2MapBonus = (mapRaceAdvantage[player2Race] - 50) / 1000;
+  // 맵 종족 유불리 적용
+  const player1Advantage = mapRaceAdvantage[player1Race] || 0;
+  const player2Advantage = mapRaceAdvantage[player2Race] || 0;
   
-  let adjustedWinProb = baseWinProb + player1MapBonus - player2MapBonus;
-  adjustedWinProb = Math.max(0.2, Math.min(0.8, adjustedWinProb)); // 20~80% 범위
+  player1WinProb += (player1Advantage - player2Advantage) * 5;
   
-  return Math.round(adjustedWinProb * 100);
+  // 범위 제한
+  return Math.max(5, Math.min(95, Math.round(player1WinProb)));
 }
 
 /**
  * 게임 시뮬레이션 실행
- * 턴 기반 시뮬레이션으로 해설과 함께 병력/자원 변화를 표현
  */
 export async function simulateGame(
   player1Id: number,
@@ -128,27 +128,21 @@ export async function simulateGame(
   let player1Health = 100;
   let player2Health = 100;
   
+  // 멀티 확장 추적
+  let player1MultiCount = 1;
+  let player2MultiCount = 1;
+  
   // 빌드 결정
   const player1Build = determineBuild(player1EffectiveStats, mapCharacteristic);
   const player2Build = determineBuild(player2EffectiveStats, mapCharacteristic);
   
-  // buildActions 임포트 추가
+  // buildActions 임포트
   const { generatePlayerActions: genActions, generateGameCommentary: genCommentary, shouldGameEnd, evaluateAdvantage } = await import("./buildActions");
   
   // 게임 진행 시뮬레이션
   const allCommentaries: string[] = [];
   for (let turn = 1; turn <= maxTurns; turn++) {
-    const commentary = generateCommentary(
-      turn,
-      maxTurns,
-      player1Race,
-      player2Race,
-      player1WinProb,
-      player1Supply,
-      player2Supply,
-      player1Resources,
-      player2Resources
-    );
+    const turnPhase = turn / maxTurns;
     
     // 빌드 기반 플레이어 액션 생성
     const player1Action = genActions(
@@ -177,7 +171,7 @@ export async function simulateGame(
     
     allCommentaries.push(gameCommentary);
     
-    // 턴별 자원/병력 변화
+    // 턴별 자원/병력 변화 계산
     const changeData = calculateTurnChanges(
       turn,
       maxTurns,
@@ -189,6 +183,20 @@ export async function simulateGame(
       difficulty
     );
     
+    // 멤른 확장 로직
+    if (turnPhase > 0.2 && turnPhase < 0.7) {
+      // 중반부에 멤른 확장 가능
+      if (player1Resources > 200 && Math.random() < (player1EffectiveStats.sense / 1000)) {
+        player1Resources += 30; // 멤른 자원 보너스
+        allCommentaries.push(`[중립] ${player1Name} 선수 멤른지역 리소스를 확보했습니다!`);
+      }
+      if (player2Resources > 200 && Math.random() < (player2EffectiveStats.sense / 1000)) {
+        player2Resources += 30; // 멤른 자원 보너스
+        allCommentaries.push(`[중립] ${player2Name} 선수 멤른지역 리소스를 확보했습니다!`);
+      }
+    }
+    
+    // 자원/병력 변화 적용
     player1Supply += changeData.player1SupplyChange;
     player2Supply += changeData.player2SupplyChange;
     player1Resources += changeData.player1ResourceChange;
@@ -196,17 +204,48 @@ export async function simulateGame(
     player1Health -= changeData.player1HealthLoss;
     player2Health -= changeData.player2HealthLoss;
     
+    // 병력 교전 시뮬레이션
+    if (turnPhase > 0.4) {
+      const combatIntensity = Math.min(1, (turnPhase - 0.4) / 0.3);
+      
+      if (player1Supply > player2Supply) {
+        // 플레이어 1이 우위
+        const damageToPlayer2 = Math.round((player1Supply - player2Supply) * combatIntensity * 0.3);
+        player2Supply = Math.max(0, player2Supply - damageToPlayer2);
+        player2Resources = Math.max(0, player2Resources - damageToPlayer2 * 2);
+        
+        if (damageToPlayer2 > 0) {
+          allCommentaries.push(`[중립] ${player1Name} 선수의 병력이 ${player2Name} 선수의 병력을 압박합니다!`);
+        }
+      } else if (player2Supply > player1Supply) {
+        // 플레이어 2가 우위
+        const damageToPlayer1 = Math.round((player2Supply - player1Supply) * combatIntensity * 0.3);
+        player1Supply = Math.max(0, player1Supply - damageToPlayer1);
+        player1Resources = Math.max(0, player1Resources - damageToPlayer1 * 2);
+        
+        if (damageToPlayer1 > 0) {
+          allCommentaries.push(`[중립] ${player2Name} 선수의 병력이 ${player1Name} 선수의 병력을 압박합니다!`);
+        }
+      }
+    }
+    
     // 범위 제한
     player1Supply = Math.max(0, Math.min(200, player1Supply));
     player2Supply = Math.max(0, Math.min(200, player2Supply));
     player1Resources = Math.max(0, Math.min(500, player1Resources));
     player2Resources = Math.max(0, Math.min(500, player2Resources));
-    player1Health = Math.max(0, Math.min(100, player1Health));
-    player2Health = Math.max(0, Math.min(100, player2Health));
+    player1Health = Math.max(0, player1Health);
+    player2Health = Math.max(0, player2Health);
     
+    // 게임 종료 판정
+    if (shouldGameEnd(player1Supply, player1Resources, player1Health, player2Supply, player2Resources, player2Health, turn)) {
+      break;
+    }
+    
+    // 턴 데이터 저장
     turns.push({
       turn,
-      commentary,
+      commentary: gameCommentary,
       player1Supply,
       player1Resources,
       player2Supply,
@@ -215,20 +254,29 @@ export async function simulateGame(
       player2Health,
       allCommentaries: [...allCommentaries],
     });
-    
-    // 게임 종료 조건 확인
-    if (shouldGameEnd(player1Supply, player1Resources, player1Health, player2Supply, player2Resources, player2Health, turn)) {
-      break;
-    }
-    
-    // 게임 종료 조건
-    if (player1Health <= 0 || player2Health <= 0) {
-      break;
-    }
   }
   
-  // 승자 결정
-  const winnerId = player1Health > player2Health ? player1Id : player2Id;
+  // 최종 승자 판정
+  let winnerId = player1Id;
+  if (player2Supply > player1Supply || player2Resources > player1Resources) {
+    winnerId = player2Id;
+  }
+  
+  // 최종 해설 추가
+  if (winnerId === player1Id) {
+    allCommentaries.push(`[중립] ${player1Name} 선수 상대의 허점을 놓치지 않아요`);
+    allCommentaries.push(`[중립] ${player1Name} 선수 역시 이길 줄 아는 선수입니다`);
+    allCommentaries.push(`[중립] ${player2Name} 선수 GG를 칠 수 밖에 없네요.`);
+  } else {
+    allCommentaries.push(`[중립] ${player2Name} 선수 상대의 허점을 놓치지 않아요`);
+    allCommentaries.push(`[중립] ${player2Name} 선수 역시 이길 줄 아는 선수입니다`);
+    allCommentaries.push(`[중립] ${player1Name} 선수 GG를 칠 수 밖에 없네요.`);
+  }
+  
+  // 최종 턴에 모든 해설 추가
+  if (turns.length > 0) {
+    turns[turns.length - 1].allCommentaries = allCommentaries;
+  }
   
   // 최종 스코어 계산
   const player1FinalScore = Math.round(
@@ -244,66 +292,6 @@ export async function simulateGame(
     player1FinalScore,
     player2FinalScore,
   };
-}
-
-/**
- * 해설 생성
- */
-// 기존 generateCommentary 함수는 유지하되, 빌드 기반 해설로 보강
-function generateCommentary(
-  turn: number,
-  maxTurns: number,
-  player1Race: "terran" | "zerg" | "protoss",
-  player2Race: "terran" | "zerg" | "protoss",
-  player1WinProb: number,
-  player1Supply: number,
-  player2Supply: number,
-  player1Resources: number,
-  player2Resources: number
-): string {
-  const turnPhase = turn / maxTurns;
-  const commentaries: string[] = [];
-  
-  // 게임 진행 단계별 해설
-  if (turnPhase < 0.3) {
-    // 초반: 빌드 오더 및 초기 병력
-    if (player1Supply > player2Supply) {
-      commentaries.push(`${getRaceKorean(player1Race)}이 초반 빌드 오더를 잘 펼쳤습니다!`);
-    } else if (player2Supply > player1Supply) {
-      commentaries.push(`${getRaceKorean(player2Race)}이 초반 빌드 오더를 잘 펼쳤습니다!`);
-    } else {
-      commentaries.push("양 선수 모두 균형잡힌 초반 빌드를 보여주고 있습니다!");
-    }
-  } else if (turnPhase < 0.6) {
-    // 중반: 확장 및 병력 구성
-    if (player1Resources > player2Resources) {
-      commentaries.push(`${getRaceKorean(player1Race)}이 자원 수급을 잘 관리하고 있습니다!`);
-    } else if (player2Resources > player1Resources) {
-      commentaries.push(`${getRaceKorean(player2Race)}이 자원 수급을 잘 관리하고 있습니다!`);
-    } else {
-      commentaries.push("양 선수의 자원 관리가 팽팽합니다!");
-    }
-  } else {
-    // 후반: 최종 전투
-    if (player1Supply > player2Supply) {
-      commentaries.push(`${getRaceKorean(player1Race)}이 병력 우위를 확보했습니다!`);
-    } else if (player2Supply > player1Supply) {
-      commentaries.push(`${getRaceKorean(player2Race)}이 병력 우위를 확보했습니다!`);
-    } else {
-      commentaries.push("최종 전투가 펼쳐지고 있습니다!");
-    }
-  }
-  
-  // 확률 기반 추가 해설
-  if (player1WinProb > 60) {
-    commentaries.push(`${getRaceKorean(player1Race)} 선수가 우위를 점하고 있습니다!`);
-  } else if (player1WinProb < 40) {
-    commentaries.push(`${getRaceKorean(player2Race)} 선수가 우위를 점하고 있습니다!`);
-  } else {
-    commentaries.push("경기가 팽팽합니다!");
-  }
-  
-  return commentaries.join(" ");
 }
 
 /**
@@ -346,6 +334,8 @@ function calculateTurnChanges(
   // 턴별 변화 - 병력/자원 늨 단위 증가
   let player1SupplyChange = Math.round(3 + player1SupplyRate * 2);
   let player2SupplyChange = Math.round(3 + player2SupplyRate * 2);
+  
+  // 자원 변화
   let player1ResourceChange = Math.round(8 + player1ResourceRate * 3);
   let player2ResourceChange = Math.round(8 + player2ResourceRate * 3);
   
