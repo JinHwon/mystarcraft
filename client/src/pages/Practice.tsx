@@ -275,35 +275,36 @@ export default function PracticePage() {
                 </CardHeader>
                 <CardContent className="flex-1 overflow-y-auto max-h-96">
                   <div className="space-y-2">
-                    {/* 플레이어 1 해설 */}
-                    {currentTurn?.player1Commentary?.map((commentary: string, idx: number) => (
-                      <div
-                        key={`p1-${idx}`}
-                        className="p-2 rounded text-sm border-l-4 border-cyan-400 bg-cyan-950/30"
-                      >
-                        <p className="whitespace-pre-wrap text-cyan-200">{commentary}</p>
-                      </div>
-                    ))}
-                    
-                    {/* 플레이어 2 해설 */}
-                    {currentTurn?.player2Commentary?.map((commentary: string, idx: number) => (
-                      <div
-                        key={`p2-${idx}`}
-                        className="p-2 rounded text-sm border-l-4 border-red-500 bg-red-950/30"
-                      >
-                        <p className="whitespace-pre-wrap text-red-200">{commentary}</p>
-                      </div>
-                    ))}
-                    
-                    {/* 중립 해설 */}
-                    {currentTurn?.allCommentaries?.filter((c: string) => c.includes("[중립]")).map((commentary: string, idx: number) => (
-                      <div
-                        key={`neutral-${idx}`}
-                        className="p-2 rounded text-sm border-l-4 border-slate-400 bg-slate-900/50"
-                      >
-                        <p className="whitespace-pre-wrap text-slate-100">{commentary}</p>
-                      </div>
-                    ))}
+                    {currentTurn?.allCommentaries?.map((commentary: string, idx: number) => {
+                      let textColor = "text-slate-300";
+                      let borderColor = "border-slate-500";
+                      let bgColor = "bg-slate-700/30";
+
+                      if (commentary.includes(player1Name)) {
+                        textColor = "text-cyan-200";
+                        borderColor = "border-cyan-400";
+                        bgColor = "bg-cyan-950/30";
+                      } else if (commentary.includes(player2Name)) {
+                        textColor = "text-red-200";
+                        borderColor = "border-red-500";
+                        bgColor = "bg-red-950/30";
+                      } else if (commentary.includes("[중립]")) {
+                        textColor = "text-white";
+                        borderColor = "border-slate-400";
+                        bgColor = "bg-slate-700/50";
+                      }
+
+                      return (
+                        <div
+                          key={idx}
+                          className={`p-2 rounded text-sm border-l-4 ${borderColor} ${bgColor}`}
+                        >
+                          <p className={`whitespace-pre-wrap ${textColor}`}>
+                            {commentary.replace("[중립] ", "")}
+                          </p>
+                        </div>
+                      );
+                    })}
                     <div ref={commentaryEndRef} />
                   </div>
                 </CardContent>
@@ -311,90 +312,81 @@ export default function PracticePage() {
             </div>
 
             {/* 오른쪽: 게임 상태 */}
-            <div className="lg:col-span-2 space-y-6">
-              {currentTurn && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* 플레이어 1 상태 */}
-                  <Card className="bg-slate-800 border-slate-700 border-l-4 border-l-cyan-400">
-                    <CardHeader>
-                      <CardTitle className="text-cyan-400">{player1Name}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div>
-                        <p className="text-slate-400 text-sm">병력</p>
-                        <div className="flex items-center gap-2">
-                          <span className="text-white font-bold w-12 text-right">{currentTurn.player1Supply}</span>
-                          <div className="flex-1 bg-slate-700 rounded-full h-3">
-                            <div
-                              className="bg-cyan-500 h-3 rounded-full transition-all"
-                              style={{ width: `${Math.min(currentTurn.player1Supply / 200 * 100, 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-slate-400 text-sm">자원</p>
-                        <div className="flex items-center gap-2">
-                          <span className="text-white font-bold w-12 text-right">{currentTurn.player1Resources}</span>
-                          <div className="flex-1 bg-slate-700 rounded-full h-3">
-                            <div
-                              className="bg-yellow-500 h-3 rounded-full transition-all"
-                              style={{ width: `${Math.min(currentTurn.player1Resources / 500 * 100, 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+            <div className="lg:col-span-2 space-y-4">
+              {/* 플레이어 1 상태 */}
+              <Card className="bg-slate-800 border-slate-700 border-l-4 border-l-cyan-400">
+                <CardHeader>
+                  <CardTitle className="text-cyan-300">{player1Name}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <div className="flex justify-between text-sm text-slate-300 mb-1">
+                      <span>병력</span>
+                      <span className="font-bold">{currentTurn?.player1Supply || 0}</span>
+                    </div>
+                    <div className="w-full bg-slate-700 rounded-full h-2">
+                      <div
+                        className="bg-cyan-500 h-2 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, (currentTurn?.player1Supply || 0) / 2)}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-sm text-slate-300 mb-1">
+                      <span>자원</span>
+                      <span className="font-bold">{currentTurn?.player1Resources || 0}</span>
+                    </div>
+                    <div className="w-full bg-slate-700 rounded-full h-2">
+                      <div
+                        className="bg-yellow-500 h-2 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, (currentTurn?.player1Resources || 0) / 5)}%` }}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-                  {/* 플레이어 2 상태 */}
-                  <Card className="bg-slate-800 border-slate-700 border-l-4 border-l-red-500">
-                    <CardHeader>
-                      <CardTitle className="text-red-500">{player2Name}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div>
-                        <p className="text-slate-400 text-sm">병력</p>
-                        <div className="flex items-center gap-2">
-                          <span className="text-white font-bold w-12 text-right">{currentTurn.player2Supply}</span>
-                          <div className="flex-1 bg-slate-700 rounded-full h-3">
-                            <div
-                              className="bg-red-500 h-3 rounded-full transition-all"
-                              style={{ width: `${Math.min(currentTurn.player2Supply / 200 * 100, 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-slate-400 text-sm">자원</p>
-                        <div className="flex items-center gap-2">
-                          <span className="text-white font-bold w-12 text-right">{currentTurn.player2Resources}</span>
-                          <div className="flex-1 bg-slate-700 rounded-full h-3">
-                            <div
-                              className="bg-yellow-500 h-3 rounded-full transition-all"
-                              style={{ width: `${Math.min(currentTurn.player2Resources / 500 * 100, 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
+              {/* 플레이어 2 상태 */}
+              <Card className="bg-slate-800 border-slate-700 border-l-4 border-l-red-500">
+                <CardHeader>
+                  <CardTitle className="text-red-300">{player2Name}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <div className="flex justify-between text-sm text-slate-300 mb-1">
+                      <span>병력</span>
+                      <span className="font-bold">{currentTurn?.player2Supply || 0}</span>
+                    </div>
+                    <div className="w-full bg-slate-700 rounded-full h-2">
+                      <div
+                        className="bg-red-500 h-2 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, (currentTurn?.player2Supply || 0) / 2)}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-sm text-slate-300 mb-1">
+                      <span>자원</span>
+                      <span className="font-bold">{currentTurn?.player2Resources || 0}</span>
+                    </div>
+                    <div className="w-full bg-slate-700 rounded-full h-2">
+                      <div
+                        className="bg-yellow-500 h-2 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, (currentTurn?.player2Resources || 0) / 5)}%` }}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-              {/* 게임 종료 확인 버튼 */}
+              {/* 게임 종료 버튼 */}
               {showResultConfirm && (
-                <Card className="bg-slate-800 border-slate-700">
-                  <CardContent className="p-6 text-center">
-                    <p className="text-white mb-4">게임이 종료되었습니다!</p>
-                    <Button
-                      className="w-full bg-green-600 hover:bg-green-700"
-                      onClick={() => setPhase("result")}
-                    >
-                      결과 확인
-                    </Button>
-                  </CardContent>
-                </Card>
+                <Button
+                  className="w-full bg-green-600 hover:bg-green-700 text-lg py-6"
+                  onClick={() => setPhase("result")}
+                >
+                  결과 확인
+                </Button>
               )}
             </div>
           </div>
@@ -406,42 +398,41 @@ export default function PracticePage() {
   // 게임 결과 화면
   if (phase === "result") {
     const isWinner = gameState.isWinner;
-    const expGained = gameState.expGained || 0;
-    const goldGained = gameState.goldGained || 0;
-    const fatigueUsed = gameState.fatigueUsed || 0;
-
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
         <div className="max-w-2xl mx-auto">
           <div className="text-center mb-12">
             <h1 className={`text-4xl font-bold mb-2 ${isWinner ? "text-green-400" : "text-red-400"}`}>
-              {isWinner ? "승리!" : "패배!"}
+              {isWinner ? "승리!" : "패배..."}
             </h1>
             <p className="text-slate-400">게임이 종료되었습니다</p>
           </div>
 
           <Card className="bg-slate-800 border-slate-700 mb-6">
             <CardHeader>
-              <CardTitle className="text-white">게임 결과</CardTitle>
+              <CardTitle className="text-white">최종 스코어</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
-                <div className="text-center">
-                  <p className="text-slate-400 text-sm">경험치</p>
-                  <p className={`text-lg font-bold ${expGained > 0 ? "text-green-400" : "text-red-400"}`}>
-                    {expGained > 0 ? "+" : ""}{expGained}
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="text-slate-400 text-sm">골드</p>
-                  <p className={`text-lg font-bold ${goldGained > 0 ? "text-yellow-400" : "text-red-400"}`}>
-                    {goldGained > 0 ? "+" : ""}{goldGained}
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="text-slate-400 text-sm">피로도</p>
-                  <p className="text-lg font-bold text-orange-400">-{fatigueUsed}</p>
-                </div>
+            <CardContent>
+              <p className="text-3xl font-bold text-center text-blue-400">{gameState.finalScore}</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-slate-800 border-slate-700 mb-6">
+            <CardHeader>
+              <CardTitle className="text-white">획득 보상</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex justify-between">
+                <span className="text-slate-300">경험치</span>
+                <span className="text-green-400 font-bold">+{gameState.expGained}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-300">골드</span>
+                <span className="text-yellow-400 font-bold">+{gameState.goldGained}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-300">피로도 소비</span>
+                <span className="text-red-400 font-bold">-{gameState.fatigueUsed}</span>
               </div>
             </CardContent>
           </Card>
@@ -455,7 +446,7 @@ export default function PracticePage() {
               setShowResultConfirm(false);
             }}
           >
-            다시 게임하기
+            다시 하기
           </Button>
         </div>
       </div>
