@@ -39,7 +39,8 @@ import {
 import { storagePut } from "./storage";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, MAPS, calcGradeIndex, calcTotalStats, STAT_KEYS } from "@shared/gameConstants";
+import { DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, MAPS, calcGradeIndex, calcTotalStats, STAT_KEYS, StatKey } from "@shared/gameConstants";
+import { simulateGame, calculateWinProbability } from "./gameSimulation";
 
 // ── Player Router ────────────────────────────────────────────────
 
@@ -358,18 +359,44 @@ const practiceRouter = router({
       const opponentStats = await getPlayerStats(opponent.id);
       if (!playerStats || !opponentStats) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "능력치 조회 실패" });
 
+      // 맵 정보 조회
+      const maps = await getAllMaps();
+      const map = maps.find(m => m.id === input.mapId);
+      if (!map) throw new TRPCError({ code: "NOT_FOUND", message: "맵을 찾을 수 없습니다" });
+
+      // 승률 계산
+      const raceAdvantage = typeof map.raceAdvantage === 'string' 
+        ? JSON.parse(map.raceAdvantage) 
+        : map.raceAdvantage;
+      
+      const playerStatsRecord = Object.fromEntries(
+        STAT_KEYS.map(key => [key, (playerStats as any)[key]])
+      ) as Record<StatKey, number>;
+      const opponentStatsRecord = Object.fromEntries(
+        STAT_KEYS.map(key => [key, (opponentStats as any)[key]])
+      ) as Record<StatKey, number>;
+
+      const winProbability = calculateWinProbability(
+        playerStatsRecord,
+        opponentStatsRecord,
+        player.race as "terran" | "zerg" | "protoss",
+        opponent.race as "terran" | "zerg" | "protoss",
+        raceAdvantage
+      );
+
       // 게임 생성
-      const gameResult = await createGame({
+      const newGameResult = await createGame({
         player1Id: player.id,
         player2Id: opponent.id,
         mapId: input.mapId,
         difficulty: input.difficulty,
         player1Race: player.race as "terran" | "zerg" | "protoss",
         player2Race: opponent.race as "terran" | "zerg" | "protoss",
-        player1WinProbability: 50, // 기본값, 나중에 계산
+        player1WinProbability: winProbability,
       });
 
-      return { gameId: 1, opponent }; // TODO: 실제 게임 ID 반환
+      const gameId = (newGameResult as any)?.insertId || 1;
+      return { gameId, opponent, winProbability };
     }),
 
   playGame: protectedProcedure
@@ -385,9 +412,33 @@ const practiceRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "이 게임에 참여할 수 없습니다" });
       }
 
-      // 게임 결과 계산 (간단한 로직: 50% 확률)
-      const isPlayer1 = player.id === game.player1Id;
-      const winnerId = Math.random() < 0.5 ? game.player1Id : game.player2Id;
+      // 상대 선수 정보 조회
+      const opponentId = player.id === game.player1Id ? game.player2Id : game.player1Id;
+      const opponent = await getPlayerByUserId(opponentId);
+      if (!opponent) throw new TRPCError({ code: "NOT_FOUND", message: "상대 선수를 찾을 수 없습니다" });
+
+      // 맵 정보 조회
+      const maps = await getAllMaps();
+      const map = maps.find(m => m.id === game.mapId);
+      if (!map) throw new TRPCError({ code: "NOT_FOUND", message: "맵을 찾을 수 없습니다" });
+
+      const raceAdvantage = typeof map.raceAdvantage === 'string' 
+        ? JSON.parse(map.raceAdvantage) 
+        : map.raceAdvantage;
+
+      // 게임 시뮬레이션 실행
+      const simulation = await simulateGame(
+        game.player1Id,
+        game.player2Id,
+        game.player1Race,
+        game.player2Race,
+        game.difficulty,
+        raceAdvantage,
+        player.id === game.player1Id ? player.fatigue : opponent.fatigue,
+        player.id === game.player2Id ? player.fatigue : opponent.fatigue
+      );
+
+      const winnerId = simulation.winnerId;
       const isWinner = winnerId === player.id;
 
       // 보상 계산
@@ -397,7 +448,7 @@ const practiceRouter = router({
       const fatigueUsed = FATIGUE_COST[game.difficulty];
 
       // 게임 완료
-      await completeGame(input.gameId, winnerId, 60, 40);
+      await completeGame(input.gameId, winnerId, simulation.player1FinalScore, simulation.player2FinalScore);
 
       // 게임 결과 저장
       const statChanges: Record<string, number> = {};
@@ -415,7 +466,14 @@ const practiceRouter = router({
         fatigueUsed,
       });
 
-      return { isWinner, expGained, goldGained, fatigueUsed };
+      return { 
+        isWinner, 
+        expGained, 
+        goldGained, 
+        fatigueUsed,
+        turns: simulation.turns,
+        finalScore: isWinner ? simulation.player1FinalScore : simulation.player2FinalScore,
+      };
     }),
 
   getGameHistory: protectedProcedure.query(async ({ ctx }) => {
