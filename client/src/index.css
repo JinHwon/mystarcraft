@@ -43,75 +43,43 @@
 }
 
 :root {
-  --primary: var(--color-blue-700);
-  --primary-foreground: var(--color-blue-50);
-  --sidebar-primary: var(--color-blue-600);
-  --sidebar-primary-foreground: var(--color-blue-50);
-  --chart-1: var(--color-blue-300);
-  --chart-2: var(--color-blue-500);
-  --chart-3: var(--color-blue-600);
-  --chart-4: var(--color-blue-700);
-  --chart-5: var(--color-blue-800);
-  --radius: 0.65rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.235 0.015 65);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.235 0.015 65);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.235 0.015 65);
-  --secondary: oklch(0.98 0.001 286.375);
-  --secondary-foreground: oklch(0.4 0.015 65);
-  --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.552 0.016 285.938);
-  --accent: oklch(0.967 0.001 286.375);
-  --accent-foreground: oklch(0.141 0.005 285.823);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.623 0.214 259.815);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.235 0.015 65);
-  --sidebar-accent: oklch(0.967 0.001 286.375);
-  --sidebar-accent-foreground: oklch(0.141 0.005 285.823);
-  --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(0.623 0.214 259.815);
+  --radius: 0.625rem;
+  /* 스타크래프트 다크 테마 */
+  --background: oklch(0.10 0.015 240);
+  --foreground: oklch(0.92 0.01 240);
+  --card: oklch(0.14 0.018 240);
+  --card-foreground: oklch(0.92 0.01 240);
+  --popover: oklch(0.13 0.018 240);
+  --popover-foreground: oklch(0.92 0.01 240);
+  --primary: oklch(0.65 0.18 220);
+  --primary-foreground: oklch(0.98 0.005 240);
+  --secondary: oklch(0.20 0.02 240);
+  --secondary-foreground: oklch(0.85 0.01 240);
+  --muted: oklch(0.18 0.015 240);
+  --muted-foreground: oklch(0.60 0.015 240);
+  --accent: oklch(0.22 0.025 240);
+  --accent-foreground: oklch(0.90 0.01 240);
+  --destructive: oklch(0.60 0.22 25);
+  --destructive-foreground: oklch(0.98 0.005 240);
+  --border: oklch(0.25 0.02 240);
+  --input: oklch(0.20 0.02 240);
+  --ring: oklch(0.65 0.18 220);
+  --chart-1: oklch(0.65 0.18 220);
+  --chart-2: oklch(0.65 0.18 160);
+  --chart-3: oklch(0.65 0.18 280);
+  --chart-4: oklch(0.65 0.18 60);
+  --chart-5: oklch(0.65 0.18 340);
+  --sidebar: oklch(0.12 0.018 240);
+  --sidebar-foreground: oklch(0.88 0.01 240);
+  --sidebar-primary: oklch(0.65 0.18 220);
+  --sidebar-primary-foreground: oklch(0.98 0.005 240);
+  --sidebar-accent: oklch(0.20 0.025 240);
+  --sidebar-accent-foreground: oklch(0.88 0.01 240);
+  --sidebar-border: oklch(0.22 0.02 240);
+  --sidebar-ring: oklch(0.65 0.18 220);
 }
 
-.dark {
-  --primary: var(--color-blue-700);
-  --primary-foreground: var(--color-blue-50);
-  --sidebar-primary: var(--color-blue-500);
-  --sidebar-primary-foreground: var(--color-blue-50);
-  --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.85 0.005 65);
-  --card: oklch(0.21 0.006 285.885);
-  --card-foreground: oklch(0.85 0.005 65);
-  --popover: oklch(0.21 0.006 285.885);
-  --popover-foreground: oklch(0.85 0.005 65);
-  --secondary: oklch(0.24 0.006 286.033);
-  --secondary-foreground: oklch(0.7 0.005 65);
-  --muted: oklch(0.274 0.006 286.033);
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.274 0.006 286.033);
-  --accent-foreground:  oklch(0.92 0.005 65);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.488 0.243 264.376);
-  --chart-1: var(--color-blue-300);
-  --chart-2: var(--color-blue-500);
-  --chart-3: var(--color-blue-600);
-  --chart-4: var(--color-blue-700);
-  --chart-5: var(--color-blue-800);
-  --sidebar: oklch(0.21 0.006 285.885);
-  --sidebar-foreground: oklch(0.85 0.005 65);
-  --sidebar-accent: oklch(0.274 0.006 286.033);
-  --sidebar-accent-foreground:  oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.488 0.243 264.376);
-}
+/* dark mode inherits root (already dark) */
 
 @layer base {
   * {
@@ -119,6 +87,7 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: 'Noto Sans KR', 'Inter', sans-serif;
   }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
@@ -132,6 +101,29 @@
     @apply cursor-pointer;
   }
 }
+
+/* 스타크래프트 커스텀 유틸리티 */
+.glow-blue { box-shadow: 0 0 15px oklch(0.65 0.18 220 / 0.4), 0 0 30px oklch(0.65 0.18 220 / 0.2); }
+.glow-gold { box-shadow: 0 0 15px oklch(0.80 0.18 80 / 0.4), 0 0 30px oklch(0.80 0.18 80 / 0.2); }
+.glow-purple { box-shadow: 0 0 15px oklch(0.65 0.18 300 / 0.4), 0 0 30px oklch(0.65 0.18 300 / 0.2); }
+
+@keyframes stat-fill {
+  from { width: 0%; }
+  to { width: var(--stat-width); }
+}
+.stat-bar-fill { animation: stat-fill 0.8s ease-out forwards; }
+
+.race-terran { color: #4A9EFF; }
+.race-zerg { color: #B44FD8; }
+.race-protoss { color: #F1C40F; }
+
+.card-hover { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 25px oklch(0 0 0 / 0.4); }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: oklch(0.12 0.018 240); }
+::-webkit-scrollbar-thumb { background: oklch(0.30 0.02 240); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: oklch(0.40 0.03 240); }
 
 @layer components {
   /**

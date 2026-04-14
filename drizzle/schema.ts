@@ -1,17 +1,16 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import {
+  boolean,
+  int,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  varchar,
+  json,
+} from "drizzle-orm/mysql-core";
 
-/**
- * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
- */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -25,4 +24,67 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+// 선수 테이블
+export const players = mysqlTable("players", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(), // 계정당 1명
+  name: varchar("name", { length: 100 }).notNull(),
+  race: mysqlEnum("race", ["terran", "zerg", "protoss"]).notNull(),
+  photoUrl: text("photoUrl"),
+  level: int("level").default(1).notNull(),
+  exp: int("exp").default(0).notNull(),
+  expToNext: int("expToNext").default(100).notNull(),
+  statPoints: int("statPoints").default(0).notNull(), // 미배분 포인트
+  gold: int("gold").default(1000).notNull(), // 게임 내 재화
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Player = typeof players.$inferSelect;
+export type InsertPlayer = typeof players.$inferInsert;
+
+// 선수 능력치 테이블
+export const playerStats = mysqlTable("player_stats", {
+  id: int("id").autoincrement().primaryKey(),
+  playerId: int("playerId").notNull().unique(),
+  sense: int("sense").default(500).notNull(),      // 센스
+  control: int("control").default(500).notNull(),  // 컨트롤
+  attack: int("attack").default(500).notNull(),    // 공격력
+  harass: int("harass").default(500).notNull(),    // 견제
+  strategy: int("strategy").default(500).notNull(), // 전략
+  supply: int("supply").default(500).notNull(),    // 물량
+  defense: int("defense").default(500).notNull(),  // 수비력
+  scout: int("scout").default(500).notNull(),      // 정찰
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PlayerStats = typeof playerStats.$inferSelect;
+export type InsertPlayerStats = typeof playerStats.$inferInsert;
+
+// 아이템 테이블
+export const items = mysqlTable("items", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  price: int("price").notNull(),
+  rarity: mysqlEnum("rarity", ["common", "rare", "epic", "legendary"]).default("common").notNull(),
+  // 능력치 보너스 JSON: { sense, control, attack, harass, strategy, supply, defense, scout }
+  statBoosts: json("statBoosts").notNull(),
+  iconEmoji: varchar("iconEmoji", { length: 10 }).default("⚔️").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Item = typeof items.$inferSelect;
+export type InsertItem = typeof items.$inferInsert;
+
+// 선수-아이템 관계 테이블
+export const playerItems = mysqlTable("player_items", {
+  id: int("id").autoincrement().primaryKey(),
+  playerId: int("playerId").notNull(),
+  itemId: int("itemId").notNull(),
+  equipped: boolean("equipped").default(false).notNull(),
+  purchasedAt: timestamp("purchasedAt").defaultNow().notNull(),
+});
+
+export type PlayerItem = typeof playerItems.$inferSelect;
+export type InsertPlayerItem = typeof playerItems.$inferInsert;

@@ -1,11 +1,10 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import { InsertUser, items, playerItems, players, playerStats, users } from "../drizzle/schema";
+import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
@@ -19,25 +18,14 @@ export async function getDb() {
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
-  }
-
+  if (!user.openId) throw new Error("User openId is required for upsert");
   const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
-  }
-
+  if (!db) { console.warn("[Database] Cannot upsert user: database not available"); return; }
   try {
-    const values: InsertUser = {
-      openId: user.openId,
-    };
+    const values: InsertUser = { openId: user.openId };
     const updateSet: Record<string, unknown> = {};
-
     const textFields = ["name", "email", "loginMethod"] as const;
     type TextField = (typeof textFields)[number];
-
     const assignNullable = (field: TextField) => {
       const value = user[field];
       if (value === undefined) return;
@@ -45,32 +33,13 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       values[field] = normalized;
       updateSet[field] = normalized;
     };
-
     textFields.forEach(assignNullable);
-
-    if (user.lastSignedIn !== undefined) {
-      values.lastSignedIn = user.lastSignedIn;
-      updateSet.lastSignedIn = user.lastSignedIn;
-    }
-    if (user.role !== undefined) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
-    }
-
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
-    }
-
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
-    });
+    if (user.lastSignedIn !== undefined) { values.lastSignedIn = user.lastSignedIn; updateSet.lastSignedIn = user.lastSignedIn; }
+    if (user.role !== undefined) { values.role = user.role; updateSet.role = user.role; }
+    else if (user.openId === ENV.ownerOpenId) { values.role = "admin"; updateSet.role = "admin"; }
+    if (!values.lastSignedIn) values.lastSignedIn = new Date();
+    if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
+    await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
   } catch (error) {
     console.error("[Database] Failed to upsert user:", error);
     throw error;
@@ -79,14 +48,176 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return undefined;
-  }
-
+  if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// ── Player Queries ──────────────────────────────────────────────
+
+export async function getPlayerByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(players).where(eq(players.userId, userId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getPlayerStats(playerId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(playerStats).where(eq(playerStats.playerId, playerId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function createPlayer(data: {
+  userId: number;
+  name: string;
+  race: "terran" | "zerg" | "protoss";
+  photoUrl?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [result] = await db.insert(players).values({
+    userId: data.userId,
+    name: data.name,
+    race: data.race,
+    photoUrl: data.photoUrl ?? null,
+    level: 1,
+    exp: 0,
+    expToNext: 100,
+    statPoints: 0,
+    gold: 1000,
+  });
+  const playerId = (result as any).insertId as number;
+  await db.insert(playerStats).values({
+    playerId,
+    sense: 500,
+    control: 500,
+    attack: 500,
+    harass: 500,
+    strategy: 500,
+    supply: 500,
+    defense: 500,
+    scout: 500,
+  });
+  return playerId;
+}
+
+export async function updatePlayerPhoto(playerId: number, photoUrl: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(players).set({ photoUrl }).where(eq(players.id, playerId));
+}
+
+export async function allocateStat(
+  playerId: number,
+  statKey: string,
+  points: number,
+  currentStatPoints: number
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  if (currentStatPoints < points) throw new Error("포인트가 부족합니다");
+
+  const validKeys = ["sense", "control", "attack", "harass", "strategy", "supply", "defense", "scout"];
+  if (!validKeys.includes(statKey)) throw new Error("유효하지 않은 능력치 항목입니다");
+
+  // 현재 능력치 조회 후 최대값 체크
+  const stats = await getPlayerStats(playerId);
+  if (!stats) throw new Error("능력치 정보를 찾을 수 없습니다");
+  const current = (stats as any)[statKey] as number;
+  const newVal = Math.min(current + points, 1200);
+  const actualPoints = newVal - current;
+
+  await db.update(playerStats).set({ [statKey]: newVal }).where(eq(playerStats.playerId, playerId));
+  await db.update(players).set({ statPoints: currentStatPoints - actualPoints }).where(eq(players.id, playerId));
+  return { newVal, usedPoints: actualPoints };
+}
+
+// ── Item Queries ─────────────────────────────────────────────────
+
+export async function getAllItems() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(items);
+}
+
+export async function getPlayerItems(playerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db
+    .select({
+      playerItemId: playerItems.id,
+      equipped: playerItems.equipped,
+      purchasedAt: playerItems.purchasedAt,
+      item: items,
+    })
+    .from(playerItems)
+    .innerJoin(items, eq(playerItems.itemId, items.id))
+    .where(eq(playerItems.playerId, playerId));
+  return result;
+}
+
+export async function buyItem(playerId: number, itemId: number, playerGold: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const itemResult = await db.select().from(items).where(eq(items.id, itemId)).limit(1);
+  if (!itemResult.length) throw new Error("아이템을 찾을 수 없습니다");
+  const item = itemResult[0];
+
+  // 이미 보유 중인지 확인
+  const existing = await db
+    .select()
+    .from(playerItems)
+    .where(and(eq(playerItems.playerId, playerId), eq(playerItems.itemId, itemId)))
+    .limit(1);
+  if (existing.length > 0) throw new Error("이미 보유한 아이템입니다");
+
+  if (playerGold < item.price) throw new Error("골드가 부족합니다");
+
+  await db.insert(playerItems).values({ playerId, itemId, equipped: false });
+  await db.update(players).set({ gold: playerGold - item.price }).where(eq(players.id, playerId));
+  return item;
+}
+
+export async function toggleEquipItem(
+  playerId: number,
+  playerItemId: number,
+  equip: boolean
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(playerItems)
+    .set({ equipped: equip })
+    .where(and(eq(playerItems.id, playerItemId), eq(playerItems.playerId, playerId)));
+}
+
+// ── Seed Items ───────────────────────────────────────────────────
+
+export async function seedItemsIfEmpty() {
+  const db = await getDb();
+  if (!db) return;
+  const existing = await db.select().from(items).limit(1);
+  if (existing.length > 0) return;
+
+  const seedItems = [
+    { name: "스캔 모듈", description: "정찰 능력을 향상시키는 첨단 스캔 장비", price: 200, rarity: "common" as const, iconEmoji: "🔭", statBoosts: { scout: 30 } },
+    { name: "전술 지휘봉", description: "전략적 판단력을 높이는 지휘 도구", price: 300, rarity: "common" as const, iconEmoji: "📡", statBoosts: { strategy: 40 } },
+    { name: "마린 헬멧", description: "방어력을 강화하는 테란 표준 헬멧", price: 250, rarity: "common" as const, iconEmoji: "⛑️", statBoosts: { defense: 35 } },
+    { name: "자극제 주사", description: "공격 속도와 컨트롤을 향상시키는 스팀팩", price: 400, rarity: "rare" as const, iconEmoji: "💉", statBoosts: { control: 50, attack: 30 } },
+    { name: "사이오닉 크리스탈", description: "프로토스의 정신력을 증폭하는 수정", price: 500, rarity: "rare" as const, iconEmoji: "💎", statBoosts: { sense: 60, strategy: 30 } },
+    { name: "저그 히드라 독침", description: "공격력을 대폭 향상시키는 독침 강화제", price: 450, rarity: "rare" as const, iconEmoji: "🦂", statBoosts: { attack: 70, harass: 20 } },
+    { name: "아칸 에너지 코어", description: "모든 능력치를 균형 있게 향상시키는 에너지 코어", price: 800, rarity: "epic" as const, iconEmoji: "⚡", statBoosts: { sense: 30, control: 30, attack: 30, harass: 30 } },
+    { name: "울트라리스크 갑옷", description: "수비력과 물량을 극대화하는 최강의 갑옷", price: 900, rarity: "epic" as const, iconEmoji: "🛡️", statBoosts: { defense: 80, supply: 60 } },
+    { name: "캐리어 지휘 시스템", description: "전략과 견제 능력을 최고 수준으로 끌어올리는 시스템", price: 1200, rarity: "legendary" as const, iconEmoji: "🚀", statBoosts: { strategy: 100, harass: 80, scout: 50 } },
+    { name: "케리건의 유산", description: "저그 여왕의 힘을 담은 전설의 유물", price: 1500, rarity: "legendary" as const, iconEmoji: "👑", statBoosts: { sense: 80, control: 80, attack: 80, supply: 80 } },
+    { name: "타소니스의 검", description: "프로토스 집행관의 검에서 깃든 용맹", price: 1800, rarity: "legendary" as const, iconEmoji: "⚔️", statBoosts: { attack: 120, harass: 100, defense: 60 } },
+    { name: "레이너의 C-14 라이플", description: "테란 최고의 저격수가 사용한 전설의 소총", price: 2000, rarity: "legendary" as const, iconEmoji: "🔫", statBoosts: { control: 100, scout: 100, attack: 100 } },
+  ];
+
+  for (const item of seedItems) {
+    await db.insert(items).values(item);
+  }
+}
