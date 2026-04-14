@@ -5,6 +5,7 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Camera, Plus, Minus, ChevronUp, Star, TrendingUp, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { StatRadarChart } from "@/components/StatRadarChart";
 import {
   STAT_KEYS,
   STAT_LABELS,
@@ -421,35 +422,10 @@ export default function PlayerProfile() {
             </div>
           </div>
 
-          {/* 능력치 합산 요약 */}
-          <div className="bg-card border border-border rounded-2xl p-5">
-            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">능력치 분포</h3>
-            <div className="grid grid-cols-4 gap-3">
-              {STAT_KEYS.map((key) => {
-                const val = stats[key];
-                const color = statColors[key];
-                const pct = Math.round((val / STAT_MAX) * 100);
-                return (
-                  <div key={key} className="text-center space-y-2">
-                    <div className="relative mx-auto w-12 h-12">
-                      <svg viewBox="0 0 36 36" className="w-12 h-12 -rotate-90">
-                        <circle cx="18" cy="18" r="15.9" fill="none" stroke="oklch(0.25 0.02 240)" strokeWidth="3" />
-                        <circle
-                          cx="18" cy="18" r="15.9" fill="none"
-                          stroke={color} strokeWidth="3"
-                          strokeDasharray={`${pct} ${100 - pct}`}
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-xs font-bold text-foreground">{pct}%</span>
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{STAT_LABELS[key]}</p>
-                  </div>
-                );
-              })}
-            </div>
+          {/* 능력치 레이더 차트 */}
+          <div className="bg-card border border-border rounded-2xl p-6 flex flex-col items-center">
+            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4 self-start">능력치 분포</h3>
+            <StatRadarChart stats={effectiveStats} grade={grade} gradeColor={gradeColor} size={300} />
           </div>
         </div>
       </div>
