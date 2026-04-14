@@ -1,4 +1,3 @@
-import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -18,8 +17,18 @@ import {
   recoverFatigueIfNeeded,
   addFatigueCost,
   updateFatigue,
+  getAllUsers,
+  updatePlayerByAdmin,
+  resetPlayerStats,
+  resetPlayerProgress,
+  createEvent,
+  updateEvent,
+  deleteEvent,
+  getAllEvents,
+  getActiveEvents,
 } from "./db";
 import { storagePut } from "./storage";
+import { TRPCError } from "@trpc/server";
 
 // ── Player Router ────────────────────────────────────────────────
 
@@ -177,6 +186,109 @@ const shopRouter = router({
 
 // ── App Router ───────────────────────────────────────────────────
 
+// ── Admin Router ────────────────────────────────────────────────
+
+const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.user.role !== "admin") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "관리자 권한이 필요합니다" });
+  }
+  return next({ ctx });
+});
+
+const adminRouter = router({
+  listUsers: adminProcedure.query(async () => {
+    return await getAllUsers();
+  }),
+
+  updatePlayer: adminProcedure
+    .input(
+      z.object({
+        playerId: z.number().int(),
+        gold: z.number().int().optional(),
+        level: z.number().int().optional(),
+        exp: z.number().int().optional(),
+        statPoints: z.number().int().optional(),
+        fatigue: z.number().int().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      await updatePlayerByAdmin(input.playerId, {
+        gold: input.gold,
+        level: input.level,
+        exp: input.exp,
+        statPoints: input.statPoints,
+        fatigue: input.fatigue,
+      });
+      return { success: true };
+    }),
+
+  resetPlayerStats: adminProcedure
+    .input(z.object({ playerId: z.number().int() }))
+    .mutation(async ({ input }) => {
+      await resetPlayerStats(input.playerId);
+      return { success: true };
+    }),
+
+  resetPlayerProgress: adminProcedure
+    .input(z.object({ playerId: z.number().int() }))
+    .mutation(async ({ input }) => {
+      await resetPlayerProgress(input.playerId);
+      return { success: true };
+    }),
+});
+
+// ── Event Router ────────────────────────────────────────────────
+
+const eventRouter = router({
+  listAll: adminProcedure.query(async () => {
+    return await getAllEvents();
+  }),
+
+  listActive: publicProcedure.query(async () => {
+    return await getActiveEvents();
+  }),
+
+  create: adminProcedure
+    .input(
+      z.object({
+        type: z.enum(["exp_double", "fatigue_unlimited", "gold_double", "stat_boost"]),
+        name: z.string().min(1).max(100),
+        description: z.string().optional(),
+        isActive: z.boolean().optional(),
+        startTime: z.date().optional(),
+        endTime: z.date().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      await createEvent(input);
+      return { success: true };
+    }),
+
+  update: adminProcedure
+    .input(
+      z.object({
+        eventId: z.number().int(),
+        isActive: z.boolean().optional(),
+        startTime: z.date().optional(),
+        endTime: z.date().optional(),
+        name: z.string().optional(),
+        description: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const { eventId, ...updates } = input;
+      await updateEvent(eventId, updates);
+      return { success: true };
+    }),
+
+  delete: adminProcedure
+    .input(z.object({ eventId: z.number().int() }))
+    .mutation(async ({ input }) => {
+      await deleteEvent(input.eventId);
+      return { success: true };
+    }),
+});
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -189,6 +301,8 @@ export const appRouter = router({
   }),
   player: playerRouter,
   shop: shopRouter,
+  admin: adminRouter,
+  event: eventRouter,
 });
 
 export type AppRouter = typeof appRouter;

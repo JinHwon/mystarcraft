@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, items, playerItems, players, playerStats, users } from "../drizzle/schema";
+import { InsertUser, items, playerItems, players, playerStats, users, events } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -274,4 +274,125 @@ export async function updateFatigue(playerId: number, amount: number) {
     .update(players)
     .set({ fatigue: newFatigue })
     .where(eq(players.id, playerId));
+}
+
+
+// ── Admin Functions ──────────────────────────────────────────────
+
+export async function getAllUsers() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(users);
+}
+
+export async function updatePlayerByAdmin(playerId: number, updates: {
+  gold?: number;
+  level?: number;
+  exp?: number;
+  statPoints?: number;
+  fatigue?: number;
+}) {
+  const db = await getDb();
+  if (!db) return;
+
+  const updateSet: Record<string, unknown> = {};
+  if (updates.gold !== undefined) updateSet.gold = updates.gold;
+  if (updates.level !== undefined) updateSet.level = updates.level;
+  if (updates.exp !== undefined) updateSet.exp = updates.exp;
+  if (updates.statPoints !== undefined) updateSet.statPoints = updates.statPoints;
+  if (updates.fatigue !== undefined) updateSet.fatigue = updates.fatigue;
+
+  if (Object.keys(updateSet).length > 0) {
+    await db.update(players).set(updateSet).where(eq(players.id, playerId));
+  }
+}
+
+export async function resetPlayerStats(playerId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  const STAT_KEYS = ["sense", "control", "attack", "harass", "strategy", "supply", "defense", "scout"];
+  const resetStats: Record<string, number> = {};
+  STAT_KEYS.forEach(key => {
+    resetStats[key] = 500;
+  });
+
+  await db.update(playerStats).set(resetStats).where(eq(playerStats.playerId, playerId));
+}
+
+export async function resetPlayerProgress(playerId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(players).set({
+    level: 1,
+    exp: 0,
+    statPoints: 0,
+    fatigue: 100,
+  }).where(eq(players.id, playerId));
+
+  await resetPlayerStats(playerId);
+}
+
+// ── Event Functions ──────────────────────────────────────────────
+
+export async function createEvent(eventData: {
+  type: "exp_double" | "fatigue_unlimited" | "gold_double" | "stat_boost";
+  name: string;
+  description?: string;
+  isActive?: boolean;
+  startTime?: Date;
+  endTime?: Date;
+}) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.insert(events).values({
+    type: eventData.type,
+    name: eventData.name,
+    description: eventData.description,
+    isActive: eventData.isActive ?? false,
+    startTime: eventData.startTime,
+    endTime: eventData.endTime,
+  });
+}
+
+export async function updateEvent(eventId: number, updates: {
+  isActive?: boolean;
+  startTime?: Date;
+  endTime?: Date;
+  name?: string;
+  description?: string;
+}) {
+  const db = await getDb();
+  if (!db) return;
+
+  const updateSet: Record<string, unknown> = {};
+  if (updates.isActive !== undefined) updateSet.isActive = updates.isActive;
+  if (updates.startTime !== undefined) updateSet.startTime = updates.startTime;
+  if (updates.endTime !== undefined) updateSet.endTime = updates.endTime;
+  if (updates.name !== undefined) updateSet.name = updates.name;
+  if (updates.description !== undefined) updateSet.description = updates.description;
+
+  if (Object.keys(updateSet).length > 0) {
+    await db.update(events).set(updateSet).where(eq(events.id, eventId));
+  }
+}
+
+export async function deleteEvent(eventId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(events).where(eq(events.id, eventId));
+}
+
+export async function getAllEvents() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(events);
+}
+
+export async function getActiveEvents() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(events).where(eq(events.isActive, true));
 }

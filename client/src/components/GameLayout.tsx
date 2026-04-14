@@ -1,4 +1,3 @@
-import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
 import { useLocation } from "wouter";
@@ -10,14 +9,24 @@ import {
   Sword,
   ChevronRight,
   Coins,
+  Settings,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
-const navItems = [
-  { path: "/profile", label: "선수 관리", icon: User },
-  { path: "/shop", label: "아이템 상점", icon: ShoppingBag },
-];
+const getNavItems = (isAdmin: boolean) => {
+  const items = [
+    { path: "/profile", label: "선수 관리", icon: User },
+    { path: "/shop", label: "아이템 상점", icon: ShoppingBag },
+    { path: "/events", label: "이벤트", icon: Zap },
+  ];
+  if (isAdmin) {
+    items.push({ path: "/admin", label: "관리자 패널", icon: Settings });
+  }
+  return items;
+};
 
 const RACE_LABELS: Record<string, string> = {
   terran: "테란",
@@ -33,6 +42,7 @@ const RACE_COLORS: Record<string, string> = {
 
 export default function GameLayout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, loading, logout } = useAuth();
+  const navItems = getNavItems(user?.role === "admin");
   const [location, navigate] = useLocation();
   const { data: player, isLoading: playerLoading } = trpc.player.get.useQuery(undefined, {
     enabled: isAuthenticated,

@@ -8,6 +8,8 @@ import Home from "./pages/Home";
 import CreatePlayer from "./pages/CreatePlayer";
 import PlayerProfile from "./pages/PlayerProfile";
 import Shop from "./pages/Shop";
+import Admin from "./pages/Admin";
+import Events from "./pages/Events";
 import GameLayout from "./components/GameLayout";
 
 function Router() {
@@ -23,6 +25,16 @@ function Router() {
       <Route path="/shop">
         <GameLayout>
           <Shop />
+        </GameLayout>
+      </Route>
+      <Route path="/admin">
+        <GameLayout>
+          <Admin />
+        </GameLayout>
+      </Route>
+      <Route path="/events">
+        <GameLayout>
+          <Events />
         </GameLayout>
       </Route>
       <Route path="/404" component={NotFound} />

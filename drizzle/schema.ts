@@ -91,3 +91,19 @@ export const playerItems = mysqlTable("player_items", {
 
 export type PlayerItem = typeof playerItems.$inferSelect;
 export type InsertPlayerItem = typeof playerItems.$inferInsert;
+
+// 이벤트 테이블
+export const events = mysqlTable("events", {
+  id: int("id").autoincrement().primaryKey(),
+  type: mysqlEnum("type", ["exp_double", "fatigue_unlimited", "gold_double", "stat_boost"]).notNull(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  isActive: boolean("isActive").default(false).notNull(),
+  startTime: timestamp("startTime"),
+  endTime: timestamp("endTime"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Event = typeof events.$inferSelect;
+export type InsertEvent = typeof events.$inferInsert;

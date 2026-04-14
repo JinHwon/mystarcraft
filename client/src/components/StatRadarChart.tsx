@@ -145,14 +145,25 @@ export function StatRadarChart({
 
           return (
             <g key={`label-${i}`}>
+              {/* 라벨 배경 */}
+              <rect
+                x={labelPoint.x - 22}
+                y={labelPoint.y - 18}
+                width="44"
+                height="32"
+                rx="4"
+                fill="oklch(0.12 0.02 240 / 0.8)"
+                stroke={color}
+                strokeWidth="1.5"
+              />
               {/* 라벨 텍스트 */}
               <text
                 x={labelPoint.x}
-                y={labelPoint.y - 8}
+                y={labelPoint.y - 3}
                 textAnchor="middle"
-                fontSize="11"
-                fontWeight="600"
-                fill="oklch(0.75 0.05 240)"
+                fontSize="13"
+                fontWeight="700"
+                fill={color}
                 fontFamily="system-ui, -apple-system"
               >
                 {label}
@@ -160,11 +171,11 @@ export function StatRadarChart({
               {/* 값 텍스트 */}
               <text
                 x={labelPoint.x}
-                y={labelPoint.y + 8}
+                y={labelPoint.y + 11}
                 textAnchor="middle"
-                fontSize="12"
-                fontWeight="bold"
-                fill={color}
+                fontSize="11"
+                fontWeight="600"
+                fill="oklch(0.8 0.05 240)"
                 fontFamily="system-ui, -apple-system"
               >
                 {value}
