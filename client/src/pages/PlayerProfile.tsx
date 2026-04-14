@@ -75,6 +75,7 @@ export default function PlayerProfile() {
   const utils = trpc.useUtils();
   const { data: playerData, isLoading } = trpc.player.get.useQuery();
   const { data: playerItems = [] } = trpc.shop.getPlayerItems.useQuery();
+  const { data: activeEvents = [] } = trpc.event.listActive.useQuery();
   const [allocating, setAllocating] = useState<StatKey | null>(null);
   const [allocPoints, setAllocPoints] = useState(1);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -205,6 +206,21 @@ export default function PlayerProfile() {
           경험치 획득 (+50)
         </Button>
       </div>
+
+      {/* 활성 이벤트 배너 */}
+      {activeEvents.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-900 to-orange-900 border-2 border-amber-500 rounded-lg p-4">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="font-bold text-amber-300">🎉 진행 중인 이벤트:</span>
+            {activeEvents.map((event) => (
+              <span key={event.id} className="inline-flex items-center gap-1 bg-slate-900 px-3 py-1 rounded-full text-sm text-amber-300 border border-amber-600">
+                <span className="text-lg">{{"exp_double": "⭐", "fatigue_unlimited": "⚡", "gold_double": "💰", "stat_boost": "📈"}[event.type as string] || "🎯"}</span>
+                {event.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 왼쪽: 선수 카드 */}
