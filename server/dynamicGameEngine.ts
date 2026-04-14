@@ -200,10 +200,12 @@ function applyAction(player: PlayerState, action: PlayerAction): void {
   switch (action.type) {
     case "unit_produced":
       player.resources -= 50;
+      player.supply += 10; // 병력 증가
       player.unitsProduced.push(action.data);
       break;
     case "building_built":
       player.resources -= 100;
+      player.supply += 5; // 대날 리드 중심 건물
       break;
     case "tech_upgraded":
       player.resources -= 150;
@@ -289,6 +291,17 @@ function checkGameEnd(gameState: GameState): void {
     gameState.winner = gameState.player1Advantage >= 70 ? gameState.player1.id : gameState.player2.id;
     const winnerName = gameState.player1Advantage >= 70 ? gameState.player1.name : gameState.player2.name;
     const loserName = gameState.player1Advantage >= 70 ? gameState.player2.name : gameState.player1.name;
+    const commentaries = generateGameEndCommentary(winnerName, loserName);
+    gameState.allCommentaries.push(...commentaries);
+    return;
+  }
+
+  // 최대 100턴 도달 시 게임 종료
+  if (gameState.turn >= 100) {
+    gameState.gameEnded = true;
+    gameState.winner = gameState.player1Advantage >= 50 ? gameState.player1.id : gameState.player2.id;
+    const winnerName = gameState.player1Advantage >= 50 ? gameState.player1.name : gameState.player2.name;
+    const loserName = gameState.player1Advantage >= 50 ? gameState.player2.name : gameState.player1.name;
     const commentaries = generateGameEndCommentary(winnerName, loserName);
     gameState.allCommentaries.push(...commentaries);
   }

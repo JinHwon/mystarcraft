@@ -141,9 +141,12 @@ export function generateTurnCommentary(
     }
   }
 
-  // 상황 해설
-  const player1Advantage = gameState.player1Advantage;
-  commentaries.push(generateSituationCommentary(player1Name, player2Name, player1Advantage));
+  // 공격이 있을 때만 상황 해설 추가
+  const hasAttack = gameState.player1.lastAction?.type === "attack" || gameState.player2.lastAction?.type === "attack";
+  if (hasAttack) {
+    const player1Advantage = gameState.player1Advantage;
+    commentaries.push(generateSituationCommentary(player1Name, player2Name, player1Advantage));
+  }
 
   return commentaries;
 }
