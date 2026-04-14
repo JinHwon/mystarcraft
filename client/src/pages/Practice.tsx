@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { RACE_COLORS, RACE_LABELS, DIFFICULTY_RANGES } from "@shared/gameConstants";
-import { Loader2 } from "lucide-react";
+import { Loader2, Play, Pause } from "lucide-react";
 
 type GamePhase = "difficulty" | "map" | "opponent" | "playing" | "result";
 
@@ -27,6 +27,8 @@ export default function PracticePage() {
   const [phase, setPhase] = useState<GamePhase>("difficulty");
   const [gameState, setGameState] = useState<GameState>({});
   const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
+  const [isAutoPlaying, setIsAutoPlaying] = useState(false);
+  const autoPlayIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // API 호출
   const mapsQuery = trpc.practice.getMaps.useQuery();
@@ -64,6 +66,7 @@ export default function PracticePage() {
     if (!gameState.gameId) return;
     setPhase("playing");
     setCurrentTurnIndex(0);
+    setIsAutoPlaying(true);
 
     try {
       const result = await playGameMutation.mutateAsync({
@@ -82,6 +85,7 @@ export default function PracticePage() {
     } catch (error) {
       console.error("게임 실행 실패:", error);
       setPhase("opponent");
+      setIsAutoPlaying(false);
     }
   };
 
@@ -89,7 +93,46 @@ export default function PracticePage() {
     setGameState({});
     setPhase("difficulty");
     setCurrentTurnIndex(0);
+    setIsAutoPlaying(false);
+    if (autoPlayIntervalRef.current) {
+      clearInterval(autoPlayIntervalRef.current);
+      autoPlayIntervalRef.current = null;
+    }
   };
+
+  // 자동 턴 진행
+  useEffect(() => {
+    if (!isAutoPlaying || phase !== "playing") {
+      if (autoPlayIntervalRef.current) {
+        clearInterval(autoPlayIntervalRef.current);
+        autoPlayIntervalRef.current = null;
+      }
+      return;
+    }
+
+    const turns = gameState.turns || [];
+    if (currentTurnIndex >= turns.length - 1) {
+      setIsAutoPlaying(false);
+      return;
+    }
+
+    autoPlayIntervalRef.current = setInterval(() => {
+      setCurrentTurnIndex(prev => {
+        if (prev >= turns.length - 1) {
+          setIsAutoPlaying(false);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (autoPlayIntervalRef.current) {
+        clearInterval(autoPlayIntervalRef.current);
+        autoPlayIntervalRef.current = null;
+      }
+    };
+  }, [isAutoPlaying, phase, gameState.turns, currentTurnIndex]);
 
   // 난이도 선택 화면
   if (phase === "difficulty") {
@@ -268,7 +311,7 @@ export default function PracticePage() {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-white">게임 진행 중...</h1>
             <p className="text-slate-400 mt-2">턴 {currentTurnIndex + 1} / {turns.length}</p>
@@ -285,133 +328,165 @@ export default function PracticePage() {
             </Card>
           )}
 
-          {currentTurn && (
-            <Card className="bg-slate-800 border-slate-700 mb-6">
-              <CardHeader>
-                <CardTitle className="text-white">해설</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-slate-200">{currentTurn.commentary}</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {currentTurn && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              {/* 플레이어 1 상태 */}
-              <Card className="bg-slate-800 border-slate-700">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            {/* 왼쪽: 누적 해설 */}
+            <div className="lg:col-span-1">
+              <Card className="bg-slate-800 border-slate-700 h-full">
                 <CardHeader>
-                  <CardTitle className="text-blue-400">플레이어 1</CardTitle>
+                  <CardTitle className="text-white">게임 해설</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <p className="text-slate-400 text-sm">병력</p>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 bg-slate-700 rounded-full h-2">
-                        <div
-                          className="bg-blue-500 h-2 rounded-full transition-all"
-                          style={{ width: `${Math.min(currentTurn.player1Supply / 200 * 100, 100)}%` }}
-                        />
+                <CardContent className="max-h-96 overflow-y-auto">
+                  <div className="space-y-3">
+                    {currentTurn?.allCommentaries?.map((commentary, idx) => (
+                      <div key={idx} className="p-2 bg-slate-900 rounded text-xs text-slate-300 border-l-2 border-blue-500">
+                        <p className="font-semibold text-slate-200 mb-1">턴 {idx + 1}</p>
+                        <p>{commentary}</p>
                       </div>
-                      <span className="text-white font-bold w-12">{currentTurn.player1Supply}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-sm">자원</p>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 bg-slate-700 rounded-full h-2">
-                        <div
-                          className="bg-yellow-500 h-2 rounded-full transition-all"
-                          style={{ width: `${Math.min(currentTurn.player1Resources / 500 * 100, 100)}%` }}
-                        />
-                      </div>
-                      <span className="text-white font-bold w-12">{currentTurn.player1Resources}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-sm">체력</p>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 bg-slate-700 rounded-full h-2">
-                        <div
-                          className="bg-green-500 h-2 rounded-full transition-all"
-                          style={{ width: `${currentTurn.player1Health}%` }}
-                        />
-                      </div>
-                      <span className="text-white font-bold w-12">{currentTurn.player1Health}%</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* 플레이어 2 상태 */}
-              <Card className="bg-slate-800 border-slate-700">
-                <CardHeader>
-                  <CardTitle className="text-red-400">플레이어 2</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <p className="text-slate-400 text-sm">병력</p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-white font-bold w-12 text-right">{currentTurn.player2Supply}</span>
-                      <div className="flex-1 bg-slate-700 rounded-full h-2">
-                        <div
-                          className="bg-red-500 h-2 rounded-full transition-all"
-                          style={{ width: `${Math.min(currentTurn.player2Supply / 200 * 100, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-sm">자원</p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-white font-bold w-12 text-right">{currentTurn.player2Resources}</span>
-                      <div className="flex-1 bg-slate-700 rounded-full h-2">
-                        <div
-                          className="bg-orange-500 h-2 rounded-full transition-all"
-                          style={{ width: `${Math.min(currentTurn.player2Resources / 500 * 100, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-sm">체력</p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-white font-bold w-12 text-right">{currentTurn.player2Health}%</span>
-                      <div className="flex-1 bg-slate-700 rounded-full h-2">
-                        <div
-                          className="bg-pink-500 h-2 rounded-full transition-all"
-                          style={{ width: `${currentTurn.player2Health}%` }}
-                        />
-                      </div>
-                    </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
             </div>
-          )}
 
-          <div className="flex gap-4">
-            <Button
-              className="flex-1 bg-slate-700 hover:bg-slate-600"
-              onClick={() => setCurrentTurnIndex(Math.max(0, currentTurnIndex - 1))}
-              disabled={currentTurnIndex === 0 || isLoading}
-            >
-              이전 턴
-            </Button>
-            <Button
-              className="flex-1 bg-blue-600 hover:bg-blue-700"
-              onClick={() => setCurrentTurnIndex(Math.min(turns.length - 1, currentTurnIndex + 1))}
-              disabled={currentTurnIndex === turns.length - 1 || isLoading}
-            >
-              다음 턴
-            </Button>
-            <Button
-              className="flex-1 bg-green-600 hover:bg-green-700"
-              onClick={() => setPhase("result")}
-              disabled={isLoading}
-            >
-              결과 보기
-            </Button>
+            {/* 오른쪽: 게임 상태 */}
+            <div className="lg:col-span-2 space-y-6">
+              {currentTurn && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* 플레이어 1 상태 */}
+                  <Card className="bg-slate-800 border-slate-700">
+                    <CardHeader>
+                      <CardTitle className="text-blue-400">플레이어 1</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <p className="text-slate-400 text-sm">병력</p>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 bg-slate-700 rounded-full h-2">
+                            <div
+                              className="bg-blue-500 h-2 rounded-full transition-all"
+                              style={{ width: `${Math.min(currentTurn.player1Supply / 200 * 100, 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-white font-bold w-12">{currentTurn.player1Supply}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-slate-400 text-sm">자원</p>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 bg-slate-700 rounded-full h-2">
+                            <div
+                              className="bg-yellow-500 h-2 rounded-full transition-all"
+                              style={{ width: `${Math.min(currentTurn.player1Resources / 500 * 100, 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-white font-bold w-12">{currentTurn.player1Resources}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-slate-400 text-sm">체력</p>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 bg-slate-700 rounded-full h-2">
+                            <div
+                              className="bg-green-500 h-2 rounded-full transition-all"
+                              style={{ width: `${currentTurn.player1Health}%` }}
+                            />
+                          </div>
+                          <span className="text-white font-bold w-12">{currentTurn.player1Health}%</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* 플레이어 2 상태 */}
+                  <Card className="bg-slate-800 border-slate-700">
+                    <CardHeader>
+                      <CardTitle className="text-red-400">플레이어 2</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <p className="text-slate-400 text-sm">병력</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-white font-bold w-12 text-right">{currentTurn.player2Supply}</span>
+                          <div className="flex-1 bg-slate-700 rounded-full h-2">
+                            <div
+                              className="bg-red-500 h-2 rounded-full transition-all"
+                              style={{ width: `${Math.min(currentTurn.player2Supply / 200 * 100, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-slate-400 text-sm">자원</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-white font-bold w-12 text-right">{currentTurn.player2Resources}</span>
+                          <div className="flex-1 bg-slate-700 rounded-full h-2">
+                            <div
+                              className="bg-orange-500 h-2 rounded-full transition-all"
+                              style={{ width: `${Math.min(currentTurn.player2Resources / 500 * 100, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-slate-400 text-sm">체력</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-white font-bold w-12 text-right">{currentTurn.player2Health}%</span>
+                          <div className="flex-1 bg-slate-700 rounded-full h-2">
+                            <div
+                              className="bg-pink-500 h-2 rounded-full transition-all"
+                              style={{ width: `${currentTurn.player2Health}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              <div className="flex gap-4">
+                <Button
+                  className="flex-1 bg-slate-700 hover:bg-slate-600"
+                  onClick={() => {
+                    setIsAutoPlaying(!isAutoPlaying);
+                  }}
+                  disabled={isLoading}
+                >
+                  {isAutoPlaying ? (
+                    <>
+                      <Pause className="w-4 h-4 mr-2" />
+                      일시정지
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4 mr-2" />
+                      재생
+                    </>
+                  )}
+                </Button>
+                <Button
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  onClick={() => setCurrentTurnIndex(Math.max(0, currentTurnIndex - 1))}
+                  disabled={currentTurnIndex === 0 || isLoading}
+                >
+                  이전 턴
+                </Button>
+                <Button
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  onClick={() => setCurrentTurnIndex(Math.min(turns.length - 1, currentTurnIndex + 1))}
+                  disabled={currentTurnIndex === turns.length - 1 || isLoading}
+                >
+                  다음 턴
+                </Button>
+                <Button
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                  onClick={() => setPhase("result")}
+                  disabled={isLoading}
+                >
+                  결과 보기
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

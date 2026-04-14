@@ -9,6 +9,7 @@ import {
   calcEffectiveStatsWithFatigue,
 } from "@shared/gameConstants";
 import { getPlayerStats } from "./db";
+import { determineBuild, generateBuildCommentary, type MapCharacteristic } from "./buildSystem";
 
 /**
  * 게임 턴 데이터 구조
@@ -22,6 +23,7 @@ export interface GameTurn {
   player2Resources: number;
   player1Health: number;
   player2Health: number;
+  allCommentaries: string[]; // 누적 해설
 }
 
 /**
@@ -72,7 +74,8 @@ export async function simulateGame(
   difficulty: "beginner" | "intermediate" | "advanced",
   mapRaceAdvantage: Record<string, number>,
   player1Fatigue: number,
-  player2Fatigue: number
+  player2Fatigue: number,
+  mapCharacteristic: MapCharacteristic = "balanced"
 ): Promise<GameSimulationResult> {
   // 선수 능력치 조회
   const player1Stats = await getPlayerStats(player1Id);
@@ -123,7 +126,12 @@ export async function simulateGame(
   let player1Health = 100;
   let player2Health = 100;
   
+  // 빌드 결정
+  const player1Build = determineBuild(player1EffectiveStats, mapCharacteristic);
+  const player2Build = determineBuild(player2EffectiveStats, mapCharacteristic);
+  
   // 게임 진행 시뮬레이션
+  const allCommentaries: string[] = [];
   for (let turn = 1; turn <= maxTurns; turn++) {
     const commentary = generateCommentary(
       turn,
@@ -136,6 +144,18 @@ export async function simulateGame(
       player1Resources,
       player2Resources
     );
+    
+    // 빌드 기반 해설 추가
+    const buildCommentary1 = generateBuildCommentary(
+      turn,
+      maxTurns,
+      player1Build.type,
+      player1Race,
+      player1WinProb > 0.5,
+      player1Build
+    );
+    
+    allCommentaries.push(buildCommentary1);
     
     // 턴별 자원/병력 변화
     const changeData = calculateTurnChanges(
@@ -173,6 +193,7 @@ export async function simulateGame(
       player2Resources,
       player1Health,
       player2Health,
+      allCommentaries: [...allCommentaries],
     });
     
     // 게임 종료 조건
@@ -203,11 +224,12 @@ export async function simulateGame(
 /**
  * 해설 생성
  */
+// 기존 generateCommentary 함수는 유지하되, 빌드 기반 해설로 보강
 function generateCommentary(
   turn: number,
   maxTurns: number,
-  player1Race: string,
-  player2Race: string,
+  player1Race: "terran" | "zerg" | "protoss",
+  player2Race: "terran" | "zerg" | "protoss",
   player1WinProb: number,
   player1Supply: number,
   player2Supply: number,
