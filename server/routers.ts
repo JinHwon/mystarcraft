@@ -26,6 +26,8 @@ import {
   deleteEvent,
   getAllEvents,
   getActiveEvents,
+  updateUserRole,
+  getPlayerWithUser,
 } from "./db";
 import { storagePut } from "./storage";
 import { TRPCError } from "@trpc/server";
@@ -234,6 +236,32 @@ const adminRouter = router({
     .mutation(async ({ input }) => {
       await resetPlayerProgress(input.playerId);
       return { success: true };
+    }),
+
+  updateUserRole: adminProcedure
+    .input(z.object({ userId: z.number().int(), role: z.enum(["admin", "user"]) }))
+    .mutation(async ({ input }) => {
+      await updateUserRole(input.userId, input.role);
+      return { success: true };
+    }),
+
+  getPlayerInfo: adminProcedure
+    .input(z.object({ playerId: z.number().int() }))
+    .query(async ({ input }) => {
+      const result = await getPlayerWithUser(input.playerId);
+      if (!result) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
+      const { player, user } = result;
+      return {
+        playerId: player.id,
+        userId: user?.id ?? null,
+        userName: user?.name ?? "Unknown",
+        userRole: user?.role ?? "user",
+        gold: player.gold,
+        level: player.level,
+        exp: player.exp,
+        statPoints: player.statPoints,
+        fatigue: player.fatigue,
+      };
     }),
 });
 

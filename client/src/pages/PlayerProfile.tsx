@@ -73,6 +73,7 @@ function GradeBadge({ grade, size = "md" }: { grade: string; size?: "sm" | "md" 
 
 export default function PlayerProfile() {
   const utils = trpc.useUtils();
+  const { user } = useAuth();
   const { data: playerData, isLoading } = trpc.player.get.useQuery();
   const { data: playerItems = [] } = trpc.shop.getPlayerItems.useQuery();
   const { data: activeEvents = [] } = trpc.event.listActive.useQuery();
@@ -195,16 +196,18 @@ export default function PlayerProfile() {
           <h1 className="text-2xl font-black text-foreground">선수 관리</h1>
           <p className="text-sm text-muted-foreground mt-0.5">선수 능력치를 강화하고 성장시키세요</p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2 text-xs"
-          onClick={() => addExpMutation.mutate({ amount: 50 })}
-          disabled={addExpMutation.isPending}
-        >
-          <TrendingUp className="w-3.5 h-3.5" />
-          경험치 획득 (+50)
-        </Button>
+        {user?.role === "admin" && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 text-xs"
+            onClick={() => addExpMutation.mutate({ amount: 50 })}
+            disabled={addExpMutation.isPending}
+          >
+            <TrendingUp className="w-3.5 h-3.5" />
+            경험치 획득 (+50)
+          </Button>
+        )}
       </div>
 
       {/* 활성 이벤트 배너 */}

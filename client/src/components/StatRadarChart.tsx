@@ -65,7 +65,7 @@ export function StatRadarChart({
   // 라벨 위치 (바깥쪽)
   const labelPoints = STAT_KEYS.map((_, i) => {
     const angle = angleSlice * i - Math.PI / 2;
-    const labelRadius = radius + 45;
+    const labelRadius = radius + 50;
     const x = center + labelRadius * Math.cos(angle);
     const y = center + labelRadius * Math.sin(angle);
     return { x, y };
@@ -147,9 +147,9 @@ export function StatRadarChart({
             <g key={`label-${i}`}>
               {/* 라벨 배경 */}
               <rect
-                x={labelPoint.x - 22}
+                x={labelPoint.x - 28}
                 y={labelPoint.y - 18}
-                width="44"
+                width="56"
                 height="32"
                 rx="4"
                 fill="oklch(0.12 0.02 240 / 0.8)"
@@ -161,7 +161,7 @@ export function StatRadarChart({
                 x={labelPoint.x}
                 y={labelPoint.y - 3}
                 textAnchor="middle"
-                fontSize="13"
+                fontSize="12"
                 fontWeight="700"
                 fill={color}
                 fontFamily="system-ui, -apple-system"

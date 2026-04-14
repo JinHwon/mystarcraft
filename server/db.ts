@@ -396,3 +396,20 @@ export async function getActiveEvents() {
   if (!db) return [];
   return await db.select().from(events).where(eq(events.isActive, true));
 }
+
+
+export async function updateUserRole(userId: number, role: "admin" | "user") {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ role }).where(eq(users.id, userId));
+}
+
+export async function getPlayerWithUser(playerId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
+  if (!result.length) return null;
+  const player = result[0];
+  const user = await db.select().from(users).where(eq(users.id, player.userId)).limit(1);
+  return { player, user: user[0] ?? null };
+}
