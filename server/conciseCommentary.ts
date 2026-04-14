@@ -28,9 +28,15 @@ export function generateBuildStrategyCommentary(playerName: string, strategy: st
 }
 
 /**
- * 유닛 생산 해설
+ * 유닛 생산 해설 - 일꾼(SCV/프로브/드론)은 처음 뽑을 때만 표시
  */
-export function generateUnitProducedCommentary(playerName: string, unitName: string): string {
+export function generateUnitProducedCommentary(playerName: string, unitName: string, isFirstTime: boolean = false): string | null {
+  // 일꾼 유닛은 처음 뽑을 때만 해설
+  const workerUnits = ["SCV", "프로브", "드론"];
+  if (workerUnits.includes(unitName) && !isFirstTime) {
+    return null; // 해설 생략
+  }
+
   const commentaries = [
     `${playerName} 선수 ${unitName} 나왔구요!`,
     `${playerName} 선수 ${unitName} 뽑았습니다.`,
@@ -170,7 +176,12 @@ export function generateTurnCommentary(
   if (gameState.player1.lastAction) {
     const action = gameState.player1.lastAction;
     if (action.type === "unit_produced") {
-      commentaries.push(generateUnitProducedCommentary(player1Name, action.data));
+      const isFirstTime = !gameState.player1.producedUnitsFirstTime.has(action.data);
+      if (isFirstTime) {
+        gameState.player1.producedUnitsFirstTime.add(action.data);
+      }
+      const commentary = generateUnitProducedCommentary(player1Name, action.data, isFirstTime);
+      if (commentary) commentaries.push(commentary);
     } else if (action.type === "building_built") {
       // 생산기지인지 확인
       const isProductionFacility = ["배럭", "팩토리", "스타포트", "게이트웨이", "로보틱스", "스타게이트", "스포닝풀", "스파이어", "해처리"].includes(action.data);
@@ -190,7 +201,12 @@ export function generateTurnCommentary(
   if (gameState.player2.lastAction) {
     const action = gameState.player2.lastAction;
     if (action.type === "unit_produced") {
-      commentaries.push(generateUnitProducedCommentary(player2Name, action.data));
+      const isFirstTime = !gameState.player2.producedUnitsFirstTime.has(action.data);
+      if (isFirstTime) {
+        gameState.player2.producedUnitsFirstTime.add(action.data);
+      }
+      const commentary = generateUnitProducedCommentary(player2Name, action.data, isFirstTime);
+      if (commentary) commentaries.push(commentary);
     } else if (action.type === "building_built") {
       // 생산기지인지 확인
       const isProductionFacility = ["배럭", "팩토리", "스타포트", "게이트웨이", "로보틱스", "스타게이트", "스포닝풀", "스파이어", "해처리"].includes(action.data);

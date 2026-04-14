@@ -11,6 +11,13 @@
  */
 
 import { generateTurnCommentary, generateGameEndCommentary } from "./conciseCommentary";
+import {
+  initializeBuildOrder,
+  updateBuildOrder,
+  canBuildBuilding,
+  canProduceUnit,
+  type BuildOrderState,
+} from "@shared/buildOrder";
 
 export interface PlayerAction {
   type: "barracks_first" | "cc_first" | "unit_produced" | "building_built" | "tech_upgraded" | "multi_taken" | "attack" | "scout" | "counter_tech";
@@ -39,6 +46,10 @@ export interface PlayerState {
   
   // 빌드 선택
   buildStrategy?: "barracks_first" | "cc_first" | "gateway_first" | "hatch_first";
+  
+  // 빌드 오더 시스템
+  buildOrder: BuildOrderState;
+  producedUnitsFirstTime: Set<string>; // 처음 생산한 유닛 (해설 제어용)
   
   // 게임 진행 기록
   unitsProduced: string[];
@@ -84,6 +95,8 @@ export function initializeGameState(
       hasRecall: false,
       hasEMP: false,
       hasStasisField: false,
+      buildOrder: initializeBuildOrder(player1Race),
+      producedUnitsFirstTime: new Set(),
       unitsProduced: [],
     },
     player2: {
@@ -101,6 +114,8 @@ export function initializeGameState(
       hasRecall: false,
       hasEMP: false,
       hasStasisField: false,
+      buildOrder: initializeBuildOrder(player2Race),
+      producedUnitsFirstTime: new Set(),
       unitsProduced: [],
     },
     player1Advantage: 50,
@@ -229,16 +244,23 @@ function generatePlayerAction(
   }
 
   // 자원이 충분하면 유닛 생산
+  // 빌드 오더 제약 적용 - 빌드 오더에서 생산 가능한 유닛만 선택
   if (player.resources > 50 && availableUnits.length > 0) {
-    const unit = availableUnits[Math.floor(Math.random() * availableUnits.length)];
+    const buildOrderAvailableUnits = availableUnits.filter(u => canProduceUnit(player.buildOrder, u));
+    const unitsToChoose = buildOrderAvailableUnits.length > 0 ? buildOrderAvailableUnits : availableUnits;
+    const unit = unitsToChoose[Math.floor(Math.random() * unitsToChoose.length)];
     actions.push({ type: "unit_produced", data: unit });
   }
 
   // 자원이 충분하면 건물 건설 (생산기지 추가)
+  // 빌드 오더 제약 적용
   if (player.resources > 100 && Math.random() < 0.4 && player.productionFacilities < 3) {
-    const buildings = getAvailableBuildings(player.race, turn);
-    if (buildings.length > 0) {
-      const building = buildings[Math.floor(Math.random() * buildings.length)];
+    // 빌드 오더에서 건설 가능한 건물 조회
+    const availableBuildings = player.buildOrder.availableBuildings;
+    if (availableBuildings.length > 0) {
+      const building = availableBuildings[Math.floor(Math.random() * availableBuildings.length)];
+      // 빌드 오더 업데이트
+      updateBuildOrder(player.buildOrder, building);
       actions.push({ type: "building_built", data: building });
     }
   }
