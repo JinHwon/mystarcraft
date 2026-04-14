@@ -5,7 +5,7 @@ import { BuildType } from "./buildSystem";
  */
 export type GameAction = 
   | "expand" | "scout" | "build-unit" | "attack" | "defend" 
-  | "tech" | "upgrade" | "harass" | "macro" | "micro";
+  | "tech" | "upgrade" | "harass" | "macro" | "micro" | "rush" | "all-in";
 
 /**
  * 플레이어별 액션 설명
@@ -19,7 +19,7 @@ export interface PlayerAction {
 }
 
 /**
- * 종족별 빌드 액션 데이터베이스
+ * 스타크래프트 실제 빌드 액션 데이터베이스
  */
 const BUILD_ACTIONS = {
   terran: {
@@ -69,6 +69,18 @@ const BUILD_ACTIONS = {
         { action: "attack" as GameAction, description: "경제력을 바탕으로 최종 공격을 준비합니다" },
       ],
     },
+    rush: {
+      early: [
+        { action: "rush" as GameAction, description: "8배럭을 지어 마린을 빠르게 모읍니다" },
+        { action: "all-in" as GameAction, description: "상대 앞마당을 벙커로 봉쇄합니다" },
+      ],
+      mid: [
+        { action: "attack" as GameAction, description: "마린과 SCV를 이용해 상대를 압박합니다" },
+      ],
+      late: [
+        { action: "attack" as GameAction, description: "계속해서 상대를 밀어붙입니다" },
+      ],
+    },
   },
   zerg: {
     macro: {
@@ -110,6 +122,18 @@ const BUILD_ACTIONS = {
       ],
       late: [
         { action: "attack" as GameAction, description: "물량과 스피드로 최종 공격을 준비합니다" },
+      ],
+    },
+    rush: {
+      early: [
+        { action: "rush" as GameAction, description: "4드론으로 극초반 저글링을 뽑습니다" },
+        { action: "all-in" as GameAction, description: "저글링 러쉬로 상대를 일방적으로 압박합니다" },
+      ],
+      mid: [
+        { action: "attack" as GameAction, description: "계속해서 저글링으로 상대를 괴롭힙니다" },
+      ],
+      late: [
+        { action: "attack" as GameAction, description: "상대가 방어하지 못하면 게임이 끝납니다" },
       ],
     },
   },
@@ -155,6 +179,18 @@ const BUILD_ACTIONS = {
         { action: "attack" as GameAction, description: "고급 유닛으로 최종 공격을 준비합니다" },
       ],
     },
+    rush: {
+      early: [
+        { action: "rush" as GameAction, description: "세빠닥으로 다크템플러를 빠르게 생산합니다" },
+        { action: "all-in" as GameAction, description: "다크템플러로 상대 본진을 은폐 공격합니다" },
+      ],
+      mid: [
+        { action: "attack" as GameAction, description: "다크템플러의 은폐 이동으로 상대를 압박합니다" },
+      ],
+      late: [
+        { action: "attack" as GameAction, description: "상대가 방어하지 못하면 게임이 끝납니다" },
+      ],
+    },
   },
 };
 
@@ -190,15 +226,12 @@ export function generateGameCommentary(
   turn: number,
   maxTurns: number
 ): string {
-  const phase = turn <= maxTurns / 3 ? "초반" : turn <= (maxTurns * 2) / 3 ? "중반" : "후반";
-  
-  // 액션 조합에 따른 해설
   const commentaries: string[] = [];
   
   commentaries.push(player1Action.description);
   commentaries.push(player2Action.description);
   
-  // 상황 설명 추가
+  // 액션 조합에 따른 상황 설명
   if (player1Action.action === "attack" && player2Action.action === "defend") {
     commentaries.push(`${player1Action.playerName} 선수의 공격에 ${player2Action.playerName} 선수가 방어하고 있습니다.`);
   } else if (player1Action.action === "defend" && player2Action.action === "attack") {
@@ -209,7 +242,92 @@ export function generateGameCommentary(
     commentaries.push(`양 선수 모두 경제력 확보에 집중하고 있습니다. 게임의 흐름이 천천히 진행되고 있습니다.`);
   } else if (player1Action.action === "harass" || player2Action.action === "harass") {
     commentaries.push(`견제 플레이가 이어지고 있습니다. 긴장감 있는 경기입니다.`);
+  } else if (player1Action.action === "rush" || player2Action.action === "rush") {
+    commentaries.push(`초반 러쉬 전략이 펼쳐지고 있습니다. 게임의 승패가 결정될 중요한 순간입니다.`);
+  } else if (player1Action.action === "all-in" || player2Action.action === "all-in") {
+    commentaries.push(`올인 공격으로 게임을 끝내려는 시도가 있습니다. 이 전투의 결과가 게임을 좌우할 것 같습니다.`);
   }
   
   return commentaries.join("\n");
+}
+
+/**
+ * 견제 성공 확률 계산
+ */
+export function calculateHarassSuccessRate(harasserStats: Record<string, number>, defenderStats: Record<string, number>): number {
+  // 견제자의 견제 능력이 높을수록 성공률 증가
+  const harassAbility = (harasserStats.attack || 0) + (harasserStats.harass || 0) * 1.5;
+  // 방어자의 방어 능력이 높을수록 성공률 감소
+  const defenseAbility = (defenderStats.defense || 0) + (defenderStats.sense || 0) * 0.5;
+  
+  const baseRate = 0.5;
+  const rate = baseRate + (harassAbility - defenseAbility) / 1000;
+  return Math.max(0.1, Math.min(0.9, rate));
+}
+
+/**
+ * 날빌 감지 및 판단
+ */
+export function detectRushBuild(buildType: BuildType, turn: number): boolean {
+  // 초반(턴 1-3)에 rush 빌드면 날빌
+  return buildType === "aggressive" && turn <= 3;
+}
+
+/**
+ * 유불리 판단
+ */
+export function evaluateAdvantage(
+  player1Supply: number,
+  player1Resources: number,
+  player1Health: number,
+  player2Supply: number,
+  player2Resources: number,
+  player2Health: number
+): { advantagePlayer: 1 | 2 | null; advantagePercent: number } {
+  // 병력, 자원, 체력을 종합적으로 판단
+  const player1Power = (player1Supply * 10) + (player1Resources * 0.5) + (player1Health * 0.5);
+  const player2Power = (player2Supply * 10) + (player2Resources * 0.5) + (player2Health * 0.5);
+  
+  const totalPower = player1Power + player2Power;
+  if (totalPower === 0) return { advantagePlayer: null, advantagePercent: 0 };
+  
+  const player1Percent = (player1Power / totalPower) * 100;
+  const player2Percent = (player2Power / totalPower) * 100;
+  
+  // 30% 이상 차이나면 유불리 판단
+  if (player1Percent > player2Percent + 30) {
+    return { advantagePlayer: 1, advantagePercent: player1Percent - player2Percent };
+  } else if (player2Percent > player1Percent + 30) {
+    return { advantagePlayer: 2, advantagePercent: player2Percent - player1Percent };
+  }
+  
+  return { advantagePlayer: null, advantagePercent: 0 };
+}
+
+/**
+ * 게임 종료 조건 판단
+ */
+export function shouldGameEnd(
+  player1Supply: number,
+  player1Resources: number,
+  player1Health: number,
+  player2Supply: number,
+  player2Resources: number,
+  player2Health: number,
+  turn: number
+): boolean {
+  // 한 명의 체력이 0이 되면 게임 종료
+  if (player1Health <= 0 || player2Health <= 0) return true;
+  
+  // 유불리가 심하면 게임 종료
+  const advantage = evaluateAdvantage(player1Supply, player1Resources, player1Health, player2Supply, player2Resources, player2Health);
+  if (advantage.advantagePlayer !== null && advantage.advantagePercent > 50) return true;
+  
+  // 최소 턴 수 이상 진행되었으면 게임 종료 가능
+  if (turn >= 15) {
+    // 한 명이 병력과 자원이 모두 거의 없으면 게임 종료
+    if ((player1Supply < 5 && player1Resources < 50) || (player2Supply < 5 && player2Resources < 50)) return true;
+  }
+  
+  return false;
 }

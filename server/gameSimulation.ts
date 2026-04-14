@@ -133,7 +133,7 @@ export async function simulateGame(
   const player2Build = determineBuild(player2EffectiveStats, mapCharacteristic);
   
   // buildActions 임포트 추가
-  const { generatePlayerActions: genActions, generateGameCommentary: genCommentary } = await import("./buildActions");
+  const { generatePlayerActions: genActions, generateGameCommentary: genCommentary, shouldGameEnd, evaluateAdvantage } = await import("./buildActions");
   
   // 게임 진행 시뮬레이션
   const allCommentaries: string[] = [];
@@ -215,6 +215,11 @@ export async function simulateGame(
       player2Health,
       allCommentaries: [...allCommentaries],
     });
+    
+    // 게임 종료 조건 확인
+    if (shouldGameEnd(player1Supply, player1Resources, player1Health, player2Supply, player2Resources, player2Health, turn)) {
+      break;
+    }
     
     // 게임 종료 조건
     if (player1Health <= 0 || player2Health <= 0) {

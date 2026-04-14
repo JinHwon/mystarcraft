@@ -442,6 +442,19 @@ export default function PracticePage() {
               )}
             </div>
           </div>
+          
+          {/* 게임 종료 확인 버튼 */}
+          {currentTurnIndex === turns.length - 1 && (
+            <div className="text-center mt-8">
+              <p className="text-slate-400 mb-4">게임이 종료되었습니다.</p>
+              <Button
+                className="bg-green-600 hover:bg-green-700 text-lg px-8 py-6"
+                onClick={() => setPhase("result")}
+              >
+                결과 확인
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     );
