@@ -78,14 +78,14 @@ export function progressTurn(gameState: GameState): void {
   gameState.turn++;
 
   // 플레이어 1 액션
-  const player1Action = generatePlayerAction(gameState.player1, gameState.player2);
+  const player1Action = generatePlayerAction(gameState.player1, gameState.player2, gameState.turn);
   if (player1Action) {
     gameState.player1.lastAction = player1Action;
     applyAction(gameState.player1, player1Action);
   }
 
   // 플레이어 2 액션
-  const player2Action = generatePlayerAction(gameState.player2, gameState.player1);
+  const player2Action = generatePlayerAction(gameState.player2, gameState.player1, gameState.turn);
   if (player2Action) {
     gameState.player2.lastAction = player2Action;
     applyAction(gameState.player2, player2Action);
@@ -111,23 +111,31 @@ export function progressTurn(gameState: GameState): void {
 }
 
 /**
- * 플레이어 액션 생성
+ * 플레이어 액션 생성 - 게임 진행 단계에 따라 다른 유닛 생산
  */
-function generatePlayerAction(player: PlayerState, opponent: PlayerState): PlayerAction | null {
+function generatePlayerAction(
+  player: PlayerState,
+  opponent: PlayerState,
+  turn: number
+): PlayerAction | null {
   const actions: PlayerAction[] = [];
 
+  // 게임 진행 단계별 유닛 선택
+  let availableUnits = getAvailableUnitsByPhase(player.race, turn);
+
   // 자원이 충분하면 유닛 생산
-  if (player.resources > 50) {
-    const units = getAvailableUnits(player.race);
-    const unit = units[Math.floor(Math.random() * units.length)];
+  if (player.resources > 50 && availableUnits.length > 0) {
+    const unit = availableUnits[Math.floor(Math.random() * availableUnits.length)];
     actions.push({ type: "unit_produced", data: unit });
   }
 
   // 자원이 충분하면 건물 건설
   if (player.resources > 100 && Math.random() < 0.3) {
-    const buildings = getAvailableBuildings(player.race);
-    const building = buildings[Math.floor(Math.random() * buildings.length)];
-    actions.push({ type: "building_built", data: building });
+    const buildings = getAvailableBuildings(player.race, turn);
+    if (buildings.length > 0) {
+      const building = buildings[Math.floor(Math.random() * buildings.length)];
+      actions.push({ type: "building_built", data: building });
+    }
   }
 
   // 기술 업그레이드
@@ -150,6 +158,39 @@ function generatePlayerAction(player: PlayerState, opponent: PlayerState): Playe
   }
 
   return actions.length > 0 ? actions[Math.floor(Math.random() * actions.length)] : null;
+}
+
+/**
+ * 게임 진행 단계별 사용 가능한 유닛
+ */
+function getAvailableUnitsByPhase(race: string, turn: number): string[] {
+  // 초반 (1-10턴): 기본 유닛
+  if (turn <= 10) {
+    const basicUnits: Record<string, string[]> = {
+      terran: ["마린", "배럭"],
+      zerg: ["저글링", "스포닝풀"],
+      protoss: ["질럿", "게이트웨이"],
+    };
+    return basicUnits[race] || [];
+  }
+
+  // 중반 (11-25턴): 기본 + 중급 유닛
+  if (turn <= 25) {
+    const midUnits: Record<string, string[]> = {
+      terran: ["마린", "배럭", "팩토리", "벌쳐", "탱크"],
+      zerg: ["저글링", "뮤탈리스크", "히드라", "스포닝풀"],
+      protoss: ["질럿", "드래군", "게이트웨이", "포지"],
+    };
+    return midUnits[race] || [];
+  }
+
+  // 후반 (26턴 이상): 모든 유닛
+  const allUnits: Record<string, string[]> = {
+    terran: ["마린", "배럭", "팩토리", "벌쳐", "탱크", "골리앗", "배틀크루저"],
+    zerg: ["저글링", "뮤탈리스크", "히드라", "울트라", "러커", "디파일러", "가디언"],
+    protoss: ["질럿", "드래군", "다크템플러", "하이템플러", "리버", "아칸", "케리어"],
+  };
+  return allUnits[race] || [];
 }
 
 /**
@@ -178,25 +219,22 @@ function applyAction(player: PlayerState, action: PlayerAction): void {
 }
 
 /**
- * 사용 가능한 유닛
- */
-function getAvailableUnits(race: string): string[] {
-  const units: Record<string, string[]> = {
-    terran: ["마린", "배럭", "팩토리", "벌쳐", "탱크", "골리앗", "배틀크루저"],
-    zerg: ["저글링", "뮤탈리스크", "히드라", "울트라", "러커", "디파일러", "가디언"],
-    protoss: ["질럿", "드래군", "다크템플러", "하이템플러", "리버", "아칸", "케리어"],
-  };
-  return units[race] || [];
-}
-
-/**
  * 사용 가능한 건물
  */
-function getAvailableBuildings(race: string): string[] {
+function getAvailableBuildings(race: string, turn: number): string[] {
+  if (turn <= 15) {
+    const earlyBuildings: Record<string, string[]> = {
+      terran: ["커맨드센터", "배럭"],
+      zerg: ["해처리", "스포닝풀"],
+      protoss: ["넥서스", "게이트웨이"],
+    };
+    return earlyBuildings[race] || [];
+  }
+
   const buildings: Record<string, string[]> = {
     terran: ["커맨드센터", "배럭", "팩토리", "스타포트", "터렛", "번커"],
-    zerg: ["해처리", "스포닝풀", "하이드라덴", "스파이어", "울트라리스크 캐번", "디파일러 마운드"],
-    protoss: ["넥서스", "게이트웨이", "포지", "로보틱스", "스타게이트", "템플러 아카이브"],
+    zerg: ["해처리", "스포닝풀", "하이드라덴", "스파이어", "울트라리스크 캐번"],
+    protoss: ["넥서스", "게이트웨이", "포지", "로보틱스", "스타게이트"],
   };
   return buildings[race] || [];
 }
@@ -251,17 +289,6 @@ function checkGameEnd(gameState: GameState): void {
     gameState.winner = gameState.player1Advantage >= 70 ? gameState.player1.id : gameState.player2.id;
     const winnerName = gameState.player1Advantage >= 70 ? gameState.player1.name : gameState.player2.name;
     const loserName = gameState.player1Advantage >= 70 ? gameState.player2.name : gameState.player1.name;
-    const commentaries = generateGameEndCommentary(winnerName, loserName);
-    gameState.allCommentaries.push(...commentaries);
-    return;
-  }
-
-  // 최대 50턴 도달 시 게임 종료
-  if (gameState.turn >= 50) {
-    gameState.gameEnded = true;
-    gameState.winner = gameState.player1Advantage >= 50 ? gameState.player1.id : gameState.player2.id;
-    const winnerName = gameState.player1Advantage >= 50 ? gameState.player1.name : gameState.player2.name;
-    const loserName = gameState.player1Advantage >= 50 ? gameState.player2.name : gameState.player1.name;
     const commentaries = generateGameEndCommentary(winnerName, loserName);
     gameState.allCommentaries.push(...commentaries);
   }
