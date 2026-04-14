@@ -34,7 +34,6 @@ export default function PracticePage() {
   const [showResultConfirm, setShowResultConfirm] = useState(false);
   const [gameSpeed, setGameSpeed] = useState<1 | 2 | 5>(1); // 1배속, 2배속, 5배속
   const autoPlayIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const commentaryEndRef = useRef<HTMLDivElement>(null);
 
   // API 호출
   const mapsQuery = trpc.practice.getMaps.useQuery();
@@ -117,12 +116,12 @@ export default function PracticePage() {
     }
   }, [phase, currentCommentaryIndex, gameState.turns, gameSpeed]);
 
-  // 해설 자동 스크롤
-  useEffect(() => {
-    if (commentaryEndRef.current) {
-      commentaryEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [currentCommentaryIndex, gameState.turns]);
+  // 해설 자동 스크롤 (비활성화 - 사용자가 수동으로 스크롤)
+  // useEffect(() => {
+  //   if (commentaryEndRef.current) {
+  //     commentaryEndRef.current.scrollIntoView({ behavior: "smooth" });
+  //   }
+  // }, [currentCommentaryIndex, gameState.turns]);
 
   // 플레이어 이름 추출
   const player1Name = userQuery.data?.name || "플레이어 1";
@@ -278,9 +277,9 @@ export default function PracticePage() {
                 <CardHeader>
                   <CardTitle className="text-white">게임 해설</CardTitle>
                 </CardHeader>
-                <CardContent className="flex-1 overflow-y-auto max-h-96">
-                  <div className="space-y-2">
-                    {displayedCommentaries.map((commentary: string, idx: number) => {
+                <CardContent className="flex-1 overflow-y-auto max-h-96 flex flex-col">
+                  <div className="space-y-2 flex flex-col-reverse">
+                    {[...displayedCommentaries].reverse().map((commentary: string, idx: number) => {
                       let textColor = "text-slate-300";
                       let borderColor = "border-slate-500";
                       let bgColor = "bg-slate-700/30";
@@ -310,7 +309,6 @@ export default function PracticePage() {
                         </div>
                       );
                     })}
-                    <div ref={commentaryEndRef} />
                   </div>
                   {/* 속도 조절 버튼 */}
                   <div className="flex justify-center gap-2 mt-4 pt-4 border-t border-slate-600">
