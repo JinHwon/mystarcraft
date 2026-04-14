@@ -343,11 +343,11 @@ function calculateTurnChanges(
   const player1AttackRate = (player1Stats.attack / 500) * difficultyMultiplier;
   const player2AttackRate = (player2Stats.attack / 500) * difficultyMultiplier;
   
-  // 턴별 변화
-  let player1SupplyChange = Math.round(1 + player1SupplyRate);
-  let player2SupplyChange = Math.round(1 + player2SupplyRate);
-  let player1ResourceChange = Math.round(2 + player1ResourceRate);
-  let player2ResourceChange = Math.round(2 + player2ResourceRate);
+  // 턴별 변화 - 병력/자원 늨 단위 증가
+  let player1SupplyChange = Math.round(3 + player1SupplyRate * 2);
+  let player2SupplyChange = Math.round(3 + player2SupplyRate * 2);
+  let player1ResourceChange = Math.round(8 + player1ResourceRate * 3);
+  let player2ResourceChange = Math.round(8 + player2ResourceRate * 3);
   
   // 후반부 전투 강화
   if (turnPhase > 0.6) {
