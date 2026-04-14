@@ -125,21 +125,6 @@ export default function PracticePage() {
   const player1Name = userQuery.data?.name || "플레이어 1";
   const player2Name = gameState.opponentName || "플레이어 2";
 
-  // 해설 색상 결정
-  const getCommentaryColor = (commentary: string): string => {
-    if (commentary.includes("[중립]")) {
-      // 중립 해설 - 하얀색
-      return "border-l-4 border-slate-400 bg-slate-900/50 text-slate-100";
-    } else if (commentary.includes(player1Name)) {
-      // 플레이어 1 해설 - 하늘색
-      return "border-l-4 border-cyan-400 bg-cyan-950/30 text-cyan-100";
-    } else if (commentary.includes(player2Name)) {
-      // 플레이어 2 해설 - 다홍색
-      return "border-l-4 border-red-500 bg-red-950/30 text-red-100";
-    }
-    return "border-l-4 border-slate-500 bg-slate-900 text-slate-100";
-  };
-
   // 난이도 선택 화면
   const difficultyLabels: Record<string, string> = {
     beginner: "초보",
@@ -289,11 +274,32 @@ export default function PracticePage() {
                   <CardTitle className="text-white">게임 해설</CardTitle>
                 </CardHeader>
                 <CardContent className="flex-1 overflow-y-auto max-h-96">
-                  <div className="space-y-3">
-                    {currentTurn?.allCommentaries?.map((commentary, idx) => (
+                  <div className="space-y-2">
+                    {/* 플레이어 1 해설 */}
+                    {currentTurn?.player1Commentary?.map((commentary: string, idx: number) => (
                       <div
-                        key={idx}
-                        className={`p-3 rounded text-sm ${getCommentaryColor(commentary)}`}
+                        key={`p1-${idx}`}
+                        className="p-2 rounded text-sm border-l-4 border-cyan-400 bg-cyan-950/30"
+                      >
+                        <p className="whitespace-pre-wrap text-cyan-200">{commentary}</p>
+                      </div>
+                    ))}
+                    
+                    {/* 플레이어 2 해설 */}
+                    {currentTurn?.player2Commentary?.map((commentary: string, idx: number) => (
+                      <div
+                        key={`p2-${idx}`}
+                        className="p-2 rounded text-sm border-l-4 border-red-500 bg-red-950/30"
+                      >
+                        <p className="whitespace-pre-wrap text-red-200">{commentary}</p>
+                      </div>
+                    ))}
+                    
+                    {/* 중립 해설 */}
+                    {currentTurn?.allCommentaries?.filter((c: string) => c.includes("[중립]")).map((commentary: string, idx: number) => (
+                      <div
+                        key={`neutral-${idx}`}
+                        className="p-2 rounded text-sm border-l-4 border-slate-400 bg-slate-900/50"
                       >
                         <p className="whitespace-pre-wrap text-slate-100">{commentary}</p>
                       </div>
@@ -365,7 +371,7 @@ export default function PracticePage() {
                           <span className="text-white font-bold w-12 text-right">{currentTurn.player2Resources}</span>
                           <div className="flex-1 bg-slate-700 rounded-full h-3">
                             <div
-                              className="bg-orange-500 h-3 rounded-full transition-all"
+                              className="bg-yellow-500 h-3 rounded-full transition-all"
                               style={{ width: `${Math.min(currentTurn.player2Resources / 500 * 100, 100)}%` }}
                             />
                           </div>
@@ -375,21 +381,23 @@ export default function PracticePage() {
                   </Card>
                 </div>
               )}
+
+              {/* 게임 종료 확인 버튼 */}
+              {showResultConfirm && (
+                <Card className="bg-slate-800 border-slate-700">
+                  <CardContent className="p-6 text-center">
+                    <p className="text-white mb-4">게임이 종료되었습니다!</p>
+                    <Button
+                      className="w-full bg-green-600 hover:bg-green-700"
+                      onClick={() => setPhase("result")}
+                    >
+                      결과 확인
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
-
-          {/* 게임 종료 확인 버튼 */}
-          {showResultConfirm && (
-            <div className="text-center">
-              <p className="text-slate-400 mb-4">게임이 종료되었습니다.</p>
-              <Button
-                className="bg-green-600 hover:bg-green-700 text-lg px-8 py-6"
-                onClick={() => setPhase("result")}
-              >
-                결과 확인
-              </Button>
-            </div>
-          )}
         </div>
       </div>
     );
@@ -397,44 +405,46 @@ export default function PracticePage() {
 
   // 게임 결과 화면
   if (phase === "result") {
+    const isWinner = gameState.isWinner;
+    const expGained = gameState.expGained || 0;
+    const goldGained = gameState.goldGained || 0;
+    const fatigueUsed = gameState.fatigueUsed || 0;
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
         <div className="max-w-2xl mx-auto">
           <div className="text-center mb-12">
-            <h1 className={`text-4xl font-bold mb-2 ${gameState.isWinner ? "text-green-400" : "text-red-400"}`}>
-              {gameState.isWinner ? "승리!" : "패배!"}
+            <h1 className={`text-4xl font-bold mb-2 ${isWinner ? "text-green-400" : "text-red-400"}`}>
+              {isWinner ? "승리!" : "패배!"}
             </h1>
-            <p className="text-slate-400">최종 점수: {gameState.finalScore}</p>
+            <p className="text-slate-400">게임이 종료되었습니다</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader>
-                <CardTitle className="text-green-400 text-sm">경험치</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold text-white">+{gameState.expGained}</p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader>
-                <CardTitle className="text-yellow-400 text-sm">골드</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold text-white">+{gameState.goldGained}</p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader>
-                <CardTitle className="text-orange-400 text-sm">피로도</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold text-white">-{gameState.fatigueUsed}</p>
-              </CardContent>
-            </Card>
-          </div>
+          <Card className="bg-slate-800 border-slate-700 mb-6">
+            <CardHeader>
+              <CardTitle className="text-white">게임 결과</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-center">
+                  <p className="text-slate-400 text-sm">경험치</p>
+                  <p className={`text-lg font-bold ${expGained > 0 ? "text-green-400" : "text-red-400"}`}>
+                    {expGained > 0 ? "+" : ""}{expGained}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-slate-400 text-sm">골드</p>
+                  <p className={`text-lg font-bold ${goldGained > 0 ? "text-yellow-400" : "text-red-400"}`}>
+                    {goldGained > 0 ? "+" : ""}{goldGained}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-slate-400 text-sm">피로도</p>
+                  <p className="text-lg font-bold text-orange-400">-{fatigueUsed}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           <Button
             className="w-full bg-blue-600 hover:bg-blue-700 text-lg py-6"
@@ -442,6 +452,7 @@ export default function PracticePage() {
               setPhase("difficulty");
               setGameState({});
               setCurrentTurnIndex(0);
+              setShowResultConfirm(false);
             }}
           >
             다시 게임하기
