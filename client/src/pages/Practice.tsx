@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { RACE_COLORS, RACE_LABELS, DIFFICULTY_RANGES } from "@shared/gameConstants";
+import { RACE_COLORS, RACE_LABELS, DIFFICULTY_RANGES, GAME_REWARDS } from "@shared/gameConstants";
 import { Loader2 } from "lucide-react";
 
 type GamePhase = "difficulty" | "map" | "opponent" | "playing" | "result";
@@ -136,6 +136,12 @@ export default function PracticePage() {
   };
 
   // 난이도 선택 화면
+  const difficultyLabels: Record<string, string> = {
+    beginner: "초보",
+    intermediate: "중수",
+    advanced: "고수",
+  };
+
   if (phase === "difficulty") {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
@@ -146,22 +152,24 @@ export default function PracticePage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {Object.entries(DIFFICULTY_RANGES).map(([key, value]) => (
+            {Object.entries(GAME_REWARDS).map(([key, rewards]) => (
               <Card
                 key={key}
                 className="bg-slate-800 border-slate-700 hover:border-blue-500 cursor-pointer transition-all"
                 onClick={() => handleSelectDifficulty(key as any)}
               >
                 <CardHeader>
-                  <CardTitle className="text-white capitalize">{key}</CardTitle>
+                  <CardTitle className="text-white">{difficultyLabels[key]}</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-slate-400 text-sm">
-                    경험치: {value.expWin} / {value.expLose}
-                  </p>
-                  <p className="text-slate-400 text-sm">
-                    골드: {value.goldWin} / {value.goldLose}
-                  </p>
+                <CardContent className="space-y-2">
+                  <div>
+                    <p className="text-slate-400 text-sm">경험치</p>
+                    <p className="text-green-400 font-bold">승: +{rewards.expWin} / 패: +{rewards.expLose}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-400 text-sm">골드</p>
+                    <p className="text-yellow-400 font-bold">승: +{rewards.goldWin} / 패: +{rewards.goldLose}</p>
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -226,7 +234,7 @@ export default function PracticePage() {
               </div>
               <div>
                 <p className="text-slate-400 text-sm">승률</p>
-                <p className="text-white font-bold">{(gameState.winProbability! * 100).toFixed(1)}%</p>
+                <p className="text-white font-bold">{gameState.winProbability?.toFixed(1)}%</p>
               </div>
             </CardContent>
           </Card>
