@@ -46,6 +46,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, MAPS, calcGradeIndex, calcTotalStats, STAT_KEYS, StatKey } from "@shared/gameConstants";
 import { simulateGame, calculateWinProbability } from "./gameSimulation";
+import { type MapCharacteristic } from "./buildSystem";
 import { generatePlayerActions, generateGameCommentary } from "./buildActions";
 
 // ── Player Router ────────────────────────────────────────────────
@@ -436,15 +437,21 @@ const practiceRouter = router({
         : map.raceAdvantage;
 
       // 게임 시뮬레이션 실행
+      const player1 = player.id === game.player1Id ? player : opponent;
+      const player2 = player.id === game.player2Id ? player : opponent;
+      
       const simulation = await simulateGame(
         game.player1Id,
         game.player2Id,
+        player1.name,
+        player2.name,
         game.player1Race,
         game.player2Race,
         game.difficulty,
         raceAdvantage,
-        player.id === game.player1Id ? player.fatigue : opponent.fatigue,
-        player.id === game.player2Id ? player.fatigue : opponent.fatigue
+        player1.fatigue,
+        player2.fatigue,
+        "balanced" // 기본값으로 균형잡힌 맵 사용
       );
 
       const winnerId = simulation.winnerId;
