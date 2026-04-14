@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { RACE_COLORS, RACE_LABELS, DIFFICULTY_RANGES } from "@shared/gameConstants";
-import { Loader2, Play, Pause } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 type GamePhase = "difficulty" | "map" | "opponent" | "playing" | "result";
 
@@ -21,19 +21,21 @@ interface GameState {
   fatigueUsed?: number;
   turns?: any[];
   finalScore?: number;
+  playerName?: string;
+  playerRace?: string;
 }
 
 export default function PracticePage() {
   const [phase, setPhase] = useState<GamePhase>("difficulty");
   const [gameState, setGameState] = useState<GameState>({});
   const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
-  const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const autoPlayIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // API 호출
   const mapsQuery = trpc.practice.getMaps.useQuery();
   const findOpponentMutation = trpc.practice.findOpponent.useMutation();
   const playGameMutation = trpc.practice.playGame.useMutation();
+  const userQuery = trpc.auth.me.useQuery();
 
   const handleSelectDifficulty = (difficulty: "beginner" | "intermediate" | "advanced") => {
     setGameState({ difficulty });
@@ -66,7 +68,6 @@ export default function PracticePage() {
     if (!gameState.gameId) return;
     setPhase("playing");
     setCurrentTurnIndex(0);
-    setIsAutoPlaying(true);
 
     try {
       const result = await playGameMutation.mutateAsync({
@@ -81,11 +82,9 @@ export default function PracticePage() {
         turns: result.turns || [],
         finalScore: result.finalScore,
       }));
-      // playing 페이즈에 머물러서 사용자가 턴을 볼 수 있도록 함
     } catch (error) {
       console.error("게임 실행 실패:", error);
       setPhase("opponent");
-      setIsAutoPlaying(false);
     }
   };
 
@@ -93,7 +92,6 @@ export default function PracticePage() {
     setGameState({});
     setPhase("difficulty");
     setCurrentTurnIndex(0);
-    setIsAutoPlaying(false);
     if (autoPlayIntervalRef.current) {
       clearInterval(autoPlayIntervalRef.current);
       autoPlayIntervalRef.current = null;
@@ -102,7 +100,7 @@ export default function PracticePage() {
 
   // 자동 턴 진행
   useEffect(() => {
-    if (!isAutoPlaying || phase !== "playing") {
+    if (phase !== "playing" || playGameMutation.isPending) {
       if (autoPlayIntervalRef.current) {
         clearInterval(autoPlayIntervalRef.current);
         autoPlayIntervalRef.current = null;
@@ -112,14 +110,14 @@ export default function PracticePage() {
 
     const turns = gameState.turns || [];
     if (currentTurnIndex >= turns.length - 1) {
-      setIsAutoPlaying(false);
+      // 게임 종료 - 자동으로 결과 화면으로 이동
+      setTimeout(() => setPhase("result"), 1000);
       return;
     }
 
     autoPlayIntervalRef.current = setInterval(() => {
       setCurrentTurnIndex(prev => {
         if (prev >= turns.length - 1) {
-          setIsAutoPlaying(false);
           return prev;
         }
         return prev + 1;
@@ -132,7 +130,7 @@ export default function PracticePage() {
         autoPlayIntervalRef.current = null;
       }
     };
-  }, [isAutoPlaying, phase, gameState.turns, currentTurnIndex]);
+  }, [phase, gameState.turns, currentTurnIndex, playGameMutation.isPending]);
 
   // 난이도 선택 화면
   if (phase === "difficulty") {
@@ -338,9 +336,8 @@ export default function PracticePage() {
                 <CardContent className="max-h-96 overflow-y-auto">
                   <div className="space-y-3">
                     {currentTurn?.allCommentaries?.map((commentary, idx) => (
-                      <div key={idx} className="p-2 bg-slate-900 rounded text-xs text-slate-300 border-l-2 border-blue-500">
-                        <p className="font-semibold text-slate-200 mb-1">턴 {idx + 1}</p>
-                        <p>{commentary}</p>
+                      <div key={idx} className="p-3 bg-slate-900 rounded text-sm text-slate-300 border-l-2 border-blue-500">
+                        <p className="whitespace-pre-wrap">{commentary}</p>
                       </div>
                     ))}
                   </div>
@@ -355,7 +352,7 @@ export default function PracticePage() {
                   {/* 플레이어 1 상태 */}
                   <Card className="bg-slate-800 border-slate-700">
                     <CardHeader>
-                      <CardTitle className="text-blue-400">플레이어 1</CardTitle>
+                      <CardTitle className="text-blue-400">{userQuery.data?.name || "플레이어 1"}</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div>
@@ -400,7 +397,7 @@ export default function PracticePage() {
                   {/* 플레이어 2 상태 */}
                   <Card className="bg-slate-800 border-slate-700">
                     <CardHeader>
-                      <CardTitle className="text-red-400">플레이어 2</CardTitle>
+                      <CardTitle className="text-red-400">{gameState.opponentName || "플레이어 2"}</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div>
@@ -443,49 +440,6 @@ export default function PracticePage() {
                   </Card>
                 </div>
               )}
-
-              <div className="flex gap-4">
-                <Button
-                  className="flex-1 bg-slate-700 hover:bg-slate-600"
-                  onClick={() => {
-                    setIsAutoPlaying(!isAutoPlaying);
-                  }}
-                  disabled={isLoading}
-                >
-                  {isAutoPlaying ? (
-                    <>
-                      <Pause className="w-4 h-4 mr-2" />
-                      일시정지
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-4 h-4 mr-2" />
-                      재생
-                    </>
-                  )}
-                </Button>
-                <Button
-                  className="flex-1 bg-blue-600 hover:bg-blue-700"
-                  onClick={() => setCurrentTurnIndex(Math.max(0, currentTurnIndex - 1))}
-                  disabled={currentTurnIndex === 0 || isLoading}
-                >
-                  이전 턴
-                </Button>
-                <Button
-                  className="flex-1 bg-blue-600 hover:bg-blue-700"
-                  onClick={() => setCurrentTurnIndex(Math.min(turns.length - 1, currentTurnIndex + 1))}
-                  disabled={currentTurnIndex === turns.length - 1 || isLoading}
-                >
-                  다음 턴
-                </Button>
-                <Button
-                  className="flex-1 bg-green-600 hover:bg-green-700"
-                  onClick={() => setPhase("result")}
-                  disabled={isLoading}
-                >
-                  결과 보기
-                </Button>
-              </div>
             </div>
           </div>
         </div>

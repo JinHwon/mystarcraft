@@ -69,6 +69,8 @@ export function calculateWinProbability(
 export async function simulateGame(
   player1Id: number,
   player2Id: number,
+  player1Name: string,
+  player2Name: string,
   player1Race: "terran" | "zerg" | "protoss",
   player2Race: "terran" | "zerg" | "protoss",
   difficulty: "beginner" | "intermediate" | "advanced",
@@ -130,6 +132,9 @@ export async function simulateGame(
   const player1Build = determineBuild(player1EffectiveStats, mapCharacteristic);
   const player2Build = determineBuild(player2EffectiveStats, mapCharacteristic);
   
+  // buildActions 임포트 추가
+  const { generatePlayerActions: genActions, generateGameCommentary: genCommentary } = await import("./buildActions");
+  
   // 게임 진행 시뮬레이션
   const allCommentaries: string[] = [];
   for (let turn = 1; turn <= maxTurns; turn++) {
@@ -145,17 +150,32 @@ export async function simulateGame(
       player2Resources
     );
     
-    // 빌드 기반 해설 추가
-    const buildCommentary1 = generateBuildCommentary(
-      turn,
-      maxTurns,
-      player1Build.type,
+    // 빌드 기반 플레이어 액션 생성
+    const player1Action = genActions(
+      player1Name,
       player1Race,
-      player1WinProb > 0.5,
-      player1Build
+      player1Build.type,
+      turn,
+      maxTurns
     );
     
-    allCommentaries.push(buildCommentary1);
+    const player2Action = genActions(
+      player2Name,
+      player2Race,
+      player2Build.type,
+      turn,
+      maxTurns
+    );
+    
+    // 두 플레이어의 액션을 조합하여 해설 생성
+    const gameCommentary = genCommentary(
+      player1Action,
+      player2Action,
+      turn,
+      maxTurns
+    );
+    
+    allCommentaries.push(gameCommentary);
     
     // 턴별 자원/병력 변화
     const changeData = calculateTurnChanges(

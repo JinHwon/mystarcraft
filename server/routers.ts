@@ -46,6 +46,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, MAPS, calcGradeIndex, calcTotalStats, STAT_KEYS, StatKey } from "@shared/gameConstants";
 import { simulateGame, calculateWinProbability } from "./gameSimulation";
+import { generatePlayerActions, generateGameCommentary } from "./buildActions";
 
 // ── Player Router ────────────────────────────────────────────────
 
