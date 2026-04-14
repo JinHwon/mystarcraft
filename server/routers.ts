@@ -35,7 +35,10 @@ import {
   createGameResult,
   getPlayerGameHistory,
   findOpponentByDifficulty,
+  getDb,
 } from "./db";
+import { eq } from "drizzle-orm";
+import { players } from "../drizzle/schema";
 import { storagePut } from "./storage";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -413,8 +416,11 @@ const practiceRouter = router({
       }
 
       // 상대 선수 정보 조회
-      const opponentId = player.id === game.player1Id ? game.player2Id : game.player1Id;
-      const opponent = await getPlayerByUserId(opponentId);
+      const opponentPlayerId = player.id === game.player1Id ? game.player2Id : game.player1Id;
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "데이터베이스 연결 실패" });
+      const opponentUser = await db.select().from(players).where(eq(players.id, opponentPlayerId)).limit(1);
+      const opponent = opponentUser.length > 0 ? opponentUser[0] : null;
       if (!opponent) throw new TRPCError({ code: "NOT_FOUND", message: "상대 선수를 찾을 수 없습니다" });
 
       // 맵 정보 조회

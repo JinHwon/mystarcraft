@@ -275,16 +275,17 @@ export default function PracticePage() {
     );
   }
 
-  // 게임 진행 중
+  // 게임 진� 중
   if (phase === "playing") {
-    const currentTurn = gameState.turns?.[currentTurnIndex];
+    const turns = gameState.turns || [];
+    const currentTurn = turns?.[currentTurnIndex];
     
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-white">게임 진행 중...</h1>
-            <p className="text-slate-400 mt-2">턴 {currentTurnIndex + 1} / {gameState.turns?.length || 0}</p>
+            <h1 className="text-3xl font-bold text-white">게임 진� 중...</h1>
+            <p className="text-slate-400 mt-2">턴 {currentTurnIndex + 1} / {turns.length}</p>
           </div>
 
           {currentTurn && (
@@ -402,8 +403,8 @@ export default function PracticePage() {
             </Button>
             <Button 
               className="flex-1 bg-blue-600 hover:bg-blue-700"
-              onClick={() => setCurrentTurnIndex(Math.min(gameState.turns!.length - 1, currentTurnIndex + 1))}
-              disabled={currentTurnIndex === gameState.turns!.length - 1}
+              onClick={() => setCurrentTurnIndex(Math.min(turns.length - 1, currentTurnIndex + 1))}
+              disabled={currentTurnIndex === turns.length - 1}
             >
               다음 턴
             </Button>
