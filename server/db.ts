@@ -282,7 +282,18 @@ export async function updateFatigue(playerId: number, amount: number) {
 export async function getAllUsers() {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(users);
+  const userList = await db.select().from(users);
+  // 각 사용자에 대해 선수 정보 조회
+  const usersWithPlayers = await Promise.all(
+    userList.map(async (user) => {
+      const playerResult = await db.select().from(players).where(eq(players.userId, user.id)).limit(1);
+      return {
+        ...user,
+        playerId: playerResult.length > 0 ? playerResult[0].id : null,
+      };
+    })
+  );
+  return usersWithPlayers;
 }
 
 export async function updatePlayerByAdmin(playerId: number, updates: {

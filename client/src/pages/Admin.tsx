@@ -109,7 +109,13 @@ export default function Admin() {
   };
 
   const handleManageUser = (userId: number) => {
-    setSelectedPlayerId(userId);
+    // userId를 playerId로 변환하기 위해 사용자 정보에서 선수 ID 찾기
+    const user = usersQuery.data?.find(u => u.id === userId);
+    if (user && user.playerId) {
+      setSelectedPlayerId(user.playerId);
+    } else {
+      toast.error("선수 정보를 찾을 수 없습니다");
+    }
   };
 
   if (usersQuery.isLoading) return <div className="p-8">로딩 중...</div>;
