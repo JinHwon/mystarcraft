@@ -117,10 +117,16 @@ export async function simulateGame(
 
   // 게임 진행
   const turns: GameTurn[] = [];
+  const maxTurns = 100;
 
-  while (!gameState.gameEnded) {
+  while (!gameState.gameEnded && turns.length < maxTurns) {
     progressTurn(gameState);
     turns.push(gameStateToTurnData(gameState));
+  }
+
+  if (!gameState.gameEnded) {
+    gameState.gameEnded = true;
+    gameState.winner = gameState.player1Advantage >= 50 ? gameState.player1.id : gameState.player2.id;
   }
 
   // 최종 스코어 계산
