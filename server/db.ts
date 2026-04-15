@@ -635,25 +635,24 @@ export async function findOpponentByDifficulty(
   const db = await getDb();
   if (!db) return null;
   
-  // 난이도별 등급 범위
-  const ranges = {
-    beginner: { min: 0, max: 2 },
-    intermediate: { min: 2, max: 4 },
-    advanced: { min: 4, max: 7 },
-  };
+  // 난이도별 등급 필터링
+  let allowedGrades: string[] = [];
+  if (difficulty === 'beginner') {
+    allowedGrades = ['D', 'C', 'B'];
+  } else if (difficulty === 'intermediate') {
+    allowedGrades = ['B', 'C', 'D'];
+  } else if (difficulty === 'advanced') {
+    allowedGrades = ['S', 'A', 'B'];
+  }
   
-  const range = ranges[difficulty];
-  
-  // 같은 난이도 범위의 다른 선수 찾기
   const allPlayers = await db.select().from(players);
-  const candidates = allPlayers.filter(p => p.id !== currentPlayerId);
+  const candidates = allPlayers.filter(p => 
+    p.id !== currentPlayerId && allowedGrades.includes(p.grade)
+  );
   
   if (candidates.length === 0) return null;
   
-  // 랜덤 상대 선택
   const randomOpponent = candidates[Math.floor(Math.random() * candidates.length)];
-  
-  // 상대의 실제 종족을 그대로 반환
   return randomOpponent;
 }
 

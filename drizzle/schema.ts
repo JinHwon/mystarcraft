@@ -102,6 +102,7 @@ export const players = mysqlTable("players", {
 	expToNext: int().default(100).notNull(),
 	statPoints: int().default(0).notNull(),
 	gold: int().default(1000).notNull(),
+	grade: mysqlEnum(['S','A','B','C','D']).default('D').notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	fatigue: int().default(100).notNull(),

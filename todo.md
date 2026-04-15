@@ -271,3 +271,14 @@
 - [x] 해설 스크롤 기능 추가 - 필드 레이아웃 개선 (min-h-0, overflow-y-auto)
 - [x] 배속 버튼 짧림 현상 수정 - 배속 버튼 영역에 pb-2 추가
 - [x] 자원률 증가 대폭 확대 - rRate/2에서 rRate로 변경 (100~150/턴)
+
+## 게임 밸런스 개선 (v37.0) - 완료
+
+- [x] 종족별 유불리 시스템 구현
+  - [x] 테란: 자원 1.5배 빠름 (dynamicGameEngine.ts raceResourceBonus)
+  - [x] 저그: 병력 1.5배 빠름 (dynamicGameEngine.ts raceTroopBonus)
+  - [x] 프로토스: 전투 승률 1.5배 높음 (dynamicGameEngine.ts resolveEngagement)
+- [x] 난이도별 상대 등급 제한 (db.ts findOpponentByDifficulty)
+  - [x] 초심방: D, C, B 등급 플레이어 매칭
+  - [x] 중수방: B, C, D 등급 플레이어 매칭
+  - [x] 고수방: S, A, B 등급 플레이어 매칭

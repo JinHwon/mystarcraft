@@ -57,6 +57,41 @@
       "when": 1776216049068,
       "tag": "0007_warm_kitty_pryde",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1776238052545,
+      "tag": "0008_sloppy_brood",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1776238526842,
+      "tag": "0009_demonic_violations",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1776240361297,
+      "tag": "0010_lush_stephen_strange",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1776240493881,
+      "tag": "0011_white_master_chief",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1776240548086,
+      "tag": "0012_slippery_patch",
+      "breakpoints": true
     }
   ]
 }

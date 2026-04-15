@@ -167,14 +167,19 @@ function updateResourcesAndTroops(gs: GameState, p: PlayerState): void {
   // 앞마당 파괴 시 자원 수급 50% 감소
   const frontPenalty = p.frontBaseDestroyed ? 0.5 : 1.0;
 
+  // 종족별 유불리: 테란은 자원 1.5배 빠름
+  const raceResourceBonus = p.race === 'terran' ? 1.5 : 1.0;
+  // 종족별 유불리: 저그는 병력 1.5배 빠름
+  const raceTroopBonus = p.race === 'zerg' ? 1.5 : 1.0;
+
   // 자원 증가: 기본 100~150/턴 * 멀티 수 (대폭 증가)
-  const resInc = rRate * p.multiCount * ecoMul * frontPenalty;
+  const resInc = rRate * p.multiCount * ecoMul * frontPenalty * raceResourceBonus;
   const resVar = 1.0 + (Math.random() - 0.5) * 0.3;
   p.resources = Math.min(GAME_MAX_RESOURCES, p.resources + resInc * resVar);
 
   // 병력 증가: 생산기지당 3~4 (자원이 충분할 때만)
   if (p.resources > 100) {
-    const troopInc = 3.5 * p.productionFacilities * tRate * troopMul * frontPenalty;
+    const troopInc = 3.5 * p.productionFacilities * tRate * troopMul * frontPenalty * raceTroopBonus;
     const troopVar = 1.0 + (Math.random() - 0.5) * 0.3;
     p.supply = Math.min(GAME_MAX_TROOPS, p.supply + troopInc * troopVar);
     // 병력 생산에 자원 소모
@@ -200,6 +205,10 @@ function resolveEngagement(gs: GameState): { winnerIsP1: boolean; decisive: bool
   // 랜덤 ±15%
   p1Pow *= 1 + (Math.random() - 0.5) * 0.3;
   p2Pow *= 1 + (Math.random() - 0.5) * 0.3;
+
+  // 종족별 유불리: 프로토스는 전투 승률 1.5배 높음
+  if (p1.race === 'protoss') p1Pow *= 1.5;
+  if (p2.race === 'protoss') p2Pow *= 1.5;
 
   const winP1 = p1Pow >= p2Pow;
 
