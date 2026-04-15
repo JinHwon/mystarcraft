@@ -57,6 +57,20 @@
       "when": 1776216049068,
       "tag": "0007_warm_kitty_pryde",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1776238052545,
+      "tag": "0008_sloppy_brood",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1776238526842,
+      "tag": "0009_demonic_violations",
+      "breakpoints": true
     }
   ]
 }
