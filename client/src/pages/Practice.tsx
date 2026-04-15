@@ -32,7 +32,7 @@ export default function PracticePage() {
   const [gameState, setGameState] = useState<GameState>({});
   const [currentCommentaryIndex, setCurrentCommentaryIndex] = useState(0);
   const [showResultConfirm, setShowResultConfirm] = useState(false);
-  const [gameSpeed, setGameSpeed] = useState<1 | 2 | 5>(1); // 1배속, 2배속, 5배속
+  const [gameSpeed, setGameSpeed] = useState<1 | 2 | 5>(2); // 1배속, 2배속, 5배속 (기본: 2배속)
   const autoPlayIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // API 호출
