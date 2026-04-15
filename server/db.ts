@@ -447,16 +447,32 @@ export async function getPlayerGameHistory(playerId: number, limit: number = 10)
 
   return Promise.all(
     result.map(async (record) => {
-      const opponentPlayerId = record.opponentId;
-      const opponentResult = await db.select().from(players).where(eq(players.id, opponentPlayerId)).limit(1);
-      const opponent = opponentResult.length > 0 ? opponentResult[0] : null;
+      let opponentName = "익명 유저";
+      let opponentRace = "unknown";
+      let opponentGrade = "D";
 
-      const opponentRace = opponent?.race || "unknown";
-      const opponentName = opponent?.name || "익명 유저";
-      const opponentGrade = opponent?.grade || "D";
+      if (record.opponentId && record.opponentId > 0) {
+        const opponentResult = await db.select().from(players).where(eq(players.id, record.opponentId)).limit(1);
+        if (opponentResult.length > 0) {
+          const opponent = opponentResult[0];
+          opponentName = opponent.name || "익명 유저";
+          opponentRace = opponent.race || "unknown";
+          opponentGrade = opponent.grade || "D";
+        }
+      }
+
+      let parsedStatChanges = record.statChanges;
+      if (typeof record.statChanges === "string") {
+        try {
+          parsedStatChanges = JSON.parse(record.statChanges);
+        } catch (e) {
+          parsedStatChanges = {};
+        }
+      }
 
       return {
         ...record,
+        statChanges: parsedStatChanges,
         opponentName,
         opponentRace,
         opponentGrade,

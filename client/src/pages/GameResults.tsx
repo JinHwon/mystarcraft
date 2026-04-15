@@ -113,16 +113,19 @@ export default function GameResultsPage() {
                     <div className="space-y-2">
                       <p className="text-slate-400 font-semibold text-sm">능력치 변동</p>
                       <div className="grid grid-cols-2 gap-2 text-xs">
-                        {result.statChanges && Object.entries(result.statChanges).map(([stat, change]: [string, any]) => (
-                          <div key={stat} className="flex justify-between">
-                            <span className="text-slate-400">
-                              {STAT_LABELS[stat as keyof typeof STAT_LABELS] || stat}
-                            </span>
-                            <span className={change >= 0 ? "text-green-400" : change < 0 ? "text-red-400" : "text-slate-400"}>
-                              {change >= 0 ? "+" : ""}{change}
-                            </span>
-                          </div>
-                        ))}
+                        {result.statChanges && typeof result.statChanges === 'object' && Object.entries(result.statChanges).map(([stat, change]: [string, any]) => {
+                          const numChange = Number(change) || 0;
+                          return (
+                            <div key={stat} className="flex justify-between">
+                              <span className="text-slate-400">
+                                {STAT_LABELS[stat as keyof typeof STAT_LABELS] || stat}
+                              </span>
+                              <span className={numChange > 0 ? "text-green-400" : numChange < 0 ? "text-red-400" : "text-slate-400"}>
+                                {numChange > 0 ? "+" : ""}{numChange}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>

@@ -316,3 +316,9 @@
 
 - [x] 아이템 상점에서 피로도 회복 아이템 미표시 문제 - 데이터베이스에 피로도 회복제 아이템 추가
 - [x] 경기 결과 화면 오류 (유저 이름, 종족 표시 오류) - routers.ts에서 createGameResult에 opponentId 추가
+
+## 긴급 버그 수정 (v44.0) - 경기 결과 화면 데이터 오류
+
+- [x] 경기 결과 화면 능력치 변동 값 깨짐 - getPlayerGameHistory에서 statChanges JSON 파싱 추가
+- [x] 상대방 정보 미표시 - opponentId 0 처리 추가 (익명유저, unknown으로 표기)
+- [x] 실제 게임한 상대방 정보 표시 - GameResults.tsx UI 렌더링 수정

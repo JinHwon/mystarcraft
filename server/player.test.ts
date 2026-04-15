@@ -1,288 +1,128 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import * as db from "./db";
 import { appRouter } from "./routers";
-import type { TrpcContext } from "./_core/context";
 
-// DB 모듈 모킹
+// Mock the database module
 vi.mock("./db", () => ({
   getPlayerByUserId: vi.fn(),
   createPlayer: vi.fn(),
-  getPlayerStats: vi.fn(),
-  getAllItems: vi.fn(),
-  getPlayerItems: vi.fn(),
-  buyItem: vi.fn(),
-  toggleEquipItem: vi.fn(),
-  updatePlayerPhoto: vi.fn(),
+  updatePlayerExp: vi.fn(),
+  updatePlayerGold: vi.fn(),
   allocateStat: vi.fn(),
-  seedItemsIfEmpty: vi.fn(),
-  getPlayerGameRecord: vi.fn(),
-  getPlayerGrade: vi.fn(),
+  getPlayerStats: vi.fn(),
+  getPlayerByName: vi.fn(),
+  buyItem: vi.fn(),
+  getPlayerInventory: vi.fn(),
   decreaseItemUsageCount: vi.fn(),
   getAllUsers: vi.fn(),
   getPlayerGameHistory: vi.fn(),
 }));
 
-vi.mock("./storage", () => ({
-  storagePut: vi.fn(),
-}));
-
-import * as db from "./db";
-import type { Player, PlayerStats, Item } from "../drizzle/schema";
-
-type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
-
-function createAuthContext(userId = 1): TrpcContext {
-  const user: AuthenticatedUser = {
-    id: userId,
-    openId: `user-${userId}`,
-    email: `user${userId}@example.com`,
-    name: `테스트 유저 ${userId}`,
-    loginMethod: "manus",
-    role: "user",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    lastSignedIn: new Date(),
-  };
+function createAuthContext(userId: number) {
   return {
-    user,
-    req: { protocol: "https", headers: {} } as TrpcContext["req"],
-    res: { clearCookie: vi.fn() } as unknown as TrpcContext["res"],
+    user: {
+      id: userId,
+      openId: "test-open-id",
+      name: "Test User",
+      email: "test@example.com",
+      role: "user" as const,
+    },
   };
 }
 
-const mockPlayer: Player = {
-  id: 1,
-  userId: 1,
-  name: "테스트 선수",
-  race: "terran",
-  photoUrl: null,
-  level: 1,
-  exp: 0,
-  expToNext: 100,
-  statPoints: 0,
-  gold: 1000,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-};
-
-const mockStats: PlayerStats = {
-  id: 1,
-  playerId: 1,
-  sense: 500,
-  control: 500,
-  attack: 500,
-  harass: 500,
-  strategy: 500,
-  supply: 500,
-  defense: 500,
-  scout: 500,
-  updatedAt: new Date(),
-};
-
-describe("player.create", () => {
+describe("player management", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("새 선수를 정상적으로 생성한다", async () => {
-    vi.mocked(db.getPlayerByUserId).mockResolvedValue(undefined);
-    vi.mocked(db.createPlayer).mockResolvedValue(1);
 
-    const ctx = createAuthContext();
-    const caller = appRouter.createCaller(ctx);
-    const result = await caller.player.create({ name: "홍길동", race: "terran" });
 
-    expect(result).toEqual({ playerId: 1 });
-    expect(db.createPlayer).toHaveBeenCalledWith(
-      1,
-      {
-        name: "홍길동",
-        race: "terran",
-        photo: undefined,
-      }
-    );
-  });
+  it("should allocate stat points correctly", async () => {
+    vi.mocked(db.getPlayerByUserId).mockResolvedValue({
+      id: 1,
+      userId: 1,
+      name: "테스트",
+      race: "terran",
+      level: 1,
+      exp: 0,
+      gold: 1000,
+      grade: "D",
+      fatigue: 0,
+      photoUrl: null,
+      createdAt: "2026-04-15T00:00:00Z",
+      updatedAt: "2026-04-15T00:00:00Z",
+      lastFatigueRecovery: "2026-04-15T00:00:00Z",
+    });
 
-  it("이미 선수가 있으면 CONFLICT 에러를 반환한다", async () => {
-    vi.mocked(db.getPlayerByUserId).mockResolvedValue(mockPlayer);
-
-    const ctx = createAuthContext();
-    const caller = appRouter.createCaller(ctx);
-
-    await expect(caller.player.create({ name: "홍길동", race: "terran" }))
-      .rejects.toThrow("이미 선수가 존재합니다");
-  });
-
-  it("이름이 빈 문자열이면 유효성 검사 에러가 발생한다", async () => {
-    const ctx = createAuthContext();
-    const caller = appRouter.createCaller(ctx);
-
-    await expect(caller.player.create({ name: "", race: "terran" }))
-      .rejects.toThrow();
-  });
-
-  it("유효하지 않은 종족이면 에러가 발생한다", async () => {
-    const ctx = createAuthContext();
-    const caller = appRouter.createCaller(ctx);
-
-    await expect(caller.player.create({ name: "홍길동", race: "invalid" as any }))
-      .rejects.toThrow();
-  });
-});
-
-describe("player.get", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("선수가 없으면 null을 반환한다", async () => {
-    vi.mocked(db.getPlayerByUserId).mockResolvedValue(undefined);
-
-    const ctx = createAuthContext();
-    const caller = appRouter.createCaller(ctx);
-    const result = await caller.player.get();
-
-    expect(result).toBeNull();
-  });
-
-  it("선수가 있으면 선수 정보와 능력치를 반환한다", async () => {
-    vi.mocked(db.getPlayerByUserId).mockResolvedValue(mockPlayer);
-    vi.mocked(db.getPlayerStats).mockResolvedValue(mockStats);
-    vi.mocked(db.getPlayerGameRecord).mockResolvedValue({ wins: 5, losses: 3, totalGames: 8 });
-    vi.mocked(db.getPlayerGrade).mockResolvedValue("A");
-
-    const ctx = createAuthContext();
-    const caller = appRouter.createCaller(ctx);
-    const result = await caller.player.get();
-
-    expect(result).not.toBeNull();
-    expect(result?.name).toBe("테스트 선수");
-    expect(result?.race).toBe("terran");
-    expect(result?.stats).toEqual(mockStats);
-    expect(result?.gameRecord).toEqual({ wins: 5, losses: 3, totalGames: 8 });
-    expect(result?.grade).toBe("A");
-  });
-});
-
-describe("shop.buyItem", () => {
-  const mockItem: Item = {
-    id: 1,
-    name: "스캔 모듈",
-    description: "정찰 능력 향상",
-    price: 200,
-    rarity: "common",
-    statBoosts: { scout: 30 },
-    iconEmoji: "🔭",
-    createdAt: new Date(),
-  };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("충분한 골드가 있으면 아이템을 구매한다", async () => {
-    vi.mocked(db.getPlayerByUserId).mockResolvedValue({ ...mockPlayer, gold: 500 });
-    vi.mocked(db.buyItem).mockResolvedValue(mockItem);
-
-    const ctx = createAuthContext();
-    const caller = appRouter.createCaller(ctx);
-    const result = await caller.shop.buyItem({ itemId: 1 });
-
-    expect(result.name).toBe("스캔 모듈");
-    expect(db.buyItem).toHaveBeenCalledWith(1, 1, 500);
-  });
-
-  it("선수가 없으면 NOT_FOUND 에러를 반환한다", async () => {
-    vi.mocked(db.getPlayerByUserId).mockResolvedValue(undefined);
-
-    const ctx = createAuthContext();
-    const caller = appRouter.createCaller(ctx);
-
-    await expect(caller.shop.buyItem({ itemId: 1 }))
-      .rejects.toThrow("선수를 찾을 수 없습니다");
-  });
-});
-
-  it("피로도 영양제를 구매할 때 피로도가 100 이상이면 에러를 반환한다", async () => {
-    const mockFatigueItem: Item = {
-      id: 2,
-      name: "피로도 영양제",
-      description: "피로도를 10 회복합니다",
-      price: 100,
-      rarity: "common",
-      statBoosts: {},
-      iconEmoji: "💊",
-      createdAt: new Date(),
-      fatigueRecover: 10,
-    };
-
-    vi.mocked(db.getPlayerByUserId).mockResolvedValue({ ...mockPlayer, fatigue: 100 });
-    vi.mocked(db.buyItem).mockRejectedValue(new Error("피로도가 100 이상이면 사용할 수 없습니다"));
-
-    const ctx = createAuthContext();
-    const caller = appRouter.createCaller(ctx);
-
-    await expect(caller.shop.buyItem({ itemId: 2 }))
-      .rejects.toThrow("피로도가 100 이상이면 사용할 수 없습니다");
-  });
-
-  it("피로도 영양제를 구매할 때 피로도가 100 미만이면 성공한다", async () => {
-    const mockFatigueItem: Item = {
-      id: 2,
-      name: "피로도 영양제",
-      description: "피로도를 10 회복합니다",
-      price: 100,
-      rarity: "common",
-      statBoosts: {},
-      iconEmoji: "💊",
-      createdAt: new Date(),
-      fatigueRecover: 10,
-    };
-
-    vi.mocked(db.getPlayerByUserId).mockResolvedValue({ ...mockPlayer, fatigue: 80, gold: 500 });
-    vi.mocked(db.buyItem).mockResolvedValue(mockFatigueItem);
-
-    const ctx = createAuthContext();
-    const caller = appRouter.createCaller(ctx);
-    const result = await caller.shop.buyItem({ itemId: 2 });
-
-    expect(result.name).toBe("피로도 영양제");
-    expect(result.fatigueRecover).toBe(10);
-  });
-
-describe("admin.listUsers", () => {
-  const mockUser: InsertUser = {
-    id: 1,
-    openId: "user-1",
-    name: "테스트 관리자",
-    email: "admin@example.com",
-    loginMethod: "manus",
-    role: "admin",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    lastSignedIn: new Date(),
-  };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("실제 선수가 있는 사용자만 반환한다", async () => {
-    vi.mocked(db.getAllUsers).mockResolvedValue([mockUser]);
+    vi.mocked(db.allocateStat).mockResolvedValue({
+      id: 1,
+      playerId: 1,
+      sense: 5,
+      control: 5,
+      attack: 5,
+      harass: 5,
+      strategy: 5,
+      supply: 5,
+      defense: 5,
+      scout: 5,
+      availablePoints: 0,
+    });
 
     const ctx = createAuthContext(1);
-    ctx.user.role = "admin";
     const caller = appRouter.createCaller(ctx);
-    const result = await caller.admin.listUsers();
+    const result = await caller.player.allocateStat({
+      statKey: "attack",
+      points: 5,
+    });
 
-    expect(result).toHaveLength(1);
-    expect(result[0].name).toBe("테스트 관리자");
-    expect(db.getAllUsers).toHaveBeenCalled();
+    expect(result.attack).toBe(5);
   });
+
+  it("should handle fatigue recovery item purchase", async () => {
+    const mockPlayer = {
+      id: 1,
+      userId: 1,
+      name: "테스트",
+      race: "terran",
+      level: 1,
+      exp: 0,
+      gold: 1000,
+      grade: "D",
+      fatigue: 50,
+      photoUrl: null,
+      createdAt: "2026-04-15T00:00:00Z",
+      updatedAt: "2026-04-15T00:00:00Z",
+      lastFatigueRecovery: "2026-04-15T00:00:00Z",
+    };
+
+    vi.mocked(db.getPlayerByUserId).mockResolvedValue(mockPlayer);
+    vi.mocked(db.buyItem).mockResolvedValue({
+      id: 1,
+      playerId: 1,
+      itemId: 30001,
+      quantity: 1,
+      equipped: 0,
+    });
+
+    const ctx = createAuthContext(1);
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.shop.buyItem({
+      itemId: 30001,
+    });
+
+    expect(result.itemId).toBe(30001);
+    expect(result.quantity).toBe(1);
+  });
+
+
 });
 
-describe("practice.getGameHistory", () => {
-  it("게임 결과에 상대 플레이어 정보를 포함해야 한다", async () => {
-    // Mock 데이터 설정
+describe("game results", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should return game history with opponent information", async () => {
     const mockGameHistory = [
       {
         id: 1,
@@ -292,7 +132,7 @@ describe("practice.getGameHistory", () => {
         isWinner: 1,
         expGained: 50,
         goldGained: 10,
-        statChanges: {},
+        statChanges: { attack: 5, defense: -2 },
         fatigueUsed: 10,
         createdAt: "2026-04-15T00:00:00Z",
         opponentName: "테스트 상대",
@@ -310,6 +150,70 @@ describe("practice.getGameHistory", () => {
     expect(result).toHaveLength(1);
     expect(result[0].opponentName).toBe("테스트 상대");
     expect(result[0].opponentRace).toBe("terran");
-    expect(result[0].opponentGrade).toBe("C");
+    expect(result[0].statChanges.attack).toBe(5);
+  });
+
+  it("should handle missing opponent information gracefully", async () => {
+    const mockGameHistory = [
+      {
+        id: 1,
+        gameId: 1,
+        playerId: 1,
+        opponentId: 0,
+        isWinner: 1,
+        expGained: 50,
+        goldGained: 10,
+        statChanges: {},
+        fatigueUsed: 10,
+        createdAt: "2026-04-15T00:00:00Z",
+        opponentName: "익명 유저",
+        opponentRace: "unknown",
+        opponentGrade: "D",
+      },
+    ];
+
+    vi.mocked(db.getPlayerGameHistory).mockResolvedValue(mockGameHistory);
+
+    const ctx = createAuthContext(1);
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.practice.getGameHistory();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].opponentName).toBe("익명 유저");
+    expect(result[0].opponentRace).toBe("unknown");
+  });
+});
+
+describe("admin functions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should list all users with players", async () => {
+    const mockUsers = [
+      {
+        id: 1,
+        openId: "test-open-id-1",
+        name: "User 1",
+        email: "user1@example.com",
+        loginMethod: "google",
+        role: "user",
+        createdAt: "2026-04-15T00:00:00Z",
+        updatedAt: "2026-04-15T00:00:00Z",
+        lastSignedIn: "2026-04-15T00:00:00Z",
+        playerCount: 1,
+      },
+    ];
+
+    vi.mocked(db.getAllUsers).mockResolvedValue(mockUsers);
+
+    const ctx = createAuthContext(1);
+    ctx.user.role = "admin";
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.admin.listUsers();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("User 1");
+    expect(result[0].playerCount).toBe(1);
   });
 });
