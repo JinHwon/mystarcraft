@@ -110,12 +110,19 @@ function DashboardLayoutContent({
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
   const [location, setLocation] = useLocation();
-  const { state, toggleSidebar } = useSidebar();
+  const { state, toggleSidebar, setOpen } = useSidebar();
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
+  
+  // 모바일에서 사이드바 기본 닫힘
+  useEffect(() => {
+    if (isMobile) {
+      setOpen(false);
+    }
+  }, [isMobile, setOpen]);
   const { data: playerData } = trpc.player.get.useQuery();
   const { data: playerItems = [] } = trpc.shop.getPlayerItems.useQuery();
   
@@ -127,6 +134,14 @@ function DashboardLayoutContent({
       setIsResizing(false);
     }
   }, [isCollapsed]);
+  
+  // 메뉴 항목 클릭 시 모바일에서 사이드바 자동 닫기
+  const handleMenuClick = (path: string) => {
+    setLocation(path);
+    if (isMobile) {
+      setOpen(false);
+    }
+  };
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -193,7 +208,7 @@ function DashboardLayoutContent({
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
                       isActive={isActive}
-                      onClick={() => setLocation(item.path)}
+                      onClick={() => handleMenuClick(item.path)}
                       tooltip={item.label}
                       className={`h-10 transition-all font-normal`}
                     >
