@@ -2,7 +2,7 @@ import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, items, playerItems, players, playerStats, users, events, maps, games, gameResults } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { StatKey } from "@shared/gameConstants";
-import { desc, eq, and } from "drizzle-orm";
+import { desc, eq, and, ne } from "drizzle-orm";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -277,7 +277,15 @@ export async function updatePlayerPhoto(playerId: number, photoUrl: string) {
 export async function getAllUsers() {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(users);
+  
+  // 실제 선수가 있는 사용자만 반환
+  const usersWithPlayers = await db
+    .select({ users: users })
+    .from(users)
+    .innerJoin(players, eq(users.id, players.userId))
+    .groupBy(users.id);
+  
+  return usersWithPlayers.map(row => row.users);
 }
 
 export async function updatePlayerByAdmin(playerId: number, updates: Record<string, any>) {
@@ -470,16 +478,20 @@ export async function findOpponentByDifficulty(difficulty: string, currentPlayer
     gradeFilter = ["S", "A", "B"];
   }
 
-  const allPlayers = await db.select().from(players).where(eq(players.id, currentPlayerId));
-  if (allPlayers.length === 0) throw new Error("선수를 찾을 수 없습니다");
+  // 현재 플레이어 조회
+  const currentPlayer = await db.select().from(players).where(eq(players.id, currentPlayerId)).limit(1);
+  if (currentPlayer.length === 0) throw new Error("선수를 찾을 수 없습니다");
 
-  const opponents = await db.select().from(players).where(
-    and(
-      eq(players.id, currentPlayerId),
+  // 자신을 제외한 모든 플레이어 조회
+  const opponents = await db.select().from(players)
+    .where(
+      ne(players.id, currentPlayerId)  // 자신 제외
     )
-  );
+    .limit(100);  // 최대 100명 조회
 
   if (opponents.length === 0) throw new Error("상대를 찾을 수 없습니다");
+  
+  // 랜덤 선택
   return opponents[Math.floor(Math.random() * opponents.length)];
 }
 

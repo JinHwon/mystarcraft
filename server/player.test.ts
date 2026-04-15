@@ -17,6 +17,7 @@ vi.mock("./db", () => ({
   getPlayerGameRecord: vi.fn(),
   getPlayerGrade: vi.fn(),
   decreaseItemUsageCount: vi.fn(),
+  getAllUsers: vi.fn(),
 }));
 
 vi.mock("./storage", () => ({
@@ -246,3 +247,34 @@ describe("shop.buyItem", () => {
     expect(result.name).toBe("피로도 영양제");
     expect(result.fatigueRecover).toBe(10);
   });
+
+describe("admin.listUsers", () => {
+  const mockUser: InsertUser = {
+    id: 1,
+    openId: "user-1",
+    name: "테스트 관리자",
+    email: "admin@example.com",
+    loginMethod: "manus",
+    role: "admin",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    lastSignedIn: new Date(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("실제 선수가 있는 사용자만 반환한다", async () => {
+    vi.mocked(db.getAllUsers).mockResolvedValue([mockUser]);
+
+    const ctx = createAuthContext(1);
+    ctx.user.role = "admin";
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.admin.listUsers();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("테스트 관리자");
+    expect(db.getAllUsers).toHaveBeenCalled();
+  });
+});
