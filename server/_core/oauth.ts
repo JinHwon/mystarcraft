@@ -20,18 +20,7 @@ export function registerOAuthRoutes(app: Express) {
     }
 
     try {
-      // state에서 redirectUri를 디코딩하여 토큰 교환에 사용
-      let redirectUri: string;
-      try {
-        redirectUri = Buffer.from(state, "base64").toString("utf-8");
-      } catch {
-        // 디코딩 실패 시 현재 요청에서 구성
-        const protocol = req.protocol;
-        const host = req.get("host") ?? req.headers.host ?? "localhost";
-        redirectUri = `${protocol}://${host}/api/oauth/callback`;
-      }
-
-      const tokenResponse = await sdk.exchangeCodeForToken(code, redirectUri);
+      const tokenResponse = await sdk.exchangeCodeForToken(code, state);
       const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
 
       if (!userInfo.openId) {

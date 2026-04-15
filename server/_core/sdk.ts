@@ -38,15 +38,20 @@ class OAuthService {
     }
   }
 
+  private decodeState(state: string): string {
+    const redirectUri = atob(state);
+    return redirectUri;
+  }
+
   async getTokenByCode(
     code: string,
-    redirectUri: string
+    state: string
   ): Promise<ExchangeTokenResponse> {
     const payload: ExchangeTokenRequest = {
       clientId: ENV.appId,
       grantType: "authorization_code",
       code,
-      redirectUri,
+      redirectUri: this.decodeState(state),
     };
 
     const { data } = await this.client.post<ExchangeTokenResponse>(
@@ -111,13 +116,13 @@ class SDKServer {
   /**
    * Exchange OAuth authorization code for access token
    * @example
-   * const tokenResponse = await sdk.exchangeCodeForToken(code, redirectUri);
+   * const tokenResponse = await sdk.exchangeCodeForToken(code, state);
    */
   async exchangeCodeForToken(
     code: string,
-    redirectUri: string
+    state: string
   ): Promise<ExchangeTokenResponse> {
-    return this.oauthService.getTokenByCode(code, redirectUri);
+    return this.oauthService.getTokenByCode(code, state);
   }
 
   /**
@@ -262,7 +267,7 @@ class SDKServer {
     }
 
     const sessionUserId = session.openId;
-    const signedInAt = new Date().toISOString();
+    const signedInAt = new Date();
     let user = await db.getUserByOpenId(sessionUserId);
 
     // If user not in DB, sync from OAuth server automatically
