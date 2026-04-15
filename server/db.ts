@@ -732,3 +732,31 @@ export async function getPlayerGrade(playerId: number): Promise<string> {
   
   return grades[gradeIndex];
 }
+
+
+export async function ensurePlayerStats(playerId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  // 기존 능력치 확인
+  const existing = await db.select().from(playerStats).where(eq(playerStats.playerId, playerId)).limit(1);
+  if (existing.length > 0) {
+    return existing[0];
+  }
+
+  // 능력치가 없으면 초기값으로 생성
+  const defaultStats = {
+    playerId,
+    sense: 500,
+    control: 500,
+    attack: 500,
+    harass: 500,
+    strategy: 500,
+    supply: 500,
+    defense: 500,
+    scout: 500,
+  };
+
+  await db.insert(playerStats).values(defaultStats);
+  return defaultStats;
+}

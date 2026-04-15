@@ -41,6 +41,7 @@ import {
   decreaseItemUsageCount,
   getPlayerGameRecord,
   getPlayerGrade,
+  ensurePlayerStats,
 } from "./db";
 import { eq } from "drizzle-orm";
 import { players } from "../drizzle/schema";
@@ -371,9 +372,9 @@ const practiceRouter = router({
       const opponent = await findOpponentByDifficulty(player.id, input.difficulty, 0);
       if (!opponent) throw new TRPCError({ code: "NOT_FOUND", message: "상대를 찾을 수 없습니다" });
 
-      // 선수 능력치 조회
-      const playerStats = await getPlayerStats(player.id);
-      const opponentStats = await getPlayerStats(opponent.id);
+      // 선수 능력치 조회 (없으면 초기화)
+      const playerStats = await getPlayerStats(player.id) || await ensurePlayerStats(player.id);
+      const opponentStats = await getPlayerStats(opponent.id) || await ensurePlayerStats(opponent.id);
       if (!playerStats || !opponentStats) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "능력치 조회 실패" });
 
       // 맵 정보 조회
