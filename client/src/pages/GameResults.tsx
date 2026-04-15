@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { STAT_LABELS } from "@shared/gameConstants";
+import { STAT_LABELS, RACE_LABELS } from "@shared/gameConstants";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 
 export default function GameResultsPage() {
@@ -83,7 +83,7 @@ export default function GameResultsPage() {
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-slate-400">종족</span>
-                        <span className="text-white">{result.opponentRace}</span>
+                        <span className="text-white">{RACE_LABELS[result.opponentRace as keyof typeof RACE_LABELS] || result.opponentRace}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-slate-400">날짜</span>

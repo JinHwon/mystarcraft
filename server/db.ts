@@ -447,13 +447,30 @@ export async function getPlayerGameHistory(playerId: number, limit: number = 10)
 
   return Promise.all(
     result.map(async (record) => {
-      const opponentPlayerId = record.opponentId;
-      const opponentResult = await db.select().from(players).where(eq(players.id, opponentPlayerId)).limit(1);
-      const opponent = opponentResult.length > 0 ? opponentResult[0] : null;
+      let opponentPlayerId = record.opponentId;
 
-      const opponentRace = opponent?.race || "unknown";
-      const opponentName = opponent?.name || "익명 유저";
-      const opponentGrade = opponent?.grade || "D";
+      // opponentId가 0이거나 없는 경우 games 테이블에서 상대 조회
+      if (!opponentPlayerId || opponentPlayerId === 0) {
+        const gameRecord = await db.select().from(games).where(eq(games.id, record.gameId)).limit(1);
+        if (gameRecord.length > 0) {
+          const game = gameRecord[0];
+          opponentPlayerId = game.player1Id === playerId ? game.player2Id : game.player1Id;
+        }
+      }
+
+      let opponentName = "익명 유저";
+      let opponentRace = "unknown";
+      let opponentGrade = "D";
+
+      if (opponentPlayerId && opponentPlayerId !== 0) {
+        const opponentResult = await db.select().from(players).where(eq(players.id, opponentPlayerId)).limit(1);
+        if (opponentResult.length > 0) {
+          const opponent = opponentResult[0];
+          opponentName = opponent.name || "익명 유저";
+          opponentRace = opponent.race || "unknown";
+          opponentGrade = opponent.grade || "D";
+        }
+      }
 
       return {
         ...record,

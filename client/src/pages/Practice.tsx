@@ -44,6 +44,10 @@ export default function PracticePage() {
   const findOpponentMutation = trpc.practice.findOpponent.useMutation();
   const playGameMutation = trpc.practice.playGame.useMutation();
   const userQuery = trpc.auth.me.useQuery();
+  const playerQuery = trpc.player.get.useQuery();
+
+  const player1Name = playerQuery.data?.name || "플레이어 1";
+  const player2Name = gameState.opponentName || "플레이어 2";
 
   const handleSelectDifficulty = (difficulty: "beginner" | "intermediate" | "advanced") => {
     setGameState({ difficulty });
@@ -63,7 +67,7 @@ export default function PracticePage() {
         ...prev,
         gameId: result.gameId,
         playerName: playerQuery.data?.name,
-        playerRace: (userQuery.data as any)?.race,
+        playerRace: (playerQuery.data as any)?.race,
         opponentName: result.opponent.name,
         opponentRace: result.opponent.race,
         opponentGrade: result.opponentGrade,
@@ -132,10 +136,6 @@ export default function PracticePage() {
       };
     }
   }, [phase, currentTurnIndex, gameState.turns, gameSpeed]);
-
-  const playerQuery = trpc.player.get.useQuery();
-  const player1Name = playerQuery.data?.name || "플레이어 1";
-  const player2Name = gameState.opponentName || "플레이어 2";
 
   const difficultyLabels: Record<string, string> = {
     beginner: "초보",
