@@ -114,7 +114,9 @@ export async function simulateGame(
     player1Race,
     player2Id,
     player2Name,
-    player2Race
+    player2Race,
+    player1EffectiveStats,
+    player2EffectiveStats
   );
 
   // 게임 진행

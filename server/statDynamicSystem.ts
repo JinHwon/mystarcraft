@@ -48,18 +48,18 @@ export function calculateStatChanges(
   // 정찰 능력치: 정찰 성공 시 +5, 실패 시 -2
   changes.intelligence = gameEvents.scoutingSuccess * 5 - gameEvents.scoutingFailure * 2;
 
-  // 승리 시 모든 능력치에 보너스 +10
+  // 승리 시 모든 능력치에 보너스 (8~12 랜덤)
   if (isWinner) {
-    changes.attack += 10;
-    changes.defense += 10;
-    changes.economy += 10;
-    changes.intelligence += 10;
+    changes.attack += Math.floor(Math.random() * 5) + 8;
+    changes.defense += Math.floor(Math.random() * 5) + 8;
+    changes.economy += Math.floor(Math.random() * 5) + 8;
+    changes.intelligence += Math.floor(Math.random() * 5) + 8;
   } else {
-    // 패배 시 모든 능력치에 페널티 -5
-    changes.attack -= 5;
-    changes.defense -= 5;
-    changes.economy -= 5;
-    changes.intelligence -= 5;
+    // 패배 시 능력치별 랜덤 감소 (-1 ~ -8)
+    changes.attack -= Math.floor(Math.random() * 8) + 1;
+    changes.defense -= Math.floor(Math.random() * 8) + 1;
+    changes.economy -= Math.floor(Math.random() * 8) + 1;
+    changes.intelligence -= Math.floor(Math.random() * 8) + 1;
   }
 
   return changes;

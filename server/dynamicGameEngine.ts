@@ -185,16 +185,30 @@ export function initializeGameState(
 }
 
 /**
- * 플레이어 액션 생성 - 빌드별 차등 적용
+ * 종족별 빌드 전략 매핑
+ */
+function getRaceBuildStrategies(race: "terran" | "zerg" | "protoss"): readonly ("barracks_first" | "cc_first" | "gateway_first" | "hatch_first")[] {
+  switch (race) {
+    case "terran":
+      return ["barracks_first", "cc_first"] as const;
+    case "protoss":
+      return ["gateway_first"] as const;
+    case "zerg":
+      return ["hatch_first"] as const;
+  }
+}
+
+/**
+ * 플레이어 액션 생성 - 종족별 빌드 차등 적용
  */
 function generatePlayerAction(gameState: GameState, player: PlayerState): PlayerAction | null {
   const buildStrategy = player.buildStrategy || "barracks_first";
   const resourceRate = BUILD_RESOURCE_RATES[buildStrategy] || 100;
   const troopRate = BUILD_TROOP_RATES[buildStrategy] || 1.0;
 
-  // 초반 빌드 선택
+  // 초반 빌드 선택 - 종족에 맞는 전략만 선택
   if (gameState.turn === 1 && !player.buildStrategy) {
-    const strategies = ["barracks_first", "cc_first", "gateway_first", "hatch_first"] as const;
+    const strategies = getRaceBuildStrategies(player.race);
     const selected = strategies[Math.floor(Math.random() * strategies.length)];
     player.buildStrategy = selected;
     return { type: selected, data: selected };
@@ -335,7 +349,7 @@ export function progressGame(gameState: GameState): void {
   // 게임 종료 조건 (100턴 또는 한 플레이어가 크게 밀렸을 때)
   if (gameState.turn >= 100 || gameState.player1Advantage > 95 || gameState.player1Advantage < 5) {
     gameState.gameEnded = true;
-    gameState.winner = gameState.player1Advantage > 50 ? 1 : 2;
+    gameState.winner = gameState.player1Advantage > 50 ? gameState.player1.id : gameState.player2.id;
   }
 
   // 초반 비드 해설
