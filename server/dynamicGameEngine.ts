@@ -200,6 +200,39 @@ function generatePlayerAction(gameState: GameState, player: PlayerState): Player
     return { type: selected, data: selected };
   }
 
+  // 게임 진행 중 건물 건설 및 유닛 생산
+  const turn = gameState.turn;
+  
+  // 초반 건물 건설 (턴 5-15)
+  if (turn >= 5 && turn <= 15 && player.resources > 1000) {
+    const buildingsByRace: Record<string, string[]> = {
+      terran: ["배럭", "팩토리", "스타포트"],
+      protoss: ["게이트웨이", "사이버네틱스 코어", "로보틱스 팩토리"],
+      zerg: ["스포닝풀", "레어", "하이브"]
+    };
+    
+    const buildings = buildingsByRace[player.race] || [];
+    if (buildings.length > 0 && Math.random() < 0.3) {
+      const building = buildings[Math.floor(Math.random() * buildings.length)];
+      return { type: "building_built", data: building };
+    }
+  }
+  
+  // 중반 유닛 생산 (턴 10 이후)
+  if (turn >= 10 && player.resources > 500) {
+    const unitsByRace: Record<string, string[]> = {
+      terran: ["마린", "메딕", "파이어뱃", "벌쳐", "탱크"],
+      protoss: ["질럿", "드래군", "옵저버", "리버"],
+      zerg: ["저글링", "히드라", "뮤탈리스크", "럴커"]
+    };
+    
+    const units = unitsByRace[player.race] || [];
+    if (units.length > 0 && Math.random() < 0.4) {
+      const unit = units[Math.floor(Math.random() * units.length)];
+      return { type: "unit_produced", data: unit };
+    }
+  }
+
   // 일반 게임 진행 (액션 없음 - 병력/자원은 독립적으로 증가)
   return null;
 }
