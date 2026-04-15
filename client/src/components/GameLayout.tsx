@@ -46,6 +46,7 @@ const RACE_COLORS: Record<string, string> = {
 
 export default function GameLayout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, loading, logout } = useAuth();
+  const { setOpenMobile } = useSidebar();
   const navItems = getNavItems(user?.role === "admin");
   const [location, navigate] = useLocation();
   const { data: player, isLoading: playerLoading } = trpc.player.get.useQuery(undefined, {
@@ -80,7 +81,7 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
       {/* 사이드바 */}
       <aside className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col shrink-0">
         {/* 로고 */}
-        <div className="p-6 border-b border-sidebar-border">
+        <div className="p-6 border-b border-sidebar-border cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => setOpenMobile(false)}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-primary/20 border border-primary/40 flex items-center justify-center glow-blue">
               <Sword className="w-5 h-5 text-primary" />
