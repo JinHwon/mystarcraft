@@ -16,6 +16,7 @@ interface GameState {
   gameId?: number;
   opponentName?: string;
   opponentRace?: string;
+  opponentGrade?: string;
   winProbability?: number;
   isWinner?: boolean;
   expGained?: number;
@@ -59,8 +60,11 @@ export default function PracticePage() {
       setGameState(prev => ({
         ...prev,
         gameId: result.gameId,
+        playerName: userQuery.data?.name,
+        playerRace: (userQuery.data as any)?.race,
         opponentName: result.opponent.name,
         opponentRace: result.opponent.race,
+        opponentGrade: result.opponentGrade,
         winProbability: result.winProbability,
       }));
     } catch (error) {
@@ -76,9 +80,21 @@ export default function PracticePage() {
         gameId: gameState.gameId,
       });
       
+      const raceCommentaries: Record<string, string> = {
+        terran: "테란 선수가 선택되었습니다. 테란은 기계적 우월성과 다양한 전술로 유명합니다.",
+        zerg: "저그 선수가 선택되었습니다. 저그는 빠른 확장과 공격성으로 유명합니다.",
+        protoss: "프로토스 선수가 선택되었습니다. 프로토스는 고급 기술과 강력한 유닛으로 유명합니다.",
+      };
+      
+      const turns = result.turns || [];
+      if (turns.length > 0 && turns[0]?.allCommentaries) {
+        const initialCommentary = raceCommentaries[gameState.playerRace as string] || "게임이 시작되었습니다.";
+        turns[0].allCommentaries.unshift(initialCommentary);
+      }
+      
       setGameState(prev => ({
         ...prev,
-        turns: result.turns || [],
+        turns,
         isWinner: result.isWinner,
         expGained: result.expGained,
         goldGained: result.goldGained,
@@ -215,6 +231,14 @@ export default function PracticePage() {
               <CardDescription>{RACE_LABELS[gameState.opponentRace as keyof typeof RACE_LABELS]}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {gameState.opponentGrade && (
+                <div className="p-3 bg-slate-700 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-300 text-sm">등급</span>
+                    <span className="font-bold text-lg text-yellow-400">{gameState.opponentGrade}</span>
+                  </div>
+                </div>
+              )}
               <div>
                 <div className="flex justify-between text-sm text-slate-300 mb-2">
                   <span>승률</span>
@@ -227,8 +251,19 @@ export default function PracticePage() {
                   />
                 </div>
               </div>
-              <Button onClick={handleStartGame} className="w-full bg-blue-600 hover:bg-blue-700">
-                게임 시작
+              <Button 
+                onClick={handleStartGame} 
+                disabled={playGameMutation.isPending}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {playGameMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    게임 시작 중...
+                  </>
+                ) : (
+                  "게임 시작"
+                )}
               </Button>
             </CardContent>
           </Card>
@@ -469,6 +504,21 @@ export default function PracticePage() {
                   <p className="text-2xl font-bold text-red-400">-{gameState.fatigueUsed}</p>
                 </div>
               </div>
+              {gameState.turns && gameState.turns.length > 0 && gameState.turns[0]?.statChanges && (
+                <div className="mt-6 pt-6 border-t border-slate-600">
+                  <p className="text-slate-300 font-semibold mb-3">능력치 변동</p>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {Object.entries(gameState.turns[0].statChanges).map(([stat, change]: [string, any]) => (
+                      <div key={stat} className="flex justify-between text-slate-400">
+                        <span>{stat}:</span>
+                        <span className={change >= 0 ? "text-green-400" : "text-red-400"}>
+                          {change >= 0 ? "+" : ""}{change}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <Button
                 onClick={() => {
                   setPhase("difficulty");

@@ -151,6 +151,7 @@ export async function getPlayerItems(playerId: number) {
       playerItemId: playerItems.id,
       equipped: playerItems.equipped,
       purchasedAt: playerItems.purchasedAt,
+      usageCount: playerItems.usageCount,
       item: items,
     })
     .from(playerItems)
@@ -516,7 +517,7 @@ export async function completeGame(gameId: number, winnerId: number, player1Scor
     winnerId,
     player1ActualScore: player1Score,
     player2ActualScore: player2Score,
-    completedAt: new Date(),
+    completedAt: new Date().toISOString(),
   }).where(eq(games.id, gameId));
 }
 

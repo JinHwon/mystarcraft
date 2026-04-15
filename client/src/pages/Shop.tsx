@@ -27,8 +27,8 @@ interface ItemData {
 
 interface PlayerItemData {
   playerItemId: number;
-  equipped: boolean;
-  purchasedAt: Date;
+  equipped: number;
+  purchasedAt: string;
   usageCount: number;
   item: ItemData;
 }
@@ -49,7 +49,7 @@ function ItemCard({
 }: {
   item: ItemData;
   owned: boolean;
-  equipped: boolean;
+  equipped: number;
   playerItemId?: number;
   playerGold: number;
   onBuy: () => void;
@@ -69,11 +69,11 @@ function ItemCard({
     <div
       className={cn(
         "bg-card border rounded-xl p-4 flex flex-col gap-3 transition-all card-hover",
-        equipped
+        equipped === 1
           ? "border-2"
           : "border-border"
       )}
-      style={equipped ? { borderColor: rarityColor, boxShadow: `0 0 15px ${rarityColor}20` } : {}}
+      style={equipped === 1 ? { borderColor: rarityColor, boxShadow: `0 0 15px ${rarityColor}20` } : {}}
     >
       {/* 헤더 */}
       <div className="flex items-start justify-between gap-2">
@@ -87,7 +87,7 @@ function ItemCard({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-bold text-sm text-foreground">{item.name}</span>
-              {equipped && (
+              {equipped === 1 && (
                 <span className="text-xs px-1.5 py-0.5 rounded font-medium"
                   style={{ backgroundColor: `${rarityColor}20`, color: rarityColor }}>
                   착용 중
@@ -138,7 +138,7 @@ function ItemCard({
 
         {owned ? (
           <div className="flex gap-2">
-            {equipped ? (
+            {equipped === 1 ? (
               <Button
                 size="sm"
                 variant="outline"
@@ -223,7 +223,7 @@ export default function Shop() {
   // 착용 중인 아이템들의 능력치 합산
   const equippedBoosts: Partial<Record<StatKey, number>> = {};
   playerItems.forEach((pi) => {
-    if (!pi.equipped) return;
+    if (pi.equipped !== 1) return;
     const boosts = (pi.item.statBoosts as StatBoosts) ?? {};
     Object.entries(boosts).forEach(([k, v]) => {
       const key = k as StatKey;
@@ -298,7 +298,7 @@ export default function Shop() {
                   key={item.id}
                   item={item as ItemData}
                   owned={owned}
-                  equipped={playerItem?.equipped ?? false}
+                  equipped={playerItem?.equipped ?? 0}
                   playerItemId={playerItem?.playerItemId}
                   playerGold={playerGold}
                   onBuy={() => buyMutation.mutate({ itemId: item.id })}
@@ -329,7 +329,7 @@ export default function Shop() {
                   key={pi.playerItemId}
                   item={pi.item as ItemData}
                   owned={true}
-                  equipped={pi.equipped}
+                  equipped={pi.equipped ?? 0}
                   playerItemId={pi.playerItemId}
                   playerGold={playerGold}
                   onBuy={() => {}}
@@ -347,7 +347,7 @@ export default function Shop() {
 
         {/* 착용 중 */}
         <TabsContent value="equipped" className="mt-4">
-          {playerItems.filter((pi) => pi.equipped).length === 0 ? (
+          {playerItems.filter((pi) => pi.equipped === 1).length === 0 ? (
             <div className="text-center py-16 text-muted-foreground">
               <Shield className="w-12 h-12 mx-auto mb-3 opacity-30" />
               <p className="text-sm">착용 중인 아이템이 없습니다</p>
@@ -359,7 +359,7 @@ export default function Shop() {
                   key={pi.playerItemId}
                   item={pi.item as ItemData}
                   owned={true}
-                  equipped={true}
+                  equipped={1}
                   playerItemId={pi.playerItemId}
                   playerGold={playerGold}
                   onBuy={() => {}}

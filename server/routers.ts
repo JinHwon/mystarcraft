@@ -414,7 +414,8 @@ const practiceRouter = router({
       });
 
       const gameId = (newGameResult as any)?.insertId || 1;
-      return { gameId, opponent, winProbability };
+      const opponentGrade = await getPlayerGrade(opponent.id);
+      return { gameId, opponent, opponentGrade, winProbability };
     }),
 
   playGame: protectedProcedure

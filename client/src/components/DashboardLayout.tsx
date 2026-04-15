@@ -217,12 +217,13 @@ function DashboardLayoutContent({
                       {playerData?.name || user?.name || "-"}
                     </p>
                     <div className="text-xs text-muted-foreground truncate mt-1.5 space-y-0.5">
-                      {playerData?.grade && (
-                        <p>등급: <span className="font-semibold text-primary">{playerData.grade}</span></p>
-                      )}
-                      {playerData?.gameRecord && (
-                        <p>{playerData.gameRecord.totalGames}전 {playerData.gameRecord.wins}승 {playerData.gameRecord.losses}패</p>
-                      )}
+                      <p>등급: <span className="font-semibold text-primary">{playerData?.grade || "F"}</span></p>
+                      <p>
+                        {playerData?.gameRecord 
+                          ? `${playerData.gameRecord.totalGames}전 ${playerData.gameRecord.wins}승 ${playerData.gameRecord.losses}패`
+                          : "0전 0승 0패"
+                        }
+                      </p>
                     </div>
                   </div>
                 </button>
