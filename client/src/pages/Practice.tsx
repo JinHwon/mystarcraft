@@ -497,6 +497,7 @@ export default function PracticePage() {
     const isWinner = gameState.isWinner;
     const expGained = gameState.expGained || 0;
     const goldGained = gameState.goldGained || 0;
+    const statChanges = gameState.statChanges || {};
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 md:p-4">
@@ -521,6 +522,31 @@ export default function PracticePage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* 능력치 변동 */}
+          {Object.keys(statChanges).length > 0 && (
+            <Card className="bg-slate-800 border-slate-700 mb-4 md:mb-6">
+              <CardHeader>
+                <CardTitle className="text-sm md:text-base text-white">능력치 변동</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3">
+                  {Object.entries(statChanges).map(([stat, change]: [string, any]) => (
+                    <div key={stat} className="p-2 md:p-3 bg-slate-700 rounded-lg">
+                      <div className="text-xs md:text-sm text-slate-300 mb-1">
+                        {STAT_LABELS[stat as keyof typeof STAT_LABELS] || stat}
+                      </div>
+                      <div className={`font-bold text-base md:text-lg ${
+                        change > 0 ? 'text-green-400' : change < 0 ? 'text-red-400' : 'text-slate-400'
+                      }`}>
+                        {change > 0 ? '+' : ''}{change}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Button 
             onClick={() => {
