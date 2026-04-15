@@ -39,8 +39,14 @@ class OAuthService {
   }
 
   private decodeState(state: string): string {
-    const redirectUri = atob(state);
-    return redirectUri;
+    try {
+      const decoded = atob(state);
+      const parsed = JSON.parse(decoded);
+      return parsed.redirectUri || decoded;
+    } catch (e) {
+      // 기존 형식 호환성 유지
+      return atob(state);
+    }
   }
 
   async getTokenByCode(
