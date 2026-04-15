@@ -527,10 +527,14 @@ const practiceRouter = router({
       );
       
       const statChanges: Record<string, number> = {
+        sense: 0,
+        control: 0,
         attack: finalStatChanges.attack,
+        harass: finalStatChanges.economy,
+        strategy: 0,
+        supply: 0,
         defense: finalStatChanges.defense,
-        economy: finalStatChanges.economy,
-        intelligence: finalStatChanges.intelligence,
+        scout: finalStatChanges.intelligence,
       };
 
       await createGameResult({

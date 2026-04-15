@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, items, playerItems, players, playerStats, users, events, maps, games, gameResults } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { StatKey } from "@shared/gameConstants";
+import { desc } from "drizzle-orm";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -539,12 +540,40 @@ export async function createGameResult(resultData: {
   return result;
 }
 
-export async function getPlayerGameHistory(playerId: number, limit: number = 10) {
+export async function getPlayerGameHistory(playerId: number, limit: number = 20) {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(gameResults)
+  
+  const results = await db.select().from(gameResults)
     .where(eq(gameResults.playerId, playerId))
     .limit(limit);
+  
+  // 각 결과에 상대 정보 추가
+  const enrichedResults = await Promise.all(
+    results.map(async (result) => {
+      // gameId로 게임 정보 조회
+      const gameInfo = await db?.select().from(games).where(eq(games.id, result.gameId)).then(r => r?.[0]);
+      
+      // 상대 선수 ID 찾기
+      let opponentId = 0;
+      if (gameInfo) {
+        opponentId = gameInfo.player1Id === playerId ? gameInfo.player2Id : gameInfo.player1Id;
+      }
+      
+      const opponent = opponentId > 0 ? await getPlayerByUserId(opponentId) : null;
+      const opponentGrade = opponent ? await getPlayerGrade(opponent.id) : 'F';
+      const opponentRace = gameInfo ? (gameInfo.player1Id === playerId ? gameInfo.player2Race : gameInfo.player1Race) : 'Unknown';
+      
+      return {
+        ...result,
+        opponentName: opponent?.name || 'Unknown',
+        opponentRace,
+        opponentGrade,
+      };
+    })
+  );
+  
+  return enrichedResults;
 }
 
 // 난이도별 상대 찾기
