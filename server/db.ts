@@ -583,20 +583,15 @@ export async function getPlayerGameHistory(playerId: number, limit: number = 20)
       // gameId로 게임 정보 조회
       const gameInfo = await db?.select().from(games).where(eq(games.id, result.gameId)).then(r => r?.[0]);
       
-      // 상대 선수 ID 찾기 (result.playerId는 현재 사용자의 선수 ID)
-      let opponentPlayerId = 0;
+      // 상대 선수 ID 찾기
+      let opponentId = 0;
       if (gameInfo) {
-        opponentPlayerId = gameInfo.player1Id === result.playerId ? gameInfo.player2Id : gameInfo.player1Id;
+        opponentId = gameInfo.player1Id === playerId ? gameInfo.player2Id : gameInfo.player1Id;
       }
       
-      // 상대 선수 정보 조회 (playerId로 직접 조회)
-      let opponent = null;
-      if (opponentPlayerId > 0) {
-        const opponentResult = await db?.select().from(players).where(eq(players.id, opponentPlayerId)).limit(1);
-        opponent = opponentResult && opponentResult.length > 0 ? opponentResult[0] : null;
-      }
+      const opponent = opponentId > 0 ? await getPlayerByUserId(opponentId) : null;
       const opponentGrade = opponent ? await getPlayerGrade(opponent.id) : 'F';
-      const opponentRace = gameInfo ? (gameInfo.player1Id === result.playerId ? gameInfo.player2Race : gameInfo.player1Race) : 'Unknown';
+      const opponentRace = gameInfo ? (gameInfo.player1Id === playerId ? gameInfo.player2Race : gameInfo.player1Race) : 'Unknown';
       
       // 날짜 형식 변환: yyyy-mm-dd
       const completedAtDate = new Date(result.createdAt);
@@ -616,7 +611,7 @@ export async function getPlayerGameHistory(playerId: number, limit: number = 20)
         ...result,
         completedAt: formattedDate,
         opponentName: opponent?.name || '익명유저',
-        opponentRace: opponent?.race || opponentRace,
+        opponentRace: opponentRace === 'Unknown' ? 'Unknown' : opponentRace,
         opponentGrade,
         statChanges: parsedStatChanges,
       };

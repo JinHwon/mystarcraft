@@ -301,19 +301,19 @@ export default function PracticePage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-6 mb-4 md:mb-6">
             {/* 왼쪽: 누적 해설 */}
-            <div className="lg:col-span-1 flex flex-col">
-              <Card className="bg-slate-800 border-slate-700 flex-1 flex flex-col">
+            <div className="lg:col-span-1">
+              <Card className="bg-slate-800 border-slate-700 h-full flex flex-col">
                 <CardHeader>
                   <CardTitle className="text-sm md:text-base text-white">게임 해설</CardTitle>
                 </CardHeader>
-                <CardContent className="flex-1 overflow-y-auto min-h-0 flex flex-col" ref={(el) => {
+                <CardContent className="flex-1 overflow-y-auto max-h-96 md:max-h-screen flex flex-col" ref={(el) => {
                     if (el) {
                       setTimeout(() => {
                         el.scrollTop = 0;
                       }, 0);
                     }
                   }}>
-                  <div className="space-y-1 md:space-y-2 flex flex-col-reverse flex-1 min-h-0">
+                  <div className="space-y-1 md:space-y-2 flex flex-col-reverse flex-1">
                     {[...displayedCommentaries].reverse().map((commentary: string, idx: number) => {
                       let textColor = "text-slate-300";
                       let borderColor = "border-slate-500";
@@ -376,7 +376,7 @@ export default function PracticePage() {
                 </CardContent>
               </Card>
               {/* 속도 조절 버튼 */}
-              <div className="flex justify-center gap-1 md:gap-2 pt-3 md:pt-4 pb-2">
+              <div className="flex justify-center gap-1 md:gap-2 pt-2 md:pt-4">
                 <Button
                   onClick={() => setGameSpeed(1)}
                   variant={gameSpeed === 1 ? "default" : "outline"}
@@ -497,7 +497,6 @@ export default function PracticePage() {
     const isWinner = gameState.isWinner;
     const expGained = gameState.expGained || 0;
     const goldGained = gameState.goldGained || 0;
-    const statChanges = gameState.statChanges || {};
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 md:p-4">
@@ -522,31 +521,6 @@ export default function PracticePage() {
               </div>
             </CardContent>
           </Card>
-
-          {/* 능력치 변동 */}
-          {Object.keys(statChanges).length > 0 && (
-            <Card className="bg-slate-800 border-slate-700 mb-4 md:mb-6">
-              <CardHeader>
-                <CardTitle className="text-sm md:text-base text-white">능력치 변동</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3">
-                  {Object.entries(statChanges).map(([stat, change]: [string, any]) => (
-                    <div key={stat} className="p-2 md:p-3 bg-slate-700 rounded-lg">
-                      <div className="text-xs md:text-sm text-slate-300 mb-1">
-                        {STAT_LABELS[stat as keyof typeof STAT_LABELS] || stat}
-                      </div>
-                      <div className={`font-bold text-base md:text-lg ${
-                        change > 0 ? 'text-green-400' : change < 0 ? 'text-red-400' : 'text-slate-400'
-                      }`}>
-                        {change > 0 ? '+' : ''}{change}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
 
           <Button 
             onClick={() => {
