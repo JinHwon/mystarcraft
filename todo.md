@@ -286,3 +286,7 @@
 ## 긴급 버그 수정 (v35.0)
 
 - [x] Google 로그인 403 오류 - sdk.ts exchangeCodeForToken 메서드 수정, oauth.ts 콜백 로직 추가
+
+## 긴급 버그 재진단 (v36.0)
+
+- [x] OAuth 흐름 수정 - const.ts state 구조 단순화, oauth.ts redirectUri 처리 로직 정리

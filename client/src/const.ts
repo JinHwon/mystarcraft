@@ -5,7 +5,8 @@ export const getLoginUrl = (provider: string = "manus") => {
   const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
   const appId = import.meta.env.VITE_APP_ID;
   const redirectUri = `${window.location.origin}/api/oauth/callback`;
-  const state = btoa(JSON.stringify({ redirectUri, provider }));
+  // state에는 provider 정보만 포함 (redirectUri는 별도 파라미터로 전달)
+  const state = btoa(JSON.stringify({ provider }));
 
   const url = new URL(`${oauthPortalUrl}/app-auth`);
   url.searchParams.set("appId", appId);
