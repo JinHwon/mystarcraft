@@ -258,10 +258,15 @@ export default function PracticePage() {
               </div>
               <Button 
                 onClick={handleStartGame} 
-                disabled={playGameMutation.isPending}
+                disabled={playGameMutation.isPending || findOpponentMutation.isPending}
                 className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {playGameMutation.isPending ? (
+                {findOpponentMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    상대 선수 로드 중...
+                  </>
+                ) : playGameMutation.isPending ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     게임 시작 중...
