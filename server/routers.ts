@@ -107,7 +107,7 @@ const playerRouter = router({
     .input(
       z.object({
         statKey: z.enum(["sense", "control", "attack", "harass", "strategy", "supply", "defense", "scout"]),
-        points: z.number().int().min(1).max(20),
+        points: z.number().int().min(1), // 제한 없음 - 사용자가 원하는 만큼 배분 가능
       })
     )
     .mutation(async ({ ctx, input }) => {
