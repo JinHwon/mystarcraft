@@ -48,6 +48,7 @@ import { DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, MAPS, calcGradeIndex, ca
 import { simulateGame, calculateWinProbability } from "./gameSimulation";
 import { type MapCharacteristic } from "./buildSystem";
 import { generatePlayerActions, generateGameCommentary } from "./buildActions";
+import { calculateStatChanges, applyReverseSystem } from "./statDynamicSystem";
 
 // ── Player Router ────────────────────────────────────────────────
 
@@ -480,11 +481,50 @@ const practiceRouter = router({
       // 게임 완료
       await completeGame(input.gameId, winnerId, simulation.player1FinalScore, simulation.player2FinalScore);
 
-      // 게임 결과 저장
-      const statChanges: Record<string, number> = {};
-      STAT_KEYS.forEach(key => {
-        statChanges[key] = isWinner ? 10 : -5; // 승리 시 +10, 패배 시 -5
-      });
+      // 게임 결과 저장 - 능력치 동적 변경 시스템 적용
+      const gameEvents = {
+        attackSuccess: simulation.player1Events?.filter((e: any) => e.type === 'engagement' && e.winner === (isWinner ? 1 : 2)).length || 0,
+        attackFailure: simulation.player1Events?.filter((e: any) => e.type === 'engagement' && e.winner === (isWinner ? 2 : 1)).length || 0,
+        defenseSuccess: 0, // 향후 구현
+        defenseFailure: 0, // 향후 구현
+        multiExpanded: simulation.player1Events?.filter((e: any) => e.type === 'multi_expansion').length || 0,
+        resourceDrained: simulation.player1Events?.filter((e: any) => e.type === 'resource_drain').length || 0,
+        scoutingSuccess: simulation.player1Events?.filter((e: any) => e.type === 'scouting_success').length || 0,
+        scoutingFailure: simulation.player1Events?.filter((e: any) => e.type === 'scouting_failure').length || 0,
+      };
+      
+      const baseStatChanges = calculateStatChanges(isWinner, gameEvents);
+      const opponentId = winnerId === player.id ? opponent.id : player.id;
+      const opponentStatsData = await getPlayerStats(opponentId);
+      const playerStatsData = await getPlayerStats(player.id);
+      
+      const playerStatsMap = {
+        attack: playerStatsData?.attack || 0,
+        defense: playerStatsData?.defense || 0,
+        economy: playerStatsData?.harass || 0,
+        intelligence: playerStatsData?.scout || 0,
+      };
+      
+      const opponentStatsMap = {
+        attack: opponentStatsData?.attack || 0,
+        defense: opponentStatsData?.defense || 0,
+        economy: opponentStatsData?.harass || 0,
+        intelligence: opponentStatsData?.scout || 0,
+      };
+      
+      const finalStatChanges = applyReverseSystem(
+        isWinner,
+        playerStatsMap,
+        opponentStatsMap,
+        baseStatChanges
+      );
+      
+      const statChanges: Record<string, number> = {
+        attack: finalStatChanges.attack,
+        defense: finalStatChanges.defense,
+        economy: finalStatChanges.economy,
+        intelligence: finalStatChanges.intelligence,
+      };
 
       await createGameResult({
         gameId: input.gameId,
@@ -496,9 +536,32 @@ const practiceRouter = router({
         fatigueUsed,
       });
 
-      // 리워드 적용 - 경뗘치, 골드, 피로도 업데이트
+      // 리워드 적용 - 경뗘치, 골드, 능력치, 피로도 업데이트
       await updatePlayerExp(player.id, expGained);
       await updatePlayerGold(player.id, goldGained);
+      
+      // 능력치 업데이트
+      const statKeyMap: Record<string, StatKey> = {
+        attack: 'attack',
+        defense: 'defense',
+        economy: 'harass',
+        intelligence: 'scout',
+      };
+      
+      for (const [key, value] of Object.entries(statChanges)) {
+        if (value !== 0) {
+          const mappedKey = statKeyMap[key] as StatKey;
+          const currentStats = await getPlayerStats(player.id);
+          let currentPoints = 0;
+          if (currentStats) {
+            if (mappedKey === 'attack') currentPoints = currentStats.attack;
+            else if (mappedKey === 'defense') currentPoints = currentStats.defense;
+            else if (mappedKey === 'harass') currentPoints = currentStats.harass;
+            else if (mappedKey === 'scout') currentPoints = currentStats.scout;
+          }
+          await allocateStat(player.id, mappedKey, value, currentPoints);
+        }
+      }
       
       // 무제한 피로도 이벤트 중에는 피로도 감소 안 함
       const activeEvents = await getActiveEvents();

@@ -41,6 +41,8 @@ export interface GameSimulationResult {
   turns: GameTurn[];
   player1FinalScore: number;
   player2FinalScore: number;
+  player1Events: any[];
+  player2Events: any[];
 }
 
 /**
@@ -142,5 +144,7 @@ export async function simulateGame(
     turns,
     player1FinalScore,
     player2FinalScore,
+    player1Events: gameState.player1Events || [],
+    player2Events: gameState.player2Events || [],
   };
 }
