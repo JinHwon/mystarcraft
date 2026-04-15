@@ -110,7 +110,7 @@ function DashboardLayoutContent({
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
   const [location, setLocation] = useLocation();
-  const { state, toggleSidebar, setOpen } = useSidebar();
+  const { state, toggleSidebar, setOpenMobile } = useSidebar();
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -120,9 +120,9 @@ function DashboardLayoutContent({
   // 모바일에서 사이드바 기본 닫힘
   useEffect(() => {
     if (isMobile) {
-      setOpen(false);
+      setOpenMobile(false);
     }
-  }, [isMobile, setOpen]);
+  }, [isMobile, setOpenMobile]);
   const { data: playerData } = trpc.player.get.useQuery();
   const { data: playerItems = [] } = trpc.shop.getPlayerItems.useQuery();
   
@@ -139,7 +139,7 @@ function DashboardLayoutContent({
   const handleMenuClick = (path: string) => {
     setLocation(path);
     if (isMobile) {
-      setOpen(false);
+      setOpenMobile(false);
     }
   };
 
