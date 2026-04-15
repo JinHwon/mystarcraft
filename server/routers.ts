@@ -541,6 +541,7 @@ const practiceRouter = router({
       await createGameResult({
         gameId: input.gameId,
         playerId: player.id,
+        opponentId: opponent.id,
         isWinner,
         expGained,
         goldGained,

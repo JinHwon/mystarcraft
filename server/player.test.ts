@@ -18,6 +18,7 @@ vi.mock("./db", () => ({
   getPlayerGrade: vi.fn(),
   decreaseItemUsageCount: vi.fn(),
   getAllUsers: vi.fn(),
+  getPlayerGameHistory: vi.fn(),
 }));
 
 vi.mock("./storage", () => ({
@@ -276,5 +277,39 @@ describe("admin.listUsers", () => {
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe("테스트 관리자");
     expect(db.getAllUsers).toHaveBeenCalled();
+  });
+});
+
+describe("practice.getGameHistory", () => {
+  it("게임 결과에 상대 플레이어 정보를 포함해야 한다", async () => {
+    // Mock 데이터 설정
+    const mockGameHistory = [
+      {
+        id: 1,
+        gameId: 1,
+        playerId: 1,
+        opponentId: 2,
+        isWinner: 1,
+        expGained: 50,
+        goldGained: 10,
+        statChanges: {},
+        fatigueUsed: 10,
+        createdAt: "2026-04-15T00:00:00Z",
+        opponentName: "테스트 상대",
+        opponentRace: "terran",
+        opponentGrade: "C",
+      },
+    ];
+
+    vi.mocked(db.getPlayerGameHistory).mockResolvedValue(mockGameHistory);
+
+    const ctx = createAuthContext(1);
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.practice.getGameHistory();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].opponentName).toBe("테스트 상대");
+    expect(result[0].opponentRace).toBe("terran");
+    expect(result[0].opponentGrade).toBe("C");
   });
 });
