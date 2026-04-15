@@ -92,6 +92,20 @@
       "when": 1776240548086,
       "tag": "0012_slippery_patch",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1776258492353,
+      "tag": "0013_lively_thundra",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1776259191251,
+      "tag": "0014_glamorous_sue_storm",
+      "breakpoints": true
     }
   ]
 }

@@ -9,6 +9,23 @@ function getQueryParam(req: Request, key: string): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+function parseState(state: string): { redirectUri: string; returnPath: string } {
+  try {
+    const decoded = atob(state);
+    const parsed = JSON.parse(decoded);
+    return {
+      redirectUri: parsed.redirectUri || `${process.env.VITE_FRONTEND_FORGE_API_URL || ""}/api/oauth/callback`,
+      returnPath: parsed.returnPath || "/"
+    };
+  } catch {
+    // 이전 형식 호환성: state가 단순히 redirectUri인 경우
+    return {
+      redirectUri: atob(state),
+      returnPath: "/"
+    };
+  }
+}
+
 export function registerOAuthRoutes(app: Express) {
   app.get("/api/oauth/callback", async (req: Request, res: Response) => {
     const code = getQueryParam(req, "code");
@@ -20,13 +37,7 @@ export function registerOAuthRoutes(app: Express) {
     }
 
     try {
-      // Build the redirect URI from the current request so it always matches
-      // what the client originally sent to the OAuth portal.
-      const protocol = req.protocol;
-      const host = req.get("host") ?? req.headers.host ?? "localhost";
-      const redirectUri = `${protocol}://${host}/api/oauth/callback`;
-
-      const tokenResponse = await sdk.exchangeCodeForToken(code, redirectUri);
+      const tokenResponse = await sdk.exchangeCodeForToken(code, state);
       const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
 
       if (!userInfo.openId) {
@@ -39,7 +50,7 @@ export function registerOAuthRoutes(app: Express) {
         name: userInfo.name || null,
         email: userInfo.email ?? null,
         loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
-        lastSignedIn: new Date(),
+        lastSignedIn: new Date().toISOString(),
       });
 
       const sessionToken = await sdk.createSessionToken(userInfo.openId, {
@@ -50,7 +61,8 @@ export function registerOAuthRoutes(app: Express) {
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
-      res.redirect(302, "/");
+      // returnPath로 리다이렉트 (기본값: "/")
+      res.redirect(302, returnPath);
     } catch (error) {
       console.error("[OAuth] Callback failed", error);
       res.status(500).json({ error: "OAuth callback failed" });

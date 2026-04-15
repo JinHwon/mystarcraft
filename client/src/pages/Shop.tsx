@@ -40,6 +40,7 @@ function ItemCard({
   equipped,
   playerItemId,
   playerGold,
+  playerFatigue,
   onBuy,
   onEquip,
   onUnequip,
@@ -53,6 +54,7 @@ function ItemCard({
   equipped: number;
   playerItemId?: number;
   playerGold: number;
+  playerFatigue?: number;
   onBuy: () => void;
   onEquip: () => void;
   onUnequip: () => void;
@@ -65,6 +67,8 @@ function ItemCard({
   const rarityLabel = RARITY_LABELS[item.rarity] ?? "일반";
   const statBoosts = (item.statBoosts as StatBoosts) ?? {};
   const canAfford = playerGold >= item.price;
+  const isFatigueItem = item.fatigueRecover && item.fatigueRecover > 0;
+  const canUseFatigueItem = !isFatigueItem || (playerFatigue ?? 0) < 100;
 
   return (
     <div
@@ -175,16 +179,16 @@ function ItemCard({
           <Button
             size="sm"
             className="h-7 px-3 text-xs font-bold"
-            disabled={!canAfford || isBuying}
+            disabled={!canAfford || isBuying || !canUseFatigueItem}
             onClick={onBuy}
-            variant={canAfford ? "default" : "outline"}
+            variant={canAfford && canUseFatigueItem ? "default" : "outline"}
           >
             {isBuying ? (
               <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin mr-1" />
             ) : (
               <ShoppingBag className="w-3 h-3 mr-1" />
             )}
-            {canAfford ? "구매" : "골드 부족"}
+            {!canUseFatigueItem ? "피로도 부족" : canAfford ? "구매" : "골드 부족"}
           </Button>
         )}
       </div>
@@ -310,6 +314,7 @@ export default function Shop() {
                   equipped={playerItem?.equipped ?? 0}
                   playerItemId={playerItem?.playerItemId}
                   playerGold={playerGold}
+                  playerFatigue={playerData?.fatigue}
                   onBuy={() => buyMutation.mutate({ itemId: item.id })}
                   onEquip={() => playerItem && equipMutation.mutate({ playerItemId: playerItem.playerItemId, equip: true })}
                   onUnequip={() => playerItem && equipMutation.mutate({ playerItemId: playerItem.playerItemId, equip: false })}
@@ -341,6 +346,7 @@ export default function Shop() {
                   equipped={pi.equipped ?? 0}
                   playerItemId={pi.playerItemId}
                   playerGold={playerGold}
+                  playerFatigue={playerData?.fatigue}
                   onBuy={() => {}}
                   onEquip={() => equipMutation.mutate({ playerItemId: pi.playerItemId, equip: true })}
                   onUnequip={() => equipMutation.mutate({ playerItemId: pi.playerItemId, equip: false })}
