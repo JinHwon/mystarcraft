@@ -13,6 +13,12 @@ import {
   PROTOSS_BUILDS,
   ZERG_BUILDS,
 } from "@shared/gameEvents";
+import {
+  generateRaceSpecificCommentary,
+  generateNeutralCommentary,
+  determineBattleLocation,
+  type CommentaryContext,
+} from "./raceSpecificCommentary";
 
 export type { GameEvent };
 
@@ -87,28 +93,59 @@ function generateEngagementEvent(context: GameEventContext): GameEvent {
   const player1Supply = context.player1.supply;
   const player2Supply = context.player2.supply;
   const supplyDiff = player1Supply - player2Supply;
+  const battleLocation = determineBattleLocation();
 
   // 병력이 많은 쪽이 이기는 확률 높음
   const player1WinChance = supplyDiff > 0 ? 0.65 : 0.35;
   const player1Wins = Math.random() < player1WinChance;
 
   if (player1Wins) {
+    const commentaryContext: CommentaryContext = {
+      playerName: context.player1.name,
+      playerRace: context.player1.race,
+      opponentName: context.player2.name,
+      opponentRace: context.player2.race,
+      playerSupply: player1Supply,
+      opponentSupply: player2Supply,
+      playerResources: context.player1.resources,
+      opponentResources: context.player2.resources,
+      battleLocation,
+      playerAdvantage: context.player1Advantage,
+    };
+    const playerCommentary = generateRaceSpecificCommentary(commentaryContext, "engagement");
+    const neutralCommentary = generateNeutralCommentary(commentaryContext, "engagement_result");
+
     return {
       type: "engagement",
       turn: context.turn,
       playerId: 1,
       data: `${context.player1.name} 선수가 교전에서 승리!`,
       impact: "positive",
-      commentary: `${context.player1.name} 선수가 교전을 이겨냅니다! ${context.player2.name} 선수의 병력이 큰 손실을 입었어요.`,
+      commentary: `${playerCommentary} ${neutralCommentary}`,
     };
   } else {
+    const commentaryContext: CommentaryContext = {
+      playerName: context.player2.name,
+      playerRace: context.player2.race,
+      opponentName: context.player1.name,
+      opponentRace: context.player1.race,
+      playerSupply: player2Supply,
+      opponentSupply: player1Supply,
+      playerResources: context.player2.resources,
+      opponentResources: context.player1.resources,
+      battleLocation,
+      playerAdvantage: 100 - context.player1Advantage,
+    };
+    const playerCommentary = generateRaceSpecificCommentary(commentaryContext, "engagement");
+    const neutralCommentary = generateNeutralCommentary(commentaryContext, "engagement_result");
+
     return {
       type: "engagement",
       turn: context.turn,
       playerId: 2,
       data: `${context.player2.name} 선수가 교전에서 승리!`,
       impact: "positive",
-      commentary: `${context.player2.name} 선수가 교전을 이겨냅니다! ${context.player1.name} 선수의 병력이 큰 손실을 입었어요.`,
+      commentary: `${playerCommentary} ${neutralCommentary}`,
     };
   }
 }
@@ -120,22 +157,48 @@ function generateHarassEvent(context: GameEventContext): GameEvent {
   const isPlayer1Harass = Math.random() > 0.5;
 
   if (isPlayer1Harass) {
+    const commentaryContext: CommentaryContext = {
+      playerName: context.player1.name,
+      playerRace: context.player1.race,
+      opponentName: context.player2.name,
+      opponentRace: context.player2.race,
+      playerSupply: context.player1.supply,
+      opponentSupply: context.player2.supply,
+      playerResources: context.player1.resources,
+      opponentResources: context.player2.resources,
+      playerAdvantage: context.player1Advantage,
+    };
+    const commentary = generateRaceSpecificCommentary(commentaryContext, "harass");
+
     return {
       type: "harass",
       turn: context.turn,
       playerId: 1,
       data: `${context.player1.name} 선수가 견제를 시작!`,
       impact: "positive",
-      commentary: `${context.player1.name} 선수가 ${context.player2.name} 선수의 자원 채취지를 견제합니다! 상대 경제가 흔들리고 있어요.`,
+      commentary,
     };
   } else {
+    const commentaryContext: CommentaryContext = {
+      playerName: context.player2.name,
+      playerRace: context.player2.race,
+      opponentName: context.player1.name,
+      opponentRace: context.player1.race,
+      playerSupply: context.player2.supply,
+      opponentSupply: context.player1.supply,
+      playerResources: context.player2.resources,
+      opponentResources: context.player1.resources,
+      playerAdvantage: 100 - context.player1Advantage,
+    };
+    const commentary = generateRaceSpecificCommentary(commentaryContext, "harass");
+
     return {
       type: "harass",
       turn: context.turn,
       playerId: 2,
       data: `${context.player2.name} 선수가 견제를 시작!`,
       impact: "positive",
-      commentary: `${context.player2.name} 선수가 ${context.player1.name} 선수의 자원 채취지를 견제합니다! 상대 경제가 흔들리고 있어요.`,
+      commentary,
     };
   }
 }

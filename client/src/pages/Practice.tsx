@@ -32,7 +32,7 @@ export default function PracticePage() {
   const [gameState, setGameState] = useState<GameState>({});
   const [currentCommentaryIndex, setCurrentCommentaryIndex] = useState(0);
   const [showResultConfirm, setShowResultConfirm] = useState(false);
-  const [gameSpeed, setGameSpeed] = useState<1 | 2 | 5>(2); // 1배속, 2배속, 5배속 (기본: 2배속)
+  const [gameSpeed, setGameSpeed] = useState<1 | 2 | 5>(1); // 1배속, 2배속, 5배속 (기본: 1배속)
   const autoPlayIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // API 호출
@@ -282,28 +282,37 @@ export default function PracticePage() {
                       let textColor = "text-slate-300";
                       let borderColor = "border-slate-500";
                       let bgColor = "bg-slate-700/30";
+                      let label = "";
 
-                      if (commentary.includes(player1Name)) {
-                        textColor = "text-cyan-200";
-                        borderColor = "border-cyan-400";
-                        bgColor = "bg-cyan-950/30";
-                      } else if (commentary.includes(player2Name)) {
-                        textColor = "text-red-200";
+                      if (commentary.includes(player1Name) && !commentary.includes(player2Name)) {
+                        textColor = "text-blue-300";
+                        borderColor = "border-blue-500";
+                        bgColor = "bg-blue-950/40";
+                        label = "Player1";
+                      } else if (commentary.includes(player2Name) && !commentary.includes(player1Name)) {
+                        textColor = "text-red-300";
                         borderColor = "border-red-500";
-                        bgColor = "bg-red-950/30";
-                      } else if (commentary.includes("[중립]")) {
+                        bgColor = "bg-red-950/40";
+                        label = "Player2";
+                      } else {
                         textColor = "text-white";
                         borderColor = "border-slate-400";
                         bgColor = "bg-slate-700/50";
+                        label = "중립";
                       }
 
                       return (
                         <div
                           key={idx}
-                          className={`p-2 rounded text-sm border-l-4 ${borderColor} ${bgColor}`}
+                          className={`p-3 rounded text-sm border-l-4 ${borderColor} ${bgColor}`}
                         >
+                          <div className="flex items-start gap-2 mb-1">
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded ${label === 'Player1' ? 'bg-blue-600 text-blue-100' : label === 'Player2' ? 'bg-red-600 text-red-100' : 'bg-slate-600 text-slate-100'}`}>
+                              {label}
+                            </span>
+                          </div>
                           <p className={`whitespace-pre-wrap ${textColor}`}>
-                            {commentary.replace("[중립] ", "")}
+                            {commentary}
                           </p>
                         </div>
                       );
