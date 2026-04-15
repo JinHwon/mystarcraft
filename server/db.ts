@@ -2,6 +2,8 @@ import { eq, and, inArray, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, items, playerItems, players, playerStats, users, events, maps, games, gameResults } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import { StatKey } from "@shared/gameConstants";
+import { desc } from "drizzle-orm";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -150,6 +152,7 @@ export async function getPlayerItems(playerId: number) {
       playerItemId: playerItems.id,
       equipped: playerItems.equipped,
       purchasedAt: playerItems.purchasedAt,
+      usageCount: playerItems.usageCount,
       item: items,
     })
     .from(playerItems)
@@ -515,7 +518,7 @@ export async function completeGame(gameId: number, winnerId: number, player1Scor
     winnerId,
     player1ActualScore: player1Score,
     player2ActualScore: player2Score,
-    completedAt: new Date(),
+    completedAt: new Date().toISOString(),
   }).where(eq(games.id, gameId));
 }
 
@@ -537,12 +540,57 @@ export async function createGameResult(resultData: {
   return result;
 }
 
-export async function getPlayerGameHistory(playerId: number, limit: number = 10) {
+export async function getPlayerGameHistory(playerId: number, limit: number = 20) {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(gameResults)
+  
+  const results = await db.select().from(gameResults)
     .where(eq(gameResults.playerId, playerId))
+    .orderBy(desc(gameResults.createdAt))
     .limit(limit);
+  
+  // 각 결과에 상대 정보 추가
+  const enrichedResults = await Promise.all(
+    results.map(async (result) => {
+      // gameId로 게임 정보 조회
+      const gameInfo = await db?.select().from(games).where(eq(games.id, result.gameId)).then(r => r?.[0]);
+      
+      // 상대 선수 ID 찾기
+      let opponentId = 0;
+      if (gameInfo) {
+        opponentId = gameInfo.player1Id === playerId ? gameInfo.player2Id : gameInfo.player1Id;
+      }
+      
+      const opponent = opponentId > 0 ? await getPlayerByUserId(opponentId) : null;
+      const opponentGrade = opponent ? await getPlayerGrade(opponent.id) : 'F';
+      const opponentRace = gameInfo ? (gameInfo.player1Id === playerId ? gameInfo.player2Race : gameInfo.player1Race) : 'Unknown';
+      
+      // 날짜 형식 변환: yyyy-mm-dd
+      const completedAtDate = new Date(result.createdAt);
+      const formattedDate = completedAtDate.toISOString().split('T')[0];
+      
+      // statChanges 파싱 (JSON 문자열인 경우)
+      let parsedStatChanges = result.statChanges;
+      if (typeof result.statChanges === 'string') {
+        try {
+          parsedStatChanges = JSON.parse(result.statChanges);
+        } catch (e) {
+          parsedStatChanges = {};
+        }
+      }
+      
+      return {
+        ...result,
+        completedAt: formattedDate,
+        opponentName: opponent?.name || '익명유저',
+        opponentRace: opponentRace === 'Unknown' ? 'Unknown' : opponentRace,
+        opponentGrade,
+        statChanges: parsedStatChanges,
+      };
+    })
+  );
+  
+  return enrichedResults;
 }
 
 // 난이도별 상대 찾기
@@ -567,9 +615,20 @@ export async function findOpponentByDifficulty(
   const allPlayers = await db.select().from(players);
   const candidates = allPlayers.filter(p => p.id !== currentPlayerId);
   
-  // 필터링: 난이도 범위에 맞는 선수 찾기
-  // (실제 등급 계산은 클라이언트에서 수행)
-  return candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : null;
+  if (candidates.length === 0) return null;
+  
+  // 랜덤 상대 선택
+  const randomOpponent = candidates[Math.floor(Math.random() * candidates.length)];
+  
+  // 상대 종족을 랜덤으로 선택 (테란, 프로토스, 저그)
+  const races = ['terran', 'zerg', 'protoss'] as const;
+  const randomRace = races[Math.floor(Math.random() * races.length)];
+  
+  // 선택된 상대의 종족을 랜덤 종족으로 덮어씌우기
+  return {
+    ...randomOpponent,
+    race: randomRace,
+  };
 }
 
 
@@ -618,3 +677,221 @@ export async function updatePlayerGold(playerId: number, goldGain: number) {
   await db.update(players).set({ gold: newGold }).where(eq(players.id, playerId));
 }
 
+
+
+// ── Item Usage Count Management ────────────────────────────────────
+
+export async function decreaseItemUsageCount(playerId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  // 플레이어의 착용 중인 아이템 조회
+  const equippedItems = await db
+    .select({
+      playerItemId: playerItems.id,
+      usageCount: playerItems.usageCount,
+      itemId: playerItems.itemId,
+      item: items,
+    })
+    .from(playerItems)
+    .innerJoin(items, eq(playerItems.itemId, items.id))
+    .where(and(eq(playerItems.playerId, playerId), eq(playerItems.equipped, 1)));
+
+  for (const equippedItem of equippedItems) {
+    const newUsageCount = equippedItem.usageCount - 1;
+
+    if (newUsageCount <= 0) {
+      // usageCount가 0이 되면 아이템 삭제 및 능력치 원복
+      const statBoosts = equippedItem.item.statBoosts as Record<string, number>;
+
+      // 아이템 삭제
+      await db.delete(playerItems).where(eq(playerItems.id, equippedItem.playerItemId));
+
+      // 능력치 원복 (음수로 처리)
+      const playerStatsData = await getPlayerStats(playerId);
+      if (playerStatsData) {
+        const statKeyMap: Record<string, StatKey> = {
+          sense: 'sense',
+          control: 'control',
+          attack: 'attack',
+          harass: 'harass',
+          strategy: 'strategy',
+          supply: 'supply',
+          defense: 'defense',
+          scout: 'scout',
+        };
+
+        for (const [statName, boostValue] of Object.entries(statBoosts)) {
+          const mappedKey = statKeyMap[statName] as StatKey;
+          if (mappedKey) {
+            let currentPoints = 0;
+            if (mappedKey === 'sense') currentPoints = playerStatsData.sense;
+            else if (mappedKey === 'control') currentPoints = playerStatsData.control;
+            else if (mappedKey === 'attack') currentPoints = playerStatsData.attack;
+            else if (mappedKey === 'harass') currentPoints = playerStatsData.harass;
+            else if (mappedKey === 'strategy') currentPoints = playerStatsData.strategy;
+            else if (mappedKey === 'supply') currentPoints = playerStatsData.supply;
+            else if (mappedKey === 'defense') currentPoints = playerStatsData.defense;
+            else if (mappedKey === 'scout') currentPoints = playerStatsData.scout;
+
+            // 음수로 처리하여 능력치 감소
+            await allocateStat(playerId, mappedKey, -boostValue, currentPoints);
+          }
+        }
+      }
+    } else {
+      // usageCount 감소
+      await db
+        .update(playerItems)
+        .set({ usageCount: newUsageCount })
+        .where(eq(playerItems.id, equippedItem.playerItemId));
+    }
+  }
+}
+
+
+// ── Game Record Management ────────────────────────────────────
+
+export async function getPlayerGameRecord(playerId: number) {
+  const db = await getDb();
+  if (!db) return { wins: 0, losses: 0, totalGames: 0 };
+
+  const results = await db
+    .select({
+      isWinner: gameResults.isWinner,
+    })
+    .from(gameResults)
+    .where(eq(gameResults.playerId, playerId));
+
+  const wins = results.filter(r => r.isWinner).length;
+  const losses = results.filter(r => !r.isWinner).length;
+  const totalGames = results.length;
+
+  return { wins, losses, totalGames };
+}
+
+
+export async function getPlayerGrade(playerId: number): Promise<string> {
+  const stats = await getPlayerStats(playerId);
+  if (!stats) return 'F';
+
+  const totalStats = (stats.sense || 0) + (stats.control || 0) + (stats.attack || 0) + 
+                     (stats.harass || 0) + (stats.strategy || 0) + (stats.supply || 0) + 
+                     (stats.defense || 0) + (stats.scout || 0);
+  
+  const baseScore = 4000;
+  const gradeInterval = 600;
+
+  const grades = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
+  const gradeIndex = Math.floor((totalStats - baseScore) / gradeInterval);
+  
+  if (gradeIndex < 0) return 'F';
+  if (gradeIndex >= grades.length) return 'SSS';
+  
+  return grades[gradeIndex];
+}
+
+
+export async function ensurePlayerStats(playerId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  // 기존 능력치 확인
+  const existing = await db.select().from(playerStats).where(eq(playerStats.playerId, playerId)).limit(1);
+  if (existing.length > 0) {
+    return existing[0];
+  }
+
+  // 능력치가 없으면 초기값으로 생성
+  const defaultStats = {
+    playerId,
+    sense: 500,
+    control: 500,
+    attack: 500,
+    harass: 500,
+    strategy: 500,
+    supply: 500,
+    defense: 500,
+    scout: 500,
+  };
+
+  await db.insert(playerStats).values(defaultStats);
+  return defaultStats;
+}
+
+
+// 난이도별 랜덤 능력치를 가진 NPC 상대 생성
+export async function createRandomNPCOpponent(
+  difficulty: "beginner" | "intermediate" | "advanced"
+): Promise<any> {
+  const races = ["terran", "zerg", "protoss"];
+  const npcNames = [
+    "AI-Alpha", "AI-Beta", "AI-Gamma", "AI-Delta", "AI-Epsilon",
+    "Bot-1", "Bot-2", "Bot-3", "Bot-4", "Bot-5",
+    "Computer", "Machine", "Cyber", "Digital", "Virtual"
+  ];
+  
+  // 난이도별 능력치 범위
+  const statRanges = {
+    beginner: { min: 300, max: 500 },
+    intermediate: { min: 450, max: 650 },
+    advanced: { min: 600, max: 800 },
+  };
+  
+  const range = statRanges[difficulty];
+  
+  // 랜덤 능력치 생성
+  const generateRandomStat = () => {
+    return Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
+  };
+  
+  // 가상 플레이어 객체 생성
+  const npcPlayer = {
+    id: -1, // 임시 ID (실제 DB에 저장되지 않음)
+    userId: null,
+    name: npcNames[Math.floor(Math.random() * npcNames.length)],
+    race: races[Math.floor(Math.random() * races.length)],
+    level: Math.floor(Math.random() * 5) + 1,
+    exp: 0,
+    expToNext: 100,
+    gold: Math.floor(Math.random() * 1000) + 500,
+    fatigue: 100,
+    statPoints: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    isNPC: true, // NPC 플레이어 표시
+  };
+  
+  // NPC 능력치 저장 (메모리에만)
+  const npcStats = {
+    playerId: -1,
+    attack: generateRandomStat(),
+    defense: generateRandomStat(),
+    harass: generateRandomStat(),
+    scout: generateRandomStat(),
+  };
+  
+  return { player: npcPlayer, stats: npcStats };
+}
+
+// 상대 찾기 (기존 플레이어 또는 NPC)
+export async function findOpponentWithNPC(
+  currentPlayerId: number,
+  difficulty: "beginner" | "intermediate" | "advanced",
+  useNPC: boolean = false
+) {
+  // NPC 상대 사용 여부 결정 (50% 확률)
+  const shouldUseNPC = useNPC || Math.random() < 0.5;
+  
+  if (shouldUseNPC) {
+    return await createRandomNPCOpponent(difficulty);
+  } else {
+    // 기존 플레이어 찾기
+    const opponent = await findOpponentByDifficulty(currentPlayerId, difficulty, 0);
+    if (!opponent) {
+      // 플레이어가 없으면 NPC 생성
+      return await createRandomNPCOpponent(difficulty);
+    }
+    return { player: opponent };
+  }
+}

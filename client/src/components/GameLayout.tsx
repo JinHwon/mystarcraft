@@ -12,6 +12,7 @@ import {
   Settings,
   Zap,
   Gamepad2,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -22,6 +23,7 @@ const getNavItems = (isAdmin: boolean) => {
     { path: "/profile", label: "선수 관리", icon: User },
     { path: "/shop", label: "아이템 상점", icon: ShoppingBag },
     { path: "/practice", label: "연습게임", icon: Gamepad2 },
+    { path: "/game-results", label: "경기결과", icon: BarChart3 },
     { path: "/events", label: "이벤트", icon: Zap },
   ];
   if (isAdmin) {

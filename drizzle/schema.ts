@@ -70,6 +70,7 @@ export const playerItems = mysqlTable("player_items", {
 	playerId: int().notNull(),
 	itemId: int().notNull(),
 	equipped: tinyint().default(0).notNull(),
+	usageCount: int().default(20).notNull(),
 	purchasedAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 });
 

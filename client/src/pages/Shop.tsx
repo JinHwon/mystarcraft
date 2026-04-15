@@ -27,8 +27,9 @@ interface ItemData {
 
 interface PlayerItemData {
   playerItemId: number;
-  equipped: boolean;
-  purchasedAt: Date;
+  equipped: number;
+  purchasedAt: string;
+  usageCount: number;
   item: ItemData;
 }
 
@@ -43,10 +44,12 @@ function ItemCard({
   onUnequip,
   isBuying,
   isEquipping,
+  usageCount,
+  playerItems,
 }: {
   item: ItemData;
   owned: boolean;
-  equipped: boolean;
+  equipped: number;
   playerItemId?: number;
   playerGold: number;
   onBuy: () => void;
@@ -54,6 +57,8 @@ function ItemCard({
   onUnequip: () => void;
   isBuying: boolean;
   isEquipping: boolean;
+  usageCount?: number;
+  playerItems?: PlayerItemData[];
 }) {
   const rarityColor = RARITY_COLORS[item.rarity] ?? "#9CA3AF";
   const rarityLabel = RARITY_LABELS[item.rarity] ?? "일반";
@@ -64,11 +69,11 @@ function ItemCard({
     <div
       className={cn(
         "bg-card border rounded-xl p-4 flex flex-col gap-3 transition-all card-hover",
-        equipped
+        equipped === 1
           ? "border-2"
           : "border-border"
       )}
-      style={equipped ? { borderColor: rarityColor, boxShadow: `0 0 15px ${rarityColor}20` } : {}}
+      style={equipped === 1 ? { borderColor: rarityColor, boxShadow: `0 0 15px ${rarityColor}20` } : {}}
     >
       {/* 헤더 */}
       <div className="flex items-start justify-between gap-2">
@@ -82,7 +87,7 @@ function ItemCard({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-bold text-sm text-foreground">{item.name}</span>
-              {equipped && (
+              {equipped === 1 && (
                 <span className="text-xs px-1.5 py-0.5 rounded font-medium"
                   style={{ backgroundColor: `${rarityColor}20`, color: rarityColor }}>
                   착용 중
@@ -117,6 +122,13 @@ function ItemCard({
         ))}
       </div>
 
+      {/* 남은 사용 횟수 (보유 아이템인 경우만 표시) */}
+      {owned && (
+        <div className="text-xs text-muted-foreground text-center">
+          남은 사용 횟수: <span className="font-bold text-foreground">{playerItemId !== undefined ? (playerItems?.find(pi => pi.playerItemId === playerItemId)?.usageCount ?? 0) : 0}/20</span>
+        </div>
+      )}
+
       {/* 하단: 가격 + 버튼 */}
       <div className="flex items-center justify-between mt-auto pt-2 border-t border-border">
         <div className="flex items-center gap-1.5">
@@ -126,7 +138,7 @@ function ItemCard({
 
         {owned ? (
           <div className="flex gap-2">
-            {equipped ? (
+            {equipped === 1 ? (
               <Button
                 size="sm"
                 variant="outline"
@@ -211,7 +223,7 @@ export default function Shop() {
   // 착용 중인 아이템들의 능력치 합산
   const equippedBoosts: Partial<Record<StatKey, number>> = {};
   playerItems.forEach((pi) => {
-    if (!pi.equipped) return;
+    if (pi.equipped !== 1) return;
     const boosts = (pi.item.statBoosts as StatBoosts) ?? {};
     Object.entries(boosts).forEach(([k, v]) => {
       const key = k as StatKey;
@@ -286,7 +298,7 @@ export default function Shop() {
                   key={item.id}
                   item={item as ItemData}
                   owned={owned}
-                  equipped={playerItem?.equipped ?? false}
+                  equipped={playerItem?.equipped ?? 0}
                   playerItemId={playerItem?.playerItemId}
                   playerGold={playerGold}
                   onBuy={() => buyMutation.mutate({ itemId: item.id })}
@@ -294,6 +306,8 @@ export default function Shop() {
                   onUnequip={() => playerItem && equipMutation.mutate({ playerItemId: playerItem.playerItemId, equip: false })}
                   isBuying={buyingId === item.id}
                   isEquipping={equippingId === playerItem?.playerItemId}
+                  usageCount={playerItem?.usageCount}
+                  playerItems={playerItems}
                 />
               );
             })}
@@ -315,7 +329,7 @@ export default function Shop() {
                   key={pi.playerItemId}
                   item={pi.item as ItemData}
                   owned={true}
-                  equipped={pi.equipped}
+                  equipped={pi.equipped ?? 0}
                   playerItemId={pi.playerItemId}
                   playerGold={playerGold}
                   onBuy={() => {}}
@@ -323,6 +337,8 @@ export default function Shop() {
                   onUnequip={() => equipMutation.mutate({ playerItemId: pi.playerItemId, equip: false })}
                   isBuying={false}
                   isEquipping={equippingId === pi.playerItemId}
+                  usageCount={pi.usageCount}
+                  playerItems={playerItems}
                 />
               ))}
             </div>
@@ -331,7 +347,7 @@ export default function Shop() {
 
         {/* 착용 중 */}
         <TabsContent value="equipped" className="mt-4">
-          {playerItems.filter((pi) => pi.equipped).length === 0 ? (
+          {playerItems.filter((pi) => pi.equipped === 1).length === 0 ? (
             <div className="text-center py-16 text-muted-foreground">
               <Shield className="w-12 h-12 mx-auto mb-3 opacity-30" />
               <p className="text-sm">착용 중인 아이템이 없습니다</p>
@@ -343,7 +359,7 @@ export default function Shop() {
                   key={pi.playerItemId}
                   item={pi.item as ItemData}
                   owned={true}
-                  equipped={true}
+                  equipped={1}
                   playerItemId={pi.playerItemId}
                   playerGold={playerGold}
                   onBuy={() => {}}
@@ -351,6 +367,8 @@ export default function Shop() {
                   onUnequip={() => equipMutation.mutate({ playerItemId: pi.playerItemId, equip: false })}
                   isBuying={false}
                   isEquipping={equippingId === pi.playerItemId}
+                  usageCount={pi.usageCount}
+                  playerItems={playerItems}
                 />
               ))}
             </div>

@@ -121,7 +121,7 @@ export async function simulateGame(
 
   // 게임 진행
   const turns: GameTurn[] = [];
-  const maxTurns = 100;
+  const maxTurns = 200; // 병력/자원이 계속 변화할 수 있도록 늘림
 
   while (!gameState.gameEnded && turns.length < maxTurns) {
     progressTurn(gameState);

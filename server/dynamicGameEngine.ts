@@ -214,6 +214,39 @@ function generatePlayerAction(gameState: GameState, player: PlayerState): Player
     return { type: selected, data: selected };
   }
 
+  // 게임 진행 중 건물 건설 및 유닛 생산
+  const turn = gameState.turn;
+  
+  // 초반 건물 건설 (턴 5-15)
+  if (turn >= 5 && turn <= 15 && player.resources > 1000) {
+    const buildingsByRace: Record<string, string[]> = {
+      terran: ["배럭", "팩토리", "스타포트"],
+      protoss: ["게이트웨이", "사이버네틱스 코어", "로보틱스 팩토리"],
+      zerg: ["스포닝풀", "레어", "하이브"]
+    };
+    
+    const buildings = buildingsByRace[player.race] || [];
+    if (buildings.length > 0 && Math.random() < 0.3) {
+      const building = buildings[Math.floor(Math.random() * buildings.length)];
+      return { type: "building_built", data: building };
+    }
+  }
+  
+  // 중반 유닛 생산 (턴 10 이후)
+  if (turn >= 10 && player.resources > 500) {
+    const unitsByRace: Record<string, string[]> = {
+      terran: ["마린", "메딕", "파이어뱃", "벌쳐", "탱크"],
+      protoss: ["질럿", "드래군", "옵저버", "리버"],
+      zerg: ["저글링", "히드라", "뮤탈리스크", "럴커"]
+    };
+    
+    const units = unitsByRace[player.race] || [];
+    if (units.length > 0 && Math.random() < 0.4) {
+      const unit = units[Math.floor(Math.random() * units.length)];
+      return { type: "unit_produced", data: unit };
+    }
+  }
+
   // 일반 게임 진행 (액션 없음 - 병력/자원은 독립적으로 증가)
   return null;
 }
@@ -241,11 +274,13 @@ function updateResourcesAndTroops(gameState: GameState, player: PlayerState): vo
   }
 
   // 자원 증가 (멀티 개수에 따라 증가, 능력치 반영)
-  const resourceIncrease = (resourceRate * player.multiCount * economyMultiplier) / 10;
+  // 기본값을 10배 증가: 100 * multiCount * economyMultiplier (/ 10 제거)
+  const resourceIncrease = resourceRate * player.multiCount * economyMultiplier;
   player.resources = Math.min(GAME_MAX_RESOURCES, player.resources + resourceIncrease);
 
   // 병력 증가 (생산기지 개수에 따라 증가, 능력치 반영)
-  const baseIncrease = 5 * player.productionFacilities * troopRate * troopMultiplier;
+  // 기본값을 5배 증가: 25 * productionFacilities * troopRate * troopMultiplier
+  const baseIncrease = 25 * player.productionFacilities * troopRate * troopMultiplier;
   player.supply = Math.min(GAME_MAX_TROOPS, player.supply + baseIncrease);
 }
 
@@ -346,8 +381,9 @@ export function progressGame(gameState: GameState): void {
   const totalScore = player1Score + player2Score;
   gameState.player1Advantage = totalScore > 0 ? (player1Score / totalScore) * 100 : 50;
 
-  // 게임 종료 조건 (100턴 또는 한 플레이어가 크게 밀렸을 때)
-  if (gameState.turn >= 100 || gameState.player1Advantage > 95 || gameState.player1Advantage < 5) {
+  // 게임 종료 조건 (200턴 또는 한 플레이어가 매우 크게 밀렸을 때)
+  // 플레이어가 병력/자원을 계속 생산할 수 있도록 더 오래 진행
+  if (gameState.turn >= 200 || gameState.player1Advantage > 98 || gameState.player1Advantage < 2) {
     gameState.gameEnded = true;
     gameState.winner = gameState.player1Advantage > 50 ? gameState.player1.id : gameState.player2.id;
   }

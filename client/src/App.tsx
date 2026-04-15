@@ -11,6 +11,7 @@ import Shop from "./pages/Shop";
 import Admin from "./pages/Admin";
 import Events from "./pages/Events";
 import Practice from "./pages/Practice";
+import GameResults from "./pages/GameResults";
 import GameLayout from "./components/GameLayout";
 
 function Router() {
@@ -41,6 +42,11 @@ function Router() {
       <Route path="/practice">
         <GameLayout>
           <Practice />
+        </GameLayout>
+      </Route>
+      <Route path="/game-results">
+        <GameLayout>
+          <GameResults />
         </GameLayout>
       </Route>
       <Route path="/404" component={NotFound} />

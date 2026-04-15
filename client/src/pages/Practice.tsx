@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { RACE_COLORS, RACE_LABELS, DIFFICULTY_RANGES, GAME_REWARDS } from "@shared/gameConstants";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { STAT_LABELS } from "@shared/gameConstants";
 
 type GamePhase = "difficulty" | "map" | "opponent" | "playing" | "result";
 
@@ -16,6 +18,7 @@ interface GameState {
   gameId?: number;
   opponentName?: string;
   opponentRace?: string;
+  opponentGrade?: string;
   winProbability?: number;
   isWinner?: boolean;
   expGained?: number;
@@ -25,6 +28,8 @@ interface GameState {
   finalScore?: number;
   playerName?: string;
   playerRace?: string;
+  statChanges?: Record<string, number>;
+  showStatDetailModal?: boolean;
 }
 
 export default function PracticePage() {
@@ -59,8 +64,11 @@ export default function PracticePage() {
       setGameState(prev => ({
         ...prev,
         gameId: result.gameId,
+        playerName: userQuery.data?.name,
+        playerRace: (userQuery.data as any)?.race,
         opponentName: result.opponent.name,
         opponentRace: result.opponent.race,
+        opponentGrade: result.opponentGrade,
         winProbability: result.winProbability,
       }));
     } catch (error) {
@@ -76,14 +84,27 @@ export default function PracticePage() {
         gameId: gameState.gameId,
       });
       
+      const raceCommentaries: Record<string, string> = {
+        terran: "테란 선수가 선택되었습니다. 테란은 기계적 우월성과 다양한 전술로 유명합니다.",
+        zerg: "저그 선수가 선택되었습니다. 저그는 빠른 확장과 공격성으로 유명합니다.",
+        protoss: "프로토스 선수가 선택되었습니다. 프로토스는 고급 기술과 강력한 유닛으로 유명합니다.",
+      };
+      
+      const turns = result.turns || [];
+      if (turns.length > 0 && turns[0]?.allCommentaries) {
+        const initialCommentary = raceCommentaries[gameState.playerRace as string] || "게임이 시작되었습니다.";
+        turns[0].allCommentaries.unshift(initialCommentary);
+      }
+      
       setGameState(prev => ({
         ...prev,
-        turns: result.turns || [],
+        turns,
         isWinner: result.isWinner,
         expGained: result.expGained,
         goldGained: result.goldGained,
         fatigueUsed: result.fatigueUsed,
         finalScore: result.finalScore,
+        statChanges: result.statChanges,
       }));
       
       setPhase("playing");
@@ -215,6 +236,14 @@ export default function PracticePage() {
               <CardDescription>{RACE_LABELS[gameState.opponentRace as keyof typeof RACE_LABELS]}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {gameState.opponentGrade && (
+                <div className="p-3 bg-slate-700 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-300 text-sm">등급</span>
+                    <span className="font-bold text-lg text-yellow-400">{gameState.opponentGrade}</span>
+                  </div>
+                </div>
+              )}
               <div>
                 <div className="flex justify-between text-sm text-slate-300 mb-2">
                   <span>승률</span>
@@ -227,8 +256,24 @@ export default function PracticePage() {
                   />
                 </div>
               </div>
-              <Button onClick={handleStartGame} className="w-full bg-blue-600 hover:bg-blue-700">
-                게임 시작
+              <Button 
+                onClick={handleStartGame} 
+                disabled={playGameMutation.isPending || findOpponentMutation.isPending}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {findOpponentMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    상대 선수 로드 중...
+                  </>
+                ) : playGameMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    게임 시작 중...
+                  </>
+                ) : (
+                  "게임 시작"
+                )}
               </Button>
             </CardContent>
           </Card>
@@ -290,7 +335,13 @@ export default function PracticePage() {
                       let bgColor = "bg-slate-700/30";
                       let label = "";
 
-                      if (commentary.includes(player1Name) && !commentary.includes(player2Name)) {
+                      // [중립] 태그가 있으면 중립 색상
+                      if (commentary.includes("[중립]")) {
+                        textColor = "text-white";
+                        borderColor = "border-slate-400";
+                        bgColor = "bg-slate-700/50";
+                        label = "중립";
+                      } else if (commentary.includes(player1Name) && !commentary.includes(player2Name)) {
                         textColor = "text-blue-300";
                         borderColor = "border-blue-500";
                         bgColor = "bg-blue-950/40";
@@ -364,28 +415,30 @@ export default function PracticePage() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div>
-                    <div className="flex justify-between text-sm text-slate-300 mb-1">
-                      <span>병력</span>
-                      <span className="font-bold">{currentTurn?.player1Supply || 0}</span>
+                    <div className="flex justify-between text-sm text-slate-300 mb-2">
+                      <span className="font-semibold">병력</span>
+                      <span className="font-bold text-cyan-300 text-lg">{currentTurn?.player1Supply || 0}</span>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-2">
+                    <div className="w-full bg-slate-700 rounded-full h-4">
                       <div
-                        className="bg-cyan-500 h-2 rounded-full transition-all duration-500"
+                        className="bg-cyan-500 h-4 rounded-full transition-all duration-500 shadow-lg shadow-cyan-500/50"
                         style={{ width: `${Math.min(100, (currentTurn?.player1Supply || 0) / 2)}%` }}
                       />
                     </div>
+                    <div className="text-xs text-slate-400 mt-1">최대: 200</div>
                   </div>
                   <div>
-                    <div className="flex justify-between text-sm text-slate-300 mb-1">
-                      <span>자원</span>
-                      <span className="font-bold">{currentTurn?.player1Resources || 0}</span>
+                    <div className="flex justify-between text-sm text-slate-300 mb-2">
+                      <span className="font-semibold">자원</span>
+                      <span className="font-bold text-cyan-300 text-lg">{currentTurn?.player1Resources || 0}</span>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-2">
+                    <div className="w-full bg-slate-700 rounded-full h-4">
                       <div
-                        className="bg-cyan-400 h-2 rounded-full transition-all duration-500"
+                        className="bg-cyan-400 h-4 rounded-full transition-all duration-500 shadow-lg shadow-cyan-400/50"
                         style={{ width: `${Math.min(100, (currentTurn?.player1Resources || 0) / 200)}%` }}
                       />
                     </div>
+                    <div className="text-xs text-slate-400 mt-1">최대: 20,000</div>
                   </div>
                 </CardContent>
               </Card>
@@ -397,28 +450,30 @@ export default function PracticePage() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div>
-                    <div className="flex justify-between text-sm text-slate-300 mb-1">
-                      <span>병력</span>
-                      <span className="font-bold">{currentTurn?.player2Supply || 0}</span>
+                    <div className="flex justify-between text-sm text-slate-300 mb-2">
+                      <span className="font-semibold">병력</span>
+                      <span className="font-bold text-red-300 text-lg">{currentTurn?.player2Supply || 0}</span>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-2">
+                    <div className="w-full bg-slate-700 rounded-full h-4">
                       <div
-                        className="bg-red-500 h-2 rounded-full transition-all duration-500"
+                        className="bg-red-500 h-4 rounded-full transition-all duration-500 shadow-lg shadow-red-500/50"
                         style={{ width: `${Math.min(100, (currentTurn?.player2Supply || 0) / 2)}%` }}
                       />
                     </div>
+                    <div className="text-xs text-slate-400 mt-1">최대: 200</div>
                   </div>
                   <div>
-                    <div className="flex justify-between text-sm text-slate-300 mb-1">
-                      <span>자원</span>
-                      <span className="font-bold">{currentTurn?.player2Resources || 0}</span>
+                    <div className="flex justify-between text-sm text-slate-300 mb-2">
+                      <span className="font-semibold">자원</span>
+                      <span className="font-bold text-red-300 text-lg">{currentTurn?.player2Resources || 0}</span>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-2">
+                    <div className="w-full bg-slate-700 rounded-full h-4">
                       <div
-                        className="bg-red-400 h-2 rounded-full transition-all duration-500"
+                        className="bg-red-400 h-4 rounded-full transition-all duration-500 shadow-lg shadow-red-400/50"
                         style={{ width: `${Math.min(100, (currentTurn?.player2Resources || 0) / 200)}%` }}
                       />
                     </div>
+                    <div className="text-xs text-slate-400 mt-1">최대: 20,000</div>
                   </div>
                 </CardContent>
               </Card>
@@ -469,6 +524,27 @@ export default function PracticePage() {
                   <p className="text-2xl font-bold text-red-400">-{gameState.fatigueUsed}</p>
                 </div>
               </div>
+              {gameState.statChanges && Object.keys(gameState.statChanges).length > 0 && (
+                <div className="mt-6 pt-6 border-t border-slate-600">
+                  <p 
+                    className="text-slate-300 font-semibold mb-3 cursor-pointer hover:text-blue-400 transition-colors"
+                    onDoubleClick={() => setGameState(prev => ({ ...prev, showStatDetailModal: true }))}
+                    title="더블클릭으로 상세 분석 보기"
+                  >
+                    능력치 변동 (더블클릭으로 상세 분석)
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {Object.entries(gameState.statChanges).map(([stat, change]: [string, any]) => (
+                      <div key={stat} className="flex justify-between text-slate-400">
+                        <span>{STAT_LABELS[stat as keyof typeof STAT_LABELS] || stat}:</span>
+                        <span className={change >= 0 ? "text-green-400" : "text-red-400"}>
+                          {change >= 0 ? "+" : ""}{change}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <Button
                 onClick={() => {
                   setPhase("difficulty");
@@ -481,6 +557,42 @@ export default function PracticePage() {
               </Button>
             </CardContent>
           </Card>
+
+          {/* 능력치 변동 상세 분석 팝업 */}
+          <Dialog open={gameState.showStatDetailModal} onOpenChange={(open) => setGameState(prev => ({ ...prev, showStatDetailModal: open }))}>
+            <DialogContent className="bg-slate-800 border-slate-700">
+              <DialogHeader>
+                <DialogTitle className="text-white">능력치 변동 상세 분석</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 max-h-96 overflow-y-auto">
+                {gameState.statChanges && Object.entries(gameState.statChanges).map(([stat, change]: [string, any]) => {
+                  const label = STAT_LABELS[stat as keyof typeof STAT_LABELS] || stat;
+                  const isPositive = change >= 0;
+                  const percentage = Math.abs(change) > 0 ? Math.round((Math.abs(change) / 100) * 100) : 0;
+                  
+                  return (
+                    <div key={stat} className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-300 font-medium">{label}</span>
+                        <span className={isPositive ? "text-green-400" : "text-red-400"}>
+                          {isPositive ? "+" : ""}{change}
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+                        <div 
+                          className={isPositive ? "bg-green-500" : "bg-red-500"}
+                          style={{ width: `${Math.min(percentage, 100)}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-slate-400">
+                        {isPositive ? "상승" : "하락"} - {Math.abs(percentage)}%
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     );

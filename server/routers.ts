@@ -38,6 +38,10 @@ import {
   getDb,
   updatePlayerExp,
   updatePlayerGold,
+  decreaseItemUsageCount,
+  getPlayerGameRecord,
+  getPlayerGrade,
+  ensurePlayerStats,
 } from "./db";
 import { eq } from "drizzle-orm";
 import { players } from "../drizzle/schema";
@@ -57,7 +61,9 @@ const playerRouter = router({
     const player = await getPlayerByUserId(ctx.user.id);
     if (!player) return null;
     const stats = await getPlayerStats(player.id);
-    return { ...player, stats: stats ?? null };
+    const gameRecord = await getPlayerGameRecord(player.id);
+    const grade = await getPlayerGrade(player.id);
+    return { ...player, stats: stats ?? null, gameRecord, grade };
   }),
 
   create: protectedProcedure
@@ -101,7 +107,7 @@ const playerRouter = router({
     .input(
       z.object({
         statKey: z.enum(["sense", "control", "attack", "harass", "strategy", "supply", "defense", "scout"]),
-        points: z.number().int().min(1).max(20),
+        points: z.number().int().min(1), // 제한 없음 - 사용자가 원하는 만큼 배분 가능
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -366,9 +372,9 @@ const practiceRouter = router({
       const opponent = await findOpponentByDifficulty(player.id, input.difficulty, 0);
       if (!opponent) throw new TRPCError({ code: "NOT_FOUND", message: "상대를 찾을 수 없습니다" });
 
-      // 선수 능력치 조회
-      const playerStats = await getPlayerStats(player.id);
-      const opponentStats = await getPlayerStats(opponent.id);
+      // 선수 능력치 조회 (없으면 초기화)
+      const playerStats = await getPlayerStats(player.id) || await ensurePlayerStats(player.id);
+      const opponentStats = await getPlayerStats(opponent.id) || await ensurePlayerStats(opponent.id);
       if (!playerStats || !opponentStats) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "능력치 조회 실패" });
 
       // 맵 정보 조회
@@ -408,7 +414,8 @@ const practiceRouter = router({
       });
 
       const gameId = (newGameResult as any)?.insertId || 1;
-      return { gameId, opponent, winProbability };
+      const opponentGrade = await getPlayerGrade(opponent.id);
+      return { gameId, opponent, opponentGrade, winProbability };
     }),
 
   playGame: protectedProcedure
@@ -501,14 +508,14 @@ const practiceRouter = router({
       const playerStatsMap = {
         attack: playerStatsData?.attack || 0,
         defense: playerStatsData?.defense || 0,
-        economy: playerStatsData?.harass || 0,
+        economy: playerStatsData?.strategy || 0,
         intelligence: playerStatsData?.scout || 0,
       };
       
       const opponentStatsMap = {
         attack: opponentStatsData?.attack || 0,
         defense: opponentStatsData?.defense || 0,
-        economy: opponentStatsData?.harass || 0,
+        economy: opponentStatsData?.strategy || 0,
         intelligence: opponentStatsData?.scout || 0,
       };
       
@@ -520,10 +527,14 @@ const practiceRouter = router({
       );
       
       const statChanges: Record<string, number> = {
+        sense: 0,
+        control: 0,
         attack: finalStatChanges.attack,
+        harass: 0,
+        strategy: finalStatChanges.economy,
+        supply: 0,
         defense: finalStatChanges.defense,
-        economy: finalStatChanges.economy,
-        intelligence: finalStatChanges.intelligence,
+        scout: finalStatChanges.intelligence,
       };
 
       await createGameResult({
@@ -540,28 +551,19 @@ const practiceRouter = router({
       await updatePlayerExp(player.id, expGained);
       await updatePlayerGold(player.id, goldGained);
       
-      // 능력치 업데이트
-      const statKeyMap: Record<string, StatKey> = {
-        attack: 'attack',
-        defense: 'defense',
-        economy: 'harass',
-        intelligence: 'scout',
-      };
-      
-      for (const [key, value] of Object.entries(statChanges)) {
-        if (value !== 0) {
-          const mappedKey = statKeyMap[key] as StatKey;
-          const currentStats = await getPlayerStats(player.id);
-          let currentPoints = 0;
-          if (currentStats) {
-            if (mappedKey === 'attack') currentPoints = currentStats.attack;
-            else if (mappedKey === 'defense') currentPoints = currentStats.defense;
-            else if (mappedKey === 'harass') currentPoints = currentStats.harass;
-            else if (mappedKey === 'scout') currentPoints = currentStats.scout;
+      // 능력치 업데이트 - 실제 변동이 있는 능력치만 업데이트
+      const currentStats = await getPlayerStats(player.id);
+      if (currentStats) {
+        for (const [key, value] of Object.entries(statChanges)) {
+          if (value !== 0 && key in currentStats) {
+            const currentPoints = (currentStats as any)[key] as number;
+            await allocateStat(player.id, key as StatKey, value, currentPoints);
           }
-          await allocateStat(player.id, mappedKey, value, currentPoints);
         }
       }
+      
+      // 아이템 사용 횟수 감소 (게임 진행 시마다 1씩 감소)
+      await decreaseItemUsageCount(player.id);
       
       // 무제한 피로도 이벤트 중에는 피로도 감소 안 함
       const activeEvents = await getActiveEvents();

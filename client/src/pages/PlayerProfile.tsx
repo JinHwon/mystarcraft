@@ -78,7 +78,7 @@ export default function PlayerProfile() {
   const { data: playerItems = [] } = trpc.shop.getPlayerItems.useQuery();
   const { data: activeEvents = [] } = trpc.event.listActive.useQuery();
   const [allocating, setAllocating] = useState<StatKey | null>(null);
-  const [allocPoints, setAllocPoints] = useState(1);
+  const [allocPoints, setAllocPoints] = useState(5); // 5씩 증감
   const fileRef = useRef<HTMLInputElement>(null);
 
   const allocateMutation = trpc.player.allocateStat.useMutation({
@@ -424,16 +424,16 @@ export default function PlayerProfile() {
                             size="sm"
                             variant="outline"
                             className="h-7 w-7 p-0"
-                            onClick={() => setAllocPoints(Math.max(1, allocPoints - 1))}
+                            onClick={() => setAllocPoints(Math.max(5, allocPoints - 5))}
                           >
                             <Minus className="w-3 h-3" />
                           </Button>
-                          <span className="text-sm font-bold text-foreground w-6 text-center">{allocPoints}</span>
+                          <span className="text-sm font-bold text-foreground w-8 text-center">{allocPoints}</span>
                           <Button
                             size="sm"
                             variant="outline"
                             className="h-7 w-7 p-0"
-                            onClick={() => setAllocPoints(Math.min(playerData.statPoints, allocPoints + 1))}
+                            onClick={() => setAllocPoints(Math.min(playerData.statPoints, allocPoints + 5))}
                           >
                             <Plus className="w-3 h-3" />
                           </Button>
@@ -459,13 +459,23 @@ export default function PlayerProfile() {
                     )}
 
                     {playerData.statPoints > 0 && !isAllocating && (
-                      <button
-                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
-                        onClick={() => { setAllocating(key); setAllocPoints(1); }}
-                      >
-                        <ChevronUp className="w-3 h-3" />
-                        포인트 배분
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                          onClick={() => { setAllocating(key); setAllocPoints(5); }}
+                        >
+                          <ChevronUp className="w-3 h-3" />
+                          포인트 배분
+                        </button>
+                        <button
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                          onClick={() => allocateMutation.mutate({ statKey: key, points: playerData.statPoints })}
+                          disabled={allocateMutation.isPending}
+                        >
+                          <Star className="w-3 h-3" />
+                          전부 배분
+                        </button>
+                      </div>
                     )}
                   </div>
                 );
@@ -477,6 +487,18 @@ export default function PlayerProfile() {
           <div className="bg-card border border-border rounded-2xl p-6 flex flex-col items-center">
             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4 self-start">능력치 분포</h3>
             <StatRadarChart stats={effectiveStats} grade={grade} gradeColor={gradeColor} size={300} />
+          </div>
+
+          {/* 경기결과 조회 */}
+          <div className="bg-card border border-border rounded-2xl p-6 col-span-full">
+            <h3 className="font-bold text-foreground mb-4">경기 기록</h3>
+            <p className="text-sm text-muted-foreground mb-4">지난 경기의 능력치 변동 내역을 확인하세요</p>
+            <a href="/game-results">
+              <Button className="w-full bg-blue-600 hover:bg-blue-700">
+                <TrendingUp className="w-4 h-4 mr-2" />
+                경기결과 조회
+              </Button>
+            </a>
           </div>
         </div>
       </div>
