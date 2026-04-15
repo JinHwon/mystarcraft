@@ -577,6 +577,7 @@ const practiceRouter = router({
         fatigueUsed,
         turns: simulation.turns,
         finalScore: isWinner ? simulation.player1FinalScore : simulation.player2FinalScore,
+        statChanges,
       };
     }),
 
