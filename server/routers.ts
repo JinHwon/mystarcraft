@@ -508,14 +508,14 @@ const practiceRouter = router({
       const playerStatsMap = {
         attack: playerStatsData?.attack || 0,
         defense: playerStatsData?.defense || 0,
-        economy: playerStatsData?.harass || 0,
+        economy: playerStatsData?.strategy || 0,
         intelligence: playerStatsData?.scout || 0,
       };
       
       const opponentStatsMap = {
         attack: opponentStatsData?.attack || 0,
         defense: opponentStatsData?.defense || 0,
-        economy: opponentStatsData?.harass || 0,
+        economy: opponentStatsData?.strategy || 0,
         intelligence: opponentStatsData?.scout || 0,
       };
       
@@ -530,8 +530,8 @@ const practiceRouter = router({
         sense: 0,
         control: 0,
         attack: finalStatChanges.attack,
-        harass: finalStatChanges.economy,
-        strategy: 0,
+        harass: 0,
+        strategy: finalStatChanges.economy,
         supply: 0,
         defense: finalStatChanges.defense,
         scout: finalStatChanges.intelligence,

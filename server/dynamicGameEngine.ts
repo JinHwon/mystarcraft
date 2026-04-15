@@ -227,11 +227,13 @@ function updateResourcesAndTroops(gameState: GameState, player: PlayerState): vo
   }
 
   // 자원 증가 (멀티 개수에 따라 증가, 능력치 반영)
-  const resourceIncrease = (resourceRate * player.multiCount * economyMultiplier) / 10;
+  // 기본값을 10배 증가: 100 * multiCount * economyMultiplier (/ 10 제거)
+  const resourceIncrease = resourceRate * player.multiCount * economyMultiplier;
   player.resources = Math.min(GAME_MAX_RESOURCES, player.resources + resourceIncrease);
 
   // 병력 증가 (생산기지 개수에 따라 증가, 능력치 반영)
-  const baseIncrease = 5 * player.productionFacilities * troopRate * troopMultiplier;
+  // 기본값을 5배 증가: 25 * productionFacilities * troopRate * troopMultiplier
+  const baseIncrease = 25 * player.productionFacilities * troopRate * troopMultiplier;
   player.supply = Math.min(GAME_MAX_TROOPS, player.supply + baseIncrease);
 }
 

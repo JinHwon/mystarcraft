@@ -415,28 +415,30 @@ export default function PracticePage() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div>
-                    <div className="flex justify-between text-sm text-slate-300 mb-1">
-                      <span>병력</span>
-                      <span className="font-bold">{currentTurn?.player1Supply || 0}</span>
+                    <div className="flex justify-between text-sm text-slate-300 mb-2">
+                      <span className="font-semibold">병력</span>
+                      <span className="font-bold text-cyan-300 text-lg">{currentTurn?.player1Supply || 0}</span>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-2">
+                    <div className="w-full bg-slate-700 rounded-full h-4">
                       <div
-                        className="bg-cyan-500 h-2 rounded-full transition-all duration-500"
+                        className="bg-cyan-500 h-4 rounded-full transition-all duration-500 shadow-lg shadow-cyan-500/50"
                         style={{ width: `${Math.min(100, (currentTurn?.player1Supply || 0) / 2)}%` }}
                       />
                     </div>
+                    <div className="text-xs text-slate-400 mt-1">최대: 200</div>
                   </div>
                   <div>
-                    <div className="flex justify-between text-sm text-slate-300 mb-1">
-                      <span>자원</span>
-                      <span className="font-bold">{currentTurn?.player1Resources || 0}</span>
+                    <div className="flex justify-between text-sm text-slate-300 mb-2">
+                      <span className="font-semibold">자원</span>
+                      <span className="font-bold text-cyan-300 text-lg">{currentTurn?.player1Resources || 0}</span>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-2">
+                    <div className="w-full bg-slate-700 rounded-full h-4">
                       <div
-                        className="bg-cyan-400 h-2 rounded-full transition-all duration-500"
+                        className="bg-cyan-400 h-4 rounded-full transition-all duration-500 shadow-lg shadow-cyan-400/50"
                         style={{ width: `${Math.min(100, (currentTurn?.player1Resources || 0) / 200)}%` }}
                       />
                     </div>
+                    <div className="text-xs text-slate-400 mt-1">최대: 20,000</div>
                   </div>
                 </CardContent>
               </Card>
@@ -448,28 +450,30 @@ export default function PracticePage() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div>
-                    <div className="flex justify-between text-sm text-slate-300 mb-1">
-                      <span>병력</span>
-                      <span className="font-bold">{currentTurn?.player2Supply || 0}</span>
+                    <div className="flex justify-between text-sm text-slate-300 mb-2">
+                      <span className="font-semibold">병력</span>
+                      <span className="font-bold text-red-300 text-lg">{currentTurn?.player2Supply || 0}</span>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-2">
+                    <div className="w-full bg-slate-700 rounded-full h-4">
                       <div
-                        className="bg-red-500 h-2 rounded-full transition-all duration-500"
+                        className="bg-red-500 h-4 rounded-full transition-all duration-500 shadow-lg shadow-red-500/50"
                         style={{ width: `${Math.min(100, (currentTurn?.player2Supply || 0) / 2)}%` }}
                       />
                     </div>
+                    <div className="text-xs text-slate-400 mt-1">최대: 200</div>
                   </div>
                   <div>
-                    <div className="flex justify-between text-sm text-slate-300 mb-1">
-                      <span>자원</span>
-                      <span className="font-bold">{currentTurn?.player2Resources || 0}</span>
+                    <div className="flex justify-between text-sm text-slate-300 mb-2">
+                      <span className="font-semibold">자원</span>
+                      <span className="font-bold text-red-300 text-lg">{currentTurn?.player2Resources || 0}</span>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-2">
+                    <div className="w-full bg-slate-700 rounded-full h-4">
                       <div
-                        className="bg-red-400 h-2 rounded-full transition-all duration-500"
+                        className="bg-red-400 h-4 rounded-full transition-all duration-500 shadow-lg shadow-red-400/50"
                         style={{ width: `${Math.min(100, (currentTurn?.player2Resources || 0) / 200)}%` }}
                       />
                     </div>
+                    <div className="text-xs text-slate-400 mt-1">최대: 20,000</div>
                   </div>
                 </CardContent>
               </Card>
