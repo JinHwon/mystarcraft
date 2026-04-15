@@ -551,26 +551,14 @@ const practiceRouter = router({
       await updatePlayerExp(player.id, expGained);
       await updatePlayerGold(player.id, goldGained);
       
-      // 능력치 업데이트
-      const statKeyMap: Record<string, StatKey> = {
-        attack: 'attack',
-        defense: 'defense',
-        economy: 'harass',
-        intelligence: 'scout',
-      };
-      
-      for (const [key, value] of Object.entries(statChanges)) {
-        if (value !== 0) {
-          const mappedKey = statKeyMap[key] as StatKey;
-          const currentStats = await getPlayerStats(player.id);
-          let currentPoints = 0;
-          if (currentStats) {
-            if (mappedKey === 'attack') currentPoints = currentStats.attack;
-            else if (mappedKey === 'defense') currentPoints = currentStats.defense;
-            else if (mappedKey === 'harass') currentPoints = currentStats.harass;
-            else if (mappedKey === 'scout') currentPoints = currentStats.scout;
+      // 능력치 업데이트 - 실제 변동이 있는 능력치만 업데이트
+      const currentStats = await getPlayerStats(player.id);
+      if (currentStats) {
+        for (const [key, value] of Object.entries(statChanges)) {
+          if (value !== 0 && key in currentStats) {
+            const currentPoints = (currentStats as any)[key] as number;
+            await allocateStat(player.id, key as StatKey, value, currentPoints);
           }
-          await allocateStat(player.id, mappedKey, value, currentPoints);
         }
       }
       
