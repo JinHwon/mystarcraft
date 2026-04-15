@@ -335,7 +335,13 @@ export default function PracticePage() {
                       let bgColor = "bg-slate-700/30";
                       let label = "";
 
-                      if (commentary.includes(player1Name) && !commentary.includes(player2Name)) {
+                      // [중립] 태그가 있으면 중립 색상
+                      if (commentary.includes("[중립]")) {
+                        textColor = "text-white";
+                        borderColor = "border-slate-400";
+                        bgColor = "bg-slate-700/50";
+                        label = "중립";
+                      } else if (commentary.includes(player1Name) && !commentary.includes(player2Name)) {
                         textColor = "text-blue-300";
                         borderColor = "border-blue-500";
                         bgColor = "bg-blue-950/40";

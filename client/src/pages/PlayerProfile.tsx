@@ -478,6 +478,18 @@ export default function PlayerProfile() {
             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4 self-start">능력치 분포</h3>
             <StatRadarChart stats={effectiveStats} grade={grade} gradeColor={gradeColor} size={300} />
           </div>
+
+          {/* 경기결과 조회 */}
+          <div className="bg-card border border-border rounded-2xl p-6 col-span-full">
+            <h3 className="font-bold text-foreground mb-4">경기 기록</h3>
+            <p className="text-sm text-muted-foreground mb-4">지난 경기의 능력치 변동 내역을 확인하세요</p>
+            <a href="/game-results">
+              <Button className="w-full bg-blue-600 hover:bg-blue-700">
+                <TrendingUp className="w-4 h-4 mr-2" />
+                경기결과 조회
+              </Button>
+            </a>
+          </div>
         </div>
       </div>
     </div>
