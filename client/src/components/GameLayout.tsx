@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { cn } from "@/lib/utils";
+import { useSidebar } from "@/components/ui/sidebar";
 
 const getNavItems = (isAdmin: boolean) => {
   const items = [
