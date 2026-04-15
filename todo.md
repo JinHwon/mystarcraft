@@ -242,3 +242,8 @@
 - [x] 모바일 사이드바 토글 버튼 추가 - 이미 구현되어 있음 (SidebarTrigger)
 - [x] 사이드바 오버레이 추가 - shadcn/ui Sidebar에서 자동 처리
 - [x] 사이드바 자동 닫기 - DashboardLayout.tsx에서 모바일 기본 닫힘 상태 설정 및 메뉴 클릭 시 자동 닫기
+
+## 기능 개선 (v29.5) - GameLayout 모바일 반응형 처리
+
+- [x] GameLayout 모바일 반응형 처리 - 데스크톱에서만 사이드바 표시 (hidden md:flex)
+- [x] 메인 콘텐츠 모바일 전체 너비 사용 - w-full md:w-auto로 변경
