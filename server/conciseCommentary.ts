@@ -120,12 +120,10 @@ export function generateSituationCommentary(player1Name: string, player2Name: st
 /**
  * 게임 종료 해설
  */
-export function generateGameEndCommentary(winnerName: string, loserName: string): string[] {
-  return [
-    `${loserName} 선수 GG를 칠 수 밖에 없지요.`,
-    `${winnerName} 선수는 상대 허점을 놓치지 않아요.`,
-    `[중립] 경기가 종료되었습니다.`,
-  ];
+export function generateGameEndCommentary(player1Name: string, player2Name: string, isPlayer1Winner: boolean): string {
+  const winnerName = isPlayer1Winner ? player1Name : player2Name;
+  const loserName = isPlayer1Winner ? player2Name : player1Name;
+  return `[중립] ${winnerName} 선수 승리! 경기가 종료되었습니다.`;
 }
 
 /**

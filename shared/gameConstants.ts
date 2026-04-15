@@ -27,6 +27,27 @@ export const STAT_DEFAULT = 500;
 export const STAT_MAX = 1200;
 export const STAT_POINT_PER_LEVEL = 20;
 
+// 게임 상수 - v11.0
+export const GAME_MAX_TROOPS = 200;
+export const GAME_MAX_RESOURCES = 20000;
+export const GAME_INITIAL_TROOPS = 50;
+export const GAME_INITIAL_RESOURCES = 200;
+
+// 빌드별 증가률
+export const BUILD_RESOURCE_RATES: Record<string, number> = {
+  cc_first: 150,
+  barracks_first: 100,
+  gateway_first: 100,
+  hatch_first: 100,
+};
+
+export const BUILD_TROOP_RATES: Record<string, number> = {
+  cc_first: 0.8,
+  barracks_first: 1.2,
+  gateway_first: 1.0,
+  hatch_first: 1.0,
+};
+
 // 등급 시스템
 // 기본 합산 4000 = F, 이후 600점마다 승급
 export const GRADES = ["F", "E", "D", "C", "B", "A", "S", "SS", "SSS"] as const;

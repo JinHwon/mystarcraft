@@ -254,7 +254,6 @@ export default function PracticePage() {
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-white">게임 진행 중...</h1>
-            <p className="text-slate-400 mt-2">턴 {currentTurnNum} / {Math.ceil(allCommentaries.length / 3)}</p>
           </div>
 
           {isLoading && (
@@ -356,7 +355,7 @@ export default function PracticePage() {
                     </div>
                     <div className="w-full bg-slate-700 rounded-full h-2">
                       <div
-                        className="bg-cyan-500 h-2 rounded-full transition-all"
+                        className="bg-cyan-500 h-2 rounded-full transition-all duration-500"
                         style={{ width: `${Math.min(100, (currentTurn?.player1Supply || 0) / 2)}%` }}
                       />
                     </div>
@@ -368,8 +367,8 @@ export default function PracticePage() {
                     </div>
                     <div className="w-full bg-slate-700 rounded-full h-2">
                       <div
-                        className="bg-yellow-500 h-2 rounded-full transition-all"
-                        style={{ width: `${Math.min(100, (currentTurn?.player1Resources || 0) / 5)}%` }}
+                        className="bg-cyan-400 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(100, (currentTurn?.player1Resources || 0) / 200)}%` }}
                       />
                     </div>
                   </div>
@@ -389,7 +388,7 @@ export default function PracticePage() {
                     </div>
                     <div className="w-full bg-slate-700 rounded-full h-2">
                       <div
-                        className="bg-red-500 h-2 rounded-full transition-all"
+                        className="bg-red-500 h-2 rounded-full transition-all duration-500"
                         style={{ width: `${Math.min(100, (currentTurn?.player2Supply || 0) / 2)}%` }}
                       />
                     </div>
@@ -401,8 +400,8 @@ export default function PracticePage() {
                     </div>
                     <div className="w-full bg-slate-700 rounded-full h-2">
                       <div
-                        className="bg-yellow-500 h-2 rounded-full transition-all"
-                        style={{ width: `${Math.min(100, (currentTurn?.player2Resources || 0) / 5)}%` }}
+                        className="bg-red-400 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(100, (currentTurn?.player2Resources || 0) / 200)}%` }}
                       />
                     </div>
                   </div>
