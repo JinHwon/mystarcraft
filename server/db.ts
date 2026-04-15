@@ -522,11 +522,14 @@ export async function createGame(gameData: {
   player1Race: "terran" | "zerg" | "protoss";
   player2Race: "terran" | "zerg" | "protoss";
   player1WinProbability: number;
-}) {
+}): Promise<number> {
   const db = await getDb();
-  if (!db) return null;
+  if (!db) throw new Error("Database not available");
   const result = await db.insert(games).values(gameData as any);
-  return result;
+  // MySQL drizzle returns [ResultSetHeader, ...]
+  const insertId = (result as any)?.[0]?.insertId ?? (result as any)?.insertId;
+  if (!insertId) throw new Error("게임 생성 실패: insertId를 가져올 수 없습니다");
+  return insertId;
 }
 
 export async function getGameById(gameId: number) {

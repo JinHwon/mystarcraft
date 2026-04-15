@@ -404,7 +404,7 @@ const practiceRouter = router({
       );
 
       // 게임 생성
-      const newGameResult = await createGame({
+      const gameId = await createGame({
         player1Id: player.id,
         player2Id: opponent.id,
         mapId: input.mapId,
@@ -414,7 +414,6 @@ const practiceRouter = router({
         player1WinProbability: winProbability,
       });
 
-      const gameId = (newGameResult as any)?.insertId || 1;
       const opponentGrade = await getPlayerGrade(opponent.id);
       return { gameId, opponent, opponentGrade, winProbability };
     }),

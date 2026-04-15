@@ -121,7 +121,7 @@ export async function simulateGame(
 
   // 게임 진행
   const turns: GameTurn[] = [];
-  const maxTurns = 150;
+  const maxTurns = 120;
 
   while (!gameState.gameEnded && turns.length < maxTurns) {
     progressTurn(gameState);

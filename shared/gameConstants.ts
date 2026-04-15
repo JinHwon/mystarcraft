@@ -31,7 +31,7 @@ export const STAT_POINT_PER_LEVEL = 20;
 export const GAME_MAX_TROOPS = 200;
 export const GAME_MAX_RESOURCES = 20000;
 export const GAME_INITIAL_TROOPS = 50;
-export const GAME_INITIAL_RESOURCES = 200;
+export const GAME_INITIAL_RESOURCES = 50;
 
 // 빌드별 증가률
 export const BUILD_RESOURCE_RATES: Record<string, number> = {

@@ -164,11 +164,11 @@ export const ZERG_BUILDS: Record<BuildStrategy, RaceSpecificBuild> = {
  * 게임 이벤트 확률 (턴마다)
  */
 export const EVENT_PROBABILITIES = {
-  engagement: 0.15,      // 15% 교전 발생
+  engagement: 0.30,      // 30% 교전 발생 (대폭 증가)
   harass: 0.20,          // 20% 견제 발생
-  resource_drain: 0.10,  // 10% 자원 드레인
-  multi_destroy: 0.05,   // 5% 멀티 파괴
-  tech_upgrade: 0.15,    // 15% 기술 업그레이드
+  resource_drain: 0.08,  // 8% 자원 드레인
+  multi_destroy: 0.10,   // 10% 멀티/앞마당 파괴 (증가)
+  tech_upgrade: 0.10,    // 10% 기술 업그레이드
 };
 
 /**
