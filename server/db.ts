@@ -136,6 +136,31 @@ export async function allocateStat(
   return { newVal, usedPoints: actualPoints };
 }
 
+/**
+ * 게임 결과에 의한 능력치 변동 (미배분 포인트 차감 없음)
+ * allocateStat과 달리 statPoints를 건드리지 않고 능력치만 직접 변경
+ */
+export async function applyGameStatChange(
+  playerId: number,
+  statKey: string,
+  change: number
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const validKeys = ["sense", "control", "attack", "harass", "strategy", "supply", "defense", "scout"];
+  if (!validKeys.includes(statKey)) return;
+
+  const stats = await getPlayerStats(playerId);
+  if (!stats) return;
+
+  const current = (stats as any)[statKey] as number;
+  // 능력치는 0 이하로 내려가지 않고, 1200을 초과하지 않음
+  const newVal = Math.max(0, Math.min(current + change, 1200));
+
+  await db.update(playerStats).set({ [statKey]: newVal }).where(eq(playerStats.playerId, playerId));
+}
+
 // ── Item Queries ─────────────────────────────────────────────────
 
 export async function getAllItems() {
@@ -620,15 +645,8 @@ export async function findOpponentByDifficulty(
   // 랜덤 상대 선택
   const randomOpponent = candidates[Math.floor(Math.random() * candidates.length)];
   
-  // 상대 종족을 랜덤으로 선택 (테란, 프로토스, 저그)
-  const races = ['terran', 'zerg', 'protoss'] as const;
-  const randomRace = races[Math.floor(Math.random() * races.length)];
-  
-  // 선택된 상대의 종족을 랜덤 종족으로 덮어씌우기
-  return {
-    ...randomOpponent,
-    race: randomRace,
-  };
+  // 상대의 실제 종족을 그대로 반환
+  return randomOpponent;
 }
 
 

@@ -42,6 +42,7 @@ import {
   getPlayerGameRecord,
   getPlayerGrade,
   ensurePlayerStats,
+  applyGameStatChange,
 } from "./db";
 import { eq } from "drizzle-orm";
 import { players } from "../drizzle/schema";
@@ -551,14 +552,10 @@ const practiceRouter = router({
       await updatePlayerExp(player.id, expGained);
       await updatePlayerGold(player.id, goldGained);
       
-      // 능력치 업데이트 - 실제 변동이 있는 능력치만 업데이트
-      const currentStats = await getPlayerStats(player.id);
-      if (currentStats) {
-        for (const [key, value] of Object.entries(statChanges)) {
-          if (value !== 0 && key in currentStats) {
-            const currentPoints = (currentStats as any)[key] as number;
-            await allocateStat(player.id, key as StatKey, value, currentPoints);
-          }
+      // 능력치 업데이트 - 게임 결과에 의한 변동 (미배분 포인트 차감 없음)
+      for (const [key, value] of Object.entries(statChanges)) {
+        if (value !== 0) {
+          await applyGameStatChange(player.id, key as StatKey, value);
         }
       }
       

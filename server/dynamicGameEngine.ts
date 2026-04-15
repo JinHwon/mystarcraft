@@ -396,7 +396,8 @@ export function progressGame(gameState: GameState): void {
 
   // 게임 종료 해설
   if (gameState.gameEnded) {
-    const endCommentary = generateGameEndCommentary(gameState.player1.name, gameState.player2.name, gameState.winner === 1);
+    const isPlayer1Winner = gameState.winner === gameState.player1.id;
+    const endCommentary = generateGameEndCommentary(gameState.player1.name, gameState.player2.name, isPlayer1Winner);
     if (endCommentary) gameState.allCommentaries.push(endCommentary);
   }
 }

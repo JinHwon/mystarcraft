@@ -16,3 +16,9 @@ inclusion: auto
   - 4-1. 플레이어1 해설 누락 / 플레이어2로만 해설 → winner를 player ID로 설정하도록 수정, 능력치 전달 추가
   - 4-2. 플레이어2 종족이 무조건 프로토스 → 종족별 빌드 전략 매핑 추가 (테란→barracks/cc, 프로토스→gateway, 저그→hatch)
   - 4-3. 패배 시 능력치 무조건 -5 감소 → 랜덤 감소(-1~-8)로 변경, 승리 보너스도 랜덤(8~12)으로 변경
+- [x] 5. 버그 1, 2 재수정 요청 → 완료
+  - 5-1. 플레이어1 해설 누락 → 프론트엔드 해설 분류 로직 개선 (첫 번째 등장 이름 기준으로 주체 판단), 게임 종료 해설 winner 비교 수정
+  - 5-2. 플레이어2 종족 프로토스 고정 → findOpponentByDifficulty에서 종족을 랜덤으로 덮어씌우던 버그 제거, 상대의 실제 DB 종족을 그대로 반환하도록 수정
+- [x] 6. 연습게임 후 미배분 포인트가 다시 생기는 버그 수정 → 완료
+  - 원인: playGame에서 게임 결과 능력치 변동 시 allocateStat 사용 → 능력치 값을 statPoints로 잘못 전달하여 미배분 포인트 대량 생성
+  - 수정: applyGameStatChange 함수 신규 추가 (statPoints 차감 없이 능력치만 변경), playGame에서 allocateStat 대신 applyGameStatChange 사용

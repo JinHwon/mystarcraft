@@ -341,21 +341,42 @@ export default function PracticePage() {
                         borderColor = "border-slate-400";
                         bgColor = "bg-slate-700/50";
                         label = "중립";
-                      } else if (commentary.includes(player1Name) && !commentary.includes(player2Name)) {
-                        textColor = "text-blue-300";
-                        borderColor = "border-blue-500";
-                        bgColor = "bg-blue-950/40";
-                        label = "Player1";
-                      } else if (commentary.includes(player2Name) && !commentary.includes(player1Name)) {
-                        textColor = "text-red-300";
-                        borderColor = "border-red-500";
-                        bgColor = "bg-red-950/40";
-                        label = "Player2";
                       } else {
-                        textColor = "text-white";
-                        borderColor = "border-slate-400";
-                        bgColor = "bg-slate-700/50";
-                        label = "중립";
+                        // 첫 번째로 등장하는 이름을 기준으로 주체 판단
+                        const p1Index = commentary.indexOf(player1Name);
+                        const p2Index = commentary.indexOf(player2Name);
+                        const hasP1 = p1Index >= 0;
+                        const hasP2 = p2Index >= 0;
+
+                        if (hasP1 && hasP2) {
+                          // 양쪽 이름 모두 포함 → 먼저 등장하는 이름이 주체
+                          if (p1Index < p2Index) {
+                            textColor = "text-blue-300";
+                            borderColor = "border-blue-500";
+                            bgColor = "bg-blue-950/40";
+                            label = "Player1";
+                          } else {
+                            textColor = "text-red-300";
+                            borderColor = "border-red-500";
+                            bgColor = "bg-red-950/40";
+                            label = "Player2";
+                          }
+                        } else if (hasP1) {
+                          textColor = "text-blue-300";
+                          borderColor = "border-blue-500";
+                          bgColor = "bg-blue-950/40";
+                          label = "Player1";
+                        } else if (hasP2) {
+                          textColor = "text-red-300";
+                          borderColor = "border-red-500";
+                          bgColor = "bg-red-950/40";
+                          label = "Player2";
+                        } else {
+                          textColor = "text-white";
+                          borderColor = "border-slate-400";
+                          bgColor = "bg-slate-700/50";
+                          label = "중립";
+                        }
                       }
 
                       return (
