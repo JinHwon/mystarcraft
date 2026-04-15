@@ -193,3 +193,10 @@
 
 - [x] 경기결과 능력치 변동값 오류 - routers.ts에서 능력치 매핑 오류 수정 (harass → strategy)
 - [x] 연습게임 자원/병력 변동 개선 - Practice.tsx에서 그래프 크기 및 표시 개선
+
+
+## 버그 수정 (v23.0)
+
+- [x] 경기 결과 미표시 - db.ts에서 orderBy(desc(createdAt)) 추가로 최신 결과 먼저 표시
+- [x] 상대 종족 고정 - findOpponentByDifficulty에서 랜덤 종족 선택 로직 추가
+- [x] 병력/자원 변화 중단 - maxTurns 200으로 증가, 게임 종료 조건 완화

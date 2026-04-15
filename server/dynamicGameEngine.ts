@@ -334,8 +334,9 @@ export function progressGame(gameState: GameState): void {
   const totalScore = player1Score + player2Score;
   gameState.player1Advantage = totalScore > 0 ? (player1Score / totalScore) * 100 : 50;
 
-  // 게임 종료 조건 (100턴 또는 한 플레이어가 크게 밀렸을 때)
-  if (gameState.turn >= 100 || gameState.player1Advantage > 95 || gameState.player1Advantage < 5) {
+  // 게임 종료 조건 (200턴 또는 한 플레이어가 매우 크게 밀렸을 때)
+  // 플레이어가 병력/자원을 계속 생산할 수 있도록 더 오래 진행
+  if (gameState.turn >= 200 || gameState.player1Advantage > 98 || gameState.player1Advantage < 2) {
     gameState.gameEnded = true;
     gameState.winner = gameState.player1Advantage > 50 ? 1 : 2;
   }

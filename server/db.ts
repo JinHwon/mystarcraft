@@ -546,6 +546,7 @@ export async function getPlayerGameHistory(playerId: number, limit: number = 20)
   
   const results = await db.select().from(gameResults)
     .where(eq(gameResults.playerId, playerId))
+    .orderBy(desc(gameResults.createdAt))
     .limit(limit);
   
   // 각 결과에 상대 정보 추가
@@ -614,9 +615,20 @@ export async function findOpponentByDifficulty(
   const allPlayers = await db.select().from(players);
   const candidates = allPlayers.filter(p => p.id !== currentPlayerId);
   
-  // 필터링: 난이도 범위에 맞는 선수 찾기
-  // (실제 등급 계산은 클라이언트에서 수행)
-  return candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : null;
+  if (candidates.length === 0) return null;
+  
+  // 랜덤 상대 선택
+  const randomOpponent = candidates[Math.floor(Math.random() * candidates.length)];
+  
+  // 상대 종족을 랜덤으로 선택 (테란, 프로토스, 저그)
+  const races = ['terran', 'zerg', 'protoss'] as const;
+  const randomRace = races[Math.floor(Math.random() * races.length)];
+  
+  // 선택된 상대의 종족을 랜덤 종족으로 덮어씌우기
+  return {
+    ...randomOpponent,
+    race: randomRace,
+  };
 }
 
 
