@@ -433,7 +433,7 @@ export default function PlayerProfile() {
                             size="sm"
                             variant="outline"
                             className="h-7 w-7 p-0"
-                            onClick={() => setAllocPoints(allocPoints + 5)}
+                            onClick={() => setAllocPoints(Math.min(playerData.statPoints, allocPoints + 5))}
                           >
                             <Plus className="w-3 h-3" />
                           </Button>
