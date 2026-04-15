@@ -774,21 +774,26 @@ export async function decreaseItemUsageCount(playerId: number) {
 // ── Game Record Management ────────────────────────────────────
 
 export async function getPlayerGameRecord(playerId: number) {
-  const db = await getDb();
-  if (!db) return { wins: 0, losses: 0, totalGames: 0 };
+  try {
+    const db = await getDb();
+    if (!db) return { wins: 0, losses: 0, totalGames: 0 };
 
-  const results = await db
-    .select({
-      isWinner: gameResults.isWinner,
-    })
-    .from(gameResults)
-    .where(eq(gameResults.playerId, playerId));
+    const results = await db
+      .select({
+        isWinner: gameResults.isWinner,
+      })
+      .from(gameResults)
+      .where(eq(gameResults.playerId, playerId));
 
-  const wins = results.filter(r => r.isWinner).length;
-  const losses = results.filter(r => !r.isWinner).length;
-  const totalGames = results.length;
+    const wins = results.filter(r => r.isWinner).length;
+    const losses = results.filter(r => !r.isWinner).length;
+    const totalGames = results.length;
 
-  return { wins, losses, totalGames };
+    return { wins, losses, totalGames };
+  } catch (error) {
+    console.error('Error fetching game record:', error);
+    return { wins: 0, losses: 0, totalGames: 0 };
+  }
 }
 
 
