@@ -88,7 +88,7 @@ export default function GameResultsPage() {
                       <div className="flex items-center justify-between">
                         <span className="text-slate-400">날짜</span>
                         <span className="text-slate-300 text-sm">
-                          {new Date(result.completedAt).toLocaleDateString('ko-KR')}
+                          {result.completedAt || new Date(result.createdAt).toISOString().split('T')[0]}
                         </span>
                       </div>
                     </div>

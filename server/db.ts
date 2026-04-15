@@ -564,11 +564,27 @@ export async function getPlayerGameHistory(playerId: number, limit: number = 20)
       const opponentGrade = opponent ? await getPlayerGrade(opponent.id) : 'F';
       const opponentRace = gameInfo ? (gameInfo.player1Id === playerId ? gameInfo.player2Race : gameInfo.player1Race) : 'Unknown';
       
+      // 날짜 형식 변환: yyyy-mm-dd
+      const completedAtDate = new Date(result.createdAt);
+      const formattedDate = completedAtDate.toISOString().split('T')[0];
+      
+      // statChanges 파싱 (JSON 문자열인 경우)
+      let parsedStatChanges = result.statChanges;
+      if (typeof result.statChanges === 'string') {
+        try {
+          parsedStatChanges = JSON.parse(result.statChanges);
+        } catch (e) {
+          parsedStatChanges = {};
+        }
+      }
+      
       return {
         ...result,
-        opponentName: opponent?.name || 'Unknown',
-        opponentRace,
+        completedAt: formattedDate,
+        opponentName: opponent?.name || '익명유저',
+        opponentRace: opponentRace === 'Unknown' ? 'Unknown' : opponentRace,
         opponentGrade,
+        statChanges: parsedStatChanges,
       };
     })
   );
