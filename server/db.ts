@@ -53,7 +53,7 @@ export async function createPlayer(userId: number, playerData: { name: string; r
   const result = await db.insert(players).values({
     userId,
     name: playerData.name,
-    race: playerData.race,
+    race: playerData.race as "terran" | "zerg" | "protoss",
     photoUrl: playerData.photo || null,
     gold: 500,
     level: 1,
@@ -62,7 +62,7 @@ export async function createPlayer(userId: number, playerData: { name: string; r
     fatigue: 100,
     grade: "D",
   });
-  return Number(result.insertId as any);
+  return Number((result as any).insertId);
 }
 
 export async function getPlayerByUserId(userId: number) {

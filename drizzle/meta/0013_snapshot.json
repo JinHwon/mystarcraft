@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "6a9a4d33-1c89-47d8-8804-72c4689f66ea",
-  "prevId": "42d4371f-62bd-42fc-9eb4-1954975c2595",
+  "id": "0637d79b-b198-4e26-82cf-d852d6fe03e5",
+  "prevId": "6a9a4d33-1c89-47d8-8804-72c4689f66ea",
   "tables": {
     "events": {
       "name": "events",
@@ -110,7 +110,8 @@
           "type": "int",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": 0
         },
         "isWinner": {
           "name": "isWinner",

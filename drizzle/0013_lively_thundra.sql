@@ -1,1 +1,0 @@
-ALTER TABLE `game_results` ADD `opponentId` int NOT NULL;

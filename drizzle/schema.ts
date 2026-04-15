@@ -17,7 +17,7 @@ export const gameResults = mysqlTable("game_results", {
 	id: int().autoincrement().notNull(),
 	gameId: int().notNull(),
 	playerId: int().notNull(),
-	opponentId: int().notNull(),
+	opponentId: int().default(0).notNull(),
 	isWinner: tinyint().notNull(),
 	expGained: int().default(0).notNull(),
 	goldGained: int().default(0).notNull(),
