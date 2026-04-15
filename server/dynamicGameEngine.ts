@@ -47,6 +47,20 @@ export interface PlayerState {
   resources: number;
   health: number;
   
+  // 선수 능력치
+  stats?: {
+    attack: number;
+    defense: number;
+    speed: number;
+    economy: number;
+    sense: number;
+    control: number;
+    harassment: number;
+    strategy: number;
+    scouting: number;
+    massProduction: number;
+  };
+  
   // 경제 시스템
   multiCount: number;
   productionFacilities: number;
@@ -78,6 +92,10 @@ export interface GameState {
   player1: PlayerState;
   player2: PlayerState;
   player1Advantage: number;
+  
+  // 게임 진행 기록 (능력치 변동 계산용)
+  player1Events: string[];
+  player2Events: string[];
   allCommentaries: string[];
 }
 
@@ -90,7 +108,9 @@ export function initializeGameState(
   player1Race: "terran" | "zerg" | "protoss",
   player2Id: number,
   player2Name: string,
-  player2Race: "terran" | "zerg" | "protoss"
+  player2Race: "terran" | "zerg" | "protoss",
+  player1Stats?: Record<string, number>,
+  player2Stats?: Record<string, number>
 ): GameState {
   return {
     turn: 0,
@@ -102,6 +122,18 @@ export function initializeGameState(
       supply: GAME_INITIAL_TROOPS,
       resources: GAME_INITIAL_RESOURCES,
       health: 100,
+      stats: player1Stats ? {
+        attack: player1Stats.attack || 50,
+        defense: player1Stats.defense || 50,
+        speed: player1Stats.speed || 50,
+        economy: player1Stats.economy || 50,
+        sense: player1Stats.sense || 50,
+        control: player1Stats.control || 50,
+        harassment: player1Stats.harassment || 50,
+        strategy: player1Stats.strategy || 50,
+        scouting: player1Stats.scouting || 50,
+        massProduction: player1Stats.massProduction || 50,
+      } : undefined,
       multiCount: 1,
       productionFacilities: 0,
       hasObserver: false,
@@ -121,6 +153,18 @@ export function initializeGameState(
       supply: GAME_INITIAL_TROOPS,
       resources: GAME_INITIAL_RESOURCES,
       health: 100,
+      stats: player2Stats ? {
+        attack: player2Stats.attack || 50,
+        defense: player2Stats.defense || 50,
+        speed: player2Stats.speed || 50,
+        economy: player2Stats.economy || 50,
+        sense: player2Stats.sense || 50,
+        control: player2Stats.control || 50,
+        harassment: player2Stats.harassment || 50,
+        strategy: player2Stats.strategy || 50,
+        scouting: player2Stats.scouting || 50,
+        massProduction: player2Stats.massProduction || 50,
+      } : undefined,
       multiCount: 1,
       productionFacilities: 0,
       hasObserver: false,
@@ -134,6 +178,8 @@ export function initializeGameState(
       unitsProduced: [],
     },
     player1Advantage: 50,
+    player1Events: [],
+    player2Events: [],
     allCommentaries: [],
   };
 }
@@ -159,7 +205,7 @@ function generatePlayerAction(gameState: GameState, player: PlayerState): Player
 }
 
 /**
- * 병력/자원 독립 시뮬레이션 - 빌드별 차등 적용
+ * 병력/자원 독립 시뮬레이션 - 빌드별 차등 적용 및 능력치 반영
  */
 function updateResourcesAndTroops(gameState: GameState, player: PlayerState): void {
   if (gameState.gameEnded) return;
@@ -168,12 +214,24 @@ function updateResourcesAndTroops(gameState: GameState, player: PlayerState): vo
   const resourceRate = BUILD_RESOURCE_RATES[buildStrategy] || 100;
   const troopRate = BUILD_TROOP_RATES[buildStrategy] || 1.0;
 
-  // 자원 증가 (멀티 개수에 따라 증가)
-  const resourceIncrease = (resourceRate * player.multiCount) / 10;
+  // 능력치 반영 - 경제 능력치로 자원 증가율 조정
+  let economyMultiplier = 1.0;
+  if (player.stats) {
+    economyMultiplier = 1.0 + (player.stats.economy - 50) / 500; // 50 기준, 최대 1.1배
+  }
+
+  // 능력치 반영 - 대량 생산으로 병력 증가율 조정
+  let troopMultiplier = 1.0;
+  if (player.stats) {
+    troopMultiplier = 1.0 + (player.stats.massProduction - 50) / 500; // 50 기준, 최대 1.1배
+  }
+
+  // 자원 증가 (멀티 개수에 따라 증가, 능력치 반영)
+  const resourceIncrease = (resourceRate * player.multiCount * economyMultiplier) / 10;
   player.resources = Math.min(GAME_MAX_RESOURCES, player.resources + resourceIncrease);
 
-  // 병력 증가 (생산기지 개수에 따라 증가)
-  const baseIncrease = 5 * player.productionFacilities * troopRate;
+  // 병력 증가 (생산기지 개수에 따라 증가, 능력치 반영)
+  const baseIncrease = 5 * player.productionFacilities * troopRate * troopMultiplier;
   player.supply = Math.min(GAME_MAX_TROOPS, player.supply + baseIncrease);
 }
 

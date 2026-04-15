@@ -353,7 +353,11 @@ const practiceRouter = router({
       const player = await getPlayerByUserId(ctx.user.id);
       if (!player) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
       
-      if (player.fatigue < FATIGUE_COST[input.difficulty]) {
+      // 무제한 피로도 이벤트 중에는 피로도 체크 안 함
+      const activeEvents = await getActiveEvents();
+      const hasUnlimitedFatigueEvent = activeEvents.some(e => e.type === 'fatigue_unlimited');
+      
+      if (!hasUnlimitedFatigueEvent && player.fatigue < FATIGUE_COST[input.difficulty]) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "피로도가 부족합니다" });
       }
 
@@ -457,10 +461,20 @@ const practiceRouter = router({
       const winnerId = simulation.winnerId;
       const isWinner = winnerId === player.id;
 
-      // 보상 계산
+      // 보상 계산 - 난이도별 골드 보상 조정
       const rewards = GAME_REWARDS[game.difficulty];
       const expGained = isWinner ? rewards.expWin : rewards.expLose;
-      const goldGained = isWinner ? rewards.goldWin : rewards.goldLose;
+      
+      // 난이도별 골드 보상: 초보(10/5), 중수(20/10), 고수(30/15)
+      let goldGained: number;
+      if (game.difficulty === 'beginner') {
+        goldGained = isWinner ? 10 : 5;
+      } else if (game.difficulty === 'intermediate') {
+        goldGained = isWinner ? 20 : 10;
+      } else {
+        goldGained = isWinner ? 30 : 15;
+      }
+      
       const fatigueUsed = FATIGUE_COST[game.difficulty];
 
       // 게임 완료
@@ -485,7 +499,13 @@ const practiceRouter = router({
       // 리워드 적용 - 경뗘치, 골드, 피로도 업데이트
       await updatePlayerExp(player.id, expGained);
       await updatePlayerGold(player.id, goldGained);
-      await addFatigueCost(player.id, fatigueUsed);
+      
+      // 무제한 피로도 이벤트 중에는 피로도 감소 안 함
+      const activeEvents = await getActiveEvents();
+      const hasUnlimitedFatigueEvent = activeEvents.some(e => e.type === 'fatigue_unlimited');
+      if (!hasUnlimitedFatigueEvent) {
+        await addFatigueCost(player.id, fatigueUsed);
+      }
 
       return { 
         isWinner, 

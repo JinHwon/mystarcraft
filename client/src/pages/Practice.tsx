@@ -276,7 +276,13 @@ export default function PracticePage() {
                 <CardHeader>
                   <CardTitle className="text-white">게임 해설</CardTitle>
                 </CardHeader>
-                <CardContent className="flex-1 overflow-y-auto max-h-96 flex flex-col">
+                <CardContent className="flex-1 overflow-y-auto max-h-96 flex flex-col" ref={(el) => {
+                    if (el) {
+                      setTimeout(() => {
+                        el.scrollTop = 0;
+                      }, 0);
+                    }
+                  }}>
                   <div className="space-y-2 flex flex-col-reverse">
                     {[...displayedCommentaries].reverse().map((commentary: string, idx: number) => {
                       let textColor = "text-slate-300";
@@ -319,7 +325,7 @@ export default function PracticePage() {
                     })}
                   </div>
                   {/* 속도 조절 버튼 */}
-                  <div className="flex justify-center gap-2 mt-4 pt-4 border-t border-slate-600">
+                  <div className="flex justify-center gap-2 mt-auto pt-4 border-t border-slate-600">
                     <Button
                       onClick={() => setGameSpeed(1)}
                       variant={gameSpeed === 1 ? "default" : "outline"}
