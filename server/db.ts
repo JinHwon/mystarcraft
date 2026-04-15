@@ -761,3 +761,80 @@ export async function ensurePlayerStats(playerId: number) {
   await db.insert(playerStats).values(defaultStats);
   return defaultStats;
 }
+
+
+// 난이도별 랜덤 능력치를 가진 NPC 상대 생성
+export async function createRandomNPCOpponent(
+  difficulty: "beginner" | "intermediate" | "advanced"
+): Promise<any> {
+  const races = ["terran", "zerg", "protoss"];
+  const npcNames = [
+    "AI-Alpha", "AI-Beta", "AI-Gamma", "AI-Delta", "AI-Epsilon",
+    "Bot-1", "Bot-2", "Bot-3", "Bot-4", "Bot-5",
+    "Computer", "Machine", "Cyber", "Digital", "Virtual"
+  ];
+  
+  // 난이도별 능력치 범위
+  const statRanges = {
+    beginner: { min: 300, max: 500 },
+    intermediate: { min: 450, max: 650 },
+    advanced: { min: 600, max: 800 },
+  };
+  
+  const range = statRanges[difficulty];
+  
+  // 랜덤 능력치 생성
+  const generateRandomStat = () => {
+    return Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
+  };
+  
+  // 가상 플레이어 객체 생성
+  const npcPlayer = {
+    id: -1, // 임시 ID (실제 DB에 저장되지 않음)
+    userId: null,
+    name: npcNames[Math.floor(Math.random() * npcNames.length)],
+    race: races[Math.floor(Math.random() * races.length)],
+    level: Math.floor(Math.random() * 5) + 1,
+    exp: 0,
+    expToNext: 100,
+    gold: Math.floor(Math.random() * 1000) + 500,
+    fatigue: 100,
+    statPoints: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    isNPC: true, // NPC 플레이어 표시
+  };
+  
+  // NPC 능력치 저장 (메모리에만)
+  const npcStats = {
+    playerId: -1,
+    attack: generateRandomStat(),
+    defense: generateRandomStat(),
+    harass: generateRandomStat(),
+    scout: generateRandomStat(),
+  };
+  
+  return { player: npcPlayer, stats: npcStats };
+}
+
+// 상대 찾기 (기존 플레이어 또는 NPC)
+export async function findOpponentWithNPC(
+  currentPlayerId: number,
+  difficulty: "beginner" | "intermediate" | "advanced",
+  useNPC: boolean = false
+) {
+  // NPC 상대 사용 여부 결정 (50% 확률)
+  const shouldUseNPC = useNPC || Math.random() < 0.5;
+  
+  if (shouldUseNPC) {
+    return await createRandomNPCOpponent(difficulty);
+  } else {
+    // 기존 플레이어 찾기
+    const opponent = await findOpponentByDifficulty(currentPlayerId, difficulty, 0);
+    if (!opponent) {
+      // 플레이어가 없으면 NPC 생성
+      return await createRandomNPCOpponent(difficulty);
+    }
+    return { player: opponent };
+  }
+}

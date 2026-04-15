@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { RACE_COLORS, RACE_LABELS, DIFFICULTY_RANGES, GAME_REWARDS } from "@shared/gameConstants";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { STAT_LABELS } from "@shared/gameConstants";
 
 type GamePhase = "difficulty" | "map" | "opponent" | "playing" | "result";
 
@@ -26,6 +28,8 @@ interface GameState {
   finalScore?: number;
   playerName?: string;
   playerRace?: string;
+  statChanges?: Record<string, number>;
+  showStatDetailModal?: boolean;
 }
 
 export default function PracticePage() {
@@ -100,6 +104,7 @@ export default function PracticePage() {
         goldGained: result.goldGained,
         fatigueUsed: result.fatigueUsed,
         finalScore: result.finalScore,
+        statChanges: result.statChanges,
       }));
       
       setPhase("playing");
@@ -504,13 +509,19 @@ export default function PracticePage() {
                   <p className="text-2xl font-bold text-red-400">-{gameState.fatigueUsed}</p>
                 </div>
               </div>
-              {gameState.turns && gameState.turns.length > 0 && gameState.turns[0]?.statChanges && (
+              {gameState.statChanges && Object.keys(gameState.statChanges).length > 0 && (
                 <div className="mt-6 pt-6 border-t border-slate-600">
-                  <p className="text-slate-300 font-semibold mb-3">능력치 변동</p>
+                  <p 
+                    className="text-slate-300 font-semibold mb-3 cursor-pointer hover:text-blue-400 transition-colors"
+                    onDoubleClick={() => setGameState(prev => ({ ...prev, showStatDetailModal: true }))}
+                    title="더블클릭으로 상세 분석 보기"
+                  >
+                    능력치 변동 (더블클릭으로 상세 분석)
+                  </p>
                   <div className="grid grid-cols-2 gap-3 text-sm">
-                    {Object.entries(gameState.turns[0].statChanges).map(([stat, change]: [string, any]) => (
+                    {Object.entries(gameState.statChanges).map(([stat, change]: [string, any]) => (
                       <div key={stat} className="flex justify-between text-slate-400">
-                        <span>{stat}:</span>
+                        <span>{STAT_LABELS[stat as keyof typeof STAT_LABELS] || stat}:</span>
                         <span className={change >= 0 ? "text-green-400" : "text-red-400"}>
                           {change >= 0 ? "+" : ""}{change}
                         </span>
@@ -531,6 +542,42 @@ export default function PracticePage() {
               </Button>
             </CardContent>
           </Card>
+
+          {/* 능력치 변동 상세 분석 팝업 */}
+          <Dialog open={gameState.showStatDetailModal} onOpenChange={(open) => setGameState(prev => ({ ...prev, showStatDetailModal: open }))}>
+            <DialogContent className="bg-slate-800 border-slate-700">
+              <DialogHeader>
+                <DialogTitle className="text-white">능력치 변동 상세 분석</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 max-h-96 overflow-y-auto">
+                {gameState.statChanges && Object.entries(gameState.statChanges).map(([stat, change]: [string, any]) => {
+                  const label = STAT_LABELS[stat as keyof typeof STAT_LABELS] || stat;
+                  const isPositive = change >= 0;
+                  const percentage = Math.abs(change) > 0 ? Math.round((Math.abs(change) / 100) * 100) : 0;
+                  
+                  return (
+                    <div key={stat} className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-300 font-medium">{label}</span>
+                        <span className={isPositive ? "text-green-400" : "text-red-400"}>
+                          {isPositive ? "+" : ""}{change}
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+                        <div 
+                          className={isPositive ? "bg-green-500" : "bg-red-500"}
+                          style={{ width: `${Math.min(percentage, 100)}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-slate-400">
+                        {isPositive ? "상승" : "하락"} - {Math.abs(percentage)}%
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     );

@@ -21,7 +21,8 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, AlertCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -116,6 +117,10 @@ function DashboardLayoutContent({
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
   const { data: playerData } = trpc.player.get.useQuery();
+  const { data: playerItems = [] } = trpc.shop.getPlayerItems.useQuery();
+  
+  // 사용 횟수 5회 이하인 아이템 개수
+  const expiredItemsCount = playerItems.filter((item: any) => item.usageCount && item.usageCount <= 5).length;
 
   useEffect(() => {
     if (isCollapsed) {
@@ -213,9 +218,16 @@ function DashboardLayoutContent({
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-                    <p className="text-sm font-medium truncate leading-none">
-                      {playerData?.name || user?.name || "-"}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium truncate leading-none">
+                        {playerData?.name || user?.name || "-"}
+                      </p>
+                      {expiredItemsCount > 0 && (
+                        <Badge variant="destructive" className="text-xs whitespace-nowrap">
+                          {expiredItemsCount}
+                        </Badge>
+                      )}
+                    </div>
                     <div className="text-xs text-muted-foreground truncate mt-1.5 space-y-0.5">
                       <p>등급: <span className="font-semibold text-primary">{playerData?.grade || "F"}</span></p>
                       <p>
@@ -224,6 +236,12 @@ function DashboardLayoutContent({
                           : "0전 0승 0패"
                         }
                       </p>
+                      {expiredItemsCount > 0 && (
+                        <p className="text-yellow-600 dark:text-yellow-500 font-medium flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          아이템 만료 예정
+                        </p>
+                      )}
                     </div>
                   </div>
                 </button>
