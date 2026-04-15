@@ -167,8 +167,8 @@ function updateResourcesAndTroops(gs: GameState, p: PlayerState): void {
   // 앞마당 파괴 시 자원 수급 50% 감소
   const frontPenalty = p.frontBaseDestroyed ? 0.5 : 1.0;
 
-  // 자원 증가: 기본 30~45/턴 * 멀티 수 (빠르게 증가)
-  const resInc = (rRate / 3) * p.multiCount * ecoMul * frontPenalty;
+  // 자원 증가: 기본 50~75/턴 * 멀티 수 (더 빠르게 증가)
+  const resInc = (rRate / 2) * p.multiCount * ecoMul * frontPenalty;
   const resVar = 1.0 + (Math.random() - 0.5) * 0.3;
   p.resources = Math.min(GAME_MAX_RESOURCES, p.resources + resInc * resVar);
 

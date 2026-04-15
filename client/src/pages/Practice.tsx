@@ -306,14 +306,14 @@ export default function PracticePage() {
                 <CardHeader>
                   <CardTitle className="text-sm md:text-base text-white">게임 해설</CardTitle>
                 </CardHeader>
-                <CardContent className="flex-1 overflow-y-auto max-h-48 md:max-h-96 flex flex-col" ref={(el) => {
+                <CardContent className="flex-1 overflow-y-auto max-h-96 md:max-h-screen flex flex-col" ref={(el) => {
                     if (el) {
                       setTimeout(() => {
                         el.scrollTop = 0;
                       }, 0);
                     }
                   }}>
-                  <div className="space-y-1 md:space-y-2 flex flex-col-reverse">
+                  <div className="space-y-1 md:space-y-2 flex flex-col-reverse flex-1">
                     {[...displayedCommentaries].reverse().map((commentary: string, idx: number) => {
                       let textColor = "text-slate-300";
                       let borderColor = "border-slate-500";
@@ -373,35 +373,35 @@ export default function PracticePage() {
                       );
                     })}
                   </div>
-                  {/* 속도 조절 버튼 */}
-                  <div className="flex justify-center gap-1 md:gap-2 mt-auto pt-2 md:pt-4 border-t border-slate-600">
-                    <Button
-                      onClick={() => setGameSpeed(1)}
-                      variant={gameSpeed === 1 ? "default" : "outline"}
-                      className={gameSpeed === 1 ? "bg-blue-600" : ""}
-                      size="xs"
-                    >
-                      1배속
-                    </Button>
-                    <Button
-                      onClick={() => setGameSpeed(2)}
-                      variant={gameSpeed === 2 ? "default" : "outline"}
-                      className={gameSpeed === 2 ? "bg-blue-600" : ""}
-                      size="xs"
-                    >
-                      2배속
-                    </Button>
-                    <Button
-                      onClick={() => setGameSpeed(5)}
-                      variant={gameSpeed === 5 ? "default" : "outline"}
-                      className={gameSpeed === 5 ? "bg-blue-600" : ""}
-                      size="xs"
-                    >
-                      5배속
-                    </Button>
-                  </div>
                 </CardContent>
               </Card>
+              {/* 속도 조절 버튼 */}
+              <div className="flex justify-center gap-1 md:gap-2 pt-2 md:pt-4">
+                <Button
+                  onClick={() => setGameSpeed(1)}
+                  variant={gameSpeed === 1 ? "default" : "outline"}
+                  className={gameSpeed === 1 ? "bg-blue-600" : ""}
+                  size="xs"
+                >
+                  1배속
+                </Button>
+                <Button
+                  onClick={() => setGameSpeed(2)}
+                  variant={gameSpeed === 2 ? "default" : "outline"}
+                  className={gameSpeed === 2 ? "bg-blue-600" : ""}
+                  size="xs"
+                >
+                  2배속
+                </Button>
+                <Button
+                  onClick={() => setGameSpeed(5)}
+                  variant={gameSpeed === 5 ? "default" : "outline"}
+                  className={gameSpeed === 5 ? "bg-blue-600" : ""}
+                  size="xs"
+                >
+                  5배속
+                </Button>
+              </div>
             </div>
 
             {/* 오른쪽: 게임 상태 */}
