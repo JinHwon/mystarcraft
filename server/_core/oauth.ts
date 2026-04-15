@@ -20,7 +20,13 @@ export function registerOAuthRoutes(app: Express) {
     }
 
     try {
-      const tokenResponse = await sdk.exchangeCodeForToken(code, state);
+      // Build the redirect URI from the current request so it always matches
+      // what the client originally sent to the OAuth portal.
+      const protocol = req.protocol;
+      const host = req.get("host") ?? req.headers.host ?? "localhost";
+      const redirectUri = `${protocol}://${host}/api/oauth/callback`;
+
+      const tokenResponse = await sdk.exchangeCodeForToken(code, redirectUri);
       const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
 
       if (!userInfo.openId) {
