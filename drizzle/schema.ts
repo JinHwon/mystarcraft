@@ -17,6 +17,7 @@ export const gameResults = mysqlTable("game_results", {
 	id: int().autoincrement().notNull(),
 	gameId: int().notNull(),
 	playerId: int().notNull(),
+	opponentId: int().notNull(),
 	isWinner: tinyint().notNull(),
 	expGained: int().default(0).notNull(),
 	goldGained: int().default(0).notNull(),
@@ -126,3 +127,15 @@ export const users = mysqlTable("users", {
 (table) => [
 	index("users_openId_unique").on(table.openId),
 ]);
+
+export type User = typeof users.$inferSelect;
+export type InsertUser = typeof users.$inferInsert;
+export type Player = typeof players.$inferSelect;
+export type InsertPlayer = typeof players.$inferInsert;
+export type PlayerStats = typeof playerStats.$inferSelect;
+export type Item = typeof items.$inferSelect;
+export type PlayerItem = typeof playerItems.$inferSelect;
+export type Game = typeof games.$inferSelect;
+export type GameResult = typeof gameResults.$inferSelect;
+export type Map = typeof maps.$inferSelect;
+export type Event = typeof events.$inferSelect;

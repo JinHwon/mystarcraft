@@ -72,15 +72,16 @@ const playerRouter = router({
       z.object({
         name: z.string().min(1).max(20),
         race: z.enum(["terran", "zerg", "protoss"]),
+        photoUrl: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const existing = await getPlayerByUserId(ctx.user.id);
       if (existing) throw new TRPCError({ code: "CONFLICT", message: "이미 선수가 존재합니다" });
-      const playerId = await createPlayer({
-        userId: ctx.user.id,
+      const playerId = await createPlayer(ctx.user.id, {
         name: input.name,
         race: input.race,
+        photo: input.photoUrl || undefined,
       });
       return { playerId };
     }),
@@ -116,7 +117,7 @@ const playerRouter = router({
       if (!player) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
       if (player.statPoints < input.points)
         throw new TRPCError({ code: "BAD_REQUEST", message: "포인트가 부족합니다" });
-      const result = await allocateStat(player.id, input.statKey, input.points, player.statPoints);
+      const result = await allocateStat(player.id, input.statKey, input.points);
       return result;
     }),
 
@@ -370,7 +371,7 @@ const practiceRouter = router({
       }
 
       // 상대 찾기
-      const opponent = await findOpponentByDifficulty(player.id, input.difficulty, 0);
+      const opponent = await findOpponentByDifficulty(input.difficulty, player.id);
       if (!opponent) throw new TRPCError({ code: "NOT_FOUND", message: "상대를 찾을 수 없습니다" });
 
       // 선수 능력치 조회 (없으면 초기화)

@@ -1,9 +1,8 @@
-import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, items, playerItems, players, playerStats, users, events, maps, games, gameResults } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { StatKey } from "@shared/gameConstants";
-import { desc } from "drizzle-orm";
+import { desc, eq, and } from "drizzle-orm";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -39,8 +38,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     if (user.lastSignedIn !== undefined) { values.lastSignedIn = user.lastSignedIn; updateSet.lastSignedIn = user.lastSignedIn; }
     if (user.role !== undefined) { values.role = user.role; updateSet.role = user.role; }
     else if (user.openId === ENV.ownerOpenId) { values.role = "admin"; updateSet.role = "admin"; }
-    if (!values.lastSignedIn) values.lastSignedIn = new Date();
-    if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
+    if (!values.lastSignedIn) values.lastSignedIn = new Date().toISOString();
+    if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date().toISOString();
     await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
   } catch (error) {
     console.error("[Database] Failed to upsert user:", error);
@@ -55,7 +54,7 @@ export async function createPlayer(userId: number, playerData: { name: string; r
     userId,
     name: playerData.name,
     race: playerData.race,
-    photo: playerData.photo || null,
+    photoUrl: playerData.photo || null,
     gold: 500,
     level: 1,
     exp: 0,
@@ -63,7 +62,7 @@ export async function createPlayer(userId: number, playerData: { name: string; r
     fatigue: 100,
     grade: "D",
   });
-  return Number(result.insertId);
+  return Number(result.insertId as any);
 }
 
 export async function getPlayerByUserId(userId: number) {
@@ -146,7 +145,7 @@ export async function buyItem(
     .limit(1);
   if (existing.length > 0) throw new Error("이미 보유한 아이템입니다");
 
-  await db.insert(playerItems).values({ playerId, itemId, equipped: false });
+  await db.insert(playerItems).values({ playerId, itemId, equipped: 0 });
   await db.update(players).set({ gold: playerGold - item.price }).where(eq(players.id, playerId));
   return item;
 }
@@ -160,7 +159,7 @@ export async function toggleEquipItem(
   if (!db) throw new Error("Database not available");
   await db
     .update(playerItems)
-    .set({ equipped: equip })
+    .set({ equipped: equip ? 1 : 0 })
     .where(and(eq(playerItems.id, playerItemId), eq(playerItems.playerId, playerId)));
 }
 
@@ -214,7 +213,7 @@ export async function recoverFatigueIfNeeded(playerId: number) {
     // 새로운 날이므로 피로도 회복
     await db
       .update(players)
-      .set({ fatigue: 100, lastFatigueRecovery: now })
+      .set({ fatigue: 100, lastFatigueRecovery: now.toISOString() })
       .where(eq(players.id, playerId));
   }
 }
@@ -266,7 +265,7 @@ export async function allocateStat(playerId: number, stat: StatKey, points: numb
 export async function updatePlayerPhoto(playerId: number, photoUrl: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(players).set({ photo: photoUrl }).where(eq(players.id, playerId));
+  await db.update(players).set({ photoUrl: photoUrl }).where(eq(players.id, playerId));
 }
 
 export async function getAllUsers() {
@@ -325,7 +324,7 @@ export async function createEvent(eventData: any) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const result = await db.insert(events).values(eventData);
-  return Number(result.insertId);
+  return Number((result as any).insertId);
 }
 
 export async function updateEvent(eventId: number, eventData: any) {
@@ -354,7 +353,7 @@ export async function getActiveEvents() {
     .select()
     .from(events)
     .where(and(
-      eq(events.isActive, true),
+      eq(events.isActive, 1),
     ));
   return result;
 }
@@ -398,7 +397,7 @@ export async function createGame(gameData: any) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const result = await db.insert(games).values(gameData);
-  return Number(result.insertId);
+  return Number((result as any).insertId);
 }
 
 export async function getGameById(gameId: number) {
@@ -411,14 +410,14 @@ export async function getGameById(gameId: number) {
 export async function completeGame(gameId: number, winnerId: number, player1Score: number, player2Score: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(games).set({ winnerId, player1Score, player2Score, completedAt: new Date() }).where(eq(games.id, gameId));
+  await db.update(games).set({ winnerId, player1ActualScore: player1Score, player2ActualScore: player2Score, completedAt: new Date().toISOString() }).where(eq(games.id, gameId));
 }
 
 export async function createGameResult(resultData: any) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const result = await db.insert(gameResults).values(resultData);
-  return Number(result.insertId);
+  return Number((result as any).insertId);
 }
 
 export async function getPlayerGameHistory(playerId: number, limit: number = 10) {
@@ -560,4 +559,40 @@ export async function applyGameStatChange(playerId: number, stat: StatKey, amoun
 
   const currentValue = stats[stat] ?? 0;
   await db.update(playerStats).set({ [stat]: currentValue + amount }).where(eq(playerStats.playerId, playerId));
+}
+
+export async function getPlayerById(playerId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function getAllPlayers() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(players);
+}
+
+export async function getAllRealUsers() {
+  const db = await getDb();
+  if (!db) return [];
+  // 실제 사용자만 조회 (users 테이블에서 role이 'user' 또는 'admin'인 사용자)
+  const realUsers = await db.select().from(users);
+  return realUsers;
+}
+
+export async function getAllPlayersWithUsers() {
+  const db = await getDb();
+  if (!db) return [];
+  // 실제 사용자의 선수만 조회
+  const result = await db.select().from(players).innerJoin(users, eq(players.userId, users.id));
+  return result.map(r => r.players);
+}
+
+export async function getUserByOpenId(openId: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  return result.length > 0 ? result[0] : null;
 }
