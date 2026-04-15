@@ -28,6 +28,11 @@ import {
   BUILD_RESOURCE_RATES,
   BUILD_TROOP_RATES,
 } from "@shared/gameConstants";
+import {
+  generateGameEvent,
+  generateSituationCommentary,
+  type GameEvent,
+} from "./gameEventGenerator";
 
 export interface PlayerAction {
   type: "barracks_first" | "cc_first" | "gateway_first" | "hatch_first" | "unit_produced" | "building_built" | "tech_upgraded" | "multi_taken" | "attack" | "scout" | "counter_tech";
@@ -211,6 +216,58 @@ export function progressGame(gameState: GameState): void {
     gameState.player2.resources -= 500;
   }
 
+  // 게임 이벤트 생성 및 동적 해설
+  const eventContext = {
+    turn: gameState.turn,
+    player1: {
+      id: gameState.player1.id,
+      name: gameState.player1.name,
+      race: gameState.player1.race,
+      supply: gameState.player1.supply,
+      resources: gameState.player1.resources,
+      multiCount: gameState.player1.multiCount,
+    },
+    player2: {
+      id: gameState.player2.id,
+      name: gameState.player2.name,
+      race: gameState.player2.race,
+      supply: gameState.player2.supply,
+      resources: gameState.player2.resources,
+      multiCount: gameState.player2.multiCount,
+    },
+    player1Advantage: gameState.player1Advantage,
+  };
+
+  const gameEvent = generateGameEvent(eventContext);
+  if (gameEvent) {
+    // 이벤트에 따른 병력/자원 변화
+    if (gameEvent.type === "engagement") {
+      if (gameEvent.playerId === 1) {
+        gameState.player2.supply = Math.max(0, gameState.player2.supply - 30);
+      } else {
+        gameState.player1.supply = Math.max(0, gameState.player1.supply - 30);
+      }
+    } else if (gameEvent.type === "harass" || gameEvent.type === "resource_drain") {
+      if (gameEvent.playerId === 1) {
+        gameState.player2.resources = Math.max(0, gameState.player2.resources - 500);
+      } else {
+        gameState.player1.resources = Math.max(0, gameState.player1.resources - 500);
+      }
+    } else if (gameEvent.type === "multi_destroy") {
+      if (gameEvent.playerId === 1) {
+        gameState.player2.multiCount = Math.max(1, gameState.player2.multiCount - 1);
+        gameState.player2.resources = Math.max(0, gameState.player2.resources - 1000);
+      } else {
+        gameState.player1.multiCount = Math.max(1, gameState.player1.multiCount - 1);
+        gameState.player1.resources = Math.max(0, gameState.player1.resources - 1000);
+      }
+    }
+    gameState.allCommentaries.push(gameEvent.commentary);
+  } else if (gameState.turn % 3 === 0) {
+    // 이벤트가 없으면 단순한 상황 해설
+    gameState.allCommentaries.push(generateSituationCommentary());
+  }
+
   // 유불리 계산
   const player1Score = gameState.player1.supply * 1.5 + gameState.player1.resources / 100;
   const player2Score = gameState.player2.supply * 1.5 + gameState.player2.resources / 100;
@@ -223,7 +280,7 @@ export function progressGame(gameState: GameState): void {
     gameState.winner = gameState.player1Advantage > 50 ? 1 : 2;
   }
 
-  // 해설 생성
+  // 초반 비드 해설
   const commentaries = generateTurnCommentary(gameState, gameState.player1.name, gameState.player2.name);
   if (commentaries && commentaries.length > 0) {
     gameState.allCommentaries.push(...commentaries);
