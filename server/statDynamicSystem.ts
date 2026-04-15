@@ -36,30 +36,26 @@ export function calculateStatChanges(
     intelligence: 0,
   };
 
-  // 공격 능력치: 공격 성공 시 +5, 실패 시 -3
-  changes.attack = gameEvents.attackSuccess * 5 - gameEvents.attackFailure * 3;
+  // 이벤트 기반으로 능력치 변동 방향 결정 (성공 많으면 +, 실패 많으면 -)
+  const attackDirection = gameEvents.attackSuccess - gameEvents.attackFailure;
+  const defenseDirection = gameEvents.defenseSuccess - gameEvents.defenseFailure;
+  const economyDirection = gameEvents.multiExpanded - gameEvents.resourceDrained;
+  const intelligenceDirection = gameEvents.scoutingSuccess - gameEvents.scoutingFailure;
 
-  // 방어 능력치: 방어 성공 시 +5, 실패 시 -3
-  changes.defense = gameEvents.defenseSuccess * 5 - gameEvents.defenseFailure * 3;
-
-  // 경제 능력치: 멀티 확장 시 +5, 자원 드레인 당할 시 -3
-  changes.economy = gameEvents.multiExpanded * 5 - gameEvents.resourceDrained * 3;
-
-  // 정찰 능력치: 정찰 성공 시 +5, 실패 시 -2
-  changes.intelligence = gameEvents.scoutingSuccess * 5 - gameEvents.scoutingFailure * 2;
-
-  // 승리 시 모든 능력치에 보너스 (8~12 랜덤)
   if (isWinner) {
-    changes.attack += Math.floor(Math.random() * 5) + 8;
-    changes.defense += Math.floor(Math.random() * 5) + 8;
-    changes.economy += Math.floor(Math.random() * 5) + 8;
-    changes.intelligence += Math.floor(Math.random() * 5) + 8;
+    // 승리 시: -5 ~ +5 범위
+    // 이벤트 방향에 따라 기본값 결정 후 랜덤 요소 추가
+    changes.attack = Math.max(-5, Math.min(5, attackDirection + Math.floor(Math.random() * 5) - 2));
+    changes.defense = Math.max(-5, Math.min(5, defenseDirection + Math.floor(Math.random() * 5) - 2));
+    changes.economy = Math.max(-5, Math.min(5, economyDirection + Math.floor(Math.random() * 5) - 2));
+    changes.intelligence = Math.max(-5, Math.min(5, intelligenceDirection + Math.floor(Math.random() * 5) - 2));
   } else {
-    // 패배 시 능력치별 랜덤 감소 (-1 ~ -8)
-    changes.attack -= Math.floor(Math.random() * 8) + 1;
-    changes.defense -= Math.floor(Math.random() * 8) + 1;
-    changes.economy -= Math.floor(Math.random() * 8) + 1;
-    changes.intelligence -= Math.floor(Math.random() * 8) + 1;
+    // 패배 시: -5 ~ +2 범위
+    // 이벤트 방향에 따라 기본값 결정 후 랜덤 요소 추가 (패배이므로 하향 편향)
+    changes.attack = Math.max(-5, Math.min(2, attackDirection + Math.floor(Math.random() * 4) - 3));
+    changes.defense = Math.max(-5, Math.min(2, defenseDirection + Math.floor(Math.random() * 4) - 3));
+    changes.economy = Math.max(-5, Math.min(2, economyDirection + Math.floor(Math.random() * 4) - 3));
+    changes.intelligence = Math.max(-5, Math.min(2, intelligenceDirection + Math.floor(Math.random() * 4) - 3));
   }
 
   return changes;
@@ -97,6 +93,12 @@ export function applyReverseSystem(
       adjustedChanges.economy = Math.round(baseChanges.economy * multiplier);
       adjustedChanges.intelligence = Math.round(baseChanges.intelligence * multiplier);
     }
+
+    // 승리 시 최종 범위 클램핑: -5 ~ +5
+    adjustedChanges.attack = Math.max(-5, Math.min(5, adjustedChanges.attack));
+    adjustedChanges.defense = Math.max(-5, Math.min(5, adjustedChanges.defense));
+    adjustedChanges.economy = Math.max(-5, Math.min(5, adjustedChanges.economy));
+    adjustedChanges.intelligence = Math.max(-5, Math.min(5, adjustedChanges.intelligence));
   } else {
     // 패자의 평균 능력치
     const winnerAvg = (winnerStats.attack + winnerStats.defense + winnerStats.economy + winnerStats.intelligence) / 4;
@@ -112,6 +114,12 @@ export function applyReverseSystem(
       adjustedChanges.economy = Math.round(baseChanges.economy * multiplier);
       adjustedChanges.intelligence = Math.round(baseChanges.intelligence * multiplier);
     }
+
+    // 패배 시 최종 범위 클램핑: -5 ~ +2
+    adjustedChanges.attack = Math.max(-5, Math.min(2, adjustedChanges.attack));
+    adjustedChanges.defense = Math.max(-5, Math.min(2, adjustedChanges.defense));
+    adjustedChanges.economy = Math.max(-5, Math.min(2, adjustedChanges.economy));
+    adjustedChanges.intelligence = Math.max(-5, Math.min(2, adjustedChanges.intelligence));
   }
 
   return adjustedChanges;

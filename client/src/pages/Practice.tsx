@@ -64,7 +64,7 @@ export default function PracticePage() {
       setGameState(prev => ({
         ...prev,
         gameId: result.gameId,
-        playerName: userQuery.data?.name,
+        playerName: playerQuery.data?.name,
         playerRace: (userQuery.data as any)?.race,
         opponentName: result.opponent.name,
         opponentRace: result.opponent.race,
@@ -145,8 +145,9 @@ export default function PracticePage() {
   //   }
   // }, [currentCommentaryIndex, gameState.turns]);
 
-  // 플레이어 이름 추출
-  const player1Name = userQuery.data?.name || "플레이어 1";
+  // 플레이어 이름 추출 - 게임 시뮬레이션에서 사용하는 player.name(프로필명)과 동일하게 사용
+  const playerQuery = trpc.player.get.useQuery();
+  const player1Name = playerQuery.data?.name || "플레이어 1";
   const player2Name = gameState.opponentName || "플레이어 2";
 
   // 난이도 선택 화면
