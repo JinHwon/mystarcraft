@@ -1,4 +1,4 @@
-import { eq, and, inArray, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, items, playerItems, players, playerStats, users, events, maps, games, gameResults } from "../drizzle/schema";
 import { ENV } from "./_core/env";
@@ -48,125 +48,42 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   }
 }
 
-export async function getUserByOpenId(openId: string) {
+export async function createPlayer(userId: number, playerData: { name: string; race: string; photo?: string }): Promise<number> {
   const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-  return result.length > 0 ? result[0] : undefined;
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(players).values({
+    userId,
+    name: playerData.name,
+    race: playerData.race,
+    photo: playerData.photo || null,
+    gold: 500,
+    level: 1,
+    exp: 0,
+    statPoints: 0,
+    fatigue: 100,
+    grade: "D",
+  });
+  return Number(result.insertId);
 }
-
-// ── Player Queries ──────────────────────────────────────────────
 
 export async function getPlayerByUserId(userId: number) {
   const db = await getDb();
-  if (!db) return undefined;
+  if (!db) return null;
   const result = await db.select().from(players).where(eq(players.userId, userId)).limit(1);
-  return result.length > 0 ? result[0] : undefined;
+  return result.length > 0 ? result[0] : null;
 }
 
 export async function getPlayerStats(playerId: number) {
   const db = await getDb();
-  if (!db) return undefined;
+  if (!db) return null;
   const result = await db.select().from(playerStats).where(eq(playerStats.playerId, playerId)).limit(1);
-  return result.length > 0 ? result[0] : undefined;
+  return result.length > 0 ? result[0] : null;
 }
-
-export async function createPlayer(data: {
-  userId: number;
-  name: string;
-  race: "terran" | "zerg" | "protoss";
-  photoUrl?: string;
-}) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  const [result] = await db.insert(players).values({
-    userId: data.userId,
-    name: data.name,
-    race: data.race,
-    photoUrl: data.photoUrl ?? null,
-    level: 1,
-    exp: 0,
-    expToNext: 100,
-    statPoints: 0,
-    gold: 1000,
-  });
-  const playerId = (result as any).insertId as number;
-  await db.insert(playerStats).values({
-    playerId,
-    sense: 500,
-    control: 500,
-    attack: 500,
-    harass: 500,
-    strategy: 500,
-    supply: 500,
-    defense: 500,
-    scout: 500,
-  });
-  return playerId;
-}
-
-export async function updatePlayerPhoto(playerId: number, photoUrl: string) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  await db.update(players).set({ photoUrl }).where(eq(players.id, playerId));
-}
-
-export async function allocateStat(
-  playerId: number,
-  statKey: string,
-  points: number,
-  currentStatPoints: number
-) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  if (currentStatPoints < points) throw new Error("포인트가 부족합니다");
-
-  const validKeys = ["sense", "control", "attack", "harass", "strategy", "supply", "defense", "scout"];
-  if (!validKeys.includes(statKey)) throw new Error("유효하지 않은 능력치 항목입니다");
-
-  // 현재 능력치 조회 후 최대값 체크
-  const stats = await getPlayerStats(playerId);
-  if (!stats) throw new Error("능력치 정보를 찾을 수 없습니다");
-  const current = (stats as any)[statKey] as number;
-  const newVal = Math.min(current + points, 1200);
-  const actualPoints = newVal - current;
-
-  await db.update(playerStats).set({ [statKey]: newVal }).where(eq(playerStats.playerId, playerId));
-  await db.update(players).set({ statPoints: currentStatPoints - actualPoints }).where(eq(players.id, playerId));
-  return { newVal, usedPoints: actualPoints };
-}
-
-/**
- * 게임 결과에 의한 능력치 변동 (미배분 포인트 차감 없음)
- * allocateStat과 달리 statPoints를 건드리지 않고 능력치만 직접 변경
- */
-export async function applyGameStatChange(
-  playerId: number,
-  statKey: string,
-  change: number
-) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  const validKeys = ["sense", "control", "attack", "harass", "strategy", "supply", "defense", "scout"];
-  if (!validKeys.includes(statKey)) return;
-
-  const stats = await getPlayerStats(playerId);
-  if (!stats) return;
-
-  const current = (stats as any)[statKey] as number;
-  // 능력치는 0 이하로 내려가지 않고, 1200을 초과하지 않음
-  const newVal = Math.max(0, Math.min(current + change, 1200));
-
-  await db.update(playerStats).set({ [statKey]: newVal }).where(eq(playerStats.playerId, playerId));
-}
-
-// ── Item Queries ─────────────────────────────────────────────────
 
 export async function getAllItems() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(items);
+  return await db.select().from(items);
 }
 
 export async function getPlayerItems(playerId: number) {
@@ -183,10 +100,20 @@ export async function getPlayerItems(playerId: number) {
     .from(playerItems)
     .innerJoin(items, eq(playerItems.itemId, items.id))
     .where(eq(playerItems.playerId, playerId));
-  return result;
+  return result.map((r) => ({
+    playerItemId: r.playerItemId,
+    equipped: r.equipped,
+    purchasedAt: r.purchasedAt,
+    usageCount: r.usageCount,
+    item: r.item,
+  }));
 }
 
-export async function buyItem(playerId: number, itemId: number, playerGold: number) {
+export async function buyItem(
+  playerId: number,
+  itemId: number,
+  playerGold: number
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -194,15 +121,30 @@ export async function buyItem(playerId: number, itemId: number, playerGold: numb
   if (!itemResult.length) throw new Error("아이템을 찾을 수 없습니다");
   const item = itemResult[0];
 
-  // 이미 보유 중인지 확인
+  if (playerGold < item.price) throw new Error("골드가 부족합니다");
+
+  // 피로도 회복 아이템인 경우 즉시 사용
+  if (item.fatigueRecover && item.fatigueRecover > 0) {
+    // 골드만 차감
+    await db.update(players).set({ gold: playerGold - item.price }).where(eq(players.id, playerId));
+    
+    // 피로도 회복
+    const player = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
+    if (player.length > 0) {
+      const newFatigue = Math.min(100, player[0].fatigue + item.fatigueRecover);
+      await db.update(players).set({ fatigue: newFatigue }).where(eq(players.id, playerId));
+    }
+    
+    return item;
+  }
+
+  // 일반 아이템: 소유권 추가
   const existing = await db
     .select()
     .from(playerItems)
     .where(and(eq(playerItems.playerId, playerId), eq(playerItems.itemId, itemId)))
     .limit(1);
   if (existing.length > 0) throw new Error("이미 보유한 아이템입니다");
-
-  if (playerGold < item.price) throw new Error("골드가 부족합니다");
 
   await db.insert(playerItems).values({ playerId, itemId, equipped: false });
   await db.update(players).set({ gold: playerGold - item.price }).where(eq(players.id, playerId));
@@ -231,6 +173,7 @@ export async function seedItemsIfEmpty() {
   if (existing.length > 0) return;
 
   const seedItems = [
+    { name: "피로도 회복제", description: "피로도를 즉시 회복하는 에너지 드링크", price: 100, rarity: "common" as const, iconEmoji: "🥤", statBoosts: {}, fatigueRecover: 10 },
     { name: "스캔 모듈", description: "정찰 능력을 향상시키는 첨단 스캔 장비", price: 200, rarity: "common" as const, iconEmoji: "🔭", statBoosts: { scout: 30 } },
     { name: "전술 지휘봉", description: "전략적 판단력을 높이는 지휘 도구", price: 300, rarity: "common" as const, iconEmoji: "📡", statBoosts: { strategy: 40 } },
     { name: "마린 헬멧", description: "방어력을 강화하는 테란 표준 헬멧", price: 250, rarity: "common" as const, iconEmoji: "⛑️", statBoosts: { defense: 35 } },
@@ -304,123 +247,96 @@ export async function updateFatigue(playerId: number, amount: number) {
     .where(eq(players.id, playerId));
 }
 
+export async function allocateStat(playerId: number, stat: StatKey, points: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
 
-// ── Admin Functions ──────────────────────────────────────────────
+  const player = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
+  if (player.length === 0) throw new Error("선수를 찾을 수 없습니다");
+  if (player[0].statPoints < points) throw new Error("미배분 포인트가 부족합니다");
+
+  const stats = await getPlayerStats(playerId);
+  if (!stats) throw new Error("선수 능력치를 찾을 수 없습니다");
+
+  const currentValue = stats[stat] ?? 0;
+  await db.update(playerStats).set({ [stat]: currentValue + points }).where(eq(playerStats.playerId, playerId));
+  await db.update(players).set({ statPoints: player[0].statPoints - points }).where(eq(players.id, playerId));
+}
+
+export async function updatePlayerPhoto(playerId: number, photoUrl: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(players).set({ photo: photoUrl }).where(eq(players.id, playerId));
+}
 
 export async function getAllUsers() {
   const db = await getDb();
   if (!db) return [];
-  const userList = await db.select().from(users);
-  // 각 사용자에 대해 선수 정보 조회
-  const usersWithPlayers = await Promise.all(
-    userList.map(async (user) => {
-      const playerResult = await db.select().from(players).where(eq(players.userId, user.id)).limit(1);
-      return {
-        ...user,
-        playerId: playerResult.length > 0 ? playerResult[0].id : null,
-      };
-    })
-  );
-  return usersWithPlayers;
+  return await db.select().from(users);
 }
 
-export async function updatePlayerByAdmin(playerId: number, updates: {
-  gold?: number;
-  level?: number;
-  exp?: number;
-  statPoints?: number;
-  fatigue?: number;
-}) {
+export async function updatePlayerByAdmin(playerId: number, updates: Record<string, any>) {
   const db = await getDb();
-  if (!db) return;
-
-  const updateSet: Record<string, unknown> = {};
-  if (updates.gold !== undefined) updateSet.gold = updates.gold;
-  if (updates.level !== undefined) updateSet.level = updates.level;
-  if (updates.exp !== undefined) updateSet.exp = updates.exp;
-  if (updates.statPoints !== undefined) updateSet.statPoints = updates.statPoints;
-  if (updates.fatigue !== undefined) updateSet.fatigue = updates.fatigue;
-
-  if (Object.keys(updateSet).length > 0) {
-    await db.update(players).set(updateSet).where(eq(players.id, playerId));
-  }
+  if (!db) throw new Error("Database not available");
+  await db.update(players).set(updates).where(eq(players.id, playerId));
 }
 
 export async function resetPlayerStats(playerId: number) {
   const db = await getDb();
-  if (!db) return;
+  if (!db) throw new Error("Database not available");
+  const stats = await getPlayerStats(playerId);
+  if (!stats) throw new Error("선수 능력치를 찾을 수 없습니다");
 
-  const STAT_KEYS = ["sense", "control", "attack", "harass", "strategy", "supply", "defense", "scout"];
+  const totalPoints = Object.values(stats).reduce((sum: number, val: any) => sum + (val || 0), 0);
   const resetStats: Record<string, number> = {};
-  STAT_KEYS.forEach(key => {
-    resetStats[key] = 500;
+  const statKeys: StatKey[] = ["sense", "control", "attack", "harass", "scout", "strategy", "defense", "supply"];
+  statKeys.forEach((key) => {
+    resetStats[key] = 0;
   });
 
   await db.update(playerStats).set(resetStats).where(eq(playerStats.playerId, playerId));
+  await db.update(players).set({ statPoints: totalPoints }).where(eq(players.id, playerId));
 }
 
 export async function resetPlayerProgress(playerId: number) {
   const db = await getDb();
-  if (!db) return;
-
-  await db.update(players).set({
-    level: 1,
-    exp: 0,
-    statPoints: 0,
-    fatigue: 100,
-  }).where(eq(players.id, playerId));
-
-  await resetPlayerStats(playerId);
+  if (!db) throw new Error("Database not available");
+  await db.update(players).set({ level: 1, exp: 0, gold: 500 }).where(eq(players.id, playerId));
 }
 
-// ── Event Functions ──────────────────────────────────────────────
-
-export async function createEvent(eventData: {
-  type: "exp_double" | "fatigue_unlimited" | "gold_double" | "stat_boost";
-  name: string;
-  description?: string;
-  isActive?: boolean;
-  startTime?: Date;
-  endTime?: Date;
-}) {
+export async function updateUserRole(userId: number, role: "admin" | "user") {
   const db = await getDb();
-  if (!db) return;
-
-  await db.insert(events).values({
-    type: eventData.type,
-    name: eventData.name,
-    description: eventData.description,
-    isActive: eventData.isActive ?? false,
-    startTime: eventData.startTime,
-    endTime: eventData.endTime,
-  });
+  if (!db) throw new Error("Database not available");
+  await db.update(users).set({ role }).where(eq(users.id, userId));
 }
 
-export async function updateEvent(eventId: number, updates: {
-  isActive?: boolean;
-  startTime?: Date;
-  endTime?: Date;
-  name?: string;
-  description?: string;
-}) {
+export async function getPlayerWithUser(playerId: number) {
   const db = await getDb();
-  if (!db) return;
+  if (!db) return null;
+  const result = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
+  if (result.length === 0) return null;
+  const player = result[0];
+  const userResult = await db.select().from(users).where(eq(users.id, player.userId)).limit(1);
+  const user = userResult.length > 0 ? userResult[0] : null;
+  return { player, user };
+}
 
-  const updateSet: Record<string, unknown> = {};
-  if (updates.isActive !== undefined) updateSet.isActive = updates.isActive;
-  if (updates.startTime !== undefined) updateSet.startTime = updates.startTime;
-  if (updates.endTime !== undefined) updateSet.endTime = updates.endTime;
-  if (updates.name !== undefined) updateSet.name = updates.name;
-  if (updates.description !== undefined) updateSet.description = updates.description;
+export async function createEvent(eventData: any) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(events).values(eventData);
+  return Number(result.insertId);
+}
 
-  if (Object.keys(updateSet).length > 0) {
-    await db.update(events).set(updateSet).where(eq(events.id, eventId));
-  }
+export async function updateEvent(eventId: number, eventData: any) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(events).set(eventData).where(eq(events.id, eventId));
 }
 
 export async function deleteEvent(eventId: number) {
   const db = await getDb();
-  if (!db) return;
+  if (!db) throw new Error("Database not available");
   await db.delete(events).where(eq(events.id, eventId));
 }
 
@@ -433,76 +349,42 @@ export async function getAllEvents() {
 export async function getActiveEvents() {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(events).where(eq(events.isActive, true));
+  const now = new Date();
+  const result = await db
+    .select()
+    .from(events)
+    .where(and(
+      eq(events.isActive, true),
+    ));
+  return result;
 }
-
-
-export async function updateUserRole(userId: number, role: "admin" | "user") {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(users).set({ role }).where(eq(users.id, userId));
-}
-
-export async function getPlayerWithUser(playerId: number) {
-  const db = await getDb();
-  if (!db) return null;
-  const result = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
-  if (!result.length) return null;
-  const player = result[0];
-  const user = await db.select().from(users).where(eq(users.id, player.userId)).limit(1);
-  return { player, user: user[0] ?? null };
-}
-
-
-// ── 맵 관련 함수 ────────────────────────────────────────────────────────────
 
 export async function seedMapsIfEmpty() {
   const db = await getDb();
   if (!db) return;
   const existing = await db.select().from(maps).limit(1);
   if (existing.length > 0) return;
-  
-  const mapsData = [
+
+  const seedMaps = [
     {
-      name: "네오일드트릭셋",
-      description: "균형잡힌 맵",
-      raceAdvantage: JSON.stringify({ terran: 50, zerg: 50, protoss: 50 }),
-      rushDistance: 50,
-      resources: 50,
-      complexity: 50,
-      iconEmoji: "🗺️",
+      name: "아이스크라운 글레이시어",
+      description: "얼음으로 뒤덮인 광활한 평원",
+      raceAdvantage: JSON.stringify({ terran: 1.0, zerg: 0.9, protoss: 1.1 }),
     },
     {
-      name: "스카이 테라스",
-      description: "높이 차이가 많은 맵",
-      raceAdvantage: JSON.stringify({ terran: 55, zerg: 45, protoss: 50 }),
-      rushDistance: 60,
-      resources: 45,
-      complexity: 65,
-      iconEmoji: "⛰️",
+      name: "칼라의 계곡",
+      description: "프로토스의 신성한 땅",
+      raceAdvantage: JSON.stringify({ terran: 0.9, zerg: 0.8, protoss: 1.3 }),
     },
     {
-      name: "용암 분화구",
-      description: "자원이 풍부한 맵",
-      raceAdvantage: JSON.stringify({ terran: 48, zerg: 52, protoss: 50 }),
-      rushDistance: 40,
-      resources: 70,
-      complexity: 45,
-      iconEmoji: "🌋",
-    },
-    {
-      name: "얼음 계곡",
-      description: "좁은 통로, 빠른 러쉬",
-      raceAdvantage: JSON.stringify({ terran: 45, zerg: 55, protoss: 50 }),
-      rushDistance: 30,
-      resources: 40,
-      complexity: 60,
-      iconEmoji: "❄️",
+      name: "저그의 소굴",
+      description: "저그 종족의 본거지",
+      raceAdvantage: JSON.stringify({ terran: 0.8, zerg: 1.3, protoss: 0.9 }),
     },
   ];
-  
-  for (const mapData of mapsData) {
-    await db.insert(maps).values(mapData as any);
+
+  for (const map of seedMaps) {
+    await db.insert(maps).values(map);
   }
 }
 
@@ -512,416 +394,170 @@ export async function getAllMaps() {
   return await db.select().from(maps);
 }
 
-// ── 게임 관련 함수 ────────────────────────────────────────────────────────────
-
-export async function createGame(gameData: {
-  player1Id: number;
-  player2Id: number;
-  mapId: number;
-  difficulty: "beginner" | "intermediate" | "advanced";
-  player1Race: "terran" | "zerg" | "protoss";
-  player2Race: "terran" | "zerg" | "protoss";
-  player1WinProbability: number;
-}): Promise<number> {
+export async function createGame(gameData: any) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(games).values(gameData as any);
-  // MySQL drizzle returns [ResultSetHeader, ...]
-  const insertId = (result as any)?.[0]?.insertId ?? (result as any)?.insertId;
-  if (!insertId) throw new Error("게임 생성 실패: insertId를 가져올 수 없습니다");
-  return insertId;
+  const result = await db.insert(games).values(gameData);
+  return Number(result.insertId);
 }
 
 export async function getGameById(gameId: number) {
   const db = await getDb();
   if (!db) return null;
   const result = await db.select().from(games).where(eq(games.id, gameId)).limit(1);
-  return result[0] ?? null;
+  return result.length > 0 ? result[0] : null;
 }
 
 export async function completeGame(gameId: number, winnerId: number, player1Score: number, player2Score: number) {
   const db = await getDb();
-  if (!db) return;
-  await db.update(games).set({
-    winnerId,
-    player1ActualScore: player1Score,
-    player2ActualScore: player2Score,
-    completedAt: new Date().toISOString(),
-  }).where(eq(games.id, gameId));
+  if (!db) throw new Error("Database not available");
+  await db.update(games).set({ winnerId, player1Score, player2Score, completedAt: new Date() }).where(eq(games.id, gameId));
 }
 
-export async function createGameResult(resultData: {
-  gameId: number;
-  playerId: number;
-  isWinner: boolean;
-  expGained: number;
-  goldGained: number;
-  statChanges: Record<string, number>;
-  fatigueUsed: number;
-}) {
+export async function createGameResult(resultData: any) {
   const db = await getDb();
-  if (!db) return null;
-  const result = await db.insert(gameResults).values({
-    ...resultData,
-    statChanges: JSON.stringify(resultData.statChanges),
-  } as any);
-  return result;
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(gameResults).values(resultData);
+  return Number(result.insertId);
 }
 
-export async function getPlayerGameHistory(playerId: number, limit: number = 20) {
+export async function getPlayerGameHistory(playerId: number, limit: number = 10) {
   const db = await getDb();
   if (!db) return [];
-  
-  const results = await db.select().from(gameResults)
+
+  const result = await db
+    .select()
+    .from(gameResults)
     .where(eq(gameResults.playerId, playerId))
     .orderBy(desc(gameResults.createdAt))
     .limit(limit);
-  
-  // 각 결과에 상대 정보 추가
-  const enrichedResults = await Promise.all(
-    results.map(async (result) => {
-      // gameId로 게임 정보 조회
-      const gameInfo = await db?.select().from(games).where(eq(games.id, result.gameId)).then(r => r?.[0]);
-      
-      // 상대 선수 ID 찾기 (result.playerId는 현재 사용자의 선수 ID)
-      let opponentPlayerId = 0;
-      if (gameInfo) {
-        opponentPlayerId = gameInfo.player1Id === result.playerId ? gameInfo.player2Id : gameInfo.player1Id;
-      }
-      
-      // 상대 선수 정보 조회 (playerId로 직접 조회)
-      let opponent = null;
-      if (opponentPlayerId > 0) {
-        const opponentResult = await db?.select().from(players).where(eq(players.id, opponentPlayerId)).limit(1);
-        opponent = opponentResult && opponentResult.length > 0 ? opponentResult[0] : null;
-      }
-      const opponentGrade = opponent ? await getPlayerGrade(opponent.id) : 'F';
-      const opponentRace = gameInfo ? (gameInfo.player1Id === result.playerId ? gameInfo.player2Race : gameInfo.player1Race) : 'Unknown';
-      
-      // 날짜 형식 변환: yyyy-mm-dd
-      const completedAtDate = new Date(result.createdAt);
-      const formattedDate = completedAtDate.toISOString().split('T')[0];
-      
-      // statChanges 파싱 (JSON 문자열인 경우)
-      let parsedStatChanges = result.statChanges;
-      if (typeof result.statChanges === 'string') {
-        try {
-          parsedStatChanges = JSON.parse(result.statChanges);
-        } catch (e) {
-          parsedStatChanges = {};
-        }
-      }
-      
+
+  return Promise.all(
+    result.map(async (record) => {
+      const opponentPlayerId = record.opponentId;
+      const opponentResult = await db.select().from(players).where(eq(players.id, opponentPlayerId)).limit(1);
+      const opponent = opponentResult.length > 0 ? opponentResult[0] : null;
+
+      const opponentRace = opponent?.race || "unknown";
+      const opponentName = opponent?.name || "익명 유저";
+      const opponentGrade = opponent?.grade || "D";
+
       return {
-        ...result,
-        completedAt: formattedDate,
-        opponentName: opponent?.name || '익명유저',
-        opponentRace: opponent?.race || opponentRace,
+        ...record,
+        opponentName,
+        opponentRace,
         opponentGrade,
-        statChanges: parsedStatChanges,
       };
     })
   );
-  
-  return enrichedResults;
 }
 
-// 난이도별 상대 찾기
-export async function findOpponentByDifficulty(
-  currentPlayerId: number,
-  difficulty: "beginner" | "intermediate" | "advanced",
-  gradeIndex: number
-) {
+export async function findOpponentByDifficulty(difficulty: string, currentPlayerId: number) {
   const db = await getDb();
-  if (!db) return null;
-  
-  // 난이도별 등급 필터링
-  let allowedGrades: string[] = [];
-  if (difficulty === 'beginner') {
-    allowedGrades = ['D', 'C', 'B'];
-  } else if (difficulty === 'intermediate') {
-    allowedGrades = ['B', 'C', 'D'];
-  } else if (difficulty === 'advanced') {
-    allowedGrades = ['S', 'A', 'B'];
+  if (!db) throw new Error("Database not available");
+
+  let gradeFilter: string[];
+  if (difficulty === "beginner") {
+    gradeFilter = ["D", "C", "B"];
+  } else if (difficulty === "intermediate") {
+    gradeFilter = ["B", "C", "D"];
+  } else {
+    gradeFilter = ["S", "A", "B"];
   }
-  
-  const allPlayers = await db.select().from(players);
-  const candidates = allPlayers.filter(p => 
-    p.id !== currentPlayerId && allowedGrades.includes(p.grade)
+
+  const allPlayers = await db.select().from(players).where(eq(players.id, currentPlayerId));
+  if (allPlayers.length === 0) throw new Error("선수를 찾을 수 없습니다");
+
+  const opponents = await db.select().from(players).where(
+    and(
+      eq(players.id, currentPlayerId),
+    )
   );
-  
-  if (candidates.length === 0) return null;
-  
-  const randomOpponent = candidates[Math.floor(Math.random() * candidates.length)];
-  return randomOpponent;
+
+  if (opponents.length === 0) throw new Error("상대를 찾을 수 없습니다");
+  return opponents[Math.floor(Math.random() * opponents.length)];
 }
 
-
-// ── 연습게임 관련 함수 ────────────────────────────────────────────────────────
-
-export async function getAllPlayers() {
-  const db = await getDb();
-  if (!db) return [];
-  return await db.select().from(players);
-}
-
-export async function updatePlayerExp(playerId: number, expGain: number) {
+export async function updatePlayerExp(playerId: number, expGained: number) {
   const db = await getDb();
   if (!db) return;
-  
+
   const player = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
-  if (!player.length) return;
-  
-  const currentPlayer = player[0];
-  let newExp = currentPlayer.exp + expGain;
-  let newLevel = currentPlayer.level;
-  let newStatPoints = currentPlayer.statPoints;
-  
-  // 레벨업 처리
-  while (newExp >= currentPlayer.expToNext) {
-    newExp -= currentPlayer.expToNext;
-    newLevel += 1;
-    newStatPoints += 20; // 레벨당 20포인트
-  }
-  
-  await db.update(players).set({
-    exp: newExp,
-    level: newLevel,
-    statPoints: newStatPoints,
-  }).where(eq(players.id, playerId));
+  if (player.length === 0) return;
+
+  const newExp = player[0].exp + expGained;
+  await db.update(players).set({ exp: newExp }).where(eq(players.id, playerId));
 }
 
-export async function updatePlayerGold(playerId: number, goldGain: number) {
+export async function updatePlayerGold(playerId: number, goldGained: number) {
   const db = await getDb();
   if (!db) return;
-  
+
   const player = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
-  if (!player.length) return;
-  
-  const newGold = Math.max(0, player[0].gold + goldGain);
+  if (player.length === 0) return;
+
+  const newGold = player[0].gold + goldGained;
   await db.update(players).set({ gold: newGold }).where(eq(players.id, playerId));
 }
-
-
-
-// ── Item Usage Count Management ────────────────────────────────────
 
 export async function decreaseItemUsageCount(playerId: number) {
   const db = await getDb();
   if (!db) return;
 
-  // 플레이어의 착용 중인 아이템 조회
-  const equippedItems = await db
-    .select({
-      playerItemId: playerItems.id,
-      usageCount: playerItems.usageCount,
-      itemId: playerItems.itemId,
-      item: items,
-    })
-    .from(playerItems)
-    .innerJoin(items, eq(playerItems.itemId, items.id))
-    .where(and(eq(playerItems.playerId, playerId), eq(playerItems.equipped, 1)));
-
-  for (const equippedItem of equippedItems) {
-    const newUsageCount = equippedItem.usageCount - 1;
-
-    if (newUsageCount <= 0) {
-      // usageCount가 0이 되면 아이템 삭제 및 능력치 원복
-      const statBoosts = equippedItem.item.statBoosts as Record<string, number>;
-
-      // 아이템 삭제
-      await db.delete(playerItems).where(eq(playerItems.id, equippedItem.playerItemId));
-
-      // 능력치 원복 (음수로 처리)
-      const playerStatsData = await getPlayerStats(playerId);
-      if (playerStatsData) {
-        const statKeyMap: Record<string, StatKey> = {
-          sense: 'sense',
-          control: 'control',
-          attack: 'attack',
-          harass: 'harass',
-          strategy: 'strategy',
-          supply: 'supply',
-          defense: 'defense',
-          scout: 'scout',
-        };
-
-        for (const [statName, boostValue] of Object.entries(statBoosts)) {
-          const mappedKey = statKeyMap[statName] as StatKey;
-          if (mappedKey) {
-            let currentPoints = 0;
-            if (mappedKey === 'sense') currentPoints = playerStatsData.sense;
-            else if (mappedKey === 'control') currentPoints = playerStatsData.control;
-            else if (mappedKey === 'attack') currentPoints = playerStatsData.attack;
-            else if (mappedKey === 'harass') currentPoints = playerStatsData.harass;
-            else if (mappedKey === 'strategy') currentPoints = playerStatsData.strategy;
-            else if (mappedKey === 'supply') currentPoints = playerStatsData.supply;
-            else if (mappedKey === 'defense') currentPoints = playerStatsData.defense;
-            else if (mappedKey === 'scout') currentPoints = playerStatsData.scout;
-
-            // 음수로 처리하여 능력치 감소
-            await allocateStat(playerId, mappedKey, -boostValue, currentPoints);
-          }
-        }
-      }
-    } else {
-      // usageCount 감소
-      await db
-        .update(playerItems)
-        .set({ usageCount: newUsageCount })
-        .where(eq(playerItems.id, equippedItem.playerItemId));
+  const playerItemsResult = await db.select().from(playerItems).where(eq(playerItems.playerId, playerId));
+  for (const pi of playerItemsResult) {
+    if (pi.usageCount > 0) {
+      await db.update(playerItems).set({ usageCount: pi.usageCount - 1 }).where(eq(playerItems.id, pi.id));
     }
   }
 }
 
-
-// ── Game Record Management ────────────────────────────────────
-
 export async function getPlayerGameRecord(playerId: number) {
-  try {
-    const db = await getDb();
-    if (!db) return { wins: 0, losses: 0, totalGames: 0 };
-
-    const results = await db
-      .select({
-        isWinner: gameResults.isWinner,
-      })
-      .from(gameResults)
-      .where(eq(gameResults.playerId, playerId));
-
-    const wins = results.filter(r => r.isWinner).length;
-    const losses = results.filter(r => !r.isWinner).length;
-    const totalGames = results.length;
-
-    return { wins, losses, totalGames };
-  } catch (error) {
-    console.error('Error fetching game record:', error);
-    return { wins: 0, losses: 0, totalGames: 0 };
-  }
-}
-
-
-export async function getPlayerGrade(playerId: number): Promise<string> {
-  const stats = await getPlayerStats(playerId);
-  if (!stats) return 'F';
-
-  const totalStats = (stats.sense || 0) + (stats.control || 0) + (stats.attack || 0) + 
-                     (stats.harass || 0) + (stats.strategy || 0) + (stats.supply || 0) + 
-                     (stats.defense || 0) + (stats.scout || 0);
-  
-  const baseScore = 4000;
-  const gradeInterval = 600;
-
-  const grades = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
-  const gradeIndex = Math.floor((totalStats - baseScore) / gradeInterval);
-  
-  if (gradeIndex < 0) return 'F';
-  if (gradeIndex >= grades.length) return 'SSS';
-  
-  return grades[gradeIndex];
-}
-
-
-export async function ensurePlayerStats(playerId: number) {
   const db = await getDb();
   if (!db) return null;
 
-  // 기존 능력치 확인
+  const results = await db.select().from(gameResults).where(eq(gameResults.playerId, playerId));
+  const wins = results.filter((r) => r.isWinner === 1).length;
+  const losses = results.length - wins;
+
+  return { wins, losses, total: results.length };
+}
+
+export async function getPlayerGrade(playerId: number) {
+  const db = await getDb();
+  if (!db) return "D";
+
+  const player = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
+  return player.length > 0 ? player[0].grade : "D";
+}
+
+export async function ensurePlayerStats(playerId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
   const existing = await db.select().from(playerStats).where(eq(playerStats.playerId, playerId)).limit(1);
-  if (existing.length > 0) {
-    return existing[0];
-  }
+  if (existing.length > 0) return;
 
-  // 능력치가 없으면 초기값으로 생성
-  const defaultStats = {
+  await db.insert(playerStats).values({
     playerId,
-    sense: 500,
-    control: 500,
-    attack: 500,
-    harass: 500,
-    strategy: 500,
-    supply: 500,
-    defense: 500,
-    scout: 500,
-  };
-
-  await db.insert(playerStats).values(defaultStats);
-  return defaultStats;
+    sense: 0,
+    control: 0,
+    attack: 0,
+    harass: 0,
+    scout: 0,
+    strategy: 0,
+    defense: 0,
+    supply: 0,
+  });
 }
 
+export async function applyGameStatChange(playerId: number, stat: StatKey, amount: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
 
-// 난이도별 랜덤 능력치를 가진 NPC 상대 생성
-export async function createRandomNPCOpponent(
-  difficulty: "beginner" | "intermediate" | "advanced"
-): Promise<any> {
-  const races = ["terran", "zerg", "protoss"];
-  const npcNames = [
-    "AI-Alpha", "AI-Beta", "AI-Gamma", "AI-Delta", "AI-Epsilon",
-    "Bot-1", "Bot-2", "Bot-3", "Bot-4", "Bot-5",
-    "Computer", "Machine", "Cyber", "Digital", "Virtual"
-  ];
-  
-  // 난이도별 능력치 범위
-  const statRanges = {
-    beginner: { min: 300, max: 500 },
-    intermediate: { min: 450, max: 650 },
-    advanced: { min: 600, max: 800 },
-  };
-  
-  const range = statRanges[difficulty];
-  
-  // 랜덤 능력치 생성
-  const generateRandomStat = () => {
-    return Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
-  };
-  
-  // 가상 플레이어 객체 생성
-  const npcPlayer = {
-    id: -1, // 임시 ID (실제 DB에 저장되지 않음)
-    userId: null,
-    name: npcNames[Math.floor(Math.random() * npcNames.length)],
-    race: races[Math.floor(Math.random() * races.length)],
-    level: Math.floor(Math.random() * 5) + 1,
-    exp: 0,
-    expToNext: 100,
-    gold: Math.floor(Math.random() * 1000) + 500,
-    fatigue: 100,
-    statPoints: 0,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    isNPC: true, // NPC 플레이어 표시
-  };
-  
-  // NPC 능력치 저장 (메모리에만)
-  const npcStats = {
-    playerId: -1,
-    attack: generateRandomStat(),
-    defense: generateRandomStat(),
-    harass: generateRandomStat(),
-    scout: generateRandomStat(),
-  };
-  
-  return { player: npcPlayer, stats: npcStats };
-}
+  const stats = await getPlayerStats(playerId);
+  if (!stats) throw new Error("선수 능력치를 찾을 수 없습니다");
 
-// 상대 찾기 (기존 플레이어 또는 NPC)
-export async function findOpponentWithNPC(
-  currentPlayerId: number,
-  difficulty: "beginner" | "intermediate" | "advanced",
-  useNPC: boolean = false
-) {
-  // NPC 상대 사용 여부 결정 (50% 확률)
-  const shouldUseNPC = useNPC || Math.random() < 0.5;
-  
-  if (shouldUseNPC) {
-    return await createRandomNPCOpponent(difficulty);
-  } else {
-    // 기존 플레이어 찾기
-    const opponent = await findOpponentByDifficulty(currentPlayerId, difficulty, 0);
-    if (!opponent) {
-      // 플레이어가 없으면 NPC 생성
-      return await createRandomNPCOpponent(difficulty);
-    }
-    return { player: opponent };
-  }
+  const currentValue = stats[stat] ?? 0;
+  await db.update(playerStats).set({ [stat]: currentValue + amount }).where(eq(playerStats.playerId, playerId));
 }

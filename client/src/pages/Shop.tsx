@@ -23,6 +23,7 @@ interface ItemData {
   rarity: "common" | "rare" | "epic" | "legendary";
   statBoosts: unknown;
   iconEmoji: string;
+  fatigueRecover?: number;
 }
 
 interface PlayerItemData {
@@ -107,6 +108,14 @@ function ItemCard({
       {/* 설명 */}
       {item.description && (
         <p className="text-xs text-muted-foreground leading-relaxed">{item.description}</p>
+      )}
+
+      {/* 피로도 회복 */}
+      {item.fatigueRecover && item.fatigueRecover > 0 && (
+        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-md font-medium bg-green-500/10 text-green-600 border border-green-500/20">
+          <Zap className="w-2.5 h-2.5" />
+          피로도 +{item.fatigueRecover}
+        </span>
       )}
 
       {/* 능력치 보너스 */}
