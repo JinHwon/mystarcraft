@@ -86,3 +86,28 @@ inclusion: auto
 **답변 요약:**
 - **근본 원인**: `routers.ts`의 `playGame`에서 게임 결과 능력치 변동 시 `allocateStat(playerId, key, value, currentPoints)` 호출. 4번째 파라미터에 **능력치 현재 값**(예: 500)을 전달했는데, `allocateStat` 내부에서 `statPoints = currentStatPoints - actualPoints`로 업데이트하여 `500 - 10 = 490`처럼 미배분 포인트가 대량 생성됨.
 - **수정**: `db.ts`에 `applyGameStatChange` 함수 신규 추가 (미배분 포인트 차감 없이 능력치만 직접 변경). `routers.ts`의 `playGame`에서 `allocateStat` 대신 `applyGameStatChange` 사용.
+
+---
+
+## Q7. 게임 진행 중 병력/자원 시각적 변화 + 전투 시스템 개선
+
+**질문 요약:**
+- 병력/자원이 매 턴마다 변화하면서 시각적으로 보여야 함
+- 멀티 확장 → 자원 증가율 상승, 견제 → 자원 감소
+- 전투 시 양쪽 병력 감소, 병력 적은 쪽이 더 큰 피해
+- 능력치 높으면 불리한 전투도 이길 수 있음
+- 70% 유리 → 우위, 80% 이상 → 게임 종료
+- 증가 수치 줄이기
+
+**답변 요약:**
+- **백엔드 (`dynamicGameEngine.ts` v16.0 전면 재작성)**:
+  - `turnCommentaries`: 매 턴 해설 초기화 (누적 → 턴별)
+  - `resolveEngagement`: 전투 시 양쪽 병력/자원 감소, 병력 적은 쪽 더 큰 피해 (패자 30~50%, 승자 15~25%), 능력치 보정으로 불리한 전투도 승리 가능
+  - 자원 증가: 기본 10~15/턴 * 멀티 수 (±20% 랜덤 변동)
+  - 병력 증가: 2.5/생산기지 (±15% 랜덤 변동)
+  - 종료 조건: 80% 이상 유리 시 게임 종료
+  - 초기 생산기지 1개로 시작 (기존 0개)
+- **프론트엔드 (`Practice.tsx`)**:
+  - `currentTurnIndex` 상태 추가, 턴 단위로 진행하며 매 턴 병력/자원 변화 표시
+  - 해설은 각 턴의 `commentaries`를 누적하여 표시
+- **`gameSimulation.ts`**: `GameTurn.allCommentaries` → `commentaries`로 변경

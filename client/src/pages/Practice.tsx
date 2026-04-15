@@ -91,9 +91,9 @@ export default function PracticePage() {
       };
       
       const turns = result.turns || [];
-      if (turns.length > 0 && turns[0]?.allCommentaries) {
+      if (turns.length > 0 && turns[0]?.commentaries) {
         const initialCommentary = raceCommentaries[gameState.playerRace as string] || "게임이 시작되었습니다.";
-        turns[0].allCommentaries.unshift(initialCommentary);
+        turns[0].commentaries.unshift(initialCommentary);
       }
       
       setGameState(prev => ({
@@ -109,25 +109,26 @@ export default function PracticePage() {
       
       setPhase("playing");
       setCurrentCommentaryIndex(0);
+      setCurrentTurnIndex(0);
       setShowResultConfirm(false);
     } catch (error) {
       console.error("게임 시작 실패:", error);
     }
   };
 
-  // 해설과 턴을 동시에 진행
+  // 해설과 턴을 동시에 진행 - 턴 단위로 진행하며 병력/자원 변화 표시
+  const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
+  
   useEffect(() => {
     if (phase === "playing" && gameState.turns && gameState.turns.length > 0) {
-      const allCommentaries = gameState.turns[gameState.turns.length - 1]?.allCommentaries || [];
-      
-      if (currentCommentaryIndex < allCommentaries.length) {
-        // 속도에 따라 인터벌 계산 (1배속=1000ms, 2배속=500ms, 5배속=200ms)
-        const interval = 1000 / gameSpeed;
+      if (currentTurnIndex < gameState.turns.length) {
+        // 속도에 따라 인터벌 계산 (1배속=800ms, 2배속=400ms, 5배속=160ms)
+        const interval = 800 / gameSpeed;
         autoPlayIntervalRef.current = setTimeout(() => {
-          setCurrentCommentaryIndex(prev => prev + 1);
+          setCurrentTurnIndex(prev => prev + 1);
         }, interval);
-      } else if (currentCommentaryIndex >= allCommentaries.length && allCommentaries.length > 0) {
-        // 모든 해설이 나왔으면 결과 확인 버튼 표시
+      } else {
+        // 모든 턴이 끝나면 결과 확인 버튼 표시
         setShowResultConfirm(true);
       }
 
@@ -135,7 +136,7 @@ export default function PracticePage() {
         if (autoPlayIntervalRef.current) clearTimeout(autoPlayIntervalRef.current);
       };
     }
-  }, [phase, currentCommentaryIndex, gameState.turns, gameSpeed]);
+  }, [phase, currentTurnIndex, gameState.turns, gameSpeed]);
 
   // 해설 자동 스크롤 (비활성화 - 사용자가 수동으로 스크롤)
   // useEffect(() => {
@@ -284,15 +285,15 @@ export default function PracticePage() {
 
   if (phase === "playing") {
     const turns = gameState.turns || [];
-    const currentTurn = turns[turns.length - 1];
-    const allCommentaries = currentTurn?.allCommentaries || [];
+    const currentTurn = turns[Math.min(currentTurnIndex, turns.length - 1)];
     const isLoading = playGameMutation.isPending;
 
-    // 현재까지의 해설 표시
-    const displayedCommentaries = allCommentaries.slice(0, currentCommentaryIndex + 1);
-    
-    // 현재 턴 계산 (해설 개수 기반)
-    const currentTurnNum = Math.ceil((currentCommentaryIndex + 1) / 3) || 1;
+    // 현재까지의 모든 턴 해설을 누적 (각 턴의 commentaries를 합침)
+    const displayedCommentaries: string[] = [];
+    for (let i = 0; i <= Math.min(currentTurnIndex, turns.length - 1); i++) {
+      const turnCommentaries = turns[i]?.commentaries || [];
+      displayedCommentaries.push(...turnCommentaries);
+    }
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
@@ -571,6 +572,7 @@ export default function PracticePage() {
                   setPhase("difficulty");
                   setGameState({});
                   setCurrentCommentaryIndex(0);
+                  setCurrentTurnIndex(0);
                 }}
                 className="w-full bg-blue-600 hover:bg-blue-700"
               >
