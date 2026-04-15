@@ -77,8 +77,8 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="min-h-screen bg-background flex">
-      {/* 사이드바 */}
-      <aside className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col shrink-0">
+      {/* 사이드바 - 데스크톱에서만 표시 */}
+      <aside className="hidden md:flex w-64 bg-sidebar border-r border-sidebar-border flex-col shrink-0">
         {/* 로고 */}
         <div className="p-6 border-b border-sidebar-border cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => {
           // 모바일에서 사이드바 닫기 (Sheet 오버레이 클릭으로 자동 닫힘)
@@ -175,7 +175,7 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
       </aside>
 
       {/* 메인 콘텐츠 */}
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto w-full md:w-auto">
         {children}
       </main>
     </div>
