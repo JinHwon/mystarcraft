@@ -39,7 +39,8 @@ export function registerOAuthRoutes(app: Express) {
 
     try {
       const stateData = parseState(state);
-      const tokenResponse = await sdk.exchangeCodeForToken(code, state);
+      const redirectUri = stateData.redirectUri || `${new URL(req.url, `${req.protocol}://${req.get('host')}`).origin}/api/oauth/callback`;
+      const tokenResponse = await sdk.exchangeCodeForToken(code, redirectUri);
       const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
 
       if (!userInfo.openId) {
@@ -67,8 +68,8 @@ export function registerOAuthRoutes(app: Express) {
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
       // 원래 리다이렉트 URI로 이동
-      const redirectUri = stateData.redirectUri || "/";
-      res.redirect(302, redirectUri);
+      const finalRedirectUri = stateData.redirectUri || "/";
+      res.redirect(302, finalRedirectUri);
     } catch (error) {
       console.error("[OAuth] Callback failed", error);
       res.status(500).json({ error: "OAuth callback failed" });
