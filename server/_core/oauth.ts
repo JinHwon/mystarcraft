@@ -9,41 +9,18 @@ function getQueryParam(req: Request, key: string): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-function parseState(stateStr: string): { provider: string } {
-  try {
-    const decoded = Buffer.from(stateStr, 'base64').toString('utf-8');
-    const parsed = JSON.parse(decoded);
-    return {
-      provider: parsed.provider || 'manus',
-    };
-  } catch (e) {
-    // 기존 형식 호환성 유지
-    return {
-      provider: 'manus',
-    };
-  }
-}
-
 export function registerOAuthRoutes(app: Express) {
   app.get("/api/oauth/callback", async (req: Request, res: Response) => {
     const code = getQueryParam(req, "code");
     const state = getQueryParam(req, "state");
-    const redirectUri = getQueryParam(req, "redirectUri");
-    const provider = getQueryParam(req, "provider") || "manus";
 
     if (!code || !state) {
       res.status(400).json({ error: "code and state are required" });
       return;
     }
 
-    if (!redirectUri) {
-      res.status(400).json({ error: "redirectUri is required" });
-      return;
-    }
-
     try {
-      const stateData = parseState(state);
-      const tokenResponse = await sdk.exchangeCodeForToken(code, redirectUri);
+      const tokenResponse = await sdk.exchangeCodeForToken(code, state);
       const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
 
       if (!userInfo.openId) {
@@ -51,14 +28,11 @@ export function registerOAuthRoutes(app: Express) {
         return;
       }
 
-      // 제공자별 로그인 방식 결정
-      const loginMethod = stateData.provider || userInfo.loginMethod || userInfo.platform || "manus";
-
       await db.upsertUser({
         openId: userInfo.openId,
         name: userInfo.name || null,
         email: userInfo.email ?? null,
-        loginMethod: loginMethod,
+        loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
         lastSignedIn: new Date(),
       });
 
@@ -70,8 +44,7 @@ export function registerOAuthRoutes(app: Express) {
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
-      // 원래 리다이렉트 URI로 이동
-      res.redirect(302, redirectUri);
+      res.redirect(302, "/");
     } catch (error) {
       console.error("[OAuth] Callback failed", error);
       res.status(500).json({ error: "OAuth callback failed" });

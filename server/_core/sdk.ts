@@ -39,25 +39,19 @@ class OAuthService {
   }
 
   private decodeState(state: string): string {
-    try {
-      const decoded = atob(state);
-      const parsed = JSON.parse(decoded);
-      return parsed.redirectUri || decoded;
-    } catch (e) {
-      // 기존 형식 호환성 유지
-      return atob(state);
-    }
+    const redirectUri = atob(state);
+    return redirectUri;
   }
 
   async getTokenByCode(
     code: string,
-    redirectUri: string
+    state: string
   ): Promise<ExchangeTokenResponse> {
     const payload: ExchangeTokenRequest = {
       clientId: ENV.appId,
       grantType: "authorization_code",
       code,
-      redirectUri,
+      redirectUri: this.decodeState(state),
     };
 
     const { data } = await this.client.post<ExchangeTokenResponse>(
@@ -122,13 +116,13 @@ class SDKServer {
   /**
    * Exchange OAuth authorization code for access token
    * @example
-   * const tokenResponse = await sdk.exchangeCodeForToken(code, redirectUri);
+   * const tokenResponse = await sdk.exchangeCodeForToken(code, state);
    */
   async exchangeCodeForToken(
     code: string,
-    redirectUri: string
+    state: string
   ): Promise<ExchangeTokenResponse> {
-    return this.oauthService.getTokenByCode(code, redirectUri);
+    return this.oauthService.getTokenByCode(code, state);
   }
 
   /**

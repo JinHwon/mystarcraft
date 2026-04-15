@@ -189,12 +189,12 @@ export default function PlayerProfile() {
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-4 md:space-y-6">
+    <div className="p-6 max-w-5xl mx-auto space-y-6">
       {/* 페이지 헤더 */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl md:text-2xl font-black text-foreground">선수 관리</h1>
-          <p className="text-xs md:text-sm text-muted-foreground mt-0.5">선수 능력치를 강화하고 성장시키세요</p>
+          <h1 className="text-2xl font-black text-foreground">선수 관리</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">선수 능력치를 강화하고 성장시키세요</p>
         </div>
         {user?.role === "admin" && (
           <Button

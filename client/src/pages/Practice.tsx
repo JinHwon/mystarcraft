@@ -37,9 +37,10 @@ export default function PracticePage() {
   const [gameState, setGameState] = useState<GameState>({});
   const [currentCommentaryIndex, setCurrentCommentaryIndex] = useState(0);
   const [showResultConfirm, setShowResultConfirm] = useState(false);
-  const [gameSpeed, setGameSpeed] = useState<1 | 2 | 5>(1);
+  const [gameSpeed, setGameSpeed] = useState<1 | 2 | 5>(1); // 1배속, 2배속, 5배속 (기본: 1배속)
   const autoPlayIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // API 호출
   const mapsQuery = trpc.practice.getMaps.useQuery();
   const findOpponentMutation = trpc.practice.findOpponent.useMutation();
   const playGameMutation = trpc.practice.playGame.useMutation();
@@ -54,6 +55,7 @@ export default function PracticePage() {
     setGameState(prev => ({ ...prev, mapId }));
     setPhase("opponent");
 
+    // 상대 찾기
     try {
       const result = await findOpponentMutation.mutateAsync({
         difficulty: gameState.difficulty!,
@@ -62,7 +64,7 @@ export default function PracticePage() {
       setGameState(prev => ({
         ...prev,
         gameId: result.gameId,
-        playerName: playerQuery.data?.name,
+        playerName: userQuery.data?.name,
         playerRace: (userQuery.data as any)?.race,
         opponentName: result.opponent.name,
         opponentRace: result.opponent.race,
@@ -114,16 +116,19 @@ export default function PracticePage() {
     }
   };
 
+  // 해설과 턴을 동시에 진행 - 턴 단위로 진행하며 병력/자원 변화 표시
   const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
   
   useEffect(() => {
     if (phase === "playing" && gameState.turns && gameState.turns.length > 0) {
       if (currentTurnIndex < gameState.turns.length) {
+        // 속도에 따라 인터벌 계산 (1배속=800ms, 2배속=400ms, 5배속=160ms)
         const interval = 800 / gameSpeed;
         autoPlayIntervalRef.current = setTimeout(() => {
           setCurrentTurnIndex(prev => prev + 1);
         }, interval);
       } else {
+        // 모든 턴이 끝나면 결과 확인 버튼 표시
         setShowResultConfirm(true);
       }
 
@@ -133,10 +138,18 @@ export default function PracticePage() {
     }
   }, [phase, currentTurnIndex, gameState.turns, gameSpeed]);
 
-  const playerQuery = trpc.player.get.useQuery();
-  const player1Name = playerQuery.data?.name || "플레이어 1";
+  // 해설 자동 스크롤 (비활성화 - 사용자가 수동으로 스크롤)
+  // useEffect(() => {
+  //   if (commentaryEndRef.current) {
+  //     commentaryEndRef.current.scrollIntoView({ behavior: "smooth" });
+  //   }
+  // }, [currentCommentaryIndex, gameState.turns]);
+
+  // 플레이어 이름 추출
+  const player1Name = userQuery.data?.name || "플레이어 1";
   const player2Name = gameState.opponentName || "플레이어 2";
 
+  // 난이도 선택 화면
   const difficultyLabels: Record<string, string> = {
     beginner: "초보",
     intermediate: "중수",
@@ -145,14 +158,14 @@ export default function PracticePage() {
 
   if (phase === "difficulty") {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 md:p-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
         <div className="max-w-2xl mx-auto">
-          <div className="text-center mb-6 md:mb-12">
-            <h1 className="text-2xl md:text-4xl font-bold text-white mb-1 md:mb-2">연습게임</h1>
-            <p className="text-xs md:text-base text-slate-400">난이도를 선택하세요</p>
+          <div className="text-center mb-12">
+            <h1 className="text-4xl font-bold text-white mb-2">연습게임</h1>
+            <p className="text-slate-400">난이도를 선택하세요</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {Object.entries(GAME_REWARDS).map(([key, rewards]) => (
               <Card
                 key={key}
@@ -160,10 +173,10 @@ export default function PracticePage() {
                 onClick={() => handleSelectDifficulty(key as any)}
               >
                 <CardHeader>
-                  <CardTitle className="text-sm md:text-base text-white">{difficultyLabels[key]}</CardTitle>
+                  <CardTitle className="text-white">{difficultyLabels[key]}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-1 md:space-y-2 text-xs md:text-sm text-slate-300">
+                  <div className="space-y-2 text-sm text-slate-300">
                     <p>승리 경험치: {rewards.expWin}</p>
                     <p>패배 경험치: {rewards.expLose}</p>
                     <p>승리 골드: {rewards.goldWin}</p>
@@ -181,14 +194,14 @@ export default function PracticePage() {
   if (phase === "map") {
     const maps = mapsQuery.data || [];
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 md:p-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
         <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-6 md:mb-12">
-            <h1 className="text-2xl md:text-4xl font-bold text-white mb-1 md:mb-2">맵 선택</h1>
-            <p className="text-xs md:text-base text-slate-400">플레이할 맵을 선택하세요</p>
+          <div className="text-center mb-12">
+            <h1 className="text-4xl font-bold text-white mb-2">맵 선택</h1>
+            <p className="text-slate-400">플레이할 맵을 선택하세요</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {maps.map(map => (
               <Card
                 key={map.id}
@@ -196,10 +209,10 @@ export default function PracticePage() {
                 onClick={() => handleSelectMap(map.id)}
               >
                 <CardHeader>
-                  <CardTitle className="text-sm md:text-base text-white">{map.name}</CardTitle>
+                  <CardTitle className="text-white">{map.name}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-xs md:text-sm text-slate-300">{map.description}</p>
+                  <p className="text-slate-300 text-sm">{map.description}</p>
                 </CardContent>
               </Card>
             ))}
@@ -211,35 +224,35 @@ export default function PracticePage() {
 
   if (phase === "opponent") {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 md:p-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
         <div className="max-w-2xl mx-auto">
-          <div className="text-center mb-6 md:mb-12">
-            <h1 className="text-2xl md:text-4xl font-bold text-white mb-1 md:mb-2">상대 선수</h1>
-            <p className="text-xs md:text-base text-slate-400">상대와의 승률을 확인하세요</p>
+          <div className="text-center mb-12">
+            <h1 className="text-4xl font-bold text-white mb-2">상대 선수</h1>
+            <p className="text-slate-400">상대와의 승률을 확인하세요</p>
           </div>
 
-          <Card className="bg-slate-800 border-slate-700 mb-4 md:mb-6">
+          <Card className="bg-slate-800 border-slate-700 mb-6">
             <CardHeader>
-              <CardTitle className="text-sm md:text-base text-white">{gameState.opponentName}</CardTitle>
-              <CardDescription className="text-xs md:text-sm">{RACE_LABELS[gameState.opponentRace as keyof typeof RACE_LABELS]}</CardDescription>
+              <CardTitle className="text-white">{gameState.opponentName}</CardTitle>
+              <CardDescription>{RACE_LABELS[gameState.opponentRace as keyof typeof RACE_LABELS]}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3 md:space-y-4">
+            <CardContent className="space-y-4">
               {gameState.opponentGrade && (
-                <div className="p-2 md:p-3 bg-slate-700 rounded-lg">
+                <div className="p-3 bg-slate-700 rounded-lg">
                   <div className="flex justify-between items-center">
-                    <span className="text-xs md:text-sm text-slate-300">등급</span>
-                    <span className="font-bold text-base md:text-lg text-yellow-400">{gameState.opponentGrade}</span>
+                    <span className="text-slate-300 text-sm">등급</span>
+                    <span className="font-bold text-lg text-yellow-400">{gameState.opponentGrade}</span>
                   </div>
                 </div>
               )}
               <div>
-                <div className="flex justify-between text-xs md:text-sm text-slate-300 mb-1 md:mb-2">
+                <div className="flex justify-between text-sm text-slate-300 mb-2">
                   <span>승률</span>
                   <span className="font-bold text-blue-400">{gameState.winProbability}%</span>
                 </div>
-                <div className="w-full bg-slate-700 rounded-full h-2 md:h-3">
+                <div className="w-full bg-slate-700 rounded-full h-3">
                   <div
-                    className="bg-blue-500 h-2 md:h-3 rounded-full"
+                    className="bg-blue-500 h-3 rounded-full"
                     style={{ width: `${gameState.winProbability}%` }}
                   />
                 </div>
@@ -247,7 +260,7 @@ export default function PracticePage() {
               <Button 
                 onClick={handleStartGame} 
                 disabled={playGameMutation.isPending || findOpponentMutation.isPending}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {findOpponentMutation.isPending ? (
                   <>
@@ -275,6 +288,7 @@ export default function PracticePage() {
     const currentTurn = turns[Math.min(currentTurnIndex, turns.length - 1)];
     const isLoading = playGameMutation.isPending;
 
+    // 현재까지의 모든 턴 해설을 누적 (각 턴의 commentaries를 합침)
     const displayedCommentaries: string[] = [];
     for (let i = 0; i <= Math.min(currentTurnIndex, turns.length - 1); i++) {
       const turnCommentaries = turns[i]?.commentaries || [];
@@ -282,87 +296,97 @@ export default function PracticePage() {
     }
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 md:p-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-4 md:mb-8">
-            <h1 className="text-xl md:text-3xl font-bold text-white">게임 진행 중...</h1>
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-white">게임 진행 중...</h1>
           </div>
 
           {isLoading && (
-            <Card className="bg-slate-800 border-slate-700 mb-4 md:mb-6">
-              <CardContent className="p-4 md:p-6 text-center">
+            <Card className="bg-slate-800 border-slate-700 mb-6">
+              <CardContent className="p-6 text-center">
                 <div className="flex items-center justify-center gap-2">
                   <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
-                  <p className="text-xs md:text-base text-slate-300">게임 시뮬레이션 중...</p>
+                  <p className="text-slate-300">게임 시뮬레이션 중...</p>
                 </div>
               </CardContent>
             </Card>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-6 mb-4 md:mb-6">
+
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             {/* 왼쪽: 누적 해설 */}
-            <div className="lg:col-span-1 flex flex-col">
-              <Card className="bg-slate-800 border-slate-700 flex-1 flex flex-col">
+            <div className="lg:col-span-1">
+              <Card className="bg-slate-800 border-slate-700 h-full flex flex-col">
                 <CardHeader>
-                  <CardTitle className="text-sm md:text-base text-white">게임 해설</CardTitle>
+                  <CardTitle className="text-white">게임 해설</CardTitle>
                 </CardHeader>
-                <CardContent className="flex-1 overflow-y-auto min-h-0 flex flex-col" ref={(el) => {
+                <CardContent className="flex-1 overflow-y-auto max-h-96 flex flex-col" ref={(el) => {
                     if (el) {
                       setTimeout(() => {
                         el.scrollTop = 0;
                       }, 0);
                     }
                   }}>
-                  <div className="space-y-1 md:space-y-2 flex flex-col-reverse flex-1 min-h-0">
+                  <div className="space-y-2 flex flex-col-reverse">
                     {[...displayedCommentaries].reverse().map((commentary: string, idx: number) => {
                       let textColor = "text-slate-300";
                       let borderColor = "border-slate-500";
                       let bgColor = "bg-slate-700/30";
                       let label = "";
 
+                      // [중립] 태그가 있으면 중립 색상
                       if (commentary.includes("[중립]")) {
                         textColor = "text-white";
                         borderColor = "border-slate-400";
                         bgColor = "bg-slate-700/50";
                         label = "중립";
                       } else {
+                        // 첫 번째로 등장하는 이름을 기준으로 주체 판단
                         const p1Index = commentary.indexOf(player1Name);
                         const p2Index = commentary.indexOf(player2Name);
                         const hasP1 = p1Index >= 0;
                         const hasP2 = p2Index >= 0;
 
                         if (hasP1 && hasP2) {
+                          // 양쪽 이름 모두 포함 → 먼저 등장하는 이름이 주체
                           if (p1Index < p2Index) {
+                            textColor = "text-blue-300";
+                            borderColor = "border-blue-500";
+                            bgColor = "bg-blue-950/40";
                             label = "Player1";
-                            textColor = "text-cyan-300";
-                            borderColor = "border-cyan-500";
-                            bgColor = "bg-cyan-500/10";
                           } else {
-                            label = "Player2";
                             textColor = "text-red-300";
                             borderColor = "border-red-500";
-                            bgColor = "bg-red-500/10";
+                            bgColor = "bg-red-950/40";
+                            label = "Player2";
                           }
                         } else if (hasP1) {
+                          textColor = "text-blue-300";
+                          borderColor = "border-blue-500";
+                          bgColor = "bg-blue-950/40";
                           label = "Player1";
-                          textColor = "text-cyan-300";
-                          borderColor = "border-cyan-500";
-                          bgColor = "bg-cyan-500/10";
                         } else if (hasP2) {
-                          label = "Player2";
                           textColor = "text-red-300";
                           borderColor = "border-red-500";
-                          bgColor = "bg-red-500/10";
+                          bgColor = "bg-red-950/40";
+                          label = "Player2";
+                        } else {
+                          textColor = "text-white";
+                          borderColor = "border-slate-400";
+                          bgColor = "bg-slate-700/50";
+                          label = "중립";
                         }
                       }
 
                       return (
                         <div
                           key={idx}
-                          className={`p-2 md:p-3 rounded text-xs md:text-sm border-l-4 ${borderColor} ${bgColor}`}
+                          className={`p-3 rounded text-sm border-l-4 ${borderColor} ${bgColor}`}
                         >
-                          <div className="flex items-start gap-1 md:gap-2 mb-1">
-                            <span className={`text-xs font-bold px-1.5 md:px-2 py-0.5 rounded ${label === 'Player1' ? 'bg-blue-600 text-blue-100' : label === 'Player2' ? 'bg-red-600 text-red-100' : 'bg-slate-600 text-slate-100'}`}>
+                          <div className="flex items-start gap-2 mb-1">
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded ${label === 'Player1' ? 'bg-blue-600 text-blue-100' : label === 'Player2' ? 'bg-red-600 text-red-100' : 'bg-slate-600 text-slate-100'}`}>
                               {label}
                             </span>
                           </div>
@@ -373,70 +397,70 @@ export default function PracticePage() {
                       );
                     })}
                   </div>
+                  {/* 속도 조절 버튼 */}
+                  <div className="flex justify-center gap-2 mt-auto pt-4 border-t border-slate-600">
+                    <Button
+                      onClick={() => setGameSpeed(1)}
+                      variant={gameSpeed === 1 ? "default" : "outline"}
+                      className={gameSpeed === 1 ? "bg-blue-600" : ""}
+                      size="sm"
+                    >
+                      1배속
+                    </Button>
+                    <Button
+                      onClick={() => setGameSpeed(2)}
+                      variant={gameSpeed === 2 ? "default" : "outline"}
+                      className={gameSpeed === 2 ? "bg-blue-600" : ""}
+                      size="sm"
+                    >
+                      2배속
+                    </Button>
+                    <Button
+                      onClick={() => setGameSpeed(5)}
+                      variant={gameSpeed === 5 ? "default" : "outline"}
+                      className={gameSpeed === 5 ? "bg-blue-600" : ""}
+                      size="sm"
+                    >
+                      5배속
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
-              {/* 속도 조절 버튼 */}
-              <div className="flex justify-center gap-1 md:gap-2 pt-3 md:pt-4 pb-2">
-                <Button
-                  onClick={() => setGameSpeed(1)}
-                  variant={gameSpeed === 1 ? "default" : "outline"}
-                  className={gameSpeed === 1 ? "bg-blue-600" : ""}
-                  size="xs"
-                >
-                  1배속
-                </Button>
-                <Button
-                  onClick={() => setGameSpeed(2)}
-                  variant={gameSpeed === 2 ? "default" : "outline"}
-                  className={gameSpeed === 2 ? "bg-blue-600" : ""}
-                  size="xs"
-                >
-                  2배속
-                </Button>
-                <Button
-                  onClick={() => setGameSpeed(5)}
-                  variant={gameSpeed === 5 ? "default" : "outline"}
-                  className={gameSpeed === 5 ? "bg-blue-600" : ""}
-                  size="xs"
-                >
-                  5배속
-                </Button>
-              </div>
             </div>
 
             {/* 오른쪽: 게임 상태 */}
-            <div className="lg:col-span-2 space-y-3 md:space-y-4">
+            <div className="lg:col-span-2 space-y-4">
               {/* 플레이어 1 상태 */}
               <Card className="bg-slate-800 border-slate-700 border-l-4 border-l-cyan-400">
                 <CardHeader>
-                  <CardTitle className="text-sm md:text-base text-cyan-300">{player1Name}</CardTitle>
+                  <CardTitle className="text-cyan-300">{player1Name}</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2 md:space-y-3">
+                <CardContent className="space-y-3">
                   <div>
-                    <div className="flex justify-between text-xs md:text-sm text-slate-300 mb-1 md:mb-2">
+                    <div className="flex justify-between text-sm text-slate-300 mb-2">
                       <span className="font-semibold">병력</span>
-                      <span className="font-bold text-cyan-300 text-base md:text-lg">{currentTurn?.player1Supply || 0}</span>
+                      <span className="font-bold text-cyan-300 text-lg">{currentTurn?.player1Supply || 0}</span>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-3 md:h-4">
+                    <div className="w-full bg-slate-700 rounded-full h-4">
                       <div
-                        className="bg-cyan-500 h-3 md:h-4 rounded-full transition-all duration-500 shadow-lg shadow-cyan-500/50"
+                        className="bg-cyan-500 h-4 rounded-full transition-all duration-500 shadow-lg shadow-cyan-500/50"
                         style={{ width: `${Math.min(100, (currentTurn?.player1Supply || 0) / 2)}%` }}
                       />
                     </div>
-                    <div className="text-xs text-slate-400 mt-0.5 md:mt-1">최대: 200</div>
+                    <div className="text-xs text-slate-400 mt-1">최대: 200</div>
                   </div>
                   <div>
-                    <div className="flex justify-between text-xs md:text-sm text-slate-300 mb-1 md:mb-2">
+                    <div className="flex justify-between text-sm text-slate-300 mb-2">
                       <span className="font-semibold">자원</span>
-                      <span className="font-bold text-cyan-300 text-base md:text-lg">{currentTurn?.player1Resources || 0}</span>
+                      <span className="font-bold text-cyan-300 text-lg">{currentTurn?.player1Resources || 0}</span>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-3 md:h-4">
+                    <div className="w-full bg-slate-700 rounded-full h-4">
                       <div
-                        className="bg-cyan-400 h-3 md:h-4 rounded-full transition-all duration-500 shadow-lg shadow-cyan-400/50"
+                        className="bg-cyan-400 h-4 rounded-full transition-all duration-500 shadow-lg shadow-cyan-400/50"
                         style={{ width: `${Math.min(100, (currentTurn?.player1Resources || 0) / 200)}%` }}
                       />
                     </div>
-                    <div className="text-xs text-slate-400 mt-0.5 md:mt-1">최대: 20,000</div>
+                    <div className="text-xs text-slate-400 mt-1">최대: 20,000</div>
                   </div>
                 </CardContent>
               </Card>
@@ -444,34 +468,34 @@ export default function PracticePage() {
               {/* 플레이어 2 상태 */}
               <Card className="bg-slate-800 border-slate-700 border-l-4 border-l-red-500">
                 <CardHeader>
-                  <CardTitle className="text-sm md:text-base text-red-300">{player2Name}</CardTitle>
+                  <CardTitle className="text-red-300">{player2Name}</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2 md:space-y-3">
+                <CardContent className="space-y-3">
                   <div>
-                    <div className="flex justify-between text-xs md:text-sm text-slate-300 mb-1 md:mb-2">
+                    <div className="flex justify-between text-sm text-slate-300 mb-2">
                       <span className="font-semibold">병력</span>
-                      <span className="font-bold text-red-300 text-base md:text-lg">{currentTurn?.player2Supply || 0}</span>
+                      <span className="font-bold text-red-300 text-lg">{currentTurn?.player2Supply || 0}</span>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-3 md:h-4">
+                    <div className="w-full bg-slate-700 rounded-full h-4">
                       <div
-                        className="bg-red-500 h-3 md:h-4 rounded-full transition-all duration-500 shadow-lg shadow-red-500/50"
+                        className="bg-red-500 h-4 rounded-full transition-all duration-500 shadow-lg shadow-red-500/50"
                         style={{ width: `${Math.min(100, (currentTurn?.player2Supply || 0) / 2)}%` }}
                       />
                     </div>
-                    <div className="text-xs text-slate-400 mt-0.5 md:mt-1">최대: 200</div>
+                    <div className="text-xs text-slate-400 mt-1">최대: 200</div>
                   </div>
                   <div>
-                    <div className="flex justify-between text-xs md:text-sm text-slate-300 mb-1 md:mb-2">
+                    <div className="flex justify-between text-sm text-slate-300 mb-2">
                       <span className="font-semibold">자원</span>
-                      <span className="font-bold text-red-300 text-base md:text-lg">{currentTurn?.player2Resources || 0}</span>
+                      <span className="font-bold text-red-300 text-lg">{currentTurn?.player2Resources || 0}</span>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-3 md:h-4">
+                    <div className="w-full bg-slate-700 rounded-full h-4">
                       <div
-                        className="bg-red-400 h-3 md:h-4 rounded-full transition-all duration-500 shadow-lg shadow-red-400/50"
+                        className="bg-red-400 h-4 rounded-full transition-all duration-500 shadow-lg shadow-red-400/50"
                         style={{ width: `${Math.min(100, (currentTurn?.player2Resources || 0) / 200)}%` }}
                       />
                     </div>
-                    <div className="text-xs text-slate-400 mt-0.5 md:mt-1">최대: 20,000</div>
+                    <div className="text-xs text-slate-400 mt-1">최대: 20,000</div>
                   </div>
                 </CardContent>
               </Card>
@@ -479,12 +503,12 @@ export default function PracticePage() {
           </div>
 
           {showResultConfirm && (
-            <div className="text-center">
-              <Button 
+            <div className="flex justify-center">
+              <Button
                 onClick={() => setPhase("result")}
-                className="bg-green-600 hover:bg-green-700 text-sm md:text-base"
+                className="bg-green-600 hover:bg-green-700 px-8 py-2"
               >
-                경기 결과 보기
+                결과 확인
               </Button>
             </div>
           )}
@@ -494,69 +518,104 @@ export default function PracticePage() {
   }
 
   if (phase === "result") {
-    const isWinner = gameState.isWinner;
-    const expGained = gameState.expGained || 0;
-    const goldGained = gameState.goldGained || 0;
-    const statChanges = gameState.statChanges || {};
-
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 md:p-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
         <div className="max-w-2xl mx-auto">
-          <div className={`text-center mb-6 md:mb-8 ${isWinner ? 'text-green-400' : 'text-red-400'}`}>
-            <h1 className="text-2xl md:text-4xl font-bold mb-2">{isWinner ? '승리!' : '패배'}</h1>
-            <p className="text-xs md:text-base">{isWinner ? '축하합니다!' : '다시 도전하세요'}</p>
+          <div className="text-center mb-12">
+            <h1 className="text-4xl font-bold text-white mb-2">게임 결과</h1>
           </div>
 
-          <Card className="bg-slate-800 border-slate-700 mb-4 md:mb-6">
+          <Card className={`border-slate-700 mb-6 ${gameState.isWinner ? "bg-green-950" : "bg-red-950"}`}>
             <CardHeader>
-              <CardTitle className="text-sm md:text-base text-white">경기 보상</CardTitle>
+              <CardTitle className={gameState.isWinner ? "text-green-400" : "text-red-400"}>
+                {gameState.isWinner ? "승리!" : "패배"}
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 md:space-y-4">
-              <div className="flex justify-between items-center p-3 md:p-4 bg-slate-700 rounded-lg">
-                <span className="text-xs md:text-sm text-slate-300">경험치</span>
-                <span className="font-bold text-base md:text-lg text-yellow-400">+{expGained}</span>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-center">
+                  <p className="text-slate-400 text-sm">경험치</p>
+                  <p className="text-2xl font-bold text-blue-400">+{gameState.expGained}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-slate-400 text-sm">골드</p>
+                  <p className="text-2xl font-bold text-yellow-400">+{gameState.goldGained}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-slate-400 text-sm">피로도</p>
+                  <p className="text-2xl font-bold text-red-400">-{gameState.fatigueUsed}</p>
+                </div>
               </div>
-              <div className="flex justify-between items-center p-3 md:p-4 bg-slate-700 rounded-lg">
-                <span className="text-xs md:text-sm text-slate-300">골드</span>
-                <span className="font-bold text-base md:text-lg text-yellow-400">+{goldGained}</span>
-              </div>
+              {gameState.statChanges && Object.keys(gameState.statChanges).length > 0 && (
+                <div className="mt-6 pt-6 border-t border-slate-600">
+                  <p 
+                    className="text-slate-300 font-semibold mb-3 cursor-pointer hover:text-blue-400 transition-colors"
+                    onDoubleClick={() => setGameState(prev => ({ ...prev, showStatDetailModal: true }))}
+                    title="더블클릭으로 상세 분석 보기"
+                  >
+                    능력치 변동 (더블클릭으로 상세 분석)
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {Object.entries(gameState.statChanges).map(([stat, change]: [string, any]) => (
+                      <div key={stat} className="flex justify-between text-slate-400">
+                        <span>{STAT_LABELS[stat as keyof typeof STAT_LABELS] || stat}:</span>
+                        <span className={change >= 0 ? "text-green-400" : "text-red-400"}>
+                          {change >= 0 ? "+" : ""}{change}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <Button
+                onClick={() => {
+                  setPhase("difficulty");
+                  setGameState({});
+                  setCurrentCommentaryIndex(0);
+                  setCurrentTurnIndex(0);
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-700"
+              >
+                다시 플레이
+              </Button>
             </CardContent>
           </Card>
 
-          {/* 능력치 변동 */}
-          {Object.keys(statChanges).length > 0 && (
-            <Card className="bg-slate-800 border-slate-700 mb-4 md:mb-6">
-              <CardHeader>
-                <CardTitle className="text-sm md:text-base text-white">능력치 변동</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3">
-                  {Object.entries(statChanges).map(([stat, change]: [string, any]) => (
-                    <div key={stat} className="p-2 md:p-3 bg-slate-700 rounded-lg">
-                      <div className="text-xs md:text-sm text-slate-300 mb-1">
-                        {STAT_LABELS[stat as keyof typeof STAT_LABELS] || stat}
+          {/* 능력치 변동 상세 분석 팝업 */}
+          <Dialog open={gameState.showStatDetailModal} onOpenChange={(open) => setGameState(prev => ({ ...prev, showStatDetailModal: open }))}>
+            <DialogContent className="bg-slate-800 border-slate-700">
+              <DialogHeader>
+                <DialogTitle className="text-white">능력치 변동 상세 분석</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 max-h-96 overflow-y-auto">
+                {gameState.statChanges && Object.entries(gameState.statChanges).map(([stat, change]: [string, any]) => {
+                  const label = STAT_LABELS[stat as keyof typeof STAT_LABELS] || stat;
+                  const isPositive = change >= 0;
+                  const percentage = Math.abs(change) > 0 ? Math.round((Math.abs(change) / 100) * 100) : 0;
+                  
+                  return (
+                    <div key={stat} className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-300 font-medium">{label}</span>
+                        <span className={isPositive ? "text-green-400" : "text-red-400"}>
+                          {isPositive ? "+" : ""}{change}
+                        </span>
                       </div>
-                      <div className={`font-bold text-base md:text-lg ${
-                        change > 0 ? 'text-green-400' : change < 0 ? 'text-red-400' : 'text-slate-400'
-                      }`}>
-                        {change > 0 ? '+' : ''}{change}
+                      <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+                        <div 
+                          className={isPositive ? "bg-green-500" : "bg-red-500"}
+                          style={{ width: `${Math.min(percentage, 100)}%` }}
+                        />
                       </div>
+                      <p className="text-xs text-slate-400">
+                        {isPositive ? "상승" : "하락"} - {Math.abs(percentage)}%
+                      </p>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          <Button 
-            onClick={() => {
-              setPhase("difficulty");
-              setGameState({});
-            }}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-sm md:text-base"
-          >
-            다시 시작
-          </Button>
+                  );
+                })}
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     );
