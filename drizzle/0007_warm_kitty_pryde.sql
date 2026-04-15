@@ -1,1 +1,0 @@
-ALTER TABLE `player_items` ADD `usageCount` int DEFAULT 20 NOT NULL;

@@ -1,1 +1,0 @@
-ALTER TABLE `items` ADD `fatigueRecover` int DEFAULT 0 NOT NULL;

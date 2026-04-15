@@ -5,60 +5,31 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
-import CreatePlayer from "./pages/CreatePlayer";
-import PlayerProfile from "./pages/PlayerProfile";
-import Shop from "./pages/Shop";
-import Admin from "./pages/Admin";
-import Events from "./pages/Events";
-import Practice from "./pages/Practice";
-import GameResults from "./pages/GameResults";
-import GameLayout from "./components/GameLayout";
 
 function Router() {
+  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/create-player" component={CreatePlayer} />
-      <Route path="/profile">
-        <GameLayout>
-          <PlayerProfile />
-        </GameLayout>
-      </Route>
-      <Route path="/shop">
-        <GameLayout>
-          <Shop />
-        </GameLayout>
-      </Route>
-      <Route path="/admin">
-        <GameLayout>
-          <Admin />
-        </GameLayout>
-      </Route>
-      <Route path="/events">
-        <GameLayout>
-          <Events />
-        </GameLayout>
-      </Route>
-      <Route path="/practice">
-        <GameLayout>
-          <Practice />
-        </GameLayout>
-      </Route>
-      <Route path="/game-results">
-        <GameLayout>
-          <GameResults />
-        </GameLayout>
-      </Route>
-      <Route path="/404" component={NotFound} />
+      <Route path={"/"} component={Home} />
+      <Route path={"/404"} component={NotFound} />
+      {/* Final fallback route */}
       <Route component={NotFound} />
     </Switch>
   );
 }
 
+// NOTE: About Theme
+// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
+//   to keep consistent foreground/background color across components
+// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
+
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="dark">
+      <ThemeProvider
+        defaultTheme="light"
+        // switchable
+      >
         <TooltipProvider>
           <Toaster />
           <Router />
