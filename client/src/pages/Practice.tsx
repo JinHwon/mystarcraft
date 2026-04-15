@@ -301,19 +301,19 @@ export default function PracticePage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-6 mb-4 md:mb-6">
             {/* 왼쪽: 누적 해설 */}
-            <div className="lg:col-span-1">
-              <Card className="bg-slate-800 border-slate-700 h-full flex flex-col">
+            <div className="lg:col-span-1 flex flex-col">
+              <Card className="bg-slate-800 border-slate-700 flex-1 flex flex-col">
                 <CardHeader>
                   <CardTitle className="text-sm md:text-base text-white">게임 해설</CardTitle>
                 </CardHeader>
-                <CardContent className="flex-1 overflow-y-auto max-h-96 md:max-h-screen flex flex-col" ref={(el) => {
+                <CardContent className="flex-1 overflow-y-auto min-h-0 flex flex-col" ref={(el) => {
                     if (el) {
                       setTimeout(() => {
                         el.scrollTop = 0;
                       }, 0);
                     }
                   }}>
-                  <div className="space-y-1 md:space-y-2 flex flex-col-reverse flex-1">
+                  <div className="space-y-1 md:space-y-2 flex flex-col-reverse flex-1 min-h-0">
                     {[...displayedCommentaries].reverse().map((commentary: string, idx: number) => {
                       let textColor = "text-slate-300";
                       let borderColor = "border-slate-500";
@@ -376,7 +376,7 @@ export default function PracticePage() {
                 </CardContent>
               </Card>
               {/* 속도 조절 버튼 */}
-              <div className="flex justify-center gap-1 md:gap-2 pt-2 md:pt-4">
+              <div className="flex justify-center gap-1 md:gap-2 pt-3 md:pt-4 pb-2">
                 <Button
                   onClick={() => setGameSpeed(1)}
                   variant={gameSpeed === 1 ? "default" : "outline"}
