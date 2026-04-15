@@ -38,6 +38,9 @@ import {
   getDb,
   updatePlayerExp,
   updatePlayerGold,
+  decreaseItemUsageCount,
+  getPlayerGameRecord,
+  getPlayerGrade,
 } from "./db";
 import { eq } from "drizzle-orm";
 import { players } from "../drizzle/schema";
@@ -57,7 +60,9 @@ const playerRouter = router({
     const player = await getPlayerByUserId(ctx.user.id);
     if (!player) return null;
     const stats = await getPlayerStats(player.id);
-    return { ...player, stats: stats ?? null };
+    const gameRecord = await getPlayerGameRecord(player.id);
+    const grade = await getPlayerGrade(player.id);
+    return { ...player, stats: stats ?? null, gameRecord, grade };
   }),
 
   create: protectedProcedure
@@ -562,6 +567,9 @@ const practiceRouter = router({
           await allocateStat(player.id, mappedKey, value, currentPoints);
         }
       }
+      
+      // 아이템 사용 횟수 감소 (게임 진행 시마다 1씩 감소)
+      await decreaseItemUsageCount(player.id);
       
       // 무제한 피로도 이벤트 중에는 피로도 감소 안 함
       const activeEvents = await getActiveEvents();

@@ -26,6 +26,7 @@ import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
+import { trpc } from "@/lib/trpc";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Page 1", path: "/" },
@@ -114,6 +115,7 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
+  const { data: playerData } = trpc.player.get.useQuery();
 
   useEffect(() => {
     if (isCollapsed) {
@@ -212,11 +214,16 @@ function DashboardLayoutContent({
                   </Avatar>
                   <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
                     <p className="text-sm font-medium truncate leading-none">
-                      {user?.name || "-"}
+                      {playerData?.name || user?.name || "-"}
                     </p>
-                    <p className="text-xs text-muted-foreground truncate mt-1.5">
-                      {user?.email || "-"}
-                    </p>
+                    <div className="text-xs text-muted-foreground truncate mt-1.5 space-y-0.5">
+                      {playerData?.grade && (
+                        <p>등급: <span className="font-semibold text-primary">{playerData.grade}</span></p>
+                      )}
+                      {playerData?.gameRecord && (
+                        <p>{playerData.gameRecord.totalGames}전 {playerData.gameRecord.wins}승 {playerData.gameRecord.losses}패</p>
+                      )}
+                    </div>
                   </div>
                 </button>
               </DropdownMenuTrigger>

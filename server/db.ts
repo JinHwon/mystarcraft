@@ -2,6 +2,7 @@ import { eq, and, inArray, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, items, playerItems, players, playerStats, users, events, maps, games, gameResults } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import { StatKey } from "@shared/gameConstants";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -618,3 +619,116 @@ export async function updatePlayerGold(playerId: number, goldGain: number) {
   await db.update(players).set({ gold: newGold }).where(eq(players.id, playerId));
 }
 
+
+
+// ── Item Usage Count Management ────────────────────────────────────
+
+export async function decreaseItemUsageCount(playerId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  // 플레이어의 착용 중인 아이템 조회
+  const equippedItems = await db
+    .select({
+      playerItemId: playerItems.id,
+      usageCount: playerItems.usageCount,
+      itemId: playerItems.itemId,
+      item: items,
+    })
+    .from(playerItems)
+    .innerJoin(items, eq(playerItems.itemId, items.id))
+    .where(and(eq(playerItems.playerId, playerId), eq(playerItems.equipped, 1)));
+
+  for (const equippedItem of equippedItems) {
+    const newUsageCount = equippedItem.usageCount - 1;
+
+    if (newUsageCount <= 0) {
+      // usageCount가 0이 되면 아이템 삭제 및 능력치 원복
+      const statBoosts = equippedItem.item.statBoosts as Record<string, number>;
+
+      // 아이템 삭제
+      await db.delete(playerItems).where(eq(playerItems.id, equippedItem.playerItemId));
+
+      // 능력치 원복 (음수로 처리)
+      const playerStatsData = await getPlayerStats(playerId);
+      if (playerStatsData) {
+        const statKeyMap: Record<string, StatKey> = {
+          sense: 'sense',
+          control: 'control',
+          attack: 'attack',
+          harass: 'harass',
+          strategy: 'strategy',
+          supply: 'supply',
+          defense: 'defense',
+          scout: 'scout',
+        };
+
+        for (const [statName, boostValue] of Object.entries(statBoosts)) {
+          const mappedKey = statKeyMap[statName] as StatKey;
+          if (mappedKey) {
+            let currentPoints = 0;
+            if (mappedKey === 'sense') currentPoints = playerStatsData.sense;
+            else if (mappedKey === 'control') currentPoints = playerStatsData.control;
+            else if (mappedKey === 'attack') currentPoints = playerStatsData.attack;
+            else if (mappedKey === 'harass') currentPoints = playerStatsData.harass;
+            else if (mappedKey === 'strategy') currentPoints = playerStatsData.strategy;
+            else if (mappedKey === 'supply') currentPoints = playerStatsData.supply;
+            else if (mappedKey === 'defense') currentPoints = playerStatsData.defense;
+            else if (mappedKey === 'scout') currentPoints = playerStatsData.scout;
+
+            // 음수로 처리하여 능력치 감소
+            await allocateStat(playerId, mappedKey, -boostValue, currentPoints);
+          }
+        }
+      }
+    } else {
+      // usageCount 감소
+      await db
+        .update(playerItems)
+        .set({ usageCount: newUsageCount })
+        .where(eq(playerItems.id, equippedItem.playerItemId));
+    }
+  }
+}
+
+
+// ── Game Record Management ────────────────────────────────────
+
+export async function getPlayerGameRecord(playerId: number) {
+  const db = await getDb();
+  if (!db) return { wins: 0, losses: 0, totalGames: 0 };
+
+  const results = await db
+    .select({
+      isWinner: gameResults.isWinner,
+    })
+    .from(gameResults)
+    .where(eq(gameResults.playerId, playerId));
+
+  const wins = results.filter(r => r.isWinner).length;
+  const losses = results.filter(r => !r.isWinner).length;
+  const totalGames = results.length;
+
+  return { wins, losses, totalGames };
+}
+
+
+export async function getPlayerGrade(playerId: number): Promise<string> {
+  const stats = await getPlayerStats(playerId);
+  if (!stats) return 'F';
+
+  const totalStats = (stats.sense || 0) + (stats.control || 0) + (stats.attack || 0) + 
+                     (stats.harass || 0) + (stats.strategy || 0) + (stats.supply || 0) + 
+                     (stats.defense || 0) + (stats.scout || 0);
+  
+  const baseScore = 4000;
+  const gradeInterval = 600;
+
+  const grades = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
+  const gradeIndex = Math.floor((totalStats - baseScore) / gradeInterval);
+  
+  if (gradeIndex < 0) return 'F';
+  if (gradeIndex >= grades.length) return 'SSS';
+  
+  return grades[gradeIndex];
+}

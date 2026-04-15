@@ -14,6 +14,9 @@ vi.mock("./db", () => ({
   updatePlayerPhoto: vi.fn(),
   allocateStat: vi.fn(),
   seedItemsIfEmpty: vi.fn(),
+  getPlayerGameRecord: vi.fn(),
+  getPlayerGrade: vi.fn(),
+  decreaseItemUsageCount: vi.fn(),
 }));
 
 vi.mock("./storage", () => ({
@@ -139,6 +142,8 @@ describe("player.get", () => {
   it("선수가 있으면 선수 정보와 능력치를 반환한다", async () => {
     vi.mocked(db.getPlayerByUserId).mockResolvedValue(mockPlayer);
     vi.mocked(db.getPlayerStats).mockResolvedValue(mockStats);
+    vi.mocked(db.getPlayerGameRecord).mockResolvedValue({ wins: 5, losses: 3, totalGames: 8 });
+    vi.mocked(db.getPlayerGrade).mockResolvedValue("A");
 
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
@@ -148,6 +153,8 @@ describe("player.get", () => {
     expect(result?.name).toBe("테스트 선수");
     expect(result?.race).toBe("terran");
     expect(result?.stats).toEqual(mockStats);
+    expect(result?.gameRecord).toEqual({ wins: 5, losses: 3, totalGames: 8 });
+    expect(result?.grade).toBe("A");
   });
 });
 

@@ -29,6 +29,7 @@ interface PlayerItemData {
   playerItemId: number;
   equipped: boolean;
   purchasedAt: Date;
+  usageCount: number;
   item: ItemData;
 }
 
@@ -43,6 +44,8 @@ function ItemCard({
   onUnequip,
   isBuying,
   isEquipping,
+  usageCount,
+  playerItems,
 }: {
   item: ItemData;
   owned: boolean;
@@ -54,6 +57,8 @@ function ItemCard({
   onUnequip: () => void;
   isBuying: boolean;
   isEquipping: boolean;
+  usageCount?: number;
+  playerItems?: PlayerItemData[];
 }) {
   const rarityColor = RARITY_COLORS[item.rarity] ?? "#9CA3AF";
   const rarityLabel = RARITY_LABELS[item.rarity] ?? "일반";
@@ -116,6 +121,13 @@ function ItemCard({
           </span>
         ))}
       </div>
+
+      {/* 남은 사용 횟수 (보유 아이템인 경우만 표시) */}
+      {owned && (
+        <div className="text-xs text-muted-foreground text-center">
+          남은 사용 횟수: <span className="font-bold text-foreground">{playerItemId !== undefined ? (playerItems?.find(pi => pi.playerItemId === playerItemId)?.usageCount ?? 0) : 0}/20</span>
+        </div>
+      )}
 
       {/* 하단: 가격 + 버튼 */}
       <div className="flex items-center justify-between mt-auto pt-2 border-t border-border">
@@ -294,6 +306,8 @@ export default function Shop() {
                   onUnequip={() => playerItem && equipMutation.mutate({ playerItemId: playerItem.playerItemId, equip: false })}
                   isBuying={buyingId === item.id}
                   isEquipping={equippingId === playerItem?.playerItemId}
+                  usageCount={playerItem?.usageCount}
+                  playerItems={playerItems}
                 />
               );
             })}
@@ -323,6 +337,8 @@ export default function Shop() {
                   onUnequip={() => equipMutation.mutate({ playerItemId: pi.playerItemId, equip: false })}
                   isBuying={false}
                   isEquipping={equippingId === pi.playerItemId}
+                  usageCount={pi.usageCount}
+                  playerItems={playerItems}
                 />
               ))}
             </div>
@@ -351,6 +367,8 @@ export default function Shop() {
                   onUnequip={() => equipMutation.mutate({ playerItemId: pi.playerItemId, equip: false })}
                   isBuying={false}
                   isEquipping={equippingId === pi.playerItemId}
+                  usageCount={pi.usageCount}
+                  playerItems={playerItems}
                 />
               ))}
             </div>
