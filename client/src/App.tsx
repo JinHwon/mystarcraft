@@ -13,6 +13,7 @@ import Events from "./pages/Events";
 import Practice from "./pages/Practice";
 import GameResults from "./pages/GameResults";
 import GameLayout from "./components/GameLayout";
+import { UpdateNotification } from "./components/UpdateNotification";
 
 function Router() {
   return (
@@ -60,6 +61,7 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
+          <UpdateNotification />
           <Toaster />
           <Router />
         </TooltipProvider>
