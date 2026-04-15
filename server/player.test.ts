@@ -90,11 +90,14 @@ describe("player.create", () => {
     const result = await caller.player.create({ name: "홍길동", race: "terran" });
 
     expect(result).toEqual({ playerId: 1 });
-    expect(db.createPlayer).toHaveBeenCalledWith({
-      userId: 1,
-      name: "홍길동",
-      race: "terran",
-    });
+    expect(db.createPlayer).toHaveBeenCalledWith(
+      1,
+      {
+        name: "홍길동",
+        race: "terran",
+        photo: undefined,
+      }
+    );
   });
 
   it("이미 선수가 있으면 CONFLICT 에러를 반환한다", async () => {
@@ -196,3 +199,50 @@ describe("shop.buyItem", () => {
       .rejects.toThrow("선수를 찾을 수 없습니다");
   });
 });
+
+  it("피로도 영양제를 구매할 때 피로도가 100 이상이면 에러를 반환한다", async () => {
+    const mockFatigueItem: Item = {
+      id: 2,
+      name: "피로도 영양제",
+      description: "피로도를 10 회복합니다",
+      price: 100,
+      rarity: "common",
+      statBoosts: {},
+      iconEmoji: "💊",
+      createdAt: new Date(),
+      fatigueRecover: 10,
+    };
+
+    vi.mocked(db.getPlayerByUserId).mockResolvedValue({ ...mockPlayer, fatigue: 100 });
+    vi.mocked(db.buyItem).mockRejectedValue(new Error("피로도가 100 이상이면 사용할 수 없습니다"));
+
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+
+    await expect(caller.shop.buyItem({ itemId: 2 }))
+      .rejects.toThrow("피로도가 100 이상이면 사용할 수 없습니다");
+  });
+
+  it("피로도 영양제를 구매할 때 피로도가 100 미만이면 성공한다", async () => {
+    const mockFatigueItem: Item = {
+      id: 2,
+      name: "피로도 영양제",
+      description: "피로도를 10 회복합니다",
+      price: 100,
+      rarity: "common",
+      statBoosts: {},
+      iconEmoji: "💊",
+      createdAt: new Date(),
+      fatigueRecover: 10,
+    };
+
+    vi.mocked(db.getPlayerByUserId).mockResolvedValue({ ...mockPlayer, fatigue: 80, gold: 500 });
+    vi.mocked(db.buyItem).mockResolvedValue(mockFatigueItem);
+
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.shop.buyItem({ itemId: 2 });
+
+    expect(result.name).toBe("피로도 영양제");
+    expect(result.fatigueRecover).toBe(10);
+  });

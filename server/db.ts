@@ -124,15 +124,21 @@ export async function buyItem(
 
   // 피로도 회복 아이템인 경우 즉시 사용
   if (item.fatigueRecover && item.fatigueRecover > 0) {
+    // 현재 피로도 확인
+    const player = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
+    if (player.length === 0) throw new Error("플레이어를 찾을 수 없습니다");
+    
+    // 피로도 100 이상이면 사용 불가
+    if (player[0].fatigue >= 100) {
+      throw new Error("피로도가 100 이상이면 사용할 수 없습니다");
+    }
+    
     // 골드만 차감
     await db.update(players).set({ gold: playerGold - item.price }).where(eq(players.id, playerId));
     
     // 피로도 회복
-    const player = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
-    if (player.length > 0) {
-      const newFatigue = Math.min(100, player[0].fatigue + item.fatigueRecover);
-      await db.update(players).set({ fatigue: newFatigue }).where(eq(players.id, playerId));
-    }
+    const newFatigue = Math.min(100, player[0].fatigue + item.fatigueRecover);
+    await db.update(players).set({ fatigue: newFatigue }).where(eq(players.id, playerId));
     
     return item;
   }
