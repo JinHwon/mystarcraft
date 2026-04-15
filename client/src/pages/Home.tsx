@@ -1,14 +1,15 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { getLoginUrl } from "@/const";
+import { getOAuthLoginUrl, OAUTH_PROVIDERS } from "@/const";
 import { useLocation } from "wouter";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Sword, Shield, Zap, Star } from "lucide-react";
+import { Sword, Shield, Zap, Star, ChevronDown } from "lucide-react";
 
 export default function Home() {
   const { isAuthenticated, loading } = useAuth();
   const [, navigate] = useLocation();
+  const [showOAuthMenu, setShowOAuthMenu] = useState(false);
 
   const { data: player, isLoading: playerLoading } = trpc.player.get.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -113,16 +114,45 @@ export default function Home() {
           </div>
 
           {/* CTA 버튼 */}
-          <div className="flex flex-col items-center gap-3">
+          <div className="flex flex-col items-center gap-4">
             <Button
               size="lg"
               className="px-10 py-6 text-base font-bold glow-blue"
-              onClick={() => window.location.href = getLoginUrl()}
+              onClick={() => window.location.href = getOAuthLoginUrl("manus")}
             >
               <Sword className="w-5 h-5 mr-2" />
               지금 시작하기
             </Button>
-            <p className="text-xs text-muted-foreground">Manus 계정으로 로그인하여 시작하세요</p>
+            
+            {/* 다른 로그인 옵션 */}
+            <div className="relative">
+              <button
+                onClick={() => setShowOAuthMenu(!showOAuthMenu)}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+              >
+                다른 계정으로 로그인
+                <ChevronDown className="w-3 h-3" />
+              </button>
+              
+              {/* 드롭다운 메뉴 */}
+              {showOAuthMenu && (
+                <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-card border border-border rounded-lg shadow-lg z-50 whitespace-nowrap">
+                  {OAUTH_PROVIDERS.filter(p => p.id !== "manus").map((provider) => (
+                    <button
+                      key={provider.id}
+                      onClick={() => {
+                        window.location.href = getOAuthLoginUrl(provider.id as any);
+                        setShowOAuthMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-sm text-foreground hover:bg-primary/10 first:rounded-t-lg last:rounded-b-lg transition-colors flex items-center gap-2"
+                    >
+                      <span>{provider.icon}</span>
+                      <span>{provider.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
