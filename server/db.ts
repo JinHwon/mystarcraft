@@ -666,35 +666,45 @@ export async function getRankingList() {
     .innerJoin(users, eq(players.userId, users.id))
     .leftJoin(playerStats, eq(players.id, playerStats.playerId));
 
-  return result
-    .map((row) => {
-      const totalStats =
-        (row.stats?.sense ?? 0) +
-        (row.stats?.control ?? 0) +
-        (row.stats?.attack ?? 0) +
-        (row.stats?.harass ?? 0) +
-        (row.stats?.strategy ?? 0) +
-        (row.stats?.supply ?? 0) +
-        (row.stats?.defense ?? 0) +
-        (row.stats?.scout ?? 0);
+  // 각 플레이어의 전적 조회
+  const rankings = [];
+  for (const row of result) {
+    const totalStats =
+      (row.stats?.sense ?? 0) +
+      (row.stats?.control ?? 0) +
+      (row.stats?.attack ?? 0) +
+      (row.stats?.harass ?? 0) +
+      (row.stats?.strategy ?? 0) +
+      (row.stats?.supply ?? 0) +
+      (row.stats?.defense ?? 0) +
+      (row.stats?.scout ?? 0);
 
-      return {
-        playerId: row.player.id,
-        name: row.player.name,
-        race: row.player.race,
-        grade: row.player.grade,
-        level: row.player.level,
-        sense: row.stats?.sense ?? 0,
-        control: row.stats?.control ?? 0,
-        attack: row.stats?.attack ?? 0,
-        harass: row.stats?.harass ?? 0,
-        strategy: row.stats?.strategy ?? 0,
-        supply: row.stats?.supply ?? 0,
-        defense: row.stats?.defense ?? 0,
-        scout: row.stats?.scout ?? 0,
-        totalStats,
-        lastSignedIn: row.lastSignedIn,
-      };
-    })
-    .sort((a, b) => b.totalStats - a.totalStats);
+    // 전적 조회
+    const gameResultsData = await db.select().from(gameResults).where(eq(gameResults.playerId, row.player.id));
+    const wins = gameResultsData.filter((r) => r.isWinner === 1).length;
+    const losses = gameResultsData.length - wins;
+
+    rankings.push({
+      playerId: row.player.id,
+      name: row.player.name,
+      race: row.player.race,
+      grade: row.player.grade,
+      level: row.player.level,
+      sense: row.stats?.sense ?? 0,
+      control: row.stats?.control ?? 0,
+      attack: row.stats?.attack ?? 0,
+      harass: row.stats?.harass ?? 0,
+      strategy: row.stats?.strategy ?? 0,
+      supply: row.stats?.supply ?? 0,
+      defense: row.stats?.defense ?? 0,
+      scout: row.stats?.scout ?? 0,
+      totalStats,
+      lastSignedIn: row.lastSignedIn,
+      wins,
+      losses,
+      totalGames: gameResultsData.length,
+    });
+  }
+
+  return rankings.sort((a, b) => b.totalStats - a.totalStats);
 }

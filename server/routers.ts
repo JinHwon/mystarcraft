@@ -377,12 +377,75 @@ const practiceRouter = router({
       }
 
       // 상대 찾기
-      const opponent = await findOpponentByDifficulty(input.difficulty, player.id);
+      let opponent = await findOpponentByDifficulty(input.difficulty, player.id);
+      let isAiOpponent = false;
+      let aiOpponentStats: Record<StatKey, number> | null = null;
+      
+      // 중수/고수에서 매칭 실패 시 60% 확률로 AI 가상 상대 생성
+      if (!opponent && (input.difficulty === 'intermediate' || input.difficulty === 'advanced')) {
+        const { calcGrade, GRADE_BASE, GRADE_STEP, STAT_KEYS: SK } = await import("@shared/gameConstants");
+        const aiChance = 0.6; // 60% 확률
+        if (Math.random() < aiChance) {
+          // 난이도에 맞는 AI 능력치 생성
+          const range = DIFFICULTY_RANGES[input.difficulty];
+          const targetGradeIndex = range.minIndex + Math.floor(Math.random() * (range.maxIndex - range.minIndex + 1));
+          const targetTotalStats = GRADE_BASE + targetGradeIndex * GRADE_STEP + Math.floor(Math.random() * GRADE_STEP);
+          const avgStat = Math.floor(targetTotalStats / SK.length);
+          
+          // 각 능력치에 약간의 랜덤 편차 추가
+          const aiStats: Record<string, number> = {};
+          let remaining = targetTotalStats;
+          for (let i = 0; i < SK.length - 1; i++) {
+            const variation = Math.floor(Math.random() * 100) - 50; // ±50 편차
+            const stat = Math.max(100, Math.min(1000, avgStat + variation));
+            aiStats[SK[i]] = stat;
+            remaining -= stat;
+          }
+          aiStats[SK[SK.length - 1]] = Math.max(100, Math.min(1000, remaining));
+          
+          aiOpponentStats = aiStats as Record<StatKey, number>;
+          
+          const races = ['terran', 'zerg', 'protoss'] as const;
+          const aiRace = races[Math.floor(Math.random() * races.length)];
+          const aiNames = [
+            'AI_Shadow', 'AI_Storm', 'AI_Blaze', 'AI_Frost', 'AI_Thunder',
+            'AI_Phoenix', 'AI_Dragon', 'AI_Viper', 'AI_Hawk', 'AI_Wolf',
+            'AI_Nova', 'AI_Titan', 'AI_Specter', 'AI_Phantom', 'AI_Sentinel',
+          ];
+          const aiName = aiNames[Math.floor(Math.random() * aiNames.length)];
+          
+          // AI 선수를 DB에 임시 생성하지 않고, 가상 객체로 처리
+          opponent = {
+            id: -1, // AI 식별용 음수 ID
+            userId: -1,
+            name: aiName,
+            race: aiRace,
+            photoUrl: null,
+            level: Math.max(1, targetGradeIndex * 3 + Math.floor(Math.random() * 5)),
+            exp: 0,
+            expToNext: 100,
+            statPoints: 0,
+            gold: 0,
+            grade: calcGrade(targetTotalStats) as any,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            fatigue: 100,
+            lastFatigueRecovery: new Date().toISOString(),
+          };
+          isAiOpponent = true;
+        }
+      }
+      
       if (!opponent) throw new TRPCError({ code: "NOT_FOUND", message: "상대를 찾을 수 없습니다" });
 
       // 선수 능력치 조회 (없으면 초기화)
       const playerStats = await getPlayerStats(player.id) || await ensurePlayerStats(player.id);
-      const opponentStats = await getPlayerStats(opponent.id) || await ensurePlayerStats(opponent.id);
+      let opponentStats;
+      if (isAiOpponent && aiOpponentStats) {
+        opponentStats = aiOpponentStats;
+      } else {
+        opponentStats = await getPlayerStats(opponent.id) || await ensurePlayerStats(opponent.id);
+      }
       if (!playerStats || !opponentStats) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "능력치 조회 실패" });
 
       // 맵 정보 조회
@@ -413,7 +476,7 @@ const practiceRouter = router({
       // 게임 생성
       const gameId = await createGame({
         player1Id: player.id,
-        player2Id: opponent.id,
+        player2Id: isAiOpponent ? player.id : opponent.id, // AI 상대는 자기 자신 ID 사용
         mapId: input.mapId,
         difficulty: input.difficulty,
         player1Race: player.race as "terran" | "zerg" | "protoss",
@@ -421,8 +484,22 @@ const practiceRouter = router({
         player1WinProbability: winProbability,
       });
 
-      const opponentGrade = await getPlayerGrade(opponent.id);
-      return { gameId, opponent, opponentGrade, winProbability };
+      // 상대방의 실제 등급 계산 (능력치 기반)
+      const { calcGrade } = await import("@shared/gameConstants");
+      const opponentTotalStats = STAT_KEYS.reduce((sum, key) => sum + ((opponentStats as any)[key] || 0), 0);
+      const actualOpponentGrade = calcGrade(opponentTotalStats);
+      
+      return { 
+        gameId, 
+        opponent: {
+          ...opponent,
+          id: isAiOpponent ? -1 : opponent.id,
+        },
+        opponentGrade: actualOpponentGrade, 
+        winProbability,
+        opponentStats: opponentStatsRecord,
+        isAiOpponent,
+      };
     }),
 
   playGame: protectedProcedure

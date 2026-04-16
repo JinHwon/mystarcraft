@@ -25,9 +25,11 @@ export function StatRadarChart({
     scout: "#F472B6",
   };
 
-  // SVG 중심
-  const center = size / 2;
-  const radius = size / 2 - 30;
+  // SVG 중심 - 라벨 공간을 포함한 전체 크기
+  const padding = 60; // 라벨을 위한 여백
+  const svgSize = size + padding * 2;
+  const center = svgSize / 2;
+  const radius = size / 2 - 10;
 
   // 8각형 포인트 계산
   const angleSlice = (Math.PI * 2) / STAT_KEYS.length;
@@ -65,7 +67,7 @@ export function StatRadarChart({
   // 라벨 위치 (바깥쪽)
   const labelPoints = STAT_KEYS.map((_, i) => {
     const angle = angleSlice * i - Math.PI / 2;
-    const labelRadius = radius + 50;
+    const labelRadius = radius + 35;
     const x = center + labelRadius * Math.cos(angle);
     const y = center + labelRadius * Math.sin(angle);
     return { x, y };
@@ -73,7 +75,7 @@ export function StatRadarChart({
 
   return (
     <div className="flex flex-col items-center gap-4">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="drop-shadow-lg">
+      <svg width={svgSize} height={svgSize} viewBox={`0 0 ${svgSize} ${svgSize}`} className="drop-shadow-lg">
         {/* 배경 그리드 */}
         {gridPoints.map((points, i) => (
           <polygon
@@ -147,21 +149,21 @@ export function StatRadarChart({
             <g key={`label-${i}`}>
               {/* 라벨 배경 */}
               <rect
-                x={labelPoint.x - 28}
-                y={labelPoint.y - 18}
-                width="56"
-                height="32"
+                x={labelPoint.x - 24}
+                y={labelPoint.y - 16}
+                width="48"
+                height="28"
                 rx="4"
                 fill="oklch(0.12 0.02 240 / 0.8)"
                 stroke={color}
-                strokeWidth="1.5"
+                strokeWidth="1"
               />
               {/* 라벨 텍스트 */}
               <text
                 x={labelPoint.x}
                 y={labelPoint.y - 3}
                 textAnchor="middle"
-                fontSize="12"
+                fontSize="10"
                 fontWeight="700"
                 fill={color}
                 fontFamily="system-ui, -apple-system"
@@ -171,9 +173,9 @@ export function StatRadarChart({
               {/* 값 텍스트 */}
               <text
                 x={labelPoint.x}
-                y={labelPoint.y + 11}
+                y={labelPoint.y + 9}
                 textAnchor="middle"
-                fontSize="11"
+                fontSize="10"
                 fontWeight="600"
                 fill="oklch(0.8 0.05 240)"
                 fontFamily="system-ui, -apple-system"

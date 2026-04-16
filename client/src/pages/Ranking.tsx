@@ -94,11 +94,12 @@ export default function RankingPage() {
 
         {/* 테이블 헤더 - 데스크톱 */}
         <div className="hidden lg:block mb-3">
-          <div className="grid grid-cols-[60px_1fr_80px_60px_repeat(8,64px)_100px] gap-2 px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+          <div className="grid grid-cols-[60px_1fr_80px_60px_90px_repeat(8,64px)_100px] gap-2 px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
             <span>순위</span>
             <span>선수명</span>
             <span>종족</span>
             <span>등급</span>
+            <span className="text-center">전적</span>
             {(Object.values(STAT_LABELS) as string[]).map((label) => (
               <span key={label} className="text-center">{label}</span>
             ))}
@@ -127,7 +128,7 @@ export default function RankingPage() {
                 >
                   <CardContent className="p-3 md:p-4">
                     {/* 데스크톱 레이아웃 */}
-                    <div className="hidden lg:grid grid-cols-[60px_1fr_80px_60px_repeat(8,64px)_100px] gap-2 items-center">
+                    <div className="hidden lg:grid grid-cols-[60px_1fr_80px_60px_90px_repeat(8,64px)_100px] gap-2 items-center">
                       <RankBadge rank={rank} />
                       <div className="min-w-0">
                         <p className="font-semibold text-white truncate text-sm">{player.name}</p>
@@ -141,6 +142,11 @@ export default function RankingPage() {
                         style={{ textShadow: `0 0 8px ${gradeColor}60` }}
                       >
                         {calculatedGrade}
+                      </span>
+                      <span className="text-center text-xs text-slate-300">
+                        <span className="text-green-400">{player.wins ?? 0}승</span>
+                        {' '}
+                        <span className="text-red-400">{player.losses ?? 0}패</span>
                       </span>
                       <span className="text-center text-sm text-slate-300">{player.sense}</span>
                       <span className="text-center text-sm text-slate-300">{player.control}</span>
@@ -181,6 +187,11 @@ export default function RankingPage() {
                         <div className="text-right">
                           <p className="text-xs text-slate-500">총 능력치</p>
                           <p className="text-sm font-bold text-blue-400">{player.totalStats}</p>
+                          <p className="text-xs mt-0.5">
+                            <span className="text-green-400">{player.wins ?? 0}승</span>
+                            {' '}
+                            <span className="text-red-400">{player.losses ?? 0}패</span>
+                          </p>
                         </div>
                       </div>
                       <div className="grid grid-cols-4 gap-2 text-xs">

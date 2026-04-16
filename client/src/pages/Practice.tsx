@@ -19,6 +19,8 @@ interface GameState {
   opponentName?: string;
   opponentRace?: string;
   opponentGrade?: string;
+  opponentStats?: Record<string, number>;
+  isAiOpponent?: boolean;
   winProbability?: number;
   isWinner?: boolean;
   expGained?: number;
@@ -71,6 +73,8 @@ export default function PracticePage() {
         opponentName: result.opponent.name,
         opponentRace: result.opponent.race,
         opponentGrade: result.opponentGrade,
+        opponentStats: result.opponentStats,
+        isAiOpponent: result.isAiOpponent,
         winProbability: result.winProbability,
       }));
     } catch (error) {
@@ -347,7 +351,12 @@ export default function PracticePage() {
           ) : (
             <Card className="bg-slate-800 border-slate-700 mb-4 md:mb-6">
               <CardHeader>
-                <CardTitle className="text-sm md:text-base text-white">{gameState.opponentName || "상대 검색 중..."}</CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-sm md:text-base text-white">{gameState.opponentName || "상대 검색 중..."}</CardTitle>
+                  {gameState.isAiOpponent && (
+                    <Badge className="bg-purple-600 text-purple-100 text-xs">AI</Badge>
+                  )}
+                </div>
                 {gameState.opponentRace && (
                   <CardDescription className="text-xs md:text-sm">{RACE_LABELS[gameState.opponentRace as keyof typeof RACE_LABELS]}</CardDescription>
                 )}
@@ -361,6 +370,22 @@ export default function PracticePage() {
                     </div>
                   </div>
                 )}
+                
+                {/* 상대 능력치 표시 */}
+                {gameState.opponentStats && (
+                  <div className="p-2 md:p-3 bg-slate-700/50 rounded-lg">
+                    <p className="text-xs text-slate-400 font-semibold mb-2">상대 능력치</p>
+                    <div className="grid grid-cols-4 gap-1.5 text-xs">
+                      {Object.entries(STAT_LABELS).map(([key, label]) => (
+                        <div key={key} className="bg-slate-600/50 rounded px-2 py-1.5 text-center">
+                          <p className="text-slate-400 text-[10px]">{label}</p>
+                          <p className="text-slate-200 font-semibold">{gameState.opponentStats?.[key] ?? 0}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
                 {gameState.winProbability !== undefined && (
                   <div>
                     <div className="flex justify-between text-xs md:text-sm text-slate-300 mb-1 md:mb-2">
