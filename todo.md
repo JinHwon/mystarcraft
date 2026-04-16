@@ -322,3 +322,13 @@
 - [x] 경기 결과 화면 능력치 변동 값 깨짐 - getPlayerGameHistory에서 statChanges JSON 파싱 추가
 - [x] 상대방 정보 미표시 - opponentId 0 처리 추가 (익명유저, unknown으로 표기)
 - [x] 실제 게임한 상대방 정보 표시 - GameResults.tsx UI 렌더링 수정
+
+## 긴급 버그 수정 (v45.0) - GitHub 동기화 및 TypeScript 에러 수정
+
+- [x] GitHub 오류수정3 커밋 반영 - 7개 파일 변경사항 로컬 병합 완료
+- [x] Practice.tsx Button size="xs" 오류 수정 - "sm"으로 변경 (3개 모두)
+- [x] Events.tsx handleToggleEvent 타입 오류 수정 - event.isActive → !event.isActive
+- [x] oauth.ts Date vs string 타입 오류 수정 - new Date().toISOString()으로 변경
+- [x] sdk.ts Date vs string 타입 오류 수정 - new Date().toISOString()으로 변경
+- [x] TypeScript 컴파일 성공 - 모든 에러 해결 (0개)
+- [x] 개발 서버 정상 작동 확인

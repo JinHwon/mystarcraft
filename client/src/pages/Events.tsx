@@ -182,7 +182,7 @@ export default function Events() {
                     <div className="flex gap-2">
                       <Button
                         size="sm"
-                        onClick={() => handleToggleEvent(event.id, event.isActive)}
+                        onClick={() => handleToggleEvent(event.id, !event.isActive)}
                         className={event.isActive ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"}
                         disabled={updateEventMutation.isPending}
                       >

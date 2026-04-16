@@ -514,7 +514,7 @@ export default function PracticePage() {
                   onClick={() => setGameSpeed(1)}
                   variant={gameSpeed === 1 ? "default" : "outline"}
                   className={gameSpeed === 1 ? "bg-blue-600" : ""}
-                  size="xs"
+                  size="sm"
                 >
                   1배속
                 </Button>
@@ -522,7 +522,7 @@ export default function PracticePage() {
                   onClick={() => setGameSpeed(2)}
                   variant={gameSpeed === 2 ? "default" : "outline"}
                   className={gameSpeed === 2 ? "bg-blue-600" : ""}
-                  size="xs"
+                  size="sm"
                 >
                   2배속
                 </Button>
@@ -530,7 +530,7 @@ export default function PracticePage() {
                   onClick={() => setGameSpeed(5)}
                   variant={gameSpeed === 5 ? "default" : "outline"}
                   className={gameSpeed === 5 ? "bg-blue-600" : ""}
-                  size="xs"
+                  size="sm"
                 >
                   5배속
                 </Button>
