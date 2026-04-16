@@ -427,7 +427,7 @@ export async function completeGame(gameId: number, winnerId: number, player1Scor
   await db.update(games).set({ winnerId, player1ActualScore: player1Score, player2ActualScore: player2Score, completedAt: new Date().toISOString() }).where(eq(games.id, gameId));
 }
 
-export export async function createGameResult(resultData: any) {
+export async function createGameResult(resultData: any) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const result = await db.insert(gameResults).values(resultData);
