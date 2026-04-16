@@ -65,7 +65,8 @@ function ItemCard({
 }) {
   const rarityColor = RARITY_COLORS[item.rarity] ?? "#9CA3AF";
   const rarityLabel = RARITY_LABELS[item.rarity] ?? "일반";
-  const statBoosts = (item.statBoosts as StatBoosts) ?? {};
+  const rawBoosts = item.statBoosts;
+  const statBoosts: StatBoosts = (typeof rawBoosts === 'string' ? (() => { try { return JSON.parse(rawBoosts); } catch { return {}; } })() : rawBoosts as StatBoosts) ?? {};
   const canAfford = playerGold >= item.price;
   const isFatigueItem = item.fatigueRecover && item.fatigueRecover > 0;
   const canUseFatigueItem = !isFatigueItem || (playerFatigue ?? 0) < 100;
@@ -124,7 +125,7 @@ function ItemCard({
 
       {/* 능력치 보너스 */}
       <div className="flex flex-wrap gap-1.5">
-        {Object.entries(statBoosts).map(([key, val]) => (
+        {Object.entries(statBoosts).filter(([, val]) => val && val !== 0).map(([key, val]) => (
           <span
             key={key}
             className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-md font-medium bg-primary/10 text-primary border border-primary/20"

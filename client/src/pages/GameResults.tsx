@@ -113,19 +113,31 @@ export default function GameResultsPage() {
                     <div className="space-y-2">
                       <p className="text-slate-400 font-semibold text-sm">능력치 변동</p>
                       <div className="grid grid-cols-2 gap-2 text-xs">
-                        {result.statChanges && typeof result.statChanges === 'object' && Object.entries(result.statChanges as Record<string, number>).map(([stat, change]) => {
-                          const numChange = Number(change) || 0;
-                          return (
-                            <div key={stat} className="flex justify-between">
-                              <span className="text-slate-400">
-                                {STAT_LABELS[stat as keyof typeof STAT_LABELS] || stat}
-                              </span>
-                              <span className={numChange > 0 ? "text-green-400" : numChange < 0 ? "text-red-400" : "text-slate-400"}>
-                                {numChange > 0 ? "+" : ""}{numChange}
-                              </span>
-                            </div>
-                          );
-                        })}
+                        {(() => {
+                          let parsed = result.statChanges;
+                          if (typeof parsed === 'string') {
+                            try { parsed = JSON.parse(parsed); } catch { parsed = {}; }
+                          }
+                          const entries = parsed && typeof parsed === 'object'
+                            ? Object.entries(parsed as Record<string, number>).filter(([, v]) => Number(v) !== 0)
+                            : [];
+                          if (entries.length === 0) {
+                            return <span className="text-slate-500 col-span-2">변동 없음</span>;
+                          }
+                          return entries.map(([stat, change]) => {
+                            const numChange = Number(change) || 0;
+                            return (
+                              <div key={stat} className="flex justify-between">
+                                <span className="text-slate-400">
+                                  {STAT_LABELS[stat as keyof typeof STAT_LABELS] || stat}
+                                </span>
+                                <span className={numChange > 0 ? "text-green-400" : numChange < 0 ? "text-red-400" : "text-slate-400"}>
+                                  {numChange > 0 ? "+" : ""}{numChange}
+                                </span>
+                              </div>
+                            );
+                          });
+                        })()}
                       </div>
                     </div>
                   </div>

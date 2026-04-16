@@ -62,7 +62,7 @@ export async function createPlayer(userId: number, playerData: { name: string; r
     fatigue: 100,
     grade: "D",
   });
-  return Number((result as any).insertId);
+  return Number((result as any)[0]?.insertId ?? (result as any).insertId);
 }
 
 export async function getPlayerByUserId(userId: number) {
@@ -278,12 +278,11 @@ export async function getAllUsers() {
   const db = await getDb();
   if (!db) return [];
   
-  // 실제 선수가 있는 사용자만 반환 (playerId 포함)
+  // 모든 사용자 반환 (선수가 있는 경우 playerId 포함)
   const usersWithPlayers = await db
     .select({ users: users, playerId: players.id })
     .from(users)
-    .innerJoin(players, eq(users.id, players.userId))
-    .groupBy(users.id);
+    .leftJoin(players, eq(users.id, players.userId));
   
   return usersWithPlayers.map(row => ({ ...row.users, playerId: row.playerId }));
 }
@@ -338,7 +337,7 @@ export async function createEvent(eventData: any) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const result = await db.insert(events).values(eventData);
-  return Number((result as any).insertId);
+  return Number((result as any)[0]?.insertId ?? (result as any).insertId);
 }
 
 export async function updateEvent(eventId: number, eventData: any) {
@@ -411,7 +410,8 @@ export async function createGame(gameData: any) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const result = await db.insert(games).values(gameData);
-  return Number((result as any).insertId);
+  const insertId = (result as any)[0]?.insertId ?? (result as any).insertId;
+  return Number(insertId);
 }
 
 export async function getGameById(gameId: number) {
@@ -427,11 +427,12 @@ export async function completeGame(gameId: number, winnerId: number, player1Scor
   await db.update(games).set({ winnerId, player1ActualScore: player1Score, player2ActualScore: player2Score, completedAt: new Date().toISOString() }).where(eq(games.id, gameId));
 }
 
-export async function createGameResult(resultData: any) {
+export export async function createGameResult(resultData: any) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const result = await db.insert(gameResults).values(resultData);
-  return Number((result as any).insertId);
+  const insertId = (result as any)[0]?.insertId ?? (result as any).insertId;
+  return Number(insertId);
 }
 
 export async function getPlayerGameHistory(playerId: number, limit: number = 10) {
@@ -448,12 +449,34 @@ export async function getPlayerGameHistory(playerId: number, limit: number = 10)
   return Promise.all(
     result.map(async (record) => {
       const opponentPlayerId = record.opponentId;
-      const opponentResult = await db.select().from(players).where(eq(players.id, opponentPlayerId)).limit(1);
-      const opponent = opponentResult.length > 0 ? opponentResult[0] : null;
+      let opponentName = "익명 유저";
+      let opponentRace = "unknown";
+      let opponentGrade = "D";
 
-      const opponentRace = opponent?.race || "unknown";
-      const opponentName = opponent?.name || "익명 유저";
-      const opponentGrade = opponent?.grade || "D";
+      // 1. 상대 선수 정보에서 이름/종족 조회
+      if (opponentPlayerId && opponentPlayerId > 0) {
+        const opponentResult = await db.select().from(players).where(eq(players.id, opponentPlayerId)).limit(1);
+        if (opponentResult.length > 0) {
+          const opponent = opponentResult[0];
+          opponentName = opponent.name;
+          opponentRace = opponent.race;
+          opponentGrade = opponent.grade;
+        }
+      }
+
+      // 2. 선수 정보가 없으면 게임 테이블에서 종족 정보 가져오기
+      if (opponentRace === "unknown" && record.gameId) {
+        const gameResult = await db.select().from(games).where(eq(games.id, record.gameId)).limit(1);
+        if (gameResult.length > 0) {
+          const game = gameResult[0];
+          // 현재 플레이어가 player1이면 상대는 player2, 반대도 마찬가지
+          if (game.player1Id === playerId) {
+            opponentRace = game.player2Race;
+          } else {
+            opponentRace = game.player1Race;
+          }
+        }
+      }
 
       return {
         ...record,

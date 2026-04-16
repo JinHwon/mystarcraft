@@ -585,7 +585,7 @@ const practiceRouter = router({
   getGameHistory: protectedProcedure.query(async ({ ctx }) => {
     const player = await getPlayerByUserId(ctx.user.id);
     if (!player) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
-    return await getPlayerGameHistory(player.id, 10);
+    return await getPlayerGameHistory(player.id, 100);
   }),
 });
 
