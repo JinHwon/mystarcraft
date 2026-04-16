@@ -86,9 +86,22 @@ export default function PracticePage() {
     if (!gameState.gameId) return;
 
     try {
-      const result = await playGameMutation.mutateAsync({
+      // AI 상대인 경우 AI 정보를 함께 전달
+      const playGameInput: any = {
         gameId: gameState.gameId,
-      });
+      };
+      
+      if (gameState.isAiOpponent && gameState.opponentStats) {
+        playGameInput.aiOpponent = {
+          name: gameState.opponentName || "AI 상대",
+          race: gameState.opponentRace || "terran",
+          stats: gameState.opponentStats,
+          level: 1,
+          grade: gameState.opponentGrade || "D",
+        };
+      }
+      
+      const result = await playGameMutation.mutateAsync(playGameInput);
       
       const raceCommentaries: Record<string, string> = {
         terran: "테란 선수가 선택되었습니다. 테란은 기계적 우월성과 다양한 전술로 유명합니다.",

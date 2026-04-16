@@ -82,30 +82,33 @@ export async function simulateGame(
   mapRaceAdvantage: Record<string, number>,
   player1Fatigue: number,
   player2Fatigue: number,
-  mapCharacteristic: MapCharacteristic = "balanced"
+  mapCharacteristic: MapCharacteristic = "balanced",
+  overridePlayer1Stats?: Record<StatKey, number>,
+  overridePlayer2Stats?: Record<StatKey, number>
 ): Promise<GameSimulationResult> {
-  // 선수 능력치 조회
-  const player1Stats = await getPlayerStats(player1Id);
-  const player2Stats = await getPlayerStats(player2Id);
-
-  if (!player1Stats || !player2Stats) {
-    throw new Error("선수 능력치를 조회할 수 없습니다");
+  // 선수 능력치 조회 (override가 있으면 사용)
+  let player1StatsRaw = overridePlayer1Stats || null;
+  let player2StatsRaw = overridePlayer2Stats || null;
+  
+  if (!player1StatsRaw) {
+    const stats = await getPlayerStats(player1Id);
+    if (!stats) throw new Error("선수 능력치를 조회할 수 없습니다");
+    player1StatsRaw = Object.fromEntries(
+      STAT_KEYS.map(key => [key, (stats as any)[key]])
+    ) as Record<StatKey, number>;
+  }
+  
+  if (!player2StatsRaw) {
+    const stats = await getPlayerStats(player2Id);
+    if (!stats) throw new Error("선수 능력치를 조회할 수 없습니다");
+    player2StatsRaw = Object.fromEntries(
+      STAT_KEYS.map(key => [key, (stats as any)[key]])
+    ) as Record<StatKey, number>;
   }
 
   // 피로도 적용
-  const player1EffectiveStats = calcEffectiveStatsWithFatigue(
-    Object.fromEntries(
-      STAT_KEYS.map(key => [key, (player1Stats as any)[key]])
-    ) as Record<StatKey, number>,
-    player1Fatigue
-  );
-
-  const player2EffectiveStats = calcEffectiveStatsWithFatigue(
-    Object.fromEntries(
-      STAT_KEYS.map(key => [key, (player2Stats as any)[key]])
-    ) as Record<StatKey, number>,
-    player2Fatigue
-  );
+  const player1EffectiveStats = calcEffectiveStatsWithFatigue(player1StatsRaw, player1Fatigue);
+  const player2EffectiveStats = calcEffectiveStatsWithFatigue(player2StatsRaw, player2Fatigue);
 
    // 게임 진행
   const gameState = initializeGameState(

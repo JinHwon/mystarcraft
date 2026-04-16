@@ -139,3 +139,38 @@ export type Game = typeof games.$inferSelect;
 export type GameResult = typeof gameResults.$inferSelect;
 export type Map = typeof maps.$inferSelect;
 export type Event = typeof events.$inferSelect;
+
+// ── Quest System ─────────────────────────────────────────────────
+
+export const quests = mysqlTable("quests", {
+	id: int().autoincrement().notNull(),
+	type: mysqlEnum(['daily','cumulative']).notNull(),
+	title: varchar({ length: 200 }).notNull(),
+	description: text(),
+	iconEmoji: varchar({ length: 10 }).default('📋').notNull(),
+	conditionType: varchar({ length: 50 }).notNull(), // e.g. 'practice_games', 'practice_wins', 'gold_spend', 'stat_allocate', 'item_buy', 'login'
+	conditionValue: int().notNull(), // target count
+	rewardType: varchar({ length: 50 }).notNull(), // 'gold', 'fatigue', 'exp', 'stat_points'
+	rewardValue: int().notNull(),
+	sortOrder: int().default(0).notNull(),
+	isActive: tinyint().default(1).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+});
+
+export const playerQuestProgress = mysqlTable("player_quest_progress", {
+	id: int().autoincrement().notNull(),
+	playerId: int().notNull(),
+	questId: int().notNull(),
+	progress: int().default(0).notNull(),
+	completed: tinyint().default(0).notNull(),
+	rewardClaimed: tinyint().default(0).notNull(),
+	lastResetDate: varchar({ length: 10 }), // 'YYYY-MM-DD' for daily quest reset tracking
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("pqp_player_quest").on(table.playerId, table.questId),
+]);
+
+export type Quest = typeof quests.$inferSelect;
+export type PlayerQuestProgress = typeof playerQuestProgress.$inferSelect;

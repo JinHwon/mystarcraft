@@ -33,7 +33,7 @@ const getNavItems = (isAdmin: boolean) => {
     { path: "/practice", label: "연습게임", icon: Gamepad2 },
     { path: "/game-results", label: "경기결과", icon: BarChart3 },
     { path: "/ranking", label: "랭킹", icon: Trophy },
-    { path: "/events", label: "이벤트", icon: Zap },
+    { path: "/events", label: "퀘스트", icon: Zap },
   ];
   if (isAdmin) {
     items.push({ path: "/admin", label: "관리자 패널", icon: Settings });

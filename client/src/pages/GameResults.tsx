@@ -79,7 +79,12 @@ export default function GameResultsPage() {
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-slate-400">상대</span>
-                        <span className="text-white font-medium">{result.opponentName}</span>
+                        <span className="text-white font-medium flex items-center gap-1.5">
+                          {result.opponentName}
+                          {(result as any).isAiOpponent && (
+                            <span className="text-[10px] bg-purple-600 text-purple-100 px-1.5 py-0.5 rounded">AI</span>
+                          )}
+                        </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-slate-400">종족</span>

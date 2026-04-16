@@ -44,6 +44,17 @@ import {
   ensurePlayerStats,
   applyGameStatChange,
   getRankingList,
+  seedQuestsIfEmpty,
+  getAllQuests,
+  getPlayerQuestProgress,
+  getOrCreateQuestProgress,
+  updateQuestProgress,
+  claimQuestReward,
+  getDailyGameCount,
+  getDailyWinCount,
+  getDailyAdvancedGameCount,
+  getTotalGoldEarned,
+  getPlayerGradeIndex,
 } from "./db";
 import { eq } from "drizzle-orm";
 import { players } from "../drizzle/schema";
@@ -119,6 +130,20 @@ const playerRouter = router({
       if (player.statPoints < input.points)
         throw new TRPCError({ code: "BAD_REQUEST", message: "포인트가 부족합니다" });
       const result = await allocateStat(player.id, input.statKey, input.points);
+
+      // 퀘스트 진행도 업데이트 (능력치 배분)
+      try {
+        const allQuestsList = await getAllQuests();
+        for (const quest of allQuestsList) {
+          if (quest.conditionType === 'stat_allocate' && quest.type === 'daily') {
+            const prog = await getOrCreateQuestProgress(player.id, quest.id, quest.type);
+            if (prog.rewardClaimed !== 1) {
+              await updateQuestProgress(player.id, quest.id, prog.progress + 1, quest.conditionValue);
+            }
+          }
+        }
+      } catch (e) { /* quest tracking should not block main action */ }
+
       return result;
     }),
 
@@ -200,6 +225,20 @@ const shopRouter = router({
       const player = await getPlayerByUserId(ctx.user.id);
       if (!player) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
       const item = await buyItem(player.id, input.itemId, player.gold);
+
+      // 퀘스트 진행도 업데이트 (아이템 구매)
+      try {
+        const allQuestsList = await getAllQuests();
+        for (const quest of allQuestsList) {
+          if (quest.conditionType === 'item_buy' && quest.type === 'daily') {
+            const prog = await getOrCreateQuestProgress(player.id, quest.id, quest.type);
+            if (prog.rewardClaimed !== 1) {
+              await updateQuestProgress(player.id, quest.id, prog.progress + 1, quest.conditionValue);
+            }
+          }
+        }
+      } catch (e) { /* quest tracking should not block main action */ }
+
       return item;
     }),
 
@@ -345,6 +384,126 @@ const eventRouter = router({
 });
 
 // appRouter는 아래에서 정의됨
+
+// ── Quest Router ────────────────────────────────────────────────
+
+const questRouter = router({
+  list: protectedProcedure.query(async () => {
+    await seedQuestsIfEmpty();
+    return await getAllQuests();
+  }),
+
+  getProgress: protectedProcedure.query(async ({ ctx }) => {
+    const player = await getPlayerByUserId(ctx.user.id);
+    if (!player) return [];
+
+    await seedQuestsIfEmpty();
+    const allQuestsList = await getAllQuests();
+    const progressList = [];
+
+    for (const quest of allQuestsList) {
+      const prog = await getOrCreateQuestProgress(player.id, quest.id, quest.type);
+
+      // 자동으로 진행도 계산
+      let currentProgress = prog.progress;
+
+      if (quest.type === 'daily') {
+        if (quest.conditionType === 'practice_games') {
+          currentProgress = await getDailyGameCount(player.id);
+        } else if (quest.conditionType === 'practice_wins') {
+          currentProgress = await getDailyWinCount(player.id);
+        } else if (quest.conditionType === 'practice_advanced') {
+          currentProgress = await getDailyAdvancedGameCount(player.id);
+        }
+        // stat_allocate, item_buy는 액션 시점에 증가시킴
+      } else if (quest.type === 'cumulative') {
+        const record = await getPlayerGameRecord(player.id);
+        if (quest.conditionType === 'total_wins') {
+          currentProgress = record?.wins ?? 0;
+        } else if (quest.conditionType === 'total_games') {
+          currentProgress = record?.total ?? 0;
+        } else if (quest.conditionType === 'total_gold_earned') {
+          currentProgress = await getTotalGoldEarned(player.id);
+        } else if (quest.conditionType === 'player_level') {
+          currentProgress = player.level;
+        } else if (quest.conditionType === 'player_grade') {
+          currentProgress = await getPlayerGradeIndex(player.id);
+        }
+      }
+
+      // 진행도 업데이트
+      if (currentProgress !== prog.progress) {
+        await updateQuestProgress(player.id, quest.id, currentProgress, quest.conditionValue);
+      }
+
+      const completed = currentProgress >= quest.conditionValue;
+      progressList.push({
+        questId: quest.id,
+        progress: Math.min(currentProgress, quest.conditionValue),
+        completed,
+        rewardClaimed: prog.rewardClaimed === 1,
+      });
+    }
+
+    return progressList;
+  }),
+
+  claimReward: protectedProcedure
+    .input(z.object({ questId: z.number().int() }))
+    .mutation(async ({ ctx, input }) => {
+      const player = await getPlayerByUserId(ctx.user.id);
+      if (!player) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
+
+      const allQuestsList = await getAllQuests();
+      const quest = allQuestsList.find(q => q.id === input.questId);
+      if (!quest) throw new TRPCError({ code: "NOT_FOUND", message: "퀘스트를 찾을 수 없습니다" });
+
+      const prog = await getOrCreateQuestProgress(player.id, quest.id, quest.type);
+
+      // 이미 보상 수령했는지 확인
+      if (prog.rewardClaimed === 1) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "이미 보상을 수령했습니다" });
+      }
+
+      // 완료 여부 확인
+      if (prog.completed !== 1 && prog.progress < quest.conditionValue) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "퀘스트를 아직 완료하지 않았습니다" });
+      }
+
+      // 보상 지급
+      if (quest.rewardType === 'gold') {
+        await updatePlayerGold(player.id, quest.rewardValue);
+      } else if (quest.rewardType === 'exp') {
+        await updatePlayerExp(player.id, quest.rewardValue);
+      } else if (quest.rewardType === 'fatigue') {
+        const db = await getDb();
+        if (db) {
+          const p = await db.select().from(players).where(eq(players.id, player.id)).limit(1);
+          if (p.length > 0) {
+            const newFatigue = Math.min(100, p[0].fatigue + quest.rewardValue);
+            await db.update(players).set({ fatigue: newFatigue }).where(eq(players.id, player.id));
+          }
+        }
+      } else if (quest.rewardType === 'stat_points') {
+        const db = await getDb();
+        if (db) {
+          const p = await db.select().from(players).where(eq(players.id, player.id)).limit(1);
+          if (p.length > 0) {
+            await db.update(players).set({ statPoints: p[0].statPoints + quest.rewardValue }).where(eq(players.id, player.id));
+          }
+        }
+      }
+
+      // 보상 수령 처리
+      await claimQuestReward(player.id, quest.id);
+
+      return {
+        success: true,
+        rewardType: quest.rewardType,
+        rewardValue: quest.rewardValue,
+      };
+    }),
+});
 
 // ── Practice Game Router ────────────────────────────────────────
 
@@ -505,6 +664,13 @@ const practiceRouter = router({
   playGame: protectedProcedure
     .input(z.object({
       gameId: z.number().int(),
+      aiOpponent: z.object({
+        name: z.string(),
+        race: z.enum(["terran", "zerg", "protoss"]),
+        stats: z.record(z.string(), z.number()),
+        level: z.number().int(),
+        grade: z.string(),
+      }).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const game = await getGameById(input.gameId);
@@ -515,13 +681,31 @@ const practiceRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "이 게임에 참여할 수 없습니다" });
       }
 
-      // 상대 선수 정보 조회
-      const opponentPlayerId = player.id === game.player1Id ? game.player2Id : game.player1Id;
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "데이터베이스 연결 실패" });
-      const opponentUser = await db.select().from(players).where(eq(players.id, opponentPlayerId)).limit(1);
-      const opponent = opponentUser.length > 0 ? opponentUser[0] : null;
-      if (!opponent) throw new TRPCError({ code: "NOT_FOUND", message: "상대 선수를 찾을 수 없습니다" });
+      const isAiGame = !!input.aiOpponent;
+      
+      // 상대 선수 정보 - AI vs 실제 플레이어
+      let opponentName: string;
+      let opponentRace: "terran" | "zerg" | "protoss";
+      let opponentFatigue: number;
+      let opponentId: number;
+      
+      if (isAiGame && input.aiOpponent) {
+        opponentName = input.aiOpponent.name;
+        opponentRace = input.aiOpponent.race;
+        opponentFatigue = 100; // AI는 항상 피로도 100
+        opponentId = -1; // AI 식별용
+      } else {
+        const opponentPlayerId = player.id === game.player1Id ? game.player2Id : game.player1Id;
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "데이터베이스 연결 실패" });
+        const opponentUser = await db.select().from(players).where(eq(players.id, opponentPlayerId)).limit(1);
+        const opponent = opponentUser.length > 0 ? opponentUser[0] : null;
+        if (!opponent) throw new TRPCError({ code: "NOT_FOUND", message: "상대 선수를 찾을 수 없습니다" });
+        opponentName = opponent.name;
+        opponentRace = opponent.race as "terran" | "zerg" | "protoss";
+        opponentFatigue = opponent.fatigue;
+        opponentId = opponent.id;
+      }
 
       // 맵 정보 조회
       const maps = await getAllMaps();
@@ -533,21 +717,33 @@ const practiceRouter = router({
         : map.raceAdvantage;
 
       // 게임 시뮬레이션 실행
-      const player1 = player.id === game.player1Id ? player : opponent;
-      const player2 = player.id === game.player2Id ? player : opponent;
+      // AI 상대인 경우 능력치를 직접 전달
+      const playerStatsRaw = await getPlayerStats(player.id);
+      const playerStatsForSim = Object.fromEntries(
+        STAT_KEYS.map(key => [key, (playerStatsRaw as any)?.[key] || 500])
+      ) as Record<StatKey, number>;
+      
+      let aiStatsForSim: Record<StatKey, number> | undefined;
+      if (isAiGame && input.aiOpponent) {
+        aiStatsForSim = Object.fromEntries(
+          STAT_KEYS.map(key => [key, input.aiOpponent!.stats[key] || 500])
+        ) as Record<StatKey, number>;
+      }
       
       const simulation = await simulateGame(
-        game.player1Id,
-        game.player2Id,
-        player1.name,
-        player2.name,
-        game.player1Race,
-        game.player2Race,
+        player.id,
+        isAiGame ? -1 : opponentId,
+        player.name,
+        opponentName,
+        player.race as "terran" | "zerg" | "protoss",
+        opponentRace,
         game.difficulty,
         raceAdvantage,
-        player1.fatigue,
-        player2.fatigue,
-        "balanced" // 기본값으로 균형잡힌 맵 사용
+        player.fatigue,
+        opponentFatigue,
+        "balanced",
+        playerStatsForSim,
+        aiStatsForSim
       );
 
       const winnerId = simulation.winnerId;
@@ -585,9 +781,15 @@ const practiceRouter = router({
       };
       
       const baseStatChanges = calculateStatChanges(isWinner, gameEvents);
-      const opponentId = winnerId === player.id ? opponent.id : player.id;
-      const opponentStatsData = await getPlayerStats(opponentId);
       const playerStatsData = await getPlayerStats(player.id);
+      
+      // AI 상대인 경우 전달받은 능력치 사용, 아닌 경우 DB에서 조회
+      let opponentStatsData;
+      if (isAiGame && input.aiOpponent) {
+        opponentStatsData = input.aiOpponent.stats;
+      } else {
+        opponentStatsData = await getPlayerStats(opponentId);
+      }
       
       const playerStatsMap = {
         attack: playerStatsData?.attack || 0,
@@ -597,10 +799,10 @@ const practiceRouter = router({
       };
       
       const opponentStatsMap = {
-        attack: opponentStatsData?.attack || 0,
-        defense: opponentStatsData?.defense || 0,
-        economy: opponentStatsData?.strategy || 0,
-        intelligence: opponentStatsData?.scout || 0,
+        attack: (opponentStatsData as any)?.attack || 0,
+        defense: (opponentStatsData as any)?.defense || 0,
+        economy: (opponentStatsData as any)?.strategy || 0,
+        intelligence: (opponentStatsData as any)?.scout || 0,
       };
       
       const finalStatChanges = applyReverseSystem(
@@ -656,7 +858,7 @@ const practiceRouter = router({
       await createGameResult({
         gameId: input.gameId,
         playerId: player.id,
-        opponentId: opponent.id,
+        opponentId: isAiGame ? 0 : opponentId, // AI 상대는 0으로 저장
         isWinner,
         expGained,
         goldGained,
@@ -693,6 +895,9 @@ const practiceRouter = router({
         turns: simulation.turns,
         finalScore: isWinner ? simulation.player1FinalScore : simulation.player2FinalScore,
         statChanges,
+        opponentName: isAiGame ? input.aiOpponent?.name : opponentName,
+        opponentRace: isAiGame ? input.aiOpponent?.race : opponentRace,
+        isAiOpponent: isAiGame,
       };
     }),
 
@@ -718,6 +923,7 @@ export const appRouter = router({
   admin: adminRouter,
   event: eventRouter,
   practice: practiceRouter,
+  quest: questRouter,
   ranking: router({
     list: publicProcedure.query(async () => {
       return await getRankingList();

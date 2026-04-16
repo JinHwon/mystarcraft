@@ -1,8 +1,8 @@
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, items, playerItems, players, playerStats, users, events, maps, games, gameResults } from "../drizzle/schema";
+import { InsertUser, items, playerItems, players, playerStats, users, events, maps, games, gameResults, quests, playerQuestProgress } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { StatKey } from "@shared/gameConstants";
-import { desc, eq, and, ne } from "drizzle-orm";
+import { desc, eq, and, ne, sql } from "drizzle-orm";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -452,9 +452,24 @@ export async function getPlayerGameHistory(playerId: number, limit: number = 10)
       let opponentName = "익명 유저";
       let opponentRace = "unknown";
       let opponentGrade = "D";
+      let isAiOpponent = false;
 
-      // 1. 상대 선수 정보에서 이름/종족 조회
-      if (opponentPlayerId && opponentPlayerId > 0) {
+      if (opponentPlayerId === 0) {
+        // AI 상대
+        isAiOpponent = true;
+        opponentName = "AI 상대";
+        
+        // 게임 테이블에서 종족 정보 가져오기
+        if (record.gameId) {
+          const gameResult = await db.select().from(games).where(eq(games.id, record.gameId)).limit(1);
+          if (gameResult.length > 0) {
+            const game = gameResult[0];
+            opponentRace = game.player1Id === playerId ? game.player2Race : game.player1Race;
+          }
+        }
+        opponentGrade = "AI";
+      } else if (opponentPlayerId && opponentPlayerId > 0) {
+        // 1. 상대 선수 정보에서 이름/종족 조회
         const opponentResult = await db.select().from(players).where(eq(players.id, opponentPlayerId)).limit(1);
         if (opponentResult.length > 0) {
           const opponent = opponentResult[0];
@@ -484,6 +499,7 @@ export async function getPlayerGameHistory(playerId: number, limit: number = 10)
         opponentName,
         opponentRace,
         opponentGrade,
+        isAiOpponent,
       };
     })
   );
@@ -707,4 +723,200 @@ export async function getRankingList() {
   }
 
   return rankings.sort((a, b) => b.totalStats - a.totalStats);
+}
+
+
+// ── Quest System ─────────────────────────────────────────────────
+
+export async function seedQuestsIfEmpty() {
+  const db = await getDb();
+  if (!db) return;
+  const existing = await db.select().from(quests).limit(1);
+  if (existing.length > 0) return;
+
+  const seedData = [
+    // 일일퀘스트
+    { type: "daily" as const, title: "연습게임 5판 완료", description: "오늘 연습게임을 5판 플레이하세요", iconEmoji: "🎮", conditionType: "practice_games", conditionValue: 5, rewardType: "gold", rewardValue: 100, sortOrder: 1 },
+    { type: "daily" as const, title: "연습게임 10판 완료", description: "오늘 연습게임을 10판 플레이하세요", iconEmoji: "⚡", conditionType: "practice_games", conditionValue: 10, rewardType: "fatigue", rewardValue: 50, sortOrder: 2 },
+    { type: "daily" as const, title: "3승 달성", description: "오늘 연습게임에서 3번 승리하세요", iconEmoji: "🏆", conditionType: "practice_wins", conditionValue: 3, rewardType: "exp", rewardValue: 150, sortOrder: 3 },
+    { type: "daily" as const, title: "5승 달성", description: "오늘 연습게임에서 5번 승리하세요", iconEmoji: "🔥", conditionType: "practice_wins", conditionValue: 5, rewardType: "gold", rewardValue: 200, sortOrder: 4 },
+    { type: "daily" as const, title: "능력치 배분 1회", description: "능력치 포인트를 1회 배분하세요", iconEmoji: "📊", conditionType: "stat_allocate", conditionValue: 1, rewardType: "gold", rewardValue: 50, sortOrder: 5 },
+    { type: "daily" as const, title: "아이템 구매 1회", description: "상점에서 아이템을 1개 구매하세요", iconEmoji: "🛒", conditionType: "item_buy", conditionValue: 1, rewardType: "exp", rewardValue: 80, sortOrder: 6 },
+    { type: "daily" as const, title: "고수 난이도 도전", description: "고수 난이도 연습게임을 1판 플레이하세요", iconEmoji: "⚔️", conditionType: "practice_advanced", conditionValue: 1, rewardType: "gold", rewardValue: 150, sortOrder: 7 },
+
+    // 누적보상퀘스트
+    { type: "cumulative" as const, title: "첫 승리", description: "연습게임에서 첫 승리를 거두세요", iconEmoji: "🌟", conditionType: "total_wins", conditionValue: 1, rewardType: "gold", rewardValue: 200, sortOrder: 1 },
+    { type: "cumulative" as const, title: "10승 달성", description: "누적 10승을 달성하세요", iconEmoji: "🎯", conditionType: "total_wins", conditionValue: 10, rewardType: "gold", rewardValue: 500, sortOrder: 2 },
+    { type: "cumulative" as const, title: "50승 달성", description: "누적 50승을 달성하세요", iconEmoji: "💎", conditionType: "total_wins", conditionValue: 50, rewardType: "gold", rewardValue: 2000, sortOrder: 3 },
+    { type: "cumulative" as const, title: "100승 달성", description: "누적 100승을 달성하세요", iconEmoji: "👑", conditionType: "total_wins", conditionValue: 100, rewardType: "stat_points", rewardValue: 50, sortOrder: 4 },
+    { type: "cumulative" as const, title: "연습게임 30판", description: "연습게임을 총 30판 플레이하세요", iconEmoji: "🎮", conditionType: "total_games", conditionValue: 30, rewardType: "gold", rewardValue: 300, sortOrder: 5 },
+    { type: "cumulative" as const, title: "연습게임 100판", description: "연습게임을 총 100판 플레이하세요", iconEmoji: "🏅", conditionType: "total_games", conditionValue: 100, rewardType: "gold", rewardValue: 1000, sortOrder: 6 },
+    { type: "cumulative" as const, title: "연습게임 300판", description: "연습게임을 총 300판 플레이하세요", iconEmoji: "🏆", conditionType: "total_games", conditionValue: 300, rewardType: "stat_points", rewardValue: 100, sortOrder: 7 },
+    { type: "cumulative" as const, title: "골드 부자", description: "골드를 총 5000 이상 획득하세요", iconEmoji: "💰", conditionType: "total_gold_earned", conditionValue: 5000, rewardType: "gold", rewardValue: 1000, sortOrder: 8 },
+    { type: "cumulative" as const, title: "레벨 10 달성", description: "선수 레벨 10을 달성하세요", iconEmoji: "⬆️", conditionType: "player_level", conditionValue: 10, rewardType: "gold", rewardValue: 500, sortOrder: 9 },
+    { type: "cumulative" as const, title: "레벨 30 달성", description: "선수 레벨 30을 달성하세요", iconEmoji: "🚀", conditionType: "player_level", conditionValue: 30, rewardType: "stat_points", rewardValue: 80, sortOrder: 10 },
+    { type: "cumulative" as const, title: "C등급 달성", description: "선수 등급 C를 달성하세요", iconEmoji: "📈", conditionType: "player_grade", conditionValue: 3, rewardType: "gold", rewardValue: 800, sortOrder: 11 },
+    { type: "cumulative" as const, title: "A등급 달성", description: "선수 등급 A를 달성하세요", iconEmoji: "🌠", conditionType: "player_grade", conditionValue: 5, rewardType: "stat_points", rewardValue: 150, sortOrder: 12 },
+  ];
+
+  for (const quest of seedData) {
+    await db.insert(quests).values(quest);
+  }
+}
+
+export async function getAllQuests() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(quests).where(eq(quests.isActive, 1));
+}
+
+export async function getPlayerQuestProgress(playerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(playerQuestProgress).where(eq(playerQuestProgress.playerId, playerId));
+}
+
+function getTodayDateString(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+export async function getOrCreateQuestProgress(playerId: number, questId: number, questType: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existing = await db.select().from(playerQuestProgress)
+    .where(and(eq(playerQuestProgress.playerId, playerId), eq(playerQuestProgress.questId, questId)))
+    .limit(1);
+
+  const today = getTodayDateString();
+
+  if (existing.length > 0) {
+    const record = existing[0];
+    // 일일퀘스트: 날짜가 바뀌었으면 리셋
+    if (questType === 'daily' && record.lastResetDate !== today) {
+      await db.update(playerQuestProgress).set({
+        progress: 0,
+        completed: 0,
+        rewardClaimed: 0,
+        lastResetDate: today,
+      }).where(eq(playerQuestProgress.id, record.id));
+      return { ...record, progress: 0, completed: 0, rewardClaimed: 0, lastResetDate: today };
+    }
+    return record;
+  }
+
+  // 새로 생성
+  await db.insert(playerQuestProgress).values({
+    playerId,
+    questId,
+    progress: 0,
+    completed: 0,
+    rewardClaimed: 0,
+    lastResetDate: questType === 'daily' ? today : null,
+  });
+
+  const created = await db.select().from(playerQuestProgress)
+    .where(and(eq(playerQuestProgress.playerId, playerId), eq(playerQuestProgress.questId, questId)))
+    .limit(1);
+  return created[0];
+}
+
+export async function updateQuestProgress(playerId: number, questId: number, progress: number, conditionValue: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const completed = progress >= conditionValue ? 1 : 0;
+  await db.update(playerQuestProgress).set({
+    progress: Math.min(progress, conditionValue),
+    completed,
+  }).where(and(eq(playerQuestProgress.playerId, playerId), eq(playerQuestProgress.questId, questId)));
+}
+
+export async function claimQuestReward(playerId: number, questId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(playerQuestProgress).set({
+    rewardClaimed: 1,
+  }).where(and(eq(playerQuestProgress.playerId, playerId), eq(playerQuestProgress.questId, questId)));
+}
+
+export async function getDailyGameCount(playerId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+
+  const today = getTodayDateString();
+  const startOfDay = `${today} 00:00:00`;
+  const endOfDay = `${today} 23:59:59`;
+
+  const result = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(gameResults)
+    .where(and(
+      eq(gameResults.playerId, playerId),
+      sql`${gameResults.createdAt} >= ${startOfDay}`,
+      sql`${gameResults.createdAt} <= ${endOfDay}`,
+    ));
+
+  return Number(result[0]?.count ?? 0);
+}
+
+export async function getDailyWinCount(playerId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+
+  const today = getTodayDateString();
+  const startOfDay = `${today} 00:00:00`;
+  const endOfDay = `${today} 23:59:59`;
+
+  const result = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(gameResults)
+    .where(and(
+      eq(gameResults.playerId, playerId),
+      eq(gameResults.isWinner, 1),
+      sql`${gameResults.createdAt} >= ${startOfDay}`,
+      sql`${gameResults.createdAt} <= ${endOfDay}`,
+    ));
+
+  return Number(result[0]?.count ?? 0);
+}
+
+export async function getDailyAdvancedGameCount(playerId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+
+  const today = getTodayDateString();
+  const startOfDay = `${today} 00:00:00`;
+  const endOfDay = `${today} 23:59:59`;
+
+  const result = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(gameResults)
+    .innerJoin(games, eq(gameResults.gameId, games.id))
+    .where(and(
+      eq(gameResults.playerId, playerId),
+      eq(games.difficulty, 'advanced'),
+      sql`${gameResults.createdAt} >= ${startOfDay}`,
+      sql`${gameResults.createdAt} <= ${endOfDay}`,
+    ));
+
+  return Number(result[0]?.count ?? 0);
+}
+
+export async function getTotalGoldEarned(playerId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+
+  const result = await db.select({ total: sql<number>`COALESCE(SUM(${gameResults.goldGained}), 0)` })
+    .from(gameResults)
+    .where(eq(gameResults.playerId, playerId));
+
+  return Number(result[0]?.total ?? 0);
+}
+
+export async function getPlayerGradeIndex(playerId: number): Promise<number> {
+  const { calcGradeIndex, STAT_KEYS } = await import("@shared/gameConstants");
+  const stats = await getPlayerStats(playerId);
+  if (!stats) return 0;
+  const totalStats = STAT_KEYS.reduce((sum: number, key: string) => sum + ((stats as any)[key] || 0), 0);
+  return calcGradeIndex(totalStats);
 }
