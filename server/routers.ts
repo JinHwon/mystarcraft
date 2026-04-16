@@ -50,7 +50,7 @@ import { players } from "../drizzle/schema";
 import { storagePut } from "./storage";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, MAPS, calcGradeIndex, calcTotalStats, STAT_KEYS, StatKey } from "@shared/gameConstants";
+import { DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, FATIGUE_MIN_TO_PLAY, MAPS, calcGradeIndex, calcTotalStats, STAT_KEYS, StatKey } from "@shared/gameConstants";
 import { simulateGame, calculateWinProbability } from "./gameSimulation";
 import { type MapCharacteristic } from "./buildSystem";
 import { generatePlayerActions, generateGameCommentary } from "./buildActions";
@@ -367,6 +367,11 @@ const practiceRouter = router({
       const activeEvents = await getActiveEvents();
       const hasUnlimitedFatigueEvent = activeEvents.some(e => e.type === 'fatigue_unlimited');
       
+      // 피로도 10 이하면 게임 불가
+      if (!hasUnlimitedFatigueEvent && player.fatigue <= FATIGUE_MIN_TO_PLAY) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `피로도가 너무 낮습니다 (현재: ${player.fatigue}). 피로도가 ${FATIGUE_MIN_TO_PLAY}보다 높아야 게임을 할 수 있습니다.` });
+      }
+      
       if (!hasUnlimitedFatigueEvent && player.fatigue < FATIGUE_COST[input.difficulty]) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "피로도가 부족합니다" });
       }
@@ -528,15 +533,47 @@ const practiceRouter = router({
         baseStatChanges
       );
       
+      // 전체 능력치 변동 - 게임 해설/이벤트에 따른 영향도 반영
+      // attack → 공격력, defense → 수비력, economy → 전략, intelligence → 정찰
+      // 추가로 sense, control, harass, supply도 게임 결과에 따라 변동
+      const attackChange = finalStatChanges.attack;
+      const defenseChange = finalStatChanges.defense;
+      const economyChange = finalStatChanges.economy;
+      const intelligenceChange = finalStatChanges.intelligence;
+      
+      // 센스: 전략적 판단 관련 - 경제/정찰 이벤트 영향
+      const senseBase = Math.round((economyChange + intelligenceChange) / 2);
+      const senseChange = isWinner 
+        ? Math.max(-3, Math.min(4, senseBase + Math.floor(Math.random() * 3) - 1))
+        : Math.max(-4, Math.min(2, senseBase + Math.floor(Math.random() * 3) - 2));
+      
+      // 컨트롤: 전투 관련 - 공격/방어 이벤트 영향
+      const controlBase = Math.round((attackChange + defenseChange) / 2);
+      const controlChange = isWinner
+        ? Math.max(-3, Math.min(4, controlBase + Math.floor(Math.random() * 3) - 1))
+        : Math.max(-4, Math.min(2, controlBase + Math.floor(Math.random() * 3) - 2));
+      
+      // 견제: 공격적 플레이 관련 - 공격/정찰 이벤트 영향
+      const harassBase = Math.round((attackChange + intelligenceChange) / 2);
+      const harassChange = isWinner
+        ? Math.max(-3, Math.min(4, harassBase + Math.floor(Math.random() * 3) - 1))
+        : Math.max(-4, Math.min(2, harassBase + Math.floor(Math.random() * 3) - 2));
+      
+      // 물량: 경제/방어 관련 - 경제/방어 이벤트 영향
+      const supplyBase = Math.round((economyChange + defenseChange) / 2);
+      const supplyChange = isWinner
+        ? Math.max(-3, Math.min(4, supplyBase + Math.floor(Math.random() * 3) - 1))
+        : Math.max(-4, Math.min(2, supplyBase + Math.floor(Math.random() * 3) - 2));
+      
       const statChanges: Record<string, number> = {
-        sense: 0,
-        control: 0,
-        attack: finalStatChanges.attack,
-        harass: 0,
-        strategy: finalStatChanges.economy,
-        supply: 0,
-        defense: finalStatChanges.defense,
-        scout: finalStatChanges.intelligence,
+        sense: senseChange,
+        control: controlChange,
+        attack: attackChange,
+        harass: harassChange,
+        strategy: economyChange,
+        supply: supplyChange,
+        defense: defenseChange,
+        scout: intelligenceChange,
       };
 
       await createGameResult({

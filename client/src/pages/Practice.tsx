@@ -5,8 +5,8 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { RACE_COLORS, RACE_LABELS, DIFFICULTY_RANGES, GAME_REWARDS } from "@shared/gameConstants";
-import { Loader2, X } from "lucide-react";
+import { RACE_COLORS, RACE_LABELS, DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, FATIGUE_MIN_TO_PLAY } from "@shared/gameConstants";
+import { Loader2, X, ArrowLeft } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { STAT_LABELS } from "@shared/gameConstants";
 
@@ -144,34 +144,47 @@ export default function PracticePage() {
   };
 
   if (phase === "difficulty") {
+    const currentFatigue = playerQuery.data?.fatigue ?? 0;
+    const isFatigueTooLow = currentFatigue <= FATIGUE_MIN_TO_PLAY;
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 md:p-4">
         <div className="max-w-2xl mx-auto">
           <div className="text-center mb-6 md:mb-12">
             <h1 className="text-2xl md:text-4xl font-bold text-white mb-1 md:mb-2">연습게임</h1>
             <p className="text-xs md:text-base text-slate-400">난이도를 선택하세요</p>
+            <p className="text-xs md:text-sm text-slate-400 mt-1">현재 피로도: <span className={isFatigueTooLow ? "text-red-400 font-bold" : "text-blue-400 font-bold"}>{currentFatigue}</span></p>
+            {isFatigueTooLow && (
+              <p className="text-xs md:text-sm text-red-400 mt-1">⚠️ 피로도가 {FATIGUE_MIN_TO_PLAY} 이하이면 게임을 할 수 없습니다.</p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
-            {Object.entries(GAME_REWARDS).map(([key, rewards]) => (
-              <Card
-                key={key}
-                className="bg-slate-800 border-slate-700 hover:border-blue-500 cursor-pointer transition-all"
-                onClick={() => handleSelectDifficulty(key as any)}
-              >
-                <CardHeader>
-                  <CardTitle className="text-sm md:text-base text-white">{difficultyLabels[key]}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-1 md:space-y-2 text-xs md:text-sm text-slate-300">
-                    <p>승리 경험치: {rewards.expWin}</p>
-                    <p>패배 경험치: {rewards.expLose}</p>
-                    <p>승리 골드: {rewards.goldWin}</p>
-                    <p>패배 골드: {rewards.goldLose}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            {Object.entries(GAME_REWARDS).map(([key, rewards]) => {
+              const cost = FATIGUE_COST[key as keyof typeof FATIGUE_COST];
+              const canPlay = !isFatigueTooLow && currentFatigue >= cost;
+              return (
+                <Card
+                  key={key}
+                  className={`bg-slate-800 border-slate-700 transition-all ${canPlay ? 'hover:border-blue-500 cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                  onClick={() => canPlay && handleSelectDifficulty(key as any)}
+                >
+                  <CardHeader>
+                    <CardTitle className="text-sm md:text-base text-white">{difficultyLabels[key]}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-1 md:space-y-2 text-xs md:text-sm text-slate-300">
+                      <p>승리 경험치: {rewards.expWin}</p>
+                      <p>패배 경험치: {rewards.expLose}</p>
+                      <p>승리 골드: {rewards.goldWin}</p>
+                      <p>패배 골드: {rewards.goldLose}</p>
+                      <p className="text-yellow-400">피로도 소모: {cost}</p>
+                      {!canPlay && <p className="text-red-400 text-xs">피로도 부족</p>}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -217,6 +230,16 @@ export default function PracticePage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 md:p-4">
         <div className="max-w-4xl mx-auto">
+          <div className="mb-4">
+            <Button
+              onClick={() => { setPhase("difficulty"); setGameState({}); }}
+              variant="ghost"
+              className="text-slate-400 hover:text-white"
+              size="sm"
+            >
+              <ArrowLeft className="w-4 h-4 mr-1" /> 뒤로가기
+            </Button>
+          </div>
           <div className="text-center mb-6 md:mb-12">
             <h1 className="text-2xl md:text-4xl font-bold text-white mb-1 md:mb-2">맵 선택</h1>
             <p className="text-xs md:text-base text-slate-400">플레이할 맵을 선택하세요</p>
@@ -287,61 +310,93 @@ export default function PracticePage() {
   }
 
   if (phase === "opponent") {
+    const hasError = findOpponentMutation.isError;
+    const errorMessage = findOpponentMutation.error?.message || "상대를 찾을 수 없습니다";
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 md:p-4">
         <div className="max-w-2xl mx-auto">
+          <div className="mb-4">
+            <Button
+              onClick={() => { setPhase("difficulty"); setGameState({}); findOpponentMutation.reset(); }}
+              variant="ghost"
+              className="text-slate-400 hover:text-white"
+              size="sm"
+            >
+              <ArrowLeft className="w-4 h-4 mr-1" /> 뒤로가기
+            </Button>
+          </div>
           <div className="text-center mb-6 md:mb-12">
             <h1 className="text-2xl md:text-4xl font-bold text-white mb-1 md:mb-2">상대 선수</h1>
             <p className="text-xs md:text-base text-slate-400">상대와의 승률을 확인하세요</p>
           </div>
 
-          <Card className="bg-slate-800 border-slate-700 mb-4 md:mb-6">
-            <CardHeader>
-              <CardTitle className="text-sm md:text-base text-white">{gameState.opponentName}</CardTitle>
-              <CardDescription className="text-xs md:text-sm">{RACE_LABELS[gameState.opponentRace as keyof typeof RACE_LABELS]}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 md:space-y-4">
-              {gameState.opponentGrade && (
-                <div className="p-2 md:p-3 bg-slate-700 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs md:text-sm text-slate-300">등급</span>
-                    <span className="font-bold text-base md:text-lg text-yellow-400">{gameState.opponentGrade}</span>
-                  </div>
-                </div>
-              )}
-              <div>
-                <div className="flex justify-between text-xs md:text-sm text-slate-300 mb-1 md:mb-2">
-                  <span>승률</span>
-                  <span className="font-bold text-blue-400">{gameState.winProbability}%</span>
-                </div>
-                <div className="w-full bg-slate-700 rounded-full h-2 md:h-3">
-                  <div
-                    className="bg-blue-500 h-2 md:h-3 rounded-full"
-                    style={{ width: `${gameState.winProbability}%` }}
-                  />
-                </div>
-              </div>
-              <Button 
-                onClick={handleStartGame} 
-                disabled={playGameMutation.isPending || findOpponentMutation.isPending}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
-              >
-                {findOpponentMutation.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    상대 선수 로드 중...
-                  </>
-                ) : playGameMutation.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    게임 시작 중...
-                  </>
-                ) : (
-                  "게임 시작"
+          {hasError ? (
+            <Card className="bg-slate-800 border-slate-700 mb-4 md:mb-6">
+              <CardContent className="pt-6 text-center space-y-4">
+                <p className="text-red-400 text-sm md:text-base">⚠️ {errorMessage}</p>
+                <p className="text-slate-400 text-xs md:text-sm">해당 난이도에 맞는 상대가 없습니다.</p>
+                <Button 
+                  onClick={() => { setPhase("difficulty"); setGameState({}); findOpponentMutation.reset(); }}
+                  className="bg-slate-600 hover:bg-slate-700 text-sm md:text-base"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" /> 난이도 선택으로 돌아가기
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="bg-slate-800 border-slate-700 mb-4 md:mb-6">
+              <CardHeader>
+                <CardTitle className="text-sm md:text-base text-white">{gameState.opponentName || "상대 검색 중..."}</CardTitle>
+                {gameState.opponentRace && (
+                  <CardDescription className="text-xs md:text-sm">{RACE_LABELS[gameState.opponentRace as keyof typeof RACE_LABELS]}</CardDescription>
                 )}
-              </Button>
-            </CardContent>
-          </Card>
+              </CardHeader>
+              <CardContent className="space-y-3 md:space-y-4">
+                {gameState.opponentGrade && (
+                  <div className="p-2 md:p-3 bg-slate-700 rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs md:text-sm text-slate-300">등급</span>
+                      <span className="font-bold text-base md:text-lg text-yellow-400">{gameState.opponentGrade}</span>
+                    </div>
+                  </div>
+                )}
+                {gameState.winProbability !== undefined && (
+                  <div>
+                    <div className="flex justify-between text-xs md:text-sm text-slate-300 mb-1 md:mb-2">
+                      <span>승률</span>
+                      <span className="font-bold text-blue-400">{gameState.winProbability}%</span>
+                    </div>
+                    <div className="w-full bg-slate-700 rounded-full h-2 md:h-3">
+                      <div
+                        className="bg-blue-500 h-2 md:h-3 rounded-full"
+                        style={{ width: `${gameState.winProbability}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+                <Button 
+                  onClick={handleStartGame} 
+                  disabled={playGameMutation.isPending || findOpponentMutation.isPending || !gameState.gameId}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
+                >
+                  {findOpponentMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      상대 선수 로드 중...
+                    </>
+                  ) : playGameMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      게임 시작 중...
+                    </>
+                  ) : (
+                    "게임 시작"
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     );
@@ -379,19 +434,20 @@ export default function PracticePage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-6 mb-4 md:mb-6">
             {/* 왼쪽: 누적 해설 */}
             <div className="lg:col-span-1 flex flex-col">
-              <Card className="bg-slate-800 border-slate-700 flex-1 flex flex-col">
+              <Card className="bg-slate-800 border-slate-700 flex-1 flex flex-col" style={{ maxHeight: '600px' }}>
                 <CardHeader>
                   <CardTitle className="text-sm md:text-base text-white">게임 해설</CardTitle>
                 </CardHeader>
-                <CardContent className="flex-1 overflow-y-auto min-h-0 flex flex-col" ref={(el) => {
+                <CardContent className="flex-1 overflow-y-auto min-h-0" style={{ maxHeight: '500px' }} ref={(el) => {
                     if (el) {
+                      // 자동으로 맨 아래로 스크롤 (새 해설이 추가될 때)
                       setTimeout(() => {
-                        el.scrollTop = 0;
+                        el.scrollTop = el.scrollHeight;
                       }, 0);
                     }
                   }}>
-                  <div className="space-y-1 md:space-y-2 flex flex-col-reverse flex-1 min-h-0">
-                    {[...displayedCommentaries].reverse().map((commentary: string, idx: number) => {
+                  <div className="space-y-1 md:space-y-2">
+                    {displayedCommentaries.map((commentary: string, idx: number) => {
                       let textColor = "text-slate-300";
                       let borderColor = "border-slate-500";
                       let bgColor = "bg-slate-700/30";

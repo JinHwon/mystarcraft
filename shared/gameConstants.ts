@@ -243,11 +243,11 @@ export const MAPS = [
   },
 ];
 
-// 난이도별 등급 범위
+// 난이도별 상대 등급 범위 (상대방의 등급 기준)
 export const DIFFICULTY_RANGES = {
   beginner: { minGrade: "F", maxGrade: "D", minIndex: 0, maxIndex: 2 },
   intermediate: { minGrade: "D", maxGrade: "B", minIndex: 2, maxIndex: 4 },
-  advanced: { minGrade: "B", maxGrade: "S", minIndex: 4, maxIndex: 7 },
+  advanced: { minGrade: "B", maxGrade: "SSS", minIndex: 4, maxIndex: 8 },
 };
 
 // 게임 보상 (난이도별)
@@ -263,3 +263,6 @@ export const FATIGUE_COST = {
   intermediate: 15,
   advanced: 20,
 };
+
+// 연습게임 최소 피로도 (이 값 이하면 게임 불가)
+export const FATIGUE_MIN_TO_PLAY = 10;

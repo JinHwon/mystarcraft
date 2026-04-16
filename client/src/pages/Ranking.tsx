@@ -3,17 +3,22 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { STAT_LABELS, RACE_LABELS } from "@shared/gameConstants";
+import { STAT_LABELS, RACE_LABELS, GRADE_COLORS, calcGrade } from "@shared/gameConstants";
+import type { StatKey } from "@shared/gameConstants";
 import { ChevronLeft, ChevronRight, Trophy, Medal, Award } from "lucide-react";
 
 const ITEMS_PER_PAGE = 20;
 
-const GRADE_COLORS: Record<string, string> = {
-  S: "text-red-400 border-red-500 bg-red-500/10",
-  A: "text-orange-400 border-orange-500 bg-orange-500/10",
-  B: "text-yellow-400 border-yellow-500 bg-yellow-500/10",
-  C: "text-green-400 border-green-500 bg-green-500/10",
-  D: "text-slate-400 border-slate-500 bg-slate-500/10",
+const GRADE_STYLE_CLASSES: Record<string, string> = {
+  SSS: "text-pink-400 border-pink-500 bg-pink-500/10",
+  SS: "text-red-400 border-red-500 bg-red-500/10",
+  S: "text-orange-400 border-orange-500 bg-orange-500/10",
+  A: "text-yellow-400 border-yellow-500 bg-yellow-500/10",
+  B: "text-pink-400 border-pink-500 bg-pink-500/10",
+  C: "text-purple-400 border-purple-500 bg-purple-500/10",
+  D: "text-blue-400 border-blue-500 bg-blue-500/10",
+  E: "text-green-400 border-green-500 bg-green-500/10",
+  F: "text-slate-400 border-slate-500 bg-slate-500/10",
 };
 
 const RACE_BADGE_COLORS: Record<string, string> = {
@@ -107,6 +112,9 @@ export default function RankingPage() {
             paginatedRankings.map((player, index) => {
               const rank = (currentPage - 1) * ITEMS_PER_PAGE + index + 1;
               const isTop3 = rank <= 3;
+              const calculatedGrade = calcGrade(player.totalStats);
+              const gradeColor = GRADE_COLORS[calculatedGrade as keyof typeof GRADE_COLORS] ?? "#9CA3AF";
+              const gradeClasses = GRADE_STYLE_CLASSES[calculatedGrade] ?? GRADE_STYLE_CLASSES["F"];
 
               return (
                 <Card
@@ -128,8 +136,11 @@ export default function RankingPage() {
                       <Badge className={`text-xs border ${RACE_BADGE_COLORS[player.race] ?? "bg-slate-500/20 text-slate-300"}`}>
                         {RACE_LABELS[player.race] ?? player.race}
                       </Badge>
-                      <span className={`text-center font-bold text-lg ${GRADE_COLORS[player.grade]?.split(" ")[0] ?? "text-slate-400"}`}>
-                        {player.grade}
+                      <span
+                        className={`text-center font-black text-lg px-1.5 py-0.5 rounded-md border ${gradeClasses}`}
+                        style={{ textShadow: `0 0 8px ${gradeColor}60` }}
+                      >
+                        {calculatedGrade}
                       </span>
                       <span className="text-center text-sm text-slate-300">{player.sense}</span>
                       <span className="text-center text-sm text-slate-300">{player.control}</span>
@@ -158,8 +169,11 @@ export default function RankingPage() {
                             </Badge>
                           </div>
                           <div className="flex items-center gap-2 mt-1">
-                            <span className={`font-bold text-sm ${GRADE_COLORS[player.grade]?.split(" ")[0] ?? "text-slate-400"}`}>
-                              {player.grade}등급
+                            <span
+                              className={`font-black text-sm px-1.5 py-0.5 rounded-md border ${gradeClasses}`}
+                              style={{ textShadow: `0 0 8px ${gradeColor}60` }}
+                            >
+                              {calculatedGrade}
                             </span>
                             <span className="text-xs text-slate-500">Lv.{player.level}</span>
                           </div>

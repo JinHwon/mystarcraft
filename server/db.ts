@@ -427,7 +427,7 @@ export async function completeGame(gameId: number, winnerId: number, player1Scor
   await db.update(games).set({ winnerId, player1ActualScore: player1Score, player2ActualScore: player2Score, completedAt: new Date().toISOString() }).where(eq(games.id, gameId));
 }
 
-export export async function createGameResult(resultData: any) {
+export async function createGameResult(resultData: any) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const result = await db.insert(gameResults).values(resultData);
@@ -493,30 +493,40 @@ export async function findOpponentByDifficulty(difficulty: string, currentPlayer
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  let gradeFilter: string[];
-  if (difficulty === "beginner") {
-    gradeFilter = ["D", "C", "B"];
-  } else if (difficulty === "intermediate") {
-    gradeFilter = ["B", "C", "D"];
-  } else {
-    gradeFilter = ["S", "A", "B"];
-  }
-
-  // 현재 플레이어 조회
-  const currentPlayer = await db.select().from(players).where(eq(players.id, currentPlayerId)).limit(1);
-  if (currentPlayer.length === 0) throw new Error("선수를 찾을 수 없습니다");
+  // 난이도별 상대 등급 범위 (상대방 등급 기준)
+  // 초보: F~D (index 0~2), 중수: D~B (index 2~4), 고수: B~SSS (index 4~8)
+  const { DIFFICULTY_RANGES, calcTotalStats, calcGradeIndex, STAT_KEYS } = await import("@shared/gameConstants");
+  const range = DIFFICULTY_RANGES[difficulty as keyof typeof DIFFICULTY_RANGES];
+  if (!range) throw new Error("잘못된 난이도입니다");
 
   // 자신을 제외한 모든 플레이어 조회
   const opponents = await db.select().from(players)
-    .where(
-      ne(players.id, currentPlayerId)  // 자신 제외
-    )
-    .limit(100);  // 최대 100명 조회
+    .where(ne(players.id, currentPlayerId))
+    .limit(200);
 
-  if (opponents.length === 0) throw new Error("상대를 찾을 수 없습니다");
+  if (opponents.length === 0) return null;
+  
+  // 상대방의 등급을 계산하여 난이도 범위에 맞는 상대만 필터링
+  const validOpponents = [];
+  for (const opponent of opponents) {
+    const stats = await db.select().from(playerStats)
+      .where(eq(playerStats.playerId, opponent.id))
+      .limit(1);
+    
+    if (stats.length === 0) continue;
+    
+    const totalStats = STAT_KEYS.reduce((sum: number, key: string) => sum + ((stats[0] as any)[key] || 0), 0);
+    const gradeIndex = calcGradeIndex(totalStats);
+    
+    if (gradeIndex >= range.minIndex && gradeIndex <= range.maxIndex) {
+      validOpponents.push(opponent);
+    }
+  }
+
+  if (validOpponents.length === 0) return null;
   
   // 랜덤 선택
-  return opponents[Math.floor(Math.random() * opponents.length)];
+  return validOpponents[Math.floor(Math.random() * validOpponents.length)];
 }
 
 export async function updatePlayerExp(playerId: number, expGained: number) {

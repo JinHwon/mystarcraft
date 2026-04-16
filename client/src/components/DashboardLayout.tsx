@@ -28,6 +28,14 @@ import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 import { trpc } from "@/lib/trpc";
+import {
+  STAT_KEYS,
+  STAT_MAX,
+  GRADE_COLORS,
+  calcGrade,
+  calcTotalStats,
+} from "@shared/gameConstants";
+import type { StatKey } from "@shared/gameConstants";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Page 1", path: "/" },
@@ -125,6 +133,29 @@ function DashboardLayoutContent({
   }, [isMobile, setOpenMobile]);
   const { data: playerData } = trpc.player.get.useQuery();
   const { data: playerItems = [] } = trpc.shop.getPlayerItems.useQuery();
+  
+  // 착용 중인 아이템 능력치 합산
+  const itemBoosts: Partial<Record<StatKey, number>> = {};
+  playerItems.forEach((pi: any) => {
+    if (!pi.equipped) return;
+    const boosts = (typeof pi.item.statBoosts === 'string' ? (() => { try { return JSON.parse(pi.item.statBoosts); } catch { return {}; } })() : pi.item.statBoosts) ?? {};
+    Object.entries(boosts).forEach(([k, v]) => {
+      const key = k as StatKey;
+      itemBoosts[key] = (itemBoosts[key] ?? 0) + ((v as number) ?? 0);
+    });
+  });
+
+  // 아이템 포함 등급 계산
+  const effectiveGrade = (() => {
+    if (!playerData?.stats) return playerData?.grade || "F";
+    const stats = playerData.stats;
+    const effectiveStats: Record<StatKey, number> = {} as Record<StatKey, number>;
+    STAT_KEYS.forEach((key) => {
+      effectiveStats[key] = Math.min((stats[key] ?? 0) + (itemBoosts[key] ?? 0), STAT_MAX);
+    });
+    return calcGrade(calcTotalStats(effectiveStats));
+  })();
+  const gradeColor = GRADE_COLORS[effectiveGrade as keyof typeof GRADE_COLORS] ?? "#9CA3AF";
   
   // 사용 횟수 5회 이하인 아이템 개수
   const expiredItemsCount = playerItems.filter((item: any) => item.usageCount && item.usageCount <= 5).length;
@@ -244,10 +275,10 @@ function DashboardLayoutContent({
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground truncate mt-1.5 space-y-0.5">
-                      <p>등급: <span className="font-semibold text-primary">{playerData?.grade || "F"}</span></p>
+                      <p>등급: <span className="font-semibold" style={{ color: gradeColor }}>{effectiveGrade}</span></p>
                       <p>
                         {playerData?.gameRecord 
-                          ? `${playerData.gameRecord.totalGames}전 ${playerData.gameRecord.wins}승 ${playerData.gameRecord.losses}패`
+                          ? `${playerData.gameRecord.total}전 ${playerData.gameRecord.wins}승 ${playerData.gameRecord.losses}패`
                           : "0전 0승 0패"
                         }
                       </p>

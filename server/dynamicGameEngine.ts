@@ -172,8 +172,8 @@ function updateResourcesAndTroops(gs: GameState, p: PlayerState): void {
   // 종족별 유불리: 저그는 병력 1.5배 빠름
   const raceTroopBonus = p.race === 'zerg' ? 1.5 : 1.0;
 
-  // 자원 증가: 기본 100~150/턴 * 멀티 수 (대폭 증가)
-  const resInc = rRate * p.multiCount * ecoMul * frontPenalty * raceResourceBonus;
+  // 자원 증가: 기본 150~225/턴 * 멀티 수 (대폭 증가)
+  const resInc = rRate * 1.5 * p.multiCount * ecoMul * frontPenalty * raceResourceBonus;
   const resVar = 1.0 + (Math.random() - 0.5) * 0.3;
   p.resources = Math.min(GAME_MAX_RESOURCES, p.resources + resInc * resVar);
 
@@ -193,18 +193,18 @@ function resolveEngagement(gs: GameState): { winnerIsP1: boolean; decisive: bool
   const p1 = gs.player1, p2 = gs.player2;
   let p1Pow = p1.supply, p2Pow = p2.supply;
 
-  // 능력치 보정 (최대 ±40%)
+  // 능력치 보정 (최대 ±60%) - 능력치가 높으면 확실한 우위
   if (p1.stats) {
-    const bonus = (p1.stats.attack + p1.stats.control + p1.stats.strategy) / 150;
-    p1Pow *= (1 + (bonus - 1) * 0.4);
+    const bonus = (p1.stats.attack * 1.5 + p1.stats.control * 1.2 + p1.stats.strategy + p1.stats.defense * 0.8 + p1.stats.sense * 0.5) / 250;
+    p1Pow *= (1 + (bonus - 1) * 0.6);
   }
   if (p2.stats) {
-    const bonus = (p2.stats.attack + p2.stats.control + p2.stats.strategy) / 150;
-    p2Pow *= (1 + (bonus - 1) * 0.4);
+    const bonus = (p2.stats.attack * 1.5 + p2.stats.control * 1.2 + p2.stats.strategy + p2.stats.defense * 0.8 + p2.stats.sense * 0.5) / 250;
+    p2Pow *= (1 + (bonus - 1) * 0.6);
   }
-  // 랜덤 ±15%
-  p1Pow *= 1 + (Math.random() - 0.5) * 0.3;
-  p2Pow *= 1 + (Math.random() - 0.5) * 0.3;
+  // 랜덤 ±10% (줄여서 능력치 영향력 강화)
+  p1Pow *= 1 + (Math.random() - 0.5) * 0.2;
+  p2Pow *= 1 + (Math.random() - 0.5) * 0.2;
 
   // 종족별 유불리: 프로토스는 전투 승률 1.5배 높음
   if (p1.race === 'protoss') p1Pow *= 1.5;
@@ -361,9 +361,20 @@ export function progressGame(gs: GameState): void {
     gs.turnCommentaries.push(generateSituationCommentary());
   }
 
-  // 유불리 계산
-  const s1 = gs.player1.supply * 2.5 + gs.player1.resources / 150;
-  const s2 = gs.player2.supply * 2.5 + gs.player2.resources / 150;
+  // 유불리 계산 - 능력치도 반영
+  let s1 = gs.player1.supply * 2.5 + gs.player1.resources / 150;
+  let s2 = gs.player2.supply * 2.5 + gs.player2.resources / 150;
+  
+  // 능력치 보정: 전체 능력치 합산의 영향 (최대 ±30%)
+  if (gs.player1.stats) {
+    const statSum = (gs.player1.stats.attack + gs.player1.stats.defense + gs.player1.stats.control + gs.player1.stats.strategy + gs.player1.stats.sense) / 5;
+    s1 *= 1 + (statSum - 50) / 300;
+  }
+  if (gs.player2.stats) {
+    const statSum = (gs.player2.stats.attack + gs.player2.stats.defense + gs.player2.stats.control + gs.player2.stats.strategy + gs.player2.stats.sense) / 5;
+    s2 *= 1 + (statSum - 50) / 300;
+  }
+  
   const total = s1 + s2;
   gs.player1Advantage = total > 0 ? (s1 / total) * 100 : 50;
 
