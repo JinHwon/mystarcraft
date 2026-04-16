@@ -15,6 +15,7 @@ export type GameEventType =
   | "resource_drain"  // 자원 드레인
   | "multi_destroy"   // 멀티 파괴
   | "tech_upgrade"    // 기술 업그레이드
+  | "production_hit"  // 생산기지 타격
   | "unit_produced"   // 유닛 생산
   | "building_built"  // 건물 건설
   | "situation";      // 상황 설명
@@ -164,11 +165,12 @@ export const ZERG_BUILDS: Record<BuildStrategy, RaceSpecificBuild> = {
  * 게임 이벤트 확률 (턴마다)
  */
 export const EVENT_PROBABILITIES = {
-  engagement: 0.30,      // 30% 교전 발생 (대폭 증가)
-  harass: 0.20,          // 20% 견제 발생
-  resource_drain: 0.08,  // 8% 자원 드레인
-  multi_destroy: 0.10,   // 10% 멀티/앞마당 파괴 (증가)
-  tech_upgrade: 0.10,    // 10% 기술 업그레이드
+  engagement: 0.28,      // 28% 교전 발생
+  harass: 0.18,          // 18% 견제 발생
+  resource_drain: 0.06,  // 6% 자원 드레인
+  multi_destroy: 0.10,   // 10% 멀티/앞마당 파괴
+  production_hit: 0.10,  // 10% 생산기지 타격 (신규)
+  tech_upgrade: 0.08,    // 8% 기술 업그레이드
 };
 
 /**

@@ -77,6 +77,12 @@ export function generateGameEvent(context: GameEventContext): GameEvent | null {
     return generateMultiDestroyEvent(context);
   }
 
+  // 생산기지 타격 이벤트
+  cumulativeProbability += EVENT_PROBABILITIES.production_hit;
+  if (random < cumulativeProbability) {
+    return generateProductionHitEvent(context);
+  }
+
   // 기술 업그레이드 이벤트
   cumulativeProbability += EVENT_PROBABILITIES.tech_upgrade;
   if (random < cumulativeProbability) {
@@ -93,10 +99,13 @@ function generateEngagementEvent(context: GameEventContext): GameEvent {
   const player1Supply = context.player1.supply;
   const player2Supply = context.player2.supply;
   const supplyDiff = player1Supply - player2Supply;
+  const totalSupply = player1Supply + player2Supply;
   const battleLocation = determineBattleLocation();
 
-  // 병력이 많은 쪽이 이기는 확률 높음
-  const player1WinChance = supplyDiff > 0 ? 0.65 : 0.35;
+  // ── 병력이 많은 쪽이 이기는 확률: 병력 비율에 비례 (최소 20%, 최대 85%) ──
+  let player1WinChance = totalSupply > 0 ? player1Supply / totalSupply : 0.5;
+  // 병력 차이를 더 극적으로 반영 (비율을 0.2~0.85 범위로 스케일)
+  player1WinChance = 0.2 + player1WinChance * 0.65;
   const player1Wins = Math.random() < player1WinChance;
 
   if (player1Wins) {
@@ -291,6 +300,41 @@ function generateTechUpgradeEvent(context: GameEventContext): GameEvent {
       data: `${context.player2.name} 선수가 ${tech} 완료!`,
       impact: "positive",
       commentary: `${context.player2.name} 선수가 ${tech}를 완료했습니다! 이제 더욱 강해질 것 같습니다.`,
+    };
+  }
+}
+
+/**
+ * 생산기지 타격 이벤트 생성
+ */
+function generateProductionHitEvent(context: GameEventContext): GameEvent {
+  const isPlayer1Attack = Math.random() > 0.5;
+
+  const productionNames: Record<string, string[]> = {
+    terran: ["배럭", "팩토리", "스타포트"],
+    protoss: ["게이트웨이", "로보틱스 팩토리", "스타게이트"],
+    zerg: ["해처리", "레어", "하이브"],
+  };
+
+  if (isPlayer1Attack) {
+    const targetBuilding = productionNames[context.player2.race][Math.floor(Math.random() * 3)];
+    return {
+      type: "production_hit",
+      turn: context.turn,
+      playerId: 1,
+      data: `${context.player1.name} 선수가 상대 ${targetBuilding}을 타격!`,
+      impact: "positive",
+      commentary: `${context.player1.name} 선수가 ${context.player2.name} 선수의 ${targetBuilding}에 타격을 입혔습니다! 병력 생산에 차질이 생겼습니다!`,
+    };
+  } else {
+    const targetBuilding = productionNames[context.player1.race][Math.floor(Math.random() * 3)];
+    return {
+      type: "production_hit",
+      turn: context.turn,
+      playerId: 2,
+      data: `${context.player2.name} 선수가 상대 ${targetBuilding}을 타격!`,
+      impact: "positive",
+      commentary: `${context.player2.name} 선수가 ${context.player1.name} 선수의 ${targetBuilding}에 타격을 입혔습니다! 병력 생산에 차질이 생겼습니다!`,
     };
   }
 }
