@@ -76,7 +76,27 @@ const playerRouter = router({
     const stats = await getPlayerStats(player.id);
     const gameRecord = await getPlayerGameRecord(player.id);
     const grade = await getPlayerGrade(player.id);
-    return { ...player, stats: stats ?? null, gameRecord, grade };
+    
+    // 착용 아이템 보너스 포함 등급 계산
+    const equippedItems = await getPlayerItems(player.id);
+    let effectiveGrade: string = grade;
+    if (stats) {
+      const itemBoosts: Record<string, number> = {};
+      equippedItems.forEach((pi: any) => {
+        if (!pi.equipped) return;
+        const boosts = (pi.item?.statBoosts ?? {}) as Record<string, number>;
+        Object.entries(boosts).forEach(([k, v]) => {
+          itemBoosts[k] = (itemBoosts[k] ?? 0) + (v ?? 0);
+        });
+      });
+      const effectiveTotal = STAT_KEYS.reduce((sum, key) => {
+        return sum + Math.min(((stats as any)[key] ?? 0) + (itemBoosts[key] ?? 0), 1200);
+      }, 0);
+      const { calcGrade } = await import("@shared/gameConstants");
+      effectiveGrade = calcGrade(effectiveTotal);
+    }
+    
+    return { ...player, stats: stats ?? null, gameRecord, grade: effectiveGrade };
   }),
 
   create: protectedProcedure
@@ -157,6 +177,7 @@ const playerRouter = router({
       const { getDb } = await import("./db");
       const { players } = await import("../drizzle/schema");
       const { eq } = await import("drizzle-orm");
+      const { calcExpToNext, LEVEL_MAX } = await import("@shared/gameConstants");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -165,13 +186,19 @@ const playerRouter = router({
       let leveledUp = false;
       let levelsGained = 0;
 
-      while (exp >= expToNext) {
+      while (level < LEVEL_MAX && exp >= expToNext) {
         exp -= expToNext;
         level += 1;
         levelsGained += 1;
-        expToNext = level * 100;
+        expToNext = calcExpToNext(level);
         statPoints += 20;
         leveledUp = true;
+      }
+
+      // 최대 레벨이면 경험치 초과분 제거
+      if (level >= LEVEL_MAX) {
+        exp = 0;
+        expToNext = 0;
       }
 
       await db.update(players).set({ exp, level, expToNext, statPoints }).where(eq(players.id, player.id));
@@ -265,7 +292,15 @@ const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
 
 const adminRouter = router({
   listUsers: adminProcedure.query(async () => {
-    return await getAllUsers();
+    try {
+      return await getAllUsers();
+    } catch (error) {
+      console.error("[Admin] Failed to list users:", error);
+      throw new TRPCError({ 
+        code: "INTERNAL_SERVER_ERROR", 
+        message: "사용자 목록을 불러올 수 없습니다. 데이터베이스 연결을 확인해주세요." 
+      });
+    }
   }),
 
   updatePlayer: adminProcedure

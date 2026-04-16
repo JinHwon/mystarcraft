@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { STAT_LABELS, RACE_LABELS, GRADE_COLORS, calcGrade } from "@shared/gameConstants";
+import { STAT_LABELS, RACE_LABELS, GRADE_COLORS } from "@shared/gameConstants";
 import type { StatKey } from "@shared/gameConstants";
 import { ChevronLeft, ChevronRight, Trophy, Medal, Award } from "lucide-react";
 
@@ -113,7 +113,7 @@ export default function RankingPage() {
             paginatedRankings.map((player, index) => {
               const rank = (currentPage - 1) * ITEMS_PER_PAGE + index + 1;
               const isTop3 = rank <= 3;
-              const calculatedGrade = calcGrade(player.totalStats);
+              const calculatedGrade = player.grade;
               const gradeColor = GRADE_COLORS[calculatedGrade as keyof typeof GRADE_COLORS] ?? "#9CA3AF";
               const gradeClasses = GRADE_STYLE_CLASSES[calculatedGrade] ?? GRADE_STYLE_CLASSES["F"];
 

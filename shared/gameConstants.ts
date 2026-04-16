@@ -75,9 +75,21 @@ export function calcTotalStats(stats: Record<StatKey, number>): number {
   return STAT_KEYS.reduce((sum, key) => sum + stats[key], 0);
 }
 
-// 레벨업 경험치 계산 (레벨 * 100)
+// 레벨업 경험치 계산 (레벨이 높을수록 더 많은 경험치 필요)
+// 레벨 1~10: level * 100
+// 레벨 11~20: level * 150
+// 레벨 21~30: level * 200
+// 레벨 31~40: level * 300
+// 레벨 41~50: level * 400
+export const LEVEL_MAX = 50;
+
 export function calcExpToNext(level: number): number {
-  return level * 100;
+  if (level >= LEVEL_MAX) return Infinity; // 최대 레벨
+  if (level <= 10) return level * 100;
+  if (level <= 20) return level * 150;
+  if (level <= 30) return level * 200;
+  if (level <= 40) return level * 300;
+  return level * 400;
 }
 
 // 종족 정보

@@ -8,6 +8,7 @@ import {
   GameEvent,
   GameEventType,
   EVENT_PROBABILITIES,
+  getEngagementProbability,
   SITUATION_COMMENTARIES,
   TERRAN_BUILDS,
   PROTOSS_BUILDS,
@@ -53,8 +54,9 @@ export function generateGameEvent(context: GameEventContext): GameEvent | null {
   const random = Math.random();
   let cumulativeProbability = 0;
 
-  // 교전 이벤트
-  cumulativeProbability += EVENT_PROBABILITIES.engagement;
+  // 교전 이벤트 - 병력 수에 따라 동적 확률 적용
+  const engagementProb = getEngagementProbability(context.player1.supply, context.player2.supply);
+  cumulativeProbability += engagementProb;
   if (random < cumulativeProbability) {
     return generateEngagementEvent(context);
   }
@@ -213,55 +215,107 @@ function generateHarassEvent(context: GameEventContext): GameEvent {
 }
 
 /**
- * 자원 드레인 이벤트 생성
+ * 자원 드레인 이벤트 생성 - 종족전별 해설 반영
  */
 function generateResourceDrainEvent(context: GameEventContext): GameEvent {
   const isPlayer1Drain = Math.random() > 0.5;
 
   if (isPlayer1Drain) {
+    const commentaryContext: CommentaryContext = {
+      playerName: context.player1.name,
+      playerRace: context.player1.race,
+      opponentName: context.player2.name,
+      opponentRace: context.player2.race,
+      playerSupply: context.player1.supply,
+      opponentSupply: context.player2.supply,
+      playerResources: context.player1.resources,
+      opponentResources: context.player2.resources,
+      playerAdvantage: context.player1Advantage,
+    };
+    const commentary = generateRaceSpecificCommentary(commentaryContext, "resource_drain");
+
     return {
       type: "resource_drain",
       turn: context.turn,
       playerId: 1,
       data: `${context.player1.name} 선수가 상대 자원을 드레인!`,
       impact: "positive",
-      commentary: `${context.player1.name} 선수의 지속적인 견제로 ${context.player2.name} 선수의 자원 수급이 크게 줄어들고 있습니다.`,
+      commentary,
     };
   } else {
+    const commentaryContext: CommentaryContext = {
+      playerName: context.player2.name,
+      playerRace: context.player2.race,
+      opponentName: context.player1.name,
+      opponentRace: context.player1.race,
+      playerSupply: context.player2.supply,
+      opponentSupply: context.player1.supply,
+      playerResources: context.player2.resources,
+      opponentResources: context.player1.resources,
+      playerAdvantage: 100 - context.player1Advantage,
+    };
+    const commentary = generateRaceSpecificCommentary(commentaryContext, "resource_drain");
+
     return {
       type: "resource_drain",
       turn: context.turn,
       playerId: 2,
       data: `${context.player2.name} 선수가 상대 자원을 드레인!`,
       impact: "positive",
-      commentary: `${context.player2.name} 선수의 지속적인 견제로 ${context.player1.name} 선수의 자원 수급이 크게 줄어들고 있습니다.`,
+      commentary,
     };
   }
 }
 
 /**
- * 멀티 파괴 이벤트 생성
+ * 멀티 파괴 이벤트 생성 - 종족전별 해설 반영
  */
 function generateMultiDestroyEvent(context: GameEventContext): GameEvent {
   const isPlayer1Destroy = Math.random() > 0.5;
 
   if (isPlayer1Destroy && context.player2.multiCount > 1) {
+    const commentaryContext: CommentaryContext = {
+      playerName: context.player1.name,
+      playerRace: context.player1.race,
+      opponentName: context.player2.name,
+      opponentRace: context.player2.race,
+      playerSupply: context.player1.supply,
+      opponentSupply: context.player2.supply,
+      playerResources: context.player1.resources,
+      opponentResources: context.player2.resources,
+      playerAdvantage: context.player1Advantage,
+    };
+    const commentary = generateRaceSpecificCommentary(commentaryContext, "multi_destroy");
+
     return {
       type: "multi_destroy",
       turn: context.turn,
       playerId: 1,
       data: `${context.player1.name} 선수가 상대 멀티를 파괴!`,
       impact: "positive",
-      commentary: `${context.player1.name} 선수가 ${context.player2.name} 선수의 멀티 기지를 파괴했습니다! 상대의 경제가 큰 타격을 입었어요.`,
+      commentary,
     };
   } else if (context.player1.multiCount > 1) {
+    const commentaryContext: CommentaryContext = {
+      playerName: context.player2.name,
+      playerRace: context.player2.race,
+      opponentName: context.player1.name,
+      opponentRace: context.player1.race,
+      playerSupply: context.player2.supply,
+      opponentSupply: context.player1.supply,
+      playerResources: context.player2.resources,
+      opponentResources: context.player1.resources,
+      playerAdvantage: 100 - context.player1Advantage,
+    };
+    const commentary = generateRaceSpecificCommentary(commentaryContext, "multi_destroy");
+
     return {
       type: "multi_destroy",
       turn: context.turn,
       playerId: 2,
       data: `${context.player2.name} 선수가 상대 멀티를 파괴!`,
       impact: "positive",
-      commentary: `${context.player2.name} 선수가 ${context.player1.name} 선수의 멀티 기지를 파괴했습니다! 상대의 경제가 큰 타격을 입었어요.`,
+      commentary,
     };
   } else {
     // 멀티가 없으면 견제 이벤트로 대체
@@ -270,42 +324,60 @@ function generateMultiDestroyEvent(context: GameEventContext): GameEvent {
 }
 
 /**
- * 기술 업그레이드 이벤트 생성
+ * 기술 업그레이드 이벤트 생성 - 종족전별 해설 반영
  */
 function generateTechUpgradeEvent(context: GameEventContext): GameEvent {
   const isPlayer1Tech = Math.random() > 0.5;
 
-  const techNames = {
-    terran: ["공격력 업그레이드", "방어력 업그레이드", "이동속도 업그레이드"],
-    protoss: ["공격력 업그레이드", "방어력 업그레이드", "에너지 업그레이드"],
-    zerg: ["공격력 업그레이드", "방어력 업그레이드", "이동속도 업그레이드"],
-  };
-
   if (isPlayer1Tech) {
-    const tech = techNames[context.player1.race][Math.floor(Math.random() * 3)];
+    const commentaryContext: CommentaryContext = {
+      playerName: context.player1.name,
+      playerRace: context.player1.race,
+      opponentName: context.player2.name,
+      opponentRace: context.player2.race,
+      playerSupply: context.player1.supply,
+      opponentSupply: context.player2.supply,
+      playerResources: context.player1.resources,
+      opponentResources: context.player2.resources,
+      playerAdvantage: context.player1Advantage,
+    };
+    const commentary = generateRaceSpecificCommentary(commentaryContext, "tech_upgrade");
+
     return {
       type: "tech_upgrade",
       turn: context.turn,
       playerId: 1,
-      data: `${context.player1.name} 선수가 ${tech} 완료!`,
+      data: `${context.player1.name} 선수가 기술 업그레이드 완료!`,
       impact: "positive",
-      commentary: `${context.player1.name} 선수가 ${tech}를 완료했습니다! 이제 더욱 강해질 것 같습니다.`,
+      commentary,
     };
   } else {
-    const tech = techNames[context.player2.race][Math.floor(Math.random() * 3)];
+    const commentaryContext: CommentaryContext = {
+      playerName: context.player2.name,
+      playerRace: context.player2.race,
+      opponentName: context.player1.name,
+      opponentRace: context.player1.race,
+      playerSupply: context.player2.supply,
+      opponentSupply: context.player1.supply,
+      playerResources: context.player2.resources,
+      opponentResources: context.player1.resources,
+      playerAdvantage: 100 - context.player1Advantage,
+    };
+    const commentary = generateRaceSpecificCommentary(commentaryContext, "tech_upgrade");
+
     return {
       type: "tech_upgrade",
       turn: context.turn,
       playerId: 2,
-      data: `${context.player2.name} 선수가 ${tech} 완료!`,
+      data: `${context.player2.name} 선수가 기술 업그레이드 완료!`,
       impact: "positive",
-      commentary: `${context.player2.name} 선수가 ${tech}를 완료했습니다! 이제 더욱 강해질 것 같습니다.`,
+      commentary,
     };
   }
 }
 
 /**
- * 생산기지 타격 이벤트 생성
+ * 생산기지 타격 이벤트 생성 - 종족전별 해설 반영
  */
 function generateProductionHitEvent(context: GameEventContext): GameEvent {
   const isPlayer1Attack = Math.random() > 0.5;
@@ -317,24 +389,48 @@ function generateProductionHitEvent(context: GameEventContext): GameEvent {
   };
 
   if (isPlayer1Attack) {
-    const targetBuilding = productionNames[context.player2.race][Math.floor(Math.random() * 3)];
+    const targetRace = context.player2.race;
+    const targetBuilding = productionNames[targetRace][Math.floor(Math.random() * 3)];
+    const attackerRace = context.player1.race;
+    
+    let commentary = `${context.player1.name} 선수가 ${context.player2.name} 선수의 ${targetBuilding}에 타격을 입혔습니다!`;
+    if (attackerRace === "terran") {
+      commentary = `${context.player1.name} 선수의 시즈탱크 포격이 ${context.player2.name} 선수의 ${targetBuilding}을 직격! 병력 생산에 큰 차질이 생겼습니다.`;
+    } else if (attackerRace === "protoss") {
+      commentary = `${context.player1.name} 선수의 리버 스캐럽이 ${context.player2.name} 선수의 ${targetBuilding}을 타격! 생산 시설이 큰 피해를 입었습니다.`;
+    } else if (attackerRace === "zerg") {
+      commentary = `${context.player1.name} 선수의 저글링 떼가 ${context.player2.name} 선수의 ${targetBuilding}을 공격! 생산 시설이 피해를 입고 있습니다.`;
+    }
+
     return {
       type: "production_hit",
       turn: context.turn,
       playerId: 1,
       data: `${context.player1.name} 선수가 상대 ${targetBuilding}을 타격!`,
       impact: "positive",
-      commentary: `${context.player1.name} 선수가 ${context.player2.name} 선수의 ${targetBuilding}에 타격을 입혔습니다! 병력 생산에 차질이 생겼습니다!`,
+      commentary,
     };
   } else {
-    const targetBuilding = productionNames[context.player1.race][Math.floor(Math.random() * 3)];
+    const targetRace = context.player1.race;
+    const targetBuilding = productionNames[targetRace][Math.floor(Math.random() * 3)];
+    const attackerRace = context.player2.race;
+    
+    let commentary = `${context.player2.name} 선수가 ${context.player1.name} 선수의 ${targetBuilding}에 타격을 입혔습니다!`;
+    if (attackerRace === "terran") {
+      commentary = `${context.player2.name} 선수의 시즈탱크 포격이 ${context.player1.name} 선수의 ${targetBuilding}을 직격! 병력 생산에 큰 차질이 생겼습니다.`;
+    } else if (attackerRace === "protoss") {
+      commentary = `${context.player2.name} 선수의 리버 스캐럽이 ${context.player1.name} 선수의 ${targetBuilding}을 타격! 생산 시설이 큰 피해를 입었습니다.`;
+    } else if (attackerRace === "zerg") {
+      commentary = `${context.player2.name} 선수의 저글링 떼가 ${context.player1.name} 선수의 ${targetBuilding}을 공격! 생산 시설이 피해를 입고 있습니다.`;
+    }
+
     return {
       type: "production_hit",
       turn: context.turn,
       playerId: 2,
       data: `${context.player2.name} 선수가 상대 ${targetBuilding}을 타격!`,
       impact: "positive",
-      commentary: `${context.player2.name} 선수가 ${context.player1.name} 선수의 ${targetBuilding}에 타격을 입혔습니다! 병력 생산에 차질이 생겼습니다!`,
+      commentary,
     };
   }
 }

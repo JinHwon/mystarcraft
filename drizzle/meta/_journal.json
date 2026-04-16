@@ -97,14 +97,14 @@
       "idx": 13,
       "version": "5",
       "when": 1776258492353,
-      "tag": "0013_lively_thundra",
+      "tag": "0013_add_opponent_id",
       "breakpoints": true
     },
     {
       "idx": 14,
       "version": "5",
       "when": 1776259191251,
-      "tag": "0014_glamorous_sue_storm",
+      "tag": "0015_add_fatigue_item",
       "breakpoints": true
     },
     {
@@ -112,6 +112,13 @@
       "version": "5",
       "when": 1776309407197,
       "tag": "0015_glorious_selene",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "5",
+      "when": 1776309500000,
+      "tag": "0016_add_quest_system",
       "breakpoints": true
     }
   ]

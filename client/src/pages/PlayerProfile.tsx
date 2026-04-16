@@ -486,7 +486,7 @@ export default function PlayerProfile() {
           {/* 능력치 레이더 차트 */}
           <div className="bg-card border border-border rounded-2xl p-6 flex flex-col items-center">
             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4 self-start">능력치 분포</h3>
-            <StatRadarChart stats={effectiveStats} grade={grade} gradeColor={gradeColor} size={220} />
+            <StatRadarChart stats={effectiveStats} grade={grade} gradeColor={gradeColor} size={220} fatigue={playerData.fatigue} />
           </div>
 
           {/* 경기결과 조회 */}

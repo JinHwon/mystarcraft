@@ -200,8 +200,8 @@ describe("admin functions", () => {
         role: "user",
         createdAt: "2026-04-15T00:00:00Z",
         updatedAt: "2026-04-15T00:00:00Z",
-        lastSignedIn: "2026-04-15T00:00:00Z",
-        playerCount: 1,
+        lastSignedIn: new Date("2026-04-15T00:00:00Z"),
+        playerId: 1,
       },
     ];
 
@@ -214,6 +214,6 @@ describe("admin functions", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe("User 1");
-    expect(result[0].playerCount).toBe(1);
+    expect(result[0].playerId).toBe(1);
   });
 });

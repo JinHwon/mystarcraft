@@ -113,12 +113,23 @@ export default function Admin() {
     const user = usersQuery.data?.find(u => u.id === userId);
     if (user && user.playerId) {
       setSelectedPlayerId(user.playerId);
+      setSelectedUserId(userId);
     } else {
-      toast.error("선수 정보를 찾을 수 없습니다");
+      setSelectedPlayerId(null);
+      setSelectedUserId(userId);
     }
   };
 
   if (usersQuery.isLoading) return <div className="p-8">로딩 중...</div>;
+  if (usersQuery.error) return (
+    <div className="p-8 space-y-4">
+      <h1 className="text-3xl font-bold text-red-400">오류 발생</h1>
+      <p className="text-gray-400">사용자 정보를 불러올 수 없습니다: {usersQuery.error.message}</p>
+      <Button onClick={() => usersQuery.refetch()} className="bg-amber-600 hover:bg-amber-700">
+        다시 시도
+      </Button>
+    </div>
+  );
 
   return (
     <div className="p-8 space-y-6">
@@ -154,6 +165,9 @@ export default function Admin() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs px-2 py-1 bg-amber-900 text-amber-300 rounded">
                     {user.role === "admin" ? "관리자" : "일반"}
+                  </span>
+                  <span className={`text-xs px-2 py-1 rounded ${user.playerId ? "bg-green-900 text-green-300" : "bg-gray-800 text-gray-500"}`}>
+                    {user.playerId ? "선수 있음" : "선수 없음"}
                   </span>
                 </div>
                 <div className="flex gap-2">
@@ -218,8 +232,12 @@ export default function Admin() {
                       <DialogHeader>
                         <DialogTitle className="text-amber-400">선수 정보 수정</DialogTitle>
                       </DialogHeader>
-                      {getPlayerInfoQuery.isLoading ? (
+                      {!selectedPlayerId ? (
+                        <div className="text-center py-4 text-gray-400">이 사용자는 아직 선수를 생성하지 않았습니다</div>
+                      ) : getPlayerInfoQuery.isLoading ? (
                         <div className="text-center py-4">로딩 중...</div>
+                      ) : getPlayerInfoQuery.error ? (
+                        <div className="text-center py-4 text-red-400">선수 정보 로딩 실패: {getPlayerInfoQuery.error.message}</div>
                       ) : getPlayerInfoQuery.data ? (
                         <div className="space-y-4">
                           <div className="text-sm text-gray-300 bg-slate-800 p-2 rounded">

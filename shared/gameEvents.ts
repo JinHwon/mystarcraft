@@ -162,16 +162,51 @@ export const ZERG_BUILDS: Record<BuildStrategy, RaceSpecificBuild> = {
 };
 
 /**
- * 게임 이벤트 확률 (턴마다)
+ * 게임 이벤트 기본 확률 (턴마다)
+ * 병력이 100 이상이면 교전 확률이 동적으로 증가함 (getEngagementProbability 참조)
  */
 export const EVENT_PROBABILITIES = {
-  engagement: 0.28,      // 28% 교전 발생
+  engagement: 0.22,      // 22% 교전 발생 (기본값, 병력 100+ 시 동적 증가)
   harass: 0.18,          // 18% 견제 발생
   resource_drain: 0.06,  // 6% 자원 드레인
   multi_destroy: 0.10,   // 10% 멀티/앞마당 파괴
-  production_hit: 0.10,  // 10% 생산기지 타격 (신규)
+  production_hit: 0.10,  // 10% 생산기지 타격
   tech_upgrade: 0.08,    // 8% 기술 업그레이드
 };
+
+/**
+ * 병력 수에 따른 동적 교전 확률 계산
+ * 한쪽이라도 병력 100 이상이면 교전이 더 자주 발생
+ * 양쪽 모두 150 이상이면 거의 매 턴 교전
+ */
+export function getEngagementProbability(player1Supply: number, player2Supply: number): number {
+  const maxSupply = Math.max(player1Supply, player2Supply);
+  const minSupply = Math.min(player1Supply, player2Supply);
+  
+  let baseProb = EVENT_PROBABILITIES.engagement; // 0.22
+  
+  // 한쪽이라도 병력 100 이상: 교전 확률 증가
+  if (maxSupply >= 100) {
+    // 100~150 구간: 0.22 → 0.40 (선형 증가)
+    const bonus1 = Math.min(1.0, (maxSupply - 100) / 50) * 0.18;
+    baseProb += bonus1;
+  }
+  
+  // 양쪽 모두 100 이상: 추가 교전 확률
+  if (minSupply >= 100) {
+    // 양쪽 100 이상이면 추가 +0.10~0.20
+    const bonus2 = Math.min(1.0, (minSupply - 100) / 50) * 0.20;
+    baseProb += bonus2;
+  }
+  
+  // 병력 150 이상: 대규모 전면전 확률 급증
+  if (maxSupply >= 150) {
+    baseProb += 0.10;
+  }
+  
+  // 최대 70% (나머지 이벤트도 발생해야 하므로)
+  return Math.min(0.70, baseProb);
+}
 
 /**
  * 상황 해설 템플릿

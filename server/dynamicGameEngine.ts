@@ -214,11 +214,19 @@ function updateResourcesAndTroops(gs: GameState, p: PlayerState): void {
     const actualTroopInc = troopInc * troopVar;
     p.supply = Math.min(GAME_MAX_TROOPS, p.supply + actualTroopInc);
 
-    // ── 병력 생산 시 자원 대폭 소모 ──
-    // 병력 1당 자원 8~12 소모 (기존 2에서 대폭 증가)
-    const resourceCostPerTroop = 8 + Math.random() * 4;
+    // ── 병력 생산 시 자원 소모: 생산기지가 많을수록 자원 소모도 비례 증가 ──
+    // 기본 병력 1당 자원 10~14 소모
+    const resourceCostPerTroop = 10 + Math.random() * 4;
     const resourceCost = actualTroopInc * resourceCostPerTroop;
-    p.resources = Math.max(0, p.resources - resourceCost);
+    
+    // 생산기지 유지비: 생산기지 1개당 턴마다 자원 15~25 추가 소모
+    const facilityMaintenanceCost = p.productionFacilities * (15 + Math.random() * 10);
+    
+    p.resources = Math.max(0, p.resources - resourceCost - facilityMaintenanceCost);
+  } else {
+    // 자원이 50 이하면 병력 생산 불가 - 생산기지 유지비만 소모
+    const facilityMaintenanceCost = p.productionFacilities * (10 + Math.random() * 5);
+    p.resources = Math.max(0, p.resources - facilityMaintenanceCost);
   }
 }
 
@@ -320,17 +328,20 @@ export function progressGame(gs: GameState): void {
   }
 
   // ── 생산기지 추가: 능력치(massProduction, strategy)가 높을수록 확률 증가 ──
+  // 생산기지가 많으면 병력 생산이 빨라지지만 자원 소모도 빨라짐
   const p1ProdChance = calcProductionBuildChance(gs.player1);
   const p2ProdChance = calcProductionBuildChance(gs.player2);
   if (gs.player1.resources > 1200 && gs.player1.productionFacilities < 6 && Math.random() < p1ProdChance) {
     gs.player1.productionFacilities++;
     gs.player1.resources -= 300;
-    gs.turnCommentaries.push(`${gs.player1.name} 선수가 생산기지를 추가 건설했습니다!`);
+    const facilityName = gs.player1.race === 'terran' ? '배럭' : gs.player1.race === 'protoss' ? '게이트웨이' : '해처리';
+    gs.turnCommentaries.push(`${gs.player1.name} 선수가 ${facilityName}을 추가 건설! 병력 생산이 빨라지지만 자원 소모도 늘어납니다.`);
   }
   if (gs.player2.resources > 1200 && gs.player2.productionFacilities < 6 && Math.random() < p2ProdChance) {
     gs.player2.productionFacilities++;
     gs.player2.resources -= 300;
-    gs.turnCommentaries.push(`${gs.player2.name} 선수가 생산기지를 추가 건설했습니다!`);
+    const facilityName = gs.player2.race === 'terran' ? '배럭' : gs.player2.race === 'protoss' ? '게이트웨이' : '해처리';
+    gs.turnCommentaries.push(`${gs.player2.name} 선수가 ${facilityName}을 추가 건설! 병력 생산이 빨라지지만 자원 소모도 늘어납니다.`);
   }
 
   // ── 앞마당 복구 (10% 확률, defense 높으면 최대 20%) ──

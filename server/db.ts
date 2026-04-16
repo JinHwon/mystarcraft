@@ -276,15 +276,20 @@ export async function updatePlayerPhoto(playerId: number, photoUrl: string) {
 
 export async function getAllUsers() {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) throw new Error("Database not available");
   
-  // 모든 사용자 반환 (선수가 있는 경우 playerId 포함)
-  const usersWithPlayers = await db
-    .select({ users: users, playerId: players.id })
-    .from(users)
-    .leftJoin(players, eq(users.id, players.userId));
-  
-  return usersWithPlayers.map(row => ({ ...row.users, playerId: row.playerId }));
+  try {
+    // 모든 사용자 반환 (선수가 있는 경우 playerId 포함)
+    const usersWithPlayers = await db
+      .select({ users: users, playerId: players.id })
+      .from(users)
+      .leftJoin(players, eq(users.id, players.userId));
+    
+    return usersWithPlayers.map(row => ({ ...row.users, playerId: row.playerId ?? null }));
+  } catch (error) {
+    console.error("[Database] getAllUsers failed:", error);
+    throw error;
+  }
 }
 
 export async function updatePlayerByAdmin(playerId: number, updates: Record<string, any>) {
@@ -562,8 +567,26 @@ export async function updatePlayerExp(playerId: number, expGained: number) {
   const player = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
   if (player.length === 0) return;
 
-  const newExp = player[0].exp + expGained;
-  await db.update(players).set({ exp: newExp }).where(eq(players.id, playerId));
+  const { calcExpToNext, LEVEL_MAX } = await import("@shared/gameConstants");
+
+  let { exp, level, expToNext, statPoints } = player[0];
+  exp += expGained;
+
+  // 레벨업 처리 (최대 레벨 제한)
+  while (level < LEVEL_MAX && exp >= expToNext) {
+    exp -= expToNext;
+    level += 1;
+    expToNext = calcExpToNext(level);
+    statPoints += 20;
+  }
+
+  // 최대 레벨이면 경험치 초과분 제거
+  if (level >= LEVEL_MAX) {
+    exp = 0;
+    expToNext = 0;
+  }
+
+  await db.update(players).set({ exp, level, expToNext, statPoints }).where(eq(players.id, playerId));
 }
 
 export async function updatePlayerGold(playerId: number, goldGained: number) {
@@ -692,18 +715,35 @@ export async function getRankingList() {
     .innerJoin(users, eq(players.userId, users.id))
     .leftJoin(playerStats, eq(players.id, playerStats.playerId));
 
-  // 각 플레이어의 전적 조회
+  const { calcGrade } = await import("@shared/gameConstants");
+
+  // 각 플레이어의 전적 및 아이템 보너스 조회
   const rankings = [];
   for (const row of result) {
-    const totalStats =
-      (row.stats?.sense ?? 0) +
-      (row.stats?.control ?? 0) +
-      (row.stats?.attack ?? 0) +
-      (row.stats?.harass ?? 0) +
-      (row.stats?.strategy ?? 0) +
-      (row.stats?.supply ?? 0) +
-      (row.stats?.defense ?? 0) +
-      (row.stats?.scout ?? 0);
+    // 착용 아이템 보너스 계산
+    const equippedItemsResult = await db
+      .select({ item: items, equipped: playerItems.equipped })
+      .from(playerItems)
+      .innerJoin(items, eq(playerItems.itemId, items.id))
+      .where(and(eq(playerItems.playerId, row.player.id), eq(playerItems.equipped, 1)));
+
+    const itemBoosts: Record<string, number> = {};
+    equippedItemsResult.forEach((pi) => {
+      const boosts = (pi.item?.statBoosts ?? {}) as Record<string, number>;
+      Object.entries(boosts).forEach(([k, v]) => {
+        itemBoosts[k] = (itemBoosts[k] ?? 0) + (v ?? 0);
+      });
+    });
+
+    const sense = Math.min((row.stats?.sense ?? 0) + (itemBoosts.sense ?? 0), 1200);
+    const control = Math.min((row.stats?.control ?? 0) + (itemBoosts.control ?? 0), 1200);
+    const attack = Math.min((row.stats?.attack ?? 0) + (itemBoosts.attack ?? 0), 1200);
+    const harass = Math.min((row.stats?.harass ?? 0) + (itemBoosts.harass ?? 0), 1200);
+    const strategy = Math.min((row.stats?.strategy ?? 0) + (itemBoosts.strategy ?? 0), 1200);
+    const supply = Math.min((row.stats?.supply ?? 0) + (itemBoosts.supply ?? 0), 1200);
+    const defense = Math.min((row.stats?.defense ?? 0) + (itemBoosts.defense ?? 0), 1200);
+    const scout = Math.min((row.stats?.scout ?? 0) + (itemBoosts.scout ?? 0), 1200);
+    const totalStats = sense + control + attack + harass + strategy + supply + defense + scout;
 
     // 전적 조회
     const gameResultsData = await db.select().from(gameResults).where(eq(gameResults.playerId, row.player.id));
@@ -714,16 +754,16 @@ export async function getRankingList() {
       playerId: row.player.id,
       name: row.player.name,
       race: row.player.race,
-      grade: row.player.grade,
+      grade: calcGrade(totalStats),
       level: row.player.level,
-      sense: row.stats?.sense ?? 0,
-      control: row.stats?.control ?? 0,
-      attack: row.stats?.attack ?? 0,
-      harass: row.stats?.harass ?? 0,
-      strategy: row.stats?.strategy ?? 0,
-      supply: row.stats?.supply ?? 0,
-      defense: row.stats?.defense ?? 0,
-      scout: row.stats?.scout ?? 0,
+      sense,
+      control,
+      attack,
+      harass,
+      strategy,
+      supply,
+      defense,
+      scout,
       totalStats,
       lastSignedIn: row.lastSignedIn,
       wins,

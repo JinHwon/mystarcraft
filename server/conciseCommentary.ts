@@ -176,24 +176,38 @@ export function generateAttackCommentary(playerName: string, targetName: string)
 }
 
 /**
- * 상황 해설 - 간결하고 짧게
+ * 상황 해설 - 종족전 맥락 반영
  */
 export function generateSituationCommentary(player1Name: string, player2Name: string, player1Advantage: number): string | null {
   if (player1Advantage > 65) {
-    return `[중립] ${player1Name} 선수 우위!`;
+    return pick([
+      `[중립] ${player1Name} 선수가 병력과 자원 모두에서 앞서고 있습니다! 이 격차를 유지하면 승리가 가까워집니다.`,
+      `[중립] ${player1Name} 선수 우위! 멀티 경제력을 바탕으로 생산기지에서 병력을 쏟아내고 있네요.`,
+    ]);
   } else if (player1Advantage < 35) {
-    return `[중립] ${player2Name} 선수 우위!`;
+    return pick([
+      `[중립] ${player2Name} 선수가 병력과 자원 모두에서 앞서고 있습니다! 이 격차를 유지하면 승리가 가까워집니다.`,
+      `[중립] ${player2Name} 선수 우위! 멀티 경제력을 바탕으로 생산기지에서 병력을 쏟아내고 있네요.`,
+    ]);
   }
   return null; // 균형 상태는 해설 생략
 }
 
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
 /**
- * 게임 종료 해설
+ * 게임 종료 해설 - 종족전 맥락 반영
  */
 export function generateGameEndCommentary(player1Name: string, player2Name: string, isPlayer1Winner: boolean): string {
   const winnerName = isPlayer1Winner ? player1Name : player2Name;
   const loserName = isPlayer1Winner ? player2Name : player1Name;
-  return `[중립] ${winnerName} 선수 승리! 경기가 종료되었습니다.`;
+  return pick([
+    `[중립] ${winnerName} 선수 승리! 멀티 확장으로 자원을 확보하고 생산기지에서 병력을 쏟아내면서 결국 상대를 무너뜨렸습니다. GG!`,
+    `[중립] ${winnerName} 선수가 경기를 가져갑니다! 효율적인 자원 관리와 교전에서의 우위가 빛났습니다. GG!`,
+    `[중립] ${winnerName} 선수의 승리! ${loserName} 선수도 잘 싸웠지만 병력 차이를 극복하지 못했네요. GG!`,
+  ]);
 }
 
 /**
