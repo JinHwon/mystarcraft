@@ -88,7 +88,7 @@ export default function GameResultsPage() {
                       <div className="flex items-center justify-between">
                         <span className="text-slate-400">날짜</span>
                         <span className="text-slate-300 text-sm">
-                          {result.completedAt || new Date(result.createdAt).toISOString().split('T')[0]}
+                          {new Date(result.createdAt).toISOString().split('T')[0]}
                         </span>
                       </div>
                     </div>
@@ -113,7 +113,7 @@ export default function GameResultsPage() {
                     <div className="space-y-2">
                       <p className="text-slate-400 font-semibold text-sm">능력치 변동</p>
                       <div className="grid grid-cols-2 gap-2 text-xs">
-                        {result.statChanges && typeof result.statChanges === 'object' && Object.entries(result.statChanges).map(([stat, change]: [string, any]) => {
+                        {result.statChanges && typeof result.statChanges === 'object' && Object.entries(result.statChanges as Record<string, number>).map(([stat, change]) => {
                           const numChange = Number(change) || 0;
                           return (
                             <div key={stat} className="flex justify-between">

@@ -14,6 +14,7 @@ import {
   Gamepad2,
   BarChart3,
   Menu,
+  Trophy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -31,6 +32,7 @@ const getNavItems = (isAdmin: boolean) => {
     { path: "/shop", label: "아이템 상점", icon: ShoppingBag },
     { path: "/practice", label: "연습게임", icon: Gamepad2 },
     { path: "/game-results", label: "경기결과", icon: BarChart3 },
+    { path: "/ranking", label: "랭킹", icon: Trophy },
     { path: "/events", label: "이벤트", icon: Zap },
   ];
   if (isAdmin) {
@@ -137,9 +139,19 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
                   </p>
                 </div>
               </div>
-              <div className="mt-3 flex items-center gap-2 bg-accent/50 rounded-md px-3 py-1.5">
-                <Coins className="w-3.5 h-3.5 text-yellow-400" />
-                <span className="text-xs font-semibold text-yellow-400">{player.gold.toLocaleString()} G</span>
+              <div className="mt-3 space-y-1.5">
+                <div className="flex items-center gap-2 bg-accent/50 rounded-md px-3 py-1.5">
+                  <Coins className="w-3.5 h-3.5 text-yellow-400" />
+                  <span className="text-xs font-semibold text-yellow-400">{player.gold.toLocaleString()} G</span>
+                </div>
+                <div className="flex items-center justify-between bg-accent/50 rounded-md px-3 py-1.5">
+                  <span className="text-xs text-muted-foreground">등급 <span className="font-bold text-primary">{player.grade ?? "D"}</span></span>
+                  <span className="text-xs text-muted-foreground">
+                    {player.gameRecord
+                      ? `${player.gameRecord.total}전 ${player.gameRecord.wins}승 ${player.gameRecord.losses}패`
+                      : "0전 0승 0패"}
+                  </span>
+                </div>
               </div>
             </div>
           )}
@@ -232,10 +244,21 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
                   </p>
                 </div>
               </div>
-              {/* 골드 표시 */}
-              <div className="mt-3 flex items-center gap-2 bg-accent/50 rounded-md px-3 py-1.5">
-                <Coins className="w-3.5 h-3.5 text-yellow-400" />
-                <span className="text-xs font-semibold text-yellow-400">{player.gold.toLocaleString()} G</span>
+              <div className="mt-3 space-y-1.5">
+                {/* 골드 표시 */}
+                <div className="flex items-center gap-2 bg-accent/50 rounded-md px-3 py-1.5">
+                  <Coins className="w-3.5 h-3.5 text-yellow-400" />
+                  <span className="text-xs font-semibold text-yellow-400">{player.gold.toLocaleString()} G</span>
+                </div>
+                {/* 등급 · 전적 */}
+                <div className="flex items-center justify-between bg-accent/50 rounded-md px-3 py-1.5">
+                  <span className="text-xs text-muted-foreground">등급 <span className="font-bold text-primary">{player.grade ?? "D"}</span></span>
+                  <span className="text-xs text-muted-foreground">
+                    {player.gameRecord
+                      ? `${player.gameRecord.total}전 ${player.gameRecord.wins}승 ${player.gameRecord.losses}패`
+                      : "0전 0승 0패"}
+                  </span>
+                </div>
               </div>
             </div>
           )}

@@ -43,6 +43,7 @@ import {
   getPlayerGrade,
   ensurePlayerStats,
   applyGameStatChange,
+  getRankingList,
 } from "./db";
 import { eq } from "drizzle-orm";
 import { players } from "../drizzle/schema";
@@ -603,6 +604,11 @@ export const appRouter = router({
   admin: adminRouter,
   event: eventRouter,
   practice: practiceRouter,
+  ranking: router({
+    list: publicProcedure.query(async () => {
+      return await getRankingList();
+    }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

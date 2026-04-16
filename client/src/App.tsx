@@ -12,6 +12,7 @@ import Admin from "./pages/Admin";
 import Events from "./pages/Events";
 import Practice from "./pages/Practice";
 import GameResults from "./pages/GameResults";
+import Ranking from "./pages/Ranking";
 import GameLayout from "./components/GameLayout";
 import { UpdateNotification } from "./components/UpdateNotification";
 
@@ -48,6 +49,11 @@ function Router() {
       <Route path="/game-results">
         <GameLayout>
           <GameResults />
+        </GameLayout>
+      </Route>
+      <Route path="/ranking">
+        <GameLayout>
+          <Ranking />
         </GameLayout>
       </Route>
       <Route path="/404" component={NotFound} />

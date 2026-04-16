@@ -180,6 +180,40 @@ export default function PracticePage() {
 
   if (phase === "map") {
     const maps = mapsQuery.data || [];
+
+    const getRushDistanceLabel = (value: number) => {
+      if (value <= 30) return "가까움";
+      if (value <= 50) return "보통";
+      return "멀음";
+    };
+    const getResourcesLabel = (value: number) => {
+      if (value <= 40) return "적음";
+      if (value <= 55) return "보통";
+      return "풍부";
+    };
+    const getComplexityLabel = (value: number) => {
+      if (value <= 40) return "단순";
+      if (value <= 55) return "보통";
+      return "복잡";
+    };
+
+    const parseRaceAdvantage = (raw: any): Record<string, number> => {
+      if (!raw) return { terran: 50, zerg: 50, protoss: 50 };
+      if (typeof raw === "string") {
+        try { return JSON.parse(raw); } catch { return { terran: 50, zerg: 50, protoss: 50 }; }
+      }
+      return raw as Record<string, number>;
+    };
+
+    const getMatchupText = (adv: Record<string, number>, raceA: string, raceB: string) => {
+      const a = adv[raceA] ?? 50;
+      const b = adv[raceB] ?? 50;
+      const total = a + b;
+      const pctA = Math.round((a / total) * 100);
+      const pctB = 100 - pctA;
+      return `${pctA} : ${pctB}`;
+    };
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 md:p-4">
         <div className="max-w-4xl mx-auto">
@@ -189,20 +223,63 @@ export default function PracticePage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-            {maps.map(map => (
-              <Card
-                key={map.id}
-                className="bg-slate-800 border-slate-700 hover:border-blue-500 cursor-pointer transition-all"
-                onClick={() => handleSelectMap(map.id)}
-              >
-                <CardHeader>
-                  <CardTitle className="text-sm md:text-base text-white">{map.name}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-xs md:text-sm text-slate-300">{map.description}</p>
-                </CardContent>
-              </Card>
-            ))}
+            {maps.map(map => {
+              const adv = parseRaceAdvantage(map.raceAdvantage);
+              return (
+                <Card
+                  key={map.id}
+                  className="bg-slate-800 border-slate-700 hover:border-blue-500 cursor-pointer transition-all"
+                  onClick={() => handleSelectMap(map.id)}
+                >
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm md:text-base text-white">{map.name}</CardTitle>
+                    <CardDescription className="text-xs md:text-sm text-slate-400">{map.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {/* 종족별 유불리 */}
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-slate-400 mb-1">종족 유불리</p>
+                      <div className="grid grid-cols-1 gap-0.5 text-xs">
+                        <div className="flex items-center justify-between px-2 py-1 rounded bg-slate-700/50">
+                          <span className="text-blue-400 font-medium">테란</span>
+                          <span className="text-slate-300">{getMatchupText(adv, "terran", "zerg")}</span>
+                          <span className="text-purple-400 font-medium">저그</span>
+                        </div>
+                        <div className="flex items-center justify-between px-2 py-1 rounded bg-slate-700/50">
+                          <span className="text-blue-400 font-medium">테란</span>
+                          <span className="text-slate-300">{getMatchupText(adv, "terran", "protoss")}</span>
+                          <span className="text-yellow-400 font-medium">프로토스</span>
+                        </div>
+                        <div className="flex items-center justify-between px-2 py-1 rounded bg-slate-700/50">
+                          <span className="text-purple-400 font-medium">저그</span>
+                          <span className="text-slate-300">{getMatchupText(adv, "zerg", "protoss")}</span>
+                          <span className="text-yellow-400 font-medium">프로토스</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 지형 특징 */}
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-slate-400 mb-1">지형 특징</p>
+                      <div className="grid grid-cols-3 gap-1 text-xs">
+                        <div className="flex flex-col items-center p-1.5 rounded bg-slate-700/50">
+                          <span className="text-slate-400">러쉬거리</span>
+                          <span className="text-white font-medium">{getRushDistanceLabel(map.rushDistance)}</span>
+                        </div>
+                        <div className="flex flex-col items-center p-1.5 rounded bg-slate-700/50">
+                          <span className="text-slate-400">자원</span>
+                          <span className="text-white font-medium">{getResourcesLabel(map.resources)}</span>
+                        </div>
+                        <div className="flex flex-col items-center p-1.5 rounded bg-slate-700/50">
+                          <span className="text-slate-400">복잡도</span>
+                          <span className="text-white font-medium">{getComplexityLabel(map.complexity)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       </div>

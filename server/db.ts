@@ -278,14 +278,14 @@ export async function getAllUsers() {
   const db = await getDb();
   if (!db) return [];
   
-  // 실제 선수가 있는 사용자만 반환
+  // 실제 선수가 있는 사용자만 반환 (playerId 포함)
   const usersWithPlayers = await db
-    .select({ users: users })
+    .select({ users: users, playerId: players.id })
     .from(users)
     .innerJoin(players, eq(users.id, players.userId))
     .groupBy(users.id);
   
-  return usersWithPlayers.map(row => row.users);
+  return usersWithPlayers.map(row => ({ ...row.users, playerId: row.playerId }));
 }
 
 export async function updatePlayerByAdmin(playerId: number, updates: Record<string, any>) {
@@ -457,7 +457,7 @@ export async function getPlayerGameHistory(playerId: number, limit: number = 10)
 
       return {
         ...record,
-        statChanges: parsedStatChanges,
+        statChanges: record.statChanges,
         opponentName,
         opponentRace,
         opponentGrade,
@@ -554,7 +554,7 @@ export async function ensurePlayerStats(playerId: number) {
   if (!db) throw new Error("Database not available");
 
   const existing = await db.select().from(playerStats).where(eq(playerStats.playerId, playerId)).limit(1);
-  if (existing.length > 0) return;
+  if (existing.length > 0) return existing[0];
 
   await db.insert(playerStats).values({
     playerId,
@@ -567,6 +567,9 @@ export async function ensurePlayerStats(playerId: number) {
     defense: 0,
     supply: 0,
   });
+
+  const created = await db.select().from(playerStats).where(eq(playerStats.playerId, playerId)).limit(1);
+  return created[0];
 }
 
 export async function applyGameStatChange(playerId: number, stat: StatKey, amount: number) {
@@ -614,4 +617,51 @@ export async function getUserByOpenId(openId: string) {
   if (!db) return null;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   return result.length > 0 ? result[0] : null;
+}
+
+export async function getRankingList() {
+  const db = await getDb();
+  if (!db) return [];
+
+  const result = await db
+    .select({
+      player: players,
+      stats: playerStats,
+      lastSignedIn: users.lastSignedIn,
+    })
+    .from(players)
+    .innerJoin(users, eq(players.userId, users.id))
+    .leftJoin(playerStats, eq(players.id, playerStats.playerId));
+
+  return result
+    .map((row) => {
+      const totalStats =
+        (row.stats?.sense ?? 0) +
+        (row.stats?.control ?? 0) +
+        (row.stats?.attack ?? 0) +
+        (row.stats?.harass ?? 0) +
+        (row.stats?.strategy ?? 0) +
+        (row.stats?.supply ?? 0) +
+        (row.stats?.defense ?? 0) +
+        (row.stats?.scout ?? 0);
+
+      return {
+        playerId: row.player.id,
+        name: row.player.name,
+        race: row.player.race,
+        grade: row.player.grade,
+        level: row.player.level,
+        sense: row.stats?.sense ?? 0,
+        control: row.stats?.control ?? 0,
+        attack: row.stats?.attack ?? 0,
+        harass: row.stats?.harass ?? 0,
+        strategy: row.stats?.strategy ?? 0,
+        supply: row.stats?.supply ?? 0,
+        defense: row.stats?.defense ?? 0,
+        scout: row.stats?.scout ?? 0,
+        totalStats,
+        lastSignedIn: row.lastSignedIn,
+      };
+    })
+    .sort((a, b) => b.totalStats - a.totalStats);
 }
