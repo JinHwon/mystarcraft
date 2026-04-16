@@ -336,14 +336,24 @@ export async function getPlayerWithUser(playerId: number) {
 export async function createEvent(eventData: any) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(events).values(eventData);
+  const normalizedData = {
+    ...eventData,
+    startTime: eventData.startTime instanceof Date ? eventData.startTime.toISOString() : eventData.startTime,
+    endTime: eventData.endTime instanceof Date ? eventData.endTime.toISOString() : eventData.endTime,
+  };
+  const result = await db.insert(events).values(normalizedData);
   return Number((result as any)[0]?.insertId ?? (result as any).insertId);
 }
 
 export async function updateEvent(eventId: number, eventData: any) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(events).set(eventData).where(eq(events.id, eventId));
+  const normalizedData = {
+    ...eventData,
+    startTime: eventData.startTime instanceof Date ? eventData.startTime.toISOString() : eventData.startTime,
+    endTime: eventData.endTime instanceof Date ? eventData.endTime.toISOString() : eventData.endTime,
+  };
+  await db.update(events).set(normalizedData).where(eq(events.id, eventId));
 }
 
 export async function deleteEvent(eventId: number) {
