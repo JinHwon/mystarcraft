@@ -44,6 +44,7 @@ import {
   ensurePlayerStats,
   applyGameStatChange,
   getRankingList,
+  getHeadToHeadRecord,
   seedQuestsIfEmpty,
   getAllQuests,
   getPlayerQuestProgress,
@@ -226,10 +227,20 @@ const playerRouter = router({
     .mutation(async ({ ctx, input }) => {
       const player = await getPlayerByUserId(ctx.user.id);
       if (!player) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
-      const newFatigue = Math.min(100, player.fatigue + input.amount);
-      await updateFatigue(player.id, newFatigue);
-      return { fatigue: newFatigue };
+      await updateFatigue(player.id, input.amount);
+      const updated = await getPlayerByUserId(ctx.user.id);
+      return { fatigue: updated?.fatigue ?? player.fatigue };
     }),
+
+  // 시간 기반 피로도 회복 (10분마다 5씩)
+  tickFatigueRecovery: protectedProcedure.mutation(async ({ ctx }) => {
+    const player = await getPlayerByUserId(ctx.user.id);
+    if (!player) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
+    if (player.fatigue >= 100) return { fatigue: 100, recovered: 0 };
+    const recovery = Math.min(5, 100 - player.fatigue);
+    await updateFatigue(player.id, recovery);
+    return { fatigue: Math.min(100, player.fatigue + recovery), recovered: recovery };
+  }),
 });
 
 // ── Shop Router ──────────────────────────────────────────────────
@@ -840,11 +851,19 @@ const practiceRouter = router({
         intelligence: (opponentStatsData as any)?.scout || 0,
       };
       
+      // 등급 인덱스 계산 (능력치 합산 기반)
+      const playerTotalForGrade = STAT_KEYS.reduce((sum, key) => sum + ((playerStatsData as any)?.[key] || 0), 0);
+      const opponentTotalForGrade = STAT_KEYS.reduce((sum, key) => sum + ((opponentStatsData as any)?.[key] || 0), 0);
+      const playerGradeIndex = calcGradeIndex(playerTotalForGrade);
+      const opponentGradeIndex = calcGradeIndex(opponentTotalForGrade);
+      
       const finalStatChanges = applyReverseSystem(
         isWinner,
         playerStatsMap,
         opponentStatsMap,
-        baseStatChanges
+        baseStatChanges,
+        playerGradeIndex,
+        opponentGradeIndex
       );
       
       // 전체 능력치 변동 - 게임 해설/이벤트에 따른 영향도 반영
@@ -858,26 +877,26 @@ const practiceRouter = router({
       // 센스: 전략적 판단 관련 - 경제/정찰 이벤트 영향
       const senseBase = Math.round((economyChange + intelligenceChange) / 2);
       const senseChange = isWinner 
-        ? Math.max(-3, Math.min(4, senseBase + Math.floor(Math.random() * 3) - 1))
-        : Math.max(-4, Math.min(2, senseBase + Math.floor(Math.random() * 3) - 2));
+        ? Math.max(0, Math.min(6, senseBase + Math.floor(Math.random() * 3)))
+        : Math.max(-8, Math.min(1, senseBase + Math.floor(Math.random() * 2) - 2));
       
       // 컨트롤: 전투 관련 - 공격/방어 이벤트 영향
       const controlBase = Math.round((attackChange + defenseChange) / 2);
       const controlChange = isWinner
-        ? Math.max(-3, Math.min(4, controlBase + Math.floor(Math.random() * 3) - 1))
-        : Math.max(-4, Math.min(2, controlBase + Math.floor(Math.random() * 3) - 2));
+        ? Math.max(0, Math.min(6, controlBase + Math.floor(Math.random() * 3)))
+        : Math.max(-8, Math.min(1, controlBase + Math.floor(Math.random() * 2) - 2));
       
       // 견제: 공격적 플레이 관련 - 공격/정찰 이벤트 영향
       const harassBase = Math.round((attackChange + intelligenceChange) / 2);
       const harassChange = isWinner
-        ? Math.max(-3, Math.min(4, harassBase + Math.floor(Math.random() * 3) - 1))
-        : Math.max(-4, Math.min(2, harassBase + Math.floor(Math.random() * 3) - 2));
+        ? Math.max(0, Math.min(6, harassBase + Math.floor(Math.random() * 3)))
+        : Math.max(-8, Math.min(1, harassBase + Math.floor(Math.random() * 2) - 2));
       
       // 물량: 경제/방어 관련 - 경제/방어 이벤트 영향
       const supplyBase = Math.round((economyChange + defenseChange) / 2);
       const supplyChange = isWinner
-        ? Math.max(-3, Math.min(4, supplyBase + Math.floor(Math.random() * 3) - 1))
-        : Math.max(-4, Math.min(2, supplyBase + Math.floor(Math.random() * 3) - 2));
+        ? Math.max(0, Math.min(6, supplyBase + Math.floor(Math.random() * 3)))
+        : Math.max(-8, Math.min(1, supplyBase + Math.floor(Math.random() * 2) - 2));
       
       const statChanges: Record<string, number> = {
         sense: senseChange,
@@ -920,6 +939,19 @@ const practiceRouter = router({
       const hasUnlimitedFatigueEvent = activeEvents.some(e => e.type === 'fatigue_unlimited');
       if (!hasUnlimitedFatigueEvent) {
         await addFatigueCost(player.id, fatigueUsed);
+        
+        // 게임 결과에 따른 피로도 변동
+        // 이겼으면 -1 ~ +3 (피로도가 오르거나 약간 줄 수 있음)
+        // 졌으면 -5 ~ 0 (피로도가 줄어듦)
+        let fatigueChange: number;
+        if (isWinner) {
+          fatigueChange = Math.floor(Math.random() * 5) - 1; // -1 ~ +3
+        } else {
+          fatigueChange = Math.floor(Math.random() * 6) - 5; // -5 ~ 0
+        }
+        if (fatigueChange !== 0) {
+          await updateFatigue(player.id, fatigueChange);
+        }
       }
 
       return { 
@@ -963,6 +995,14 @@ export const appRouter = router({
     list: publicProcedure.query(async () => {
       return await getRankingList();
     }),
+    // 상대전적 조회
+    headToHead: protectedProcedure
+      .input(z.object({ opponentPlayerId: z.number().int() }))
+      .query(async ({ ctx, input }) => {
+        const player = await getPlayerByUserId(ctx.user.id);
+        if (!player) return { wins: 0, losses: 0, total: 0 };
+        return await getHeadToHeadRecord(player.id, input.opponentPlayerId);
+      }),
   }),
 });
 

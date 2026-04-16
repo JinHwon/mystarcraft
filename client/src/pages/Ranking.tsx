@@ -58,7 +58,13 @@ function RankBadge({ rank }: { rank: number }) {
 
 export default function RankingPage() {
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedOpponent, setSelectedOpponent] = useState<number | null>(null);
   const { data: rankings = [], isLoading } = trpc.ranking.list.useQuery();
+  const { data: currentPlayer } = trpc.player.get.useQuery();
+  const { data: headToHead } = trpc.ranking.headToHead.useQuery(
+    { opponentPlayerId: selectedOpponent ?? 0 },
+    { enabled: !!selectedOpponent && !!currentPlayer }
+  );
 
   const totalPages = Math.ceil(rankings.length / ITEMS_PER_PAGE);
   const paginatedRankings = useMemo(() => {
@@ -148,6 +154,23 @@ export default function RankingPage() {
                         {' '}
                         <span className="text-red-400">{player.losses ?? 0}패</span>
                       </span>
+                      {/* 상대전적 표시 */}
+                      {currentPlayer && currentPlayer.id !== player.playerId && (
+                        <span className="text-center">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedOpponent(selectedOpponent === player.playerId ? null : player.playerId);
+                            }}
+                            className="text-xs px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors"
+                            title="상대전적 보기"
+                          >
+                            {selectedOpponent === player.playerId && headToHead
+                              ? `${headToHead.wins}승 ${headToHead.losses}패`
+                              : "⚔️"}
+                          </button>
+                        </span>
+                      )}
                       <span className="text-center text-sm text-slate-300">{player.sense}</span>
                       <span className="text-center text-sm text-slate-300">{player.control}</span>
                       <span className="text-center text-sm text-slate-300">{player.attack}</span>
@@ -192,6 +215,20 @@ export default function RankingPage() {
                             {' '}
                             <span className="text-red-400">{player.losses ?? 0}패</span>
                           </p>
+                          {/* 모바일 상대전적 */}
+                          {currentPlayer && currentPlayer.id !== player.playerId && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedOpponent(selectedOpponent === player.playerId ? null : player.playerId);
+                              }}
+                              className="text-xs mt-0.5 px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors"
+                            >
+                              {selectedOpponent === player.playerId && headToHead
+                                ? `상대전적: ${headToHead.wins}승 ${headToHead.losses}패`
+                                : "⚔️ 상대전적"}
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div className="grid grid-cols-4 gap-2 text-xs">

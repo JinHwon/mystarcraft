@@ -62,6 +62,16 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
     enabled: isAuthenticated,
   });
 
+  // 10분마다 피로도 5 회복
+  const fatigueRecoveryMutation = trpc.player.tickFatigueRecovery.useMutation();
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const interval = setInterval(() => {
+      fatigueRecoveryMutation.mutate();
+    }, 10 * 60 * 1000); // 10분
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
+
   useEffect(() => {
     if (!loading && !isAuthenticated) {
       navigate("/");

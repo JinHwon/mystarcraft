@@ -161,13 +161,16 @@ export default function Admin() {
                 <div>
                   <p className="font-semibold text-white truncate">{user.name || "이름 없음"}</p>
                   <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                  {user.playerName && (
+                    <p className="text-xs text-amber-400 truncate">선수: {user.playerName}</p>
+                  )}
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-xs px-2 py-1 bg-amber-900 text-amber-300 rounded">
                     {user.role === "admin" ? "관리자" : "일반"}
                   </span>
                   <span className={`text-xs px-2 py-1 rounded ${user.playerId ? "bg-green-900 text-green-300" : "bg-gray-800 text-gray-500"}`}>
-                    {user.playerId ? "선수 있음" : "선수 없음"}
+                    {user.playerId ? `선수 ID: ${user.playerId}` : "선수 없음"}
                   </span>
                 </div>
                 <div className="flex gap-2">

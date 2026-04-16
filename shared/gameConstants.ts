@@ -271,9 +271,9 @@ export const GAME_REWARDS = {
 
 // 피로도 사용 (난이도별)
 export const FATIGUE_COST = {
-  beginner: 10,
-  intermediate: 15,
-  advanced: 20,
+  beginner: 3,
+  intermediate: 5,
+  advanced: 5,
 };
 
 // 연습게임 최소 피로도 (이 값 이하면 게임 불가)

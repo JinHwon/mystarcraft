@@ -178,19 +178,51 @@ export async function seedItemsIfEmpty() {
   if (existing.length > 0) return;
 
   const seedItems = [
-    { name: "피로도 회복제", description: "피로도를 즉시 회복하는 에너지 드링크", price: 100, rarity: "common" as const, iconEmoji: "🥤", statBoosts: {}, fatigueRecover: 10 },
-    { name: "스캔 모듈", description: "정찰 능력을 향상시키는 첨단 스캔 장비", price: 200, rarity: "common" as const, iconEmoji: "🔭", statBoosts: { scout: 30 } },
-    { name: "전술 지휘봉", description: "전략적 판단력을 높이는 지휘 도구", price: 300, rarity: "common" as const, iconEmoji: "📡", statBoosts: { strategy: 40 } },
-    { name: "마린 헬멧", description: "방어력을 강화하는 테란 표준 헬멧", price: 250, rarity: "common" as const, iconEmoji: "⛑️", statBoosts: { defense: 35 } },
-    { name: "자극제 주사", description: "공격 속도와 컨트롤을 향상시키는 스팀팩", price: 400, rarity: "rare" as const, iconEmoji: "💉", statBoosts: { control: 50, attack: 30 } },
-    { name: "사이오닉 크리스탈", description: "프로토스의 정신력을 증폭하는 수정", price: 500, rarity: "rare" as const, iconEmoji: "💎", statBoosts: { sense: 60, strategy: 30 } },
-    { name: "저그 히드라 독침", description: "공격력을 대폭 향상시키는 독침 강화제", price: 450, rarity: "rare" as const, iconEmoji: "🦂", statBoosts: { attack: 70, harass: 20 } },
-    { name: "아칸 에너지 코어", description: "모든 능력치를 균형 있게 향상시키는 에너지 코어", price: 800, rarity: "epic" as const, iconEmoji: "⚡", statBoosts: { sense: 30, control: 30, attack: 30, harass: 30 } },
-    { name: "울트라리스크 갑옷", description: "수비력과 물량을 극대화하는 최강의 갑옷", price: 900, rarity: "epic" as const, iconEmoji: "🛡️", statBoosts: { defense: 80, supply: 60 } },
-    { name: "캐리어 지휘 시스템", description: "전략과 견제 능력을 최고 수준으로 끌어올리는 시스템", price: 1200, rarity: "legendary" as const, iconEmoji: "🚀", statBoosts: { strategy: 100, harass: 80, scout: 50 } },
-    { name: "케리건의 유산", description: "저그 여왕의 힘을 담은 전설의 유물", price: 1500, rarity: "legendary" as const, iconEmoji: "👑", statBoosts: { sense: 80, control: 80, attack: 80, supply: 80 } },
-    { name: "타소니스의 검", description: "프로토스 집행관의 검에서 깃든 용맹", price: 1800, rarity: "legendary" as const, iconEmoji: "⚔️", statBoosts: { attack: 120, harass: 100, defense: 60 } },
-    { name: "레이너의 C-14 라이플", description: "테란 최고의 저격수가 사용한 전설의 소총", price: 2000, rarity: "legendary" as const, iconEmoji: "🔫", statBoosts: { control: 100, scout: 100, attack: 100 } },
+    // ── 피로도 회복 아이템 ──
+    { name: "에너지 드링크", description: "피로도를 10 회복하는 에너지 드링크", price: 50, rarity: "common" as const, iconEmoji: "🥤", statBoosts: {}, fatigueRecover: 10 },
+    { name: "고급 에너지 드링크", description: "피로도를 25 회복하는 프리미엄 드링크", price: 150, rarity: "rare" as const, iconEmoji: "🧃", statBoosts: {}, fatigueRecover: 25 },
+    { name: "풀 회복 물약", description: "피로도를 50 회복하는 특제 물약", price: 400, rarity: "epic" as const, iconEmoji: "🧪", statBoosts: {}, fatigueRecover: 50 },
+    { name: "불사의 영약", description: "피로도를 완전히 회복하는 전설의 영약", price: 800, rarity: "legendary" as const, iconEmoji: "✨", statBoosts: {}, fatigueRecover: 100 },
+
+    // ── 일반 능력치 아이템 ──
+    { name: "스캔 모듈", description: "정찰 능력을 향상시키는 첨단 스캔 장비", price: 200, rarity: "common" as const, iconEmoji: "🔭", statBoosts: { scout: 30 }, fatigueRecover: 0 },
+    { name: "전술 지휘봉", description: "전략적 판단력을 높이는 지휘 도구", price: 250, rarity: "common" as const, iconEmoji: "📡", statBoosts: { strategy: 40 }, fatigueRecover: 0 },
+    { name: "마린 헬멧", description: "방어력을 강화하는 테란 표준 헬멧", price: 200, rarity: "common" as const, iconEmoji: "⛑️", statBoosts: { defense: 35 }, fatigueRecover: 0 },
+    { name: "저글링 발톱", description: "공격 속도를 높이는 저글링의 발톱", price: 200, rarity: "common" as const, iconEmoji: "🦎", statBoosts: { attack: 30 }, fatigueRecover: 0 },
+    { name: "프로브 코어", description: "경제 감각을 높이는 프로토스 코어", price: 250, rarity: "common" as const, iconEmoji: "💠", statBoosts: { sense: 35 }, fatigueRecover: 0 },
+    { name: "벌쳐 엔진", description: "견제 능력을 향상시키는 벌쳐 엔진", price: 250, rarity: "common" as const, iconEmoji: "🏍️", statBoosts: { harass: 35 }, fatigueRecover: 0 },
+    { name: "오버로드 눈", description: "시야를 넓혀주는 오버로드의 눈", price: 200, rarity: "common" as const, iconEmoji: "👁️", statBoosts: { scout: 25, sense: 15 }, fatigueRecover: 0 },
+
+    // ── 희귀 능력치 아이템 ──
+    { name: "자극제 주사", description: "공격 속도와 컨트롤을 향상시키는 스팀팩", price: 400, rarity: "rare" as const, iconEmoji: "💉", statBoosts: { control: 50, attack: 30 }, fatigueRecover: 0 },
+    { name: "사이오닉 크리스탈", description: "프로토스의 정신력을 증폭하는 수정", price: 500, rarity: "rare" as const, iconEmoji: "💎", statBoosts: { sense: 60, strategy: 30 }, fatigueRecover: 0 },
+    { name: "저그 히드라 독침", description: "공격력을 대폭 향상시키는 독침 강화제", price: 450, rarity: "rare" as const, iconEmoji: "🦂", statBoosts: { attack: 70, harass: 20 }, fatigueRecover: 0 },
+    { name: "시즈탱크 조준경", description: "정밀 사격 능력을 높이는 조준 장비", price: 500, rarity: "rare" as const, iconEmoji: "🎯", statBoosts: { attack: 40, control: 40 }, fatigueRecover: 0 },
+    { name: "드래군 사거리 모듈", description: "원거리 공격 능력을 강화하는 모듈", price: 450, rarity: "rare" as const, iconEmoji: "🔫", statBoosts: { attack: 50, defense: 30 }, fatigueRecover: 0 },
+    { name: "뮤탈리스크 날개", description: "기동력과 견제 능력을 높이는 날개", price: 500, rarity: "rare" as const, iconEmoji: "🦅", statBoosts: { harass: 60, scout: 30 }, fatigueRecover: 0 },
+    { name: "해처리 유전자", description: "물량 생산 능력을 높이는 유전자 강화제", price: 450, rarity: "rare" as const, iconEmoji: "🧬", statBoosts: { supply: 60, sense: 20 }, fatigueRecover: 0 },
+
+    // ── 영웅 능력치 아이템 ──
+    { name: "아칸 에너지 코어", description: "모든 능력치를 균형 있게 향상시키는 에너지 코어", price: 800, rarity: "epic" as const, iconEmoji: "⚡", statBoosts: { sense: 30, control: 30, attack: 30, harass: 30 }, fatigueRecover: 0 },
+    { name: "울트라리스크 갑옷", description: "수비력과 물량을 극대화하는 최강의 갑옷", price: 900, rarity: "epic" as const, iconEmoji: "🛡️", statBoosts: { defense: 80, supply: 60 }, fatigueRecover: 0 },
+    { name: "리버 스캐럽 팩", description: "강력한 스플래시 공격력을 부여하는 스캐럽", price: 850, rarity: "epic" as const, iconEmoji: "💣", statBoosts: { attack: 80, strategy: 40 }, fatigueRecover: 0 },
+    { name: "아비터 클로킹 장치", description: "전략과 센스를 극대화하는 클로킹 기술", price: 900, rarity: "epic" as const, iconEmoji: "🌀", statBoosts: { strategy: 70, sense: 50, scout: 30 }, fatigueRecover: 0 },
+    { name: "디파일러 독안개", description: "수비와 전략을 극대화하는 다크 스웜", price: 850, rarity: "epic" as const, iconEmoji: "🌫️", statBoosts: { defense: 70, strategy: 60, supply: 30 }, fatigueRecover: 0 },
+    { name: "하이템플러 사이오닉", description: "컨트롤과 공격을 극대화하는 사이오닉 에너지", price: 900, rarity: "epic" as const, iconEmoji: "🔮", statBoosts: { control: 70, attack: 50, sense: 30 }, fatigueRecover: 0 },
+
+    // ── 전설 능력치 아이템 ──
+    { name: "캐리어 지휘 시스템", description: "전략과 견제 능력을 최고 수준으로 끌어올리는 시스템", price: 1500, rarity: "legendary" as const, iconEmoji: "🚀", statBoosts: { strategy: 100, harass: 80, scout: 50 }, fatigueRecover: 0 },
+    { name: "케리건의 유산", description: "저그 여왕의 힘을 담은 전설의 유물", price: 2000, rarity: "legendary" as const, iconEmoji: "👑", statBoosts: { sense: 80, control: 80, attack: 80, supply: 80 }, fatigueRecover: 0 },
+    { name: "타사다르의 검", description: "프로토스 집행관의 검에서 깃든 용맹", price: 2000, rarity: "legendary" as const, iconEmoji: "⚔️", statBoosts: { attack: 120, harass: 100, defense: 60 }, fatigueRecover: 0 },
+    { name: "레이너의 C-14 라이플", description: "테란 최고의 저격수가 사용한 전설의 소총", price: 2500, rarity: "legendary" as const, iconEmoji: "🔫", statBoosts: { control: 100, scout: 100, attack: 100 }, fatigueRecover: 0 },
+    { name: "제라툴의 워프 블레이드", description: "다크템플러 지도자의 전설적인 무기", price: 2500, rarity: "legendary" as const, iconEmoji: "🗡️", statBoosts: { attack: 100, harass: 100, sense: 80 }, fatigueRecover: 0 },
+    { name: "아르타니스의 방패", description: "프로토스 대의회 의장의 불멸의 방패", price: 2500, rarity: "legendary" as const, iconEmoji: "🛡️", statBoosts: { defense: 120, strategy: 100, supply: 80 }, fatigueRecover: 0 },
+    { name: "오버마인드의 의지", description: "저그 오버마인드의 정신력을 담은 유물. 모든 능력치 대폭 상승", price: 3000, rarity: "legendary" as const, iconEmoji: "🧠", statBoosts: { sense: 100, control: 100, strategy: 100, supply: 100 }, fatigueRecover: 0 },
+
+    // ── 특수 아이템 (능력치 + 피로도) ──
+    { name: "메딕의 치료 키트", description: "피로도 15 회복 + 수비력 향상", price: 350, rarity: "rare" as const, iconEmoji: "🏥", statBoosts: { defense: 30 }, fatigueRecover: 15 },
+    { name: "프로토스 실드 배터리", description: "피로도 20 회복 + 방어력 향상", price: 500, rarity: "rare" as const, iconEmoji: "🔋", statBoosts: { defense: 40, sense: 20 }, fatigueRecover: 20 },
+    { name: "저그 여왕의 축복", description: "피로도 30 회복 + 물량/센스 향상", price: 700, rarity: "epic" as const, iconEmoji: "🐛", statBoosts: { supply: 40, sense: 30 }, fatigueRecover: 30 },
   ];
 
   for (const item of seedItems) {
@@ -279,13 +311,19 @@ export async function getAllUsers() {
   if (!db) throw new Error("Database not available");
   
   try {
-    // 모든 사용자 반환 (선수가 있는 경우 playerId 포함)
+    // 모든 사용자 반환 (선수가 있는 경우 playerId와 선수 이름 포함)
     const usersWithPlayers = await db
-      .select({ users: users, playerId: players.id })
+      .select({ users: users, playerId: players.id, playerName: players.name })
       .from(users)
       .leftJoin(players, eq(users.id, players.userId));
     
-    return usersWithPlayers.map(row => ({ ...row.users, playerId: row.playerId ?? null }));
+    return usersWithPlayers.map(row => ({ 
+      ...row.users, 
+      playerId: row.playerId ?? null,
+      playerName: row.playerName ?? null,
+      // name이 null이면 playerName 또는 email에서 추출
+      name: row.users.name || row.playerName || row.users.email?.split('@')[0] || `사용자#${row.users.id}`,
+    }));
   } catch (error) {
     console.error("[Database] getAllUsers failed:", error);
     throw error;
@@ -775,6 +813,23 @@ export async function getRankingList() {
   return rankings.sort((a, b) => b.totalStats - a.totalStats);
 }
 
+/**
+ * 상대전적 조회 - 특정 두 선수 간의 전적
+ */
+export async function getHeadToHeadRecord(playerId: number, opponentPlayerId: number) {
+  const db = await getDb();
+  if (!db) return { wins: 0, losses: 0, total: 0 };
+
+  // playerId가 opponentPlayerId를 상대로 한 게임 결과 조회
+  const results = await db.select().from(gameResults)
+    .where(and(eq(gameResults.playerId, playerId), eq(gameResults.opponentId, opponentPlayerId)));
+
+  const wins = results.filter(r => r.isWinner === 1).length;
+  const losses = results.length - wins;
+
+  return { wins, losses, total: results.length };
+}
+
 
 // ── Quest System ─────────────────────────────────────────────────
 
@@ -786,27 +841,55 @@ export async function seedQuestsIfEmpty() {
 
   const seedData = [
     // 일일퀘스트
-    { type: "daily" as const, title: "연습게임 5판 완료", description: "오늘 연습게임을 5판 플레이하세요", iconEmoji: "🎮", conditionType: "practice_games", conditionValue: 5, rewardType: "gold", rewardValue: 100, sortOrder: 1 },
-    { type: "daily" as const, title: "연습게임 10판 완료", description: "오늘 연습게임을 10판 플레이하세요", iconEmoji: "⚡", conditionType: "practice_games", conditionValue: 10, rewardType: "fatigue", rewardValue: 50, sortOrder: 2 },
-    { type: "daily" as const, title: "3승 달성", description: "오늘 연습게임에서 3번 승리하세요", iconEmoji: "🏆", conditionType: "practice_wins", conditionValue: 3, rewardType: "exp", rewardValue: 150, sortOrder: 3 },
-    { type: "daily" as const, title: "5승 달성", description: "오늘 연습게임에서 5번 승리하세요", iconEmoji: "🔥", conditionType: "practice_wins", conditionValue: 5, rewardType: "gold", rewardValue: 200, sortOrder: 4 },
-    { type: "daily" as const, title: "능력치 배분 1회", description: "능력치 포인트를 1회 배분하세요", iconEmoji: "📊", conditionType: "stat_allocate", conditionValue: 1, rewardType: "gold", rewardValue: 50, sortOrder: 5 },
-    { type: "daily" as const, title: "아이템 구매 1회", description: "상점에서 아이템을 1개 구매하세요", iconEmoji: "🛒", conditionType: "item_buy", conditionValue: 1, rewardType: "exp", rewardValue: 80, sortOrder: 6 },
-    { type: "daily" as const, title: "고수 난이도 도전", description: "고수 난이도 연습게임을 1판 플레이하세요", iconEmoji: "⚔️", conditionType: "practice_advanced", conditionValue: 1, rewardType: "gold", rewardValue: 150, sortOrder: 7 },
+    { type: "daily" as const, title: "연습게임 3판 완료", description: "오늘 연습게임을 3판 플레이하세요", iconEmoji: "🎮", conditionType: "practice_games", conditionValue: 3, rewardType: "gold", rewardValue: 80, sortOrder: 1 },
+    { type: "daily" as const, title: "연습게임 7판 완료", description: "오늘 연습게임을 7판 플레이하세요", iconEmoji: "🎯", conditionType: "practice_games", conditionValue: 7, rewardType: "gold", rewardValue: 150, sortOrder: 2 },
+    { type: "daily" as const, title: "연습게임 15판 완료", description: "오늘 연습게임을 15판 플레이하세요", iconEmoji: "⚡", conditionType: "practice_games", conditionValue: 15, rewardType: "fatigue", rewardValue: 30, sortOrder: 3 },
+    { type: "daily" as const, title: "3승 달성", description: "오늘 연습게임에서 3번 승리하세요", iconEmoji: "🏆", conditionType: "practice_wins", conditionValue: 3, rewardType: "exp", rewardValue: 150, sortOrder: 4 },
+    { type: "daily" as const, title: "5승 달성", description: "오늘 연습게임에서 5번 승리하세요", iconEmoji: "🔥", conditionType: "practice_wins", conditionValue: 5, rewardType: "gold", rewardValue: 200, sortOrder: 5 },
+    { type: "daily" as const, title: "10승 달성", description: "오늘 연습게임에서 10번 승리하세요", iconEmoji: "💪", conditionType: "practice_wins", conditionValue: 10, rewardType: "stat_points", rewardValue: 10, sortOrder: 6 },
+    { type: "daily" as const, title: "능력치 배분 1회", description: "능력치 포인트를 1회 배분하세요", iconEmoji: "📊", conditionType: "stat_allocate", conditionValue: 1, rewardType: "gold", rewardValue: 50, sortOrder: 7 },
+    { type: "daily" as const, title: "아이템 구매 1회", description: "상점에서 아이템을 1개 구매하세요", iconEmoji: "🛒", conditionType: "item_buy", conditionValue: 1, rewardType: "exp", rewardValue: 80, sortOrder: 8 },
+    { type: "daily" as const, title: "고수 난이도 도전", description: "고수 난이도 연습게임을 1판 플레이하세요", iconEmoji: "⚔️", conditionType: "practice_advanced", conditionValue: 1, rewardType: "gold", rewardValue: 150, sortOrder: 9 },
+    { type: "daily" as const, title: "고수 난이도 3판", description: "고수 난이도 연습게임을 3판 플레이하세요", iconEmoji: "🗡️", conditionType: "practice_advanced", conditionValue: 3, rewardType: "stat_points", rewardValue: 5, sortOrder: 10 },
 
-    // 누적보상퀘스트
+    // 누적보상퀘스트 - 초반
     { type: "cumulative" as const, title: "첫 승리", description: "연습게임에서 첫 승리를 거두세요", iconEmoji: "🌟", conditionType: "total_wins", conditionValue: 1, rewardType: "gold", rewardValue: 200, sortOrder: 1 },
     { type: "cumulative" as const, title: "10승 달성", description: "누적 10승을 달성하세요", iconEmoji: "🎯", conditionType: "total_wins", conditionValue: 10, rewardType: "gold", rewardValue: 500, sortOrder: 2 },
-    { type: "cumulative" as const, title: "50승 달성", description: "누적 50승을 달성하세요", iconEmoji: "💎", conditionType: "total_wins", conditionValue: 50, rewardType: "gold", rewardValue: 2000, sortOrder: 3 },
-    { type: "cumulative" as const, title: "100승 달성", description: "누적 100승을 달성하세요", iconEmoji: "👑", conditionType: "total_wins", conditionValue: 100, rewardType: "stat_points", rewardValue: 50, sortOrder: 4 },
-    { type: "cumulative" as const, title: "연습게임 30판", description: "연습게임을 총 30판 플레이하세요", iconEmoji: "🎮", conditionType: "total_games", conditionValue: 30, rewardType: "gold", rewardValue: 300, sortOrder: 5 },
-    { type: "cumulative" as const, title: "연습게임 100판", description: "연습게임을 총 100판 플레이하세요", iconEmoji: "🏅", conditionType: "total_games", conditionValue: 100, rewardType: "gold", rewardValue: 1000, sortOrder: 6 },
-    { type: "cumulative" as const, title: "연습게임 300판", description: "연습게임을 총 300판 플레이하세요", iconEmoji: "🏆", conditionType: "total_games", conditionValue: 300, rewardType: "stat_points", rewardValue: 100, sortOrder: 7 },
-    { type: "cumulative" as const, title: "골드 부자", description: "골드를 총 5000 이상 획득하세요", iconEmoji: "💰", conditionType: "total_gold_earned", conditionValue: 5000, rewardType: "gold", rewardValue: 1000, sortOrder: 8 },
-    { type: "cumulative" as const, title: "레벨 10 달성", description: "선수 레벨 10을 달성하세요", iconEmoji: "⬆️", conditionType: "player_level", conditionValue: 10, rewardType: "gold", rewardValue: 500, sortOrder: 9 },
-    { type: "cumulative" as const, title: "레벨 30 달성", description: "선수 레벨 30을 달성하세요", iconEmoji: "🚀", conditionType: "player_level", conditionValue: 30, rewardType: "stat_points", rewardValue: 80, sortOrder: 10 },
-    { type: "cumulative" as const, title: "C등급 달성", description: "선수 등급 C를 달성하세요", iconEmoji: "📈", conditionType: "player_grade", conditionValue: 3, rewardType: "gold", rewardValue: 800, sortOrder: 11 },
-    { type: "cumulative" as const, title: "A등급 달성", description: "선수 등급 A를 달성하세요", iconEmoji: "🌠", conditionType: "player_grade", conditionValue: 5, rewardType: "stat_points", rewardValue: 150, sortOrder: 12 },
+    { type: "cumulative" as const, title: "30승 달성", description: "누적 30승을 달성하세요", iconEmoji: "🏅", conditionType: "total_wins", conditionValue: 30, rewardType: "gold", rewardValue: 1000, sortOrder: 3 },
+    { type: "cumulative" as const, title: "50승 달성", description: "누적 50승을 달성하세요", iconEmoji: "💎", conditionType: "total_wins", conditionValue: 50, rewardType: "gold", rewardValue: 2000, sortOrder: 4 },
+    { type: "cumulative" as const, title: "100승 달성", description: "누적 100승을 달성하세요", iconEmoji: "👑", conditionType: "total_wins", conditionValue: 100, rewardType: "stat_points", rewardValue: 50, sortOrder: 5 },
+    { type: "cumulative" as const, title: "200승 달성", description: "누적 200승을 달성하세요. 진정한 프로게이머!", iconEmoji: "🏆", conditionType: "total_wins", conditionValue: 200, rewardType: "stat_points", rewardValue: 100, sortOrder: 6 },
+    { type: "cumulative" as const, title: "500승 달성", description: "누적 500승! 전설의 선수입니다", iconEmoji: "⭐", conditionType: "total_wins", conditionValue: 500, rewardType: "stat_points", rewardValue: 200, sortOrder: 7 },
+
+    // 누적보상퀘스트 - 게임 수
+    { type: "cumulative" as const, title: "연습게임 30판", description: "연습게임을 총 30판 플레이하세요", iconEmoji: "🎮", conditionType: "total_games", conditionValue: 30, rewardType: "gold", rewardValue: 300, sortOrder: 8 },
+    { type: "cumulative" as const, title: "연습게임 100판", description: "연습게임을 총 100판 플레이하세요", iconEmoji: "🎲", conditionType: "total_games", conditionValue: 100, rewardType: "gold", rewardValue: 1000, sortOrder: 9 },
+    { type: "cumulative" as const, title: "연습게임 300판", description: "연습게임을 총 300판 플레이하세요", iconEmoji: "🏅", conditionType: "total_games", conditionValue: 300, rewardType: "stat_points", rewardValue: 80, sortOrder: 10 },
+    { type: "cumulative" as const, title: "연습게임 500판", description: "연습게임을 총 500판 플레이하세요. 끈기의 달인!", iconEmoji: "💪", conditionType: "total_games", conditionValue: 500, rewardType: "stat_points", rewardValue: 150, sortOrder: 11 },
+    { type: "cumulative" as const, title: "연습게임 1000판", description: "연습게임을 총 1000판! 진정한 프로의 길", iconEmoji: "🔥", conditionType: "total_games", conditionValue: 1000, rewardType: "stat_points", rewardValue: 300, sortOrder: 12 },
+
+    // 누적보상퀘스트 - 골드
+    { type: "cumulative" as const, title: "골드 부자", description: "골드를 총 5000 이상 획득하세요", iconEmoji: "💰", conditionType: "total_gold_earned", conditionValue: 5000, rewardType: "gold", rewardValue: 1000, sortOrder: 13 },
+    { type: "cumulative" as const, title: "골드 재벌", description: "골드를 총 20000 이상 획득하세요", iconEmoji: "💎", conditionType: "total_gold_earned", conditionValue: 20000, rewardType: "stat_points", rewardValue: 50, sortOrder: 14 },
+    { type: "cumulative" as const, title: "골드 황제", description: "골드를 총 100000 이상 획득하세요", iconEmoji: "👑", conditionType: "total_gold_earned", conditionValue: 100000, rewardType: "stat_points", rewardValue: 200, sortOrder: 15 },
+
+    // 누적보상퀘스트 - 레벨
+    { type: "cumulative" as const, title: "레벨 5 달성", description: "선수 레벨 5를 달성하세요", iconEmoji: "⬆️", conditionType: "player_level", conditionValue: 5, rewardType: "gold", rewardValue: 300, sortOrder: 16 },
+    { type: "cumulative" as const, title: "레벨 10 달성", description: "선수 레벨 10을 달성하세요", iconEmoji: "📈", conditionType: "player_level", conditionValue: 10, rewardType: "gold", rewardValue: 500, sortOrder: 17 },
+    { type: "cumulative" as const, title: "레벨 20 달성", description: "선수 레벨 20을 달성하세요", iconEmoji: "🚀", conditionType: "player_level", conditionValue: 20, rewardType: "stat_points", rewardValue: 50, sortOrder: 18 },
+    { type: "cumulative" as const, title: "레벨 30 달성", description: "선수 레벨 30을 달성하세요", iconEmoji: "🌟", conditionType: "player_level", conditionValue: 30, rewardType: "stat_points", rewardValue: 80, sortOrder: 19 },
+    { type: "cumulative" as const, title: "레벨 40 달성", description: "선수 레벨 40을 달성하세요", iconEmoji: "💫", conditionType: "player_level", conditionValue: 40, rewardType: "stat_points", rewardValue: 120, sortOrder: 20 },
+    { type: "cumulative" as const, title: "레벨 50 달성 (MAX)", description: "최대 레벨 50 달성! 전설의 선수!", iconEmoji: "🏆", conditionType: "player_level", conditionValue: 50, rewardType: "stat_points", rewardValue: 300, sortOrder: 21 },
+
+    // 누적보상퀘스트 - 등급
+    { type: "cumulative" as const, title: "E등급 달성", description: "선수 등급 E를 달성하세요", iconEmoji: "📊", conditionType: "player_grade", conditionValue: 1, rewardType: "gold", rewardValue: 300, sortOrder: 22 },
+    { type: "cumulative" as const, title: "D등급 달성", description: "선수 등급 D를 달성하세요", iconEmoji: "📈", conditionType: "player_grade", conditionValue: 2, rewardType: "gold", rewardValue: 500, sortOrder: 23 },
+    { type: "cumulative" as const, title: "C등급 달성", description: "선수 등급 C를 달성하세요", iconEmoji: "🎯", conditionType: "player_grade", conditionValue: 3, rewardType: "gold", rewardValue: 800, sortOrder: 24 },
+    { type: "cumulative" as const, title: "B등급 달성", description: "선수 등급 B를 달성하세요", iconEmoji: "⭐", conditionType: "player_grade", conditionValue: 4, rewardType: "stat_points", rewardValue: 50, sortOrder: 25 },
+    { type: "cumulative" as const, title: "A등급 달성", description: "선수 등급 A를 달성하세요", iconEmoji: "🌠", conditionType: "player_grade", conditionValue: 5, rewardType: "stat_points", rewardValue: 100, sortOrder: 26 },
+    { type: "cumulative" as const, title: "S등급 달성", description: "선수 등급 S를 달성하세요. 프로 중의 프로!", iconEmoji: "💎", conditionType: "player_grade", conditionValue: 6, rewardType: "stat_points", rewardValue: 200, sortOrder: 27 },
+    { type: "cumulative" as const, title: "SS등급 달성", description: "선수 등급 SS! 전설의 영역!", iconEmoji: "👑", conditionType: "player_grade", conditionValue: 7, rewardType: "stat_points", rewardValue: 300, sortOrder: 28 },
+    { type: "cumulative" as const, title: "SSS등급 달성", description: "최고 등급 SSS! 신의 경지!", iconEmoji: "🏆", conditionType: "player_grade", conditionValue: 8, rewardType: "stat_points", rewardValue: 500, sortOrder: 29 },
   ];
 
   for (const quest of seedData) {

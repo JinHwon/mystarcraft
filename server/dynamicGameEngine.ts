@@ -274,8 +274,8 @@ function resolveEngagement(gs: GameState): { winnerIsP1: boolean; decisive: bool
   // 패자: 병력 열세할수록 많이 잃음 (30~70%)
   const loseLoss = Math.min(0.70, 0.30 + (dominance - 1) * 0.25);
 
-  const winResLoss = 50 + Math.random() * 150;
-  const loseResLoss = 200 + Math.random() * 400;
+  const winResLoss = 100 + Math.random() * 200 + (winP1 ? p1.supply : p2.supply) * 1.5;
+  const loseResLoss = 300 + Math.random() * 500 + (winP1 ? p2.supply : p1.supply) * 2.0;
 
   if (winP1) {
     p1.supply = Math.max(3, p1.supply - Math.round(p1.supply * winLoss));
@@ -289,9 +289,11 @@ function resolveEngagement(gs: GameState): { winnerIsP1: boolean; decisive: bool
     p1.resources = Math.max(0, p1.resources - loseResLoss);
   }
 
-  // 결정적 한방 판정: 패자 병력이 15 이하로 떨어지면 decisive
+  // 결정적 한방 판정: 패자 병력이 15 이하이거나 병력+자원 합이 매우 낮으면 decisive
   const loserSupply = winP1 ? p2.supply : p1.supply;
-  const decisive = loserSupply <= 15;
+  const loserResources = winP1 ? p2.resources : p1.resources;
+  const loserTotal = loserSupply + loserResources / 100; // 자원을 병력 단위로 환산
+  const decisive = loserSupply <= 15 || loserTotal <= 20;
 
   return { winnerIsP1: winP1, decisive };
 }
@@ -463,10 +465,10 @@ export function progressGame(gs: GameState): void {
     gs.turnCommentaries.push(generateSituationCommentary());
   }
 
-  // ── 유불리 계산: 병력과 자원이 핵심 요소 ──
-  // 병력 비중 60%, 자원 비중 25%, 능력치 비중 15%
-  let s1 = gs.player1.supply * 3.0 + gs.player1.resources / 100;
-  let s2 = gs.player2.supply * 3.0 + gs.player2.resources / 100;
+  // ── 유불리 계산: 병력과 자원의 합이 핵심 요소 ──
+  // 병력 비중 50%, 자원 비중 35%, 능력치 비중 15%
+  let s1 = gs.player1.supply * 2.5 + gs.player1.resources / 60;
+  let s2 = gs.player2.supply * 2.5 + gs.player2.resources / 60;
   
   // 능력치 보정: 전체 능력치 합산의 영향 (최대 ±25%)
   if (gs.player1.stats) {
@@ -481,10 +483,20 @@ export function progressGame(gs: GameState): void {
   const total = s1 + s2;
   gs.player1Advantage = total > 0 ? (s1 / total) * 100 : 50;
 
-  // 게임 종료: 80% 이상 유리 or 결정적 한방 후 75% 이상 or 최대 턴
+  // ── 게임 종료 조건 ──
+  // 1. 80% 이상 유리 (병력+자원 합 기준)
+  // 2. 결정적 한방 후 70% 이상 유리
+  // 3. 한쪽의 병력+자원 합이 너무 낮으면 (병력 10 이하 + 자원 200 이하)
+  // 4. 최대 턴
   const endByAdvantage = gs.player1Advantage > 80 || gs.player1Advantage < 20;
-  const endByDecisive = decisive && (gs.player1Advantage > 75 || gs.player1Advantage < 25);
-  if (gs.turn >= 120 || endByAdvantage || endByDecisive) {
+  const endByDecisive = decisive && (gs.player1Advantage > 70 || gs.player1Advantage < 30);
+  
+  // 한쪽이 병력+자원 모두 바닥나면 게임 종료
+  const p1Collapsed = gs.player1.supply <= 10 && gs.player1.resources <= 200;
+  const p2Collapsed = gs.player2.supply <= 10 && gs.player2.resources <= 200;
+  const endByCollapse = (p1Collapsed || p2Collapsed) && gs.turn >= 15;
+  
+  if (gs.turn >= 120 || endByAdvantage || endByDecisive || endByCollapse) {
     gs.gameEnded = true;
     gs.winner = gs.player1Advantage > 50 ? gs.player1.id : gs.player2.id;
   }
