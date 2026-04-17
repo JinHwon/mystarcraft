@@ -146,7 +146,7 @@ export default function PracticePage() {
 
   const handleUseRecoveryItem = (playerItem: any) => {
     if (!playerItem || !playerItem.item?.fatigueRecover) return;
-    useItemMutation.mutate({ playerItemId: playerItem.id });
+    useItemMutation.mutate({ playerItemId: playerItem.playerItemId });
   };
 
   const handleStartGame = async () => {
@@ -889,24 +889,34 @@ export default function PracticePage() {
           </Card>
 
           {showResultConfirm && (
-            <Dialog open={showResultConfirm} onOpenChange={setShowResultConfirm}>
-              <DialogContent className="bg-slate-800 border-slate-700">
-                <DialogHeader>
-                  <DialogTitle className="text-white">게임 완료</DialogTitle>
-                </DialogHeader>
-                <Button 
-                  onClick={() => setPhase("result")}
-                  className="w-full bg-blue-600 hover:bg-blue-700"
-                >
-                  결과 보기
-                </Button>
-              </DialogContent>
-            </Dialog>
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <Card className="bg-slate-800 border-slate-700 max-w-sm w-full mx-4">
+                <CardHeader>
+                  <CardTitle className="text-white">게임 완료</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Button 
+                    onClick={() => setPhase("result")}
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                  >
+                    결과 보기
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
           )}
         </div>
       </div>
     );
   }
+
+  // 게임 완료 후 자동으로 result 페이즈로 전환
+  useEffect(() => {
+    if (showResultConfirm && !gameState.turns) {
+      const timer = setTimeout(() => setPhase("result"), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [showResultConfirm]);
 
   if (phase === "result") {
     const isWinner = gameState.isWinner;

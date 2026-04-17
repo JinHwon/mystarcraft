@@ -48,6 +48,7 @@ function ItemCard({
   isEquipping,
   usageCount,
   playerItems,
+  onUse,
 }: {
   item: ItemData;
   owned: boolean;
@@ -62,6 +63,7 @@ function ItemCard({
   isEquipping: boolean;
   usageCount?: number;
   playerItems?: PlayerItemData[];
+  onUse?: () => void;
 }) {
   const rarityColor = RARITY_COLORS[item.rarity] ?? "#9CA3AF";
   const rarityLabel = RARITY_LABELS[item.rarity] ?? "일반";
@@ -138,7 +140,7 @@ function ItemCard({
       {/* 남은 사용 횟수 (보유 아이템인 경우만 표시) */}
       {owned && (
         <div className="text-xs text-muted-foreground text-center">
-          남은 사용 횟수: <span className="font-bold text-foreground">{playerItemId !== undefined ? (playerItems?.find(pi => pi.playerItemId === playerItemId)?.usageCount ?? 0) : 0}/20</span>
+          남은 사용 횟수: <span className="font-bold text-foreground">{playerItemId !== undefined ? (playerItems?.find(pi => pi.playerItemId === playerItemId)?.usageCount ?? 0) : 0}/{isFatigueItem ? 1 : 20}</span>
         </div>
       )}
 
@@ -151,7 +153,18 @@ function ItemCard({
 
         {owned ? (
           <div className="flex gap-2">
-            {equipped === 1 ? (
+            {isFatigueItem ? (
+              <Button
+                size="sm"
+                className="h-7 px-3 text-xs font-bold"
+                style={{ backgroundColor: rarityColor, color: "white" }}
+                onClick={onUse}
+                disabled={isEquipping || (usageCount ?? 0) <= 0}
+              >
+                <Zap className="w-3 h-3 mr-1" />
+                사용
+              </Button>
+            ) : equipped === 1 ? (
               <Button
                 size="sm"
                 variant="outline"
@@ -221,6 +234,18 @@ export default function Shop() {
     onSuccess: (_, { equip }) => {
       utils.shop.getPlayerItems.invalidate();
       toast.success(equip ? "아이템을 착용했습니다" : "아이템을 해제했습니다");
+    },
+    onError: (err) => toast.error(err.message),
+    onSettled: () => setEquippingId(null),
+  });
+
+  const useMutation = trpc.shop.useItem.useMutation({
+    onMutate: ({ playerItemId }) => setEquippingId(playerItemId),
+    onSuccess: (result, { playerItemId }) => {
+      utils.player.get.invalidate();
+      utils.shop.getPlayerItems.invalidate();
+      const item = playerItems.find(pi => pi.playerItemId === playerItemId)?.item;
+      toast.success(`${item?.name} 사용 완료!`);
     },
     onError: (err) => toast.error(err.message),
     onSettled: () => setEquippingId(null),
@@ -318,6 +343,7 @@ export default function Shop() {
                   onBuy={() => buyMutation.mutate({ itemId: item.id })}
                   onEquip={() => playerItem && equipMutation.mutate({ playerItemId: playerItem.playerItemId, equip: true })}
                   onUnequip={() => playerItem && equipMutation.mutate({ playerItemId: playerItem.playerItemId, equip: false })}
+                  onUse={() => playerItem && useMutation.mutate({ playerItemId: playerItem.playerItemId })}
                   isBuying={buyingId === item.id}
                   isEquipping={equippingId === playerItem?.playerItemId}
                   usageCount={playerItem?.usageCount}
@@ -350,6 +376,7 @@ export default function Shop() {
                   onBuy={() => {}}
                   onEquip={() => equipMutation.mutate({ playerItemId: pi.playerItemId, equip: true })}
                   onUnequip={() => equipMutation.mutate({ playerItemId: pi.playerItemId, equip: false })}
+                  onUse={() => useMutation.mutate({ playerItemId: pi.playerItemId })}
                   isBuying={false}
                   isEquipping={equippingId === pi.playerItemId}
                   usageCount={pi.usageCount}
@@ -380,6 +407,7 @@ export default function Shop() {
                   onBuy={() => {}}
                   onEquip={() => {}}
                   onUnequip={() => equipMutation.mutate({ playerItemId: pi.playerItemId, equip: false })}
+                  onUse={() => useMutation.mutate({ playerItemId: pi.playerItemId })}
                   isBuying={false}
                   isEquipping={equippingId === pi.playerItemId}
                   usageCount={pi.usageCount}
