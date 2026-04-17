@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { RACE_COLORS, RACE_LABELS, DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, FATIGUE_MIN_TO_PLAY, calcFatigueStatPenalty } from "@shared/gameConstants";
 import { Loader2, X, ArrowLeft, User } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { STAT_LABELS } from "@shared/gameConstants";
 
 type GamePhase = "difficulty" | "map" | "opponent" | "playing" | "result";
@@ -662,6 +661,32 @@ export default function PracticePage() {
             </div>
           </div>
 
+          {/* 해설 (맨 위) */}
+          <Card className="bg-slate-800 border-slate-700 mb-3">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm md:text-base text-white">해설</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-1 max-h-64 overflow-y-auto" ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}>
+                {allCommentaries.length === 0 ? (
+                  <p className="text-xs text-slate-400">해설이 없습니다.</p>
+                ) : (
+                  allCommentaries.map((item, idx) => {
+                    let textColor = "text-slate-300";
+                    if (item.text.includes(player1Name)) textColor = "text-blue-300";
+                    else if (item.text.includes(player2Name)) textColor = "text-purple-300";
+                    
+                    return (
+                      <p key={idx} className={`text-xs ${textColor}`}>
+                        {item.text}
+                      </p>
+                    );
+                  })
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
           {/* 유불리 그래프 (실시간) */}
           <Card className="bg-slate-800 border-slate-700 mb-3">
             <CardContent className="py-3 px-4">
@@ -689,37 +714,33 @@ export default function PracticePage() {
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+          {/* 플레이어 정보 (병력/자원 수치 + 바 그래프) */}
+          <div className="grid grid-cols-2 gap-3 md:gap-4">
             {/* 플레이어 1 정보 */}
             <Card className="bg-slate-800 border-blue-700/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm md:text-base text-blue-300">{player1Name}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <div className="text-xs text-slate-400 space-y-1">
-                  <div className="flex justify-between">
-                    <span>병력</span>
-                    <span className="text-cyan-400 font-bold">{currentTurn?.player1Supply ?? 0}</span>
+                <div className="text-xs text-slate-400 space-y-2">
+                  <div>
+                    <div className="flex justify-between mb-0.5">
+                      <span>⚔️ 병력</span>
+                      <span className="text-cyan-400 font-bold">{currentTurn?.player1Supply ?? 0}</span>
+                    </div>
+                    <div className="w-full bg-slate-700 rounded-full h-1.5">
+                      <div className="bg-cyan-500 h-1.5 rounded-full transition-all" style={{ width: `${Math.min(((currentTurn?.player1Supply ?? 0) / maxSupply) * 100, 100)}%` }} />
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span>자원</span>
-                    <span className="text-yellow-400 font-bold">{currentTurn?.player1Resources ?? 0}</span>
+                  <div>
+                    <div className="flex justify-between mb-0.5">
+                      <span>💰 자원</span>
+                      <span className="text-yellow-400 font-bold">{currentTurn?.player1Resources ?? 0}</span>
+                    </div>
+                    <div className="w-full bg-slate-700 rounded-full h-1.5">
+                      <div className="bg-yellow-500 h-1.5 rounded-full transition-all" style={{ width: `${Math.min(((currentTurn?.player1Resources ?? 0) / maxResources) * 100, 100)}%` }} />
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 게임 진행 상황 */}
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm md:text-base text-white text-center">게임 진행</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-center">
-                <div className="w-full bg-slate-700 rounded-full h-2">
-                  <div
-                    className="bg-blue-500 h-2 rounded-full transition-all"
-                    style={{ width: `${((currentTurnIndex + 1) / turns.length) * 100}%` }}
-                  />
                 </div>
               </CardContent>
             </Card>
@@ -730,52 +751,47 @@ export default function PracticePage() {
                 <CardTitle className="text-sm md:text-base text-purple-300">{player2Name}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <div className="text-xs text-slate-400 space-y-1">
-                  <div className="flex justify-between">
-                    <span>병력</span>
-                    <span className="text-cyan-400 font-bold">{currentTurn?.player2Supply ?? 0}</span>
+                <div className="text-xs text-slate-400 space-y-2">
+                  <div>
+                    <div className="flex justify-between mb-0.5">
+                      <span>⚔️ 병력</span>
+                      <span className="text-cyan-400 font-bold">{currentTurn?.player2Supply ?? 0}</span>
+                    </div>
+                    <div className="w-full bg-slate-700 rounded-full h-1.5">
+                      <div className="bg-cyan-500 h-1.5 rounded-full transition-all" style={{ width: `${Math.min(((currentTurn?.player2Supply ?? 0) / maxSupply) * 100, 100)}%` }} />
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span>자원</span>
-                    <span className="text-yellow-400 font-bold">{currentTurn?.player2Resources ?? 0}</span>
+                  <div>
+                    <div className="flex justify-between mb-0.5">
+                      <span>💰 자원</span>
+                      <span className="text-yellow-400 font-bold">{currentTurn?.player2Resources ?? 0}</span>
+                    </div>
+                    <div className="w-full bg-slate-700 rounded-full h-1.5">
+                      <div className="bg-yellow-500 h-1.5 rounded-full transition-all" style={{ width: `${Math.min(((currentTurn?.player2Resources ?? 0) / maxResources) * 100, 100)}%` }} />
+                    </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* 병력 그래프 */}
+          {/* 병력 추이 그래프 */}
           <Card className="bg-slate-800 border-slate-700 mt-3">
             <CardHeader className="pb-2">
               <CardTitle className="text-xs text-slate-400">⚔️ 병력 추이</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="relative h-24 md:h-32">
-                {/* Y축 라벨 */}
                 <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-[9px] text-slate-500 w-8">
                   <span>{maxSupply}</span>
                   <span>{Math.round(maxSupply / 2)}</span>
                   <span>0</span>
                 </div>
-                {/* 그래프 영역 */}
                 <div className="ml-9 h-full relative overflow-hidden">
                   <svg className="w-full h-full" viewBox={`0 0 ${Math.max(displayedTurns.length, 2)} ${maxSupply}`} preserveAspectRatio="none">
-                    {/* P1 병력 */}
-                    <polyline
-                      fill="none"
-                      stroke="#60A5FA"
-                      strokeWidth={maxSupply * 0.02}
-                      points={displayedTurns.map((t: any, i: number) => `${i},${maxSupply - (t.player1Supply ?? 0)}`).join(' ')}
-                    />
-                    {/* P2 병력 */}
-                    <polyline
-                      fill="none"
-                      stroke="#A78BFA"
-                      strokeWidth={maxSupply * 0.02}
-                      points={displayedTurns.map((t: any, i: number) => `${i},${maxSupply - (t.player2Supply ?? 0)}`).join(' ')}
-                    />
+                    <polyline fill="none" stroke="#60A5FA" strokeWidth={maxSupply * 0.02} points={displayedTurns.map((t: any, i: number) => `${i},${maxSupply - (t.player1Supply ?? 0)}`).join(' ')} />
+                    <polyline fill="none" stroke="#A78BFA" strokeWidth={maxSupply * 0.02} points={displayedTurns.map((t: any, i: number) => `${i},${maxSupply - (t.player2Supply ?? 0)}`).join(' ')} />
                   </svg>
-                  {/* 범례 */}
                   <div className="absolute top-1 right-1 flex gap-3 text-[10px]">
                     <span className="text-blue-400">● {player1Name}</span>
                     <span className="text-purple-400">● {player2Name}</span>
@@ -785,38 +801,23 @@ export default function PracticePage() {
             </CardContent>
           </Card>
 
-          {/* 자원 그래프 */}
+          {/* 자원 추이 그래프 */}
           <Card className="bg-slate-800 border-slate-700 mt-3">
             <CardHeader className="pb-2">
               <CardTitle className="text-xs text-slate-400">💰 자원 추이</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="relative h-24 md:h-32">
-                {/* Y축 라벨 */}
                 <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-[9px] text-slate-500 w-8">
                   <span>{maxResources}</span>
                   <span>{Math.round(maxResources / 2)}</span>
                   <span>0</span>
                 </div>
-                {/* 그래프 영역 */}
                 <div className="ml-9 h-full relative overflow-hidden">
                   <svg className="w-full h-full" viewBox={`0 0 ${Math.max(displayedTurns.length, 2)} ${maxResources}`} preserveAspectRatio="none">
-                    {/* P1 자원 */}
-                    <polyline
-                      fill="none"
-                      stroke="#FBBF24"
-                      strokeWidth={maxResources * 0.02}
-                      points={displayedTurns.map((t: any, i: number) => `${i},${maxResources - (t.player1Resources ?? 0)}`).join(' ')}
-                    />
-                    {/* P2 자원 */}
-                    <polyline
-                      fill="none"
-                      stroke="#F97316"
-                      strokeWidth={maxResources * 0.02}
-                      points={displayedTurns.map((t: any, i: number) => `${i},${maxResources - (t.player2Resources ?? 0)}`).join(' ')}
-                    />
+                    <polyline fill="none" stroke="#FBBF24" strokeWidth={maxResources * 0.02} points={displayedTurns.map((t: any, i: number) => `${i},${maxResources - (t.player1Resources ?? 0)}`).join(' ')} />
+                    <polyline fill="none" stroke="#F97316" strokeWidth={maxResources * 0.02} points={displayedTurns.map((t: any, i: number) => `${i},${maxResources - (t.player2Resources ?? 0)}`).join(' ')} />
                   </svg>
-                  {/* 범례 */}
                   <div className="absolute top-1 right-1 flex gap-3 text-[10px]">
                     <span className="text-yellow-400">● {player1Name}</span>
                     <span className="text-orange-400">● {player2Name}</span>
@@ -833,26 +834,16 @@ export default function PracticePage() {
             </CardHeader>
             <CardContent>
               <div className="relative h-24 md:h-32">
-                {/* Y축 라벨 */}
                 <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-[9px] text-slate-500 w-8">
                   <span className="text-blue-400">P1</span>
                   <span>50</span>
                   <span className="text-purple-400">P2</span>
                 </div>
-                {/* 그래프 영역 */}
                 <div className="ml-9 h-full relative overflow-hidden">
                   <svg className="w-full h-full" viewBox={`0 0 ${Math.max(displayedTurns.length, 2)} 100`} preserveAspectRatio="none">
-                    {/* 50% 기준선 */}
                     <line x1="0" y1="50" x2={displayedTurns.length} y2="50" stroke="#475569" strokeWidth="0.5" strokeDasharray="2,2" />
-                    {/* P1 유불리 영역 (50% 위) */}
-                    <polyline
-                      fill="none"
-                      stroke="#60A5FA"
-                      strokeWidth="1.5"
-                      points={displayedTurns.map((t: any, i: number) => `${i},${100 - (t.player1Advantage ?? 50)}`).join(' ')}
-                    />
+                    <polyline fill="none" stroke="#60A5FA" strokeWidth="1.5" points={displayedTurns.map((t: any, i: number) => `${i},${100 - (t.player1Advantage ?? 50)}`).join(' ')} />
                   </svg>
-                  {/* 범례 */}
                   <div className="absolute top-1 right-1 flex gap-3 text-[10px]">
                     <span className="text-blue-400">↑ {player1Name} 유리</span>
                     <span className="text-purple-400">↓ {player2Name} 유리</span>
@@ -862,61 +853,21 @@ export default function PracticePage() {
             </CardContent>
           </Card>
 
-          {/* 해설 */}
-          <Card className="bg-slate-800 border-slate-700 mt-3">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm md:text-base text-white">해설</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-1 max-h-64 overflow-y-auto" ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}>
-                {allCommentaries.length === 0 ? (
-                  <p className="text-xs text-slate-400">해설이 없습니다.</p>
-                ) : (
-                  allCommentaries.map((item, idx) => {
-                    let textColor = "text-slate-300";
-                    if (item.text.includes(player1Name)) textColor = "text-blue-300";
-                    else if (item.text.includes(player2Name)) textColor = "text-purple-300";
-                    
-                    return (
-                      <p key={idx} className={`text-xs ${textColor}`}>
-                        {item.text}
-                      </p>
-                    );
-                  })
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
+          {/* 게임 완료 시 결과 보기 버튼 (하단 인라인) */}
           {showResultConfirm && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <Card className="bg-slate-800 border-slate-700 max-w-sm w-full mx-4">
-                <CardHeader>
-                  <CardTitle className="text-white">게임 완료</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Button 
-                    onClick={() => setPhase("result")}
-                    className="w-full bg-blue-600 hover:bg-blue-700"
-                  >
-                    결과 보기
-                  </Button>
-                </CardContent>
-              </Card>
+            <div className="mt-4">
+              <Button 
+                onClick={() => setPhase("result")}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-base font-bold py-3"
+              >
+                🏆 결과 보기
+              </Button>
             </div>
           )}
         </div>
       </div>
     );
   }
-
-  // 게임 완료 후 자동으로 result 페이즈로 전환
-  useEffect(() => {
-    if (showResultConfirm && !gameState.turns) {
-      const timer = setTimeout(() => setPhase("result"), 500);
-      return () => clearTimeout(timer);
-    }
-  }, [showResultConfirm]);
 
   if (phase === "result") {
     const isWinner = gameState.isWinner;
@@ -938,19 +889,19 @@ export default function PracticePage() {
             <CardContent className="space-y-2">
               <div className="flex justify-between text-xs md:text-sm">
                 <span className="text-slate-300">경험치</span>
-                <span className={`font-bold ${gameState.expGained! > 0 ? 'text-green-400' : 'text-slate-300'}`}>
-                  +{gameState.expGained}
+                <span className={`font-bold ${(gameState.expGained ?? 0) > 0 ? 'text-green-400' : 'text-slate-300'}`}>
+                  +{gameState.expGained ?? 0}
                 </span>
               </div>
               <div className="flex justify-between text-xs md:text-sm">
                 <span className="text-slate-300">골드</span>
-                <span className={`font-bold ${gameState.goldGained! > 0 ? 'text-yellow-400' : 'text-slate-300'}`}>
-                  +{gameState.goldGained}
+                <span className={`font-bold ${(gameState.goldGained ?? 0) > 0 ? 'text-yellow-400' : 'text-slate-300'}`}>
+                  +{gameState.goldGained ?? 0}
                 </span>
               </div>
               <div className="flex justify-between text-xs md:text-sm">
                 <span className="text-slate-300">피로도 소모</span>
-                <span className="font-bold text-red-400">-{gameState.fatigueUsed}</span>
+                <span className="font-bold text-red-400">-{gameState.fatigueUsed ?? 0}</span>
               </div>
             </CardContent>
           </Card>

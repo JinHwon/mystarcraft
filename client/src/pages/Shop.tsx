@@ -49,6 +49,7 @@ function ItemCard({
   usageCount,
   playerItems,
   onUse,
+  onBuyMore,
 }: {
   item: ItemData;
   owned: boolean;
@@ -64,6 +65,7 @@ function ItemCard({
   usageCount?: number;
   playerItems?: PlayerItemData[];
   onUse?: () => void;
+  onBuyMore?: () => void;
 }) {
   const rarityColor = RARITY_COLORS[item.rarity] ?? "#9CA3AF";
   const rarityLabel = RARITY_LABELS[item.rarity] ?? "일반";
@@ -154,16 +156,32 @@ function ItemCard({
         {owned ? (
           <div className="flex gap-2">
             {isFatigueItem ? (
-              <Button
-                size="sm"
-                className="h-7 px-3 text-xs font-bold"
-                style={{ backgroundColor: rarityColor, color: "white" }}
-                onClick={onUse}
-                disabled={isEquipping || (usageCount ?? 0) <= 0}
-              >
-                <Zap className="w-3 h-3 mr-1" />
-                사용
-              </Button>
+              <div className="flex gap-1">
+                <Button
+                  size="sm"
+                  className="h-7 px-3 text-xs font-bold"
+                  style={{ backgroundColor: rarityColor, color: "white" }}
+                  onClick={onUse}
+                  disabled={isEquipping || (usageCount ?? 0) <= 0}
+                >
+                  <Zap className="w-3 h-3 mr-1" />
+                  사용
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-7 px-3 text-xs font-bold"
+                  disabled={!canAfford || isBuying}
+                  onClick={onBuyMore ?? onBuy}
+                  variant={canAfford ? "default" : "outline"}
+                >
+                  {isBuying ? (
+                    <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin mr-1" />
+                  ) : (
+                    <ShoppingBag className="w-3 h-3 mr-1" />
+                  )}
+                  구매
+                </Button>
+              </div>
             ) : equipped === 1 ? (
               <Button
                 size="sm"
@@ -328,7 +346,15 @@ export default function Shop() {
         {/* 전체 아이템 */}
         <TabsContent value="all" className="mt-4">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {allItems.map((item) => {
+            {[...allItems]
+              .sort((a, b) => {
+                // 피로도 아이템을 먼저, 그 안에서 가격 오름차순
+                const aFatigue = (a as any).fatigueRecover && (a as any).fatigueRecover > 0 ? 1 : 0;
+                const bFatigue = (b as any).fatigueRecover && (b as any).fatigueRecover > 0 ? 1 : 0;
+                if (aFatigue !== bFatigue) return bFatigue - aFatigue;
+                return a.price - b.price;
+              })
+              .map((item) => {
               const owned = ownedMap.has(item.id);
               const playerItem = ownedMap.get(item.id);
               return (
@@ -341,6 +367,7 @@ export default function Shop() {
                   playerGold={playerGold}
                   playerFatigue={playerData?.fatigue}
                   onBuy={() => buyMutation.mutate({ itemId: item.id })}
+                  onBuyMore={() => buyMutation.mutate({ itemId: item.id })}
                   onEquip={() => playerItem && equipMutation.mutate({ playerItemId: playerItem.playerItemId, equip: true })}
                   onUnequip={() => playerItem && equipMutation.mutate({ playerItemId: playerItem.playerItemId, equip: false })}
                   onUse={() => playerItem && useMutation.mutate({ playerItemId: playerItem.playerItemId })}
@@ -374,10 +401,11 @@ export default function Shop() {
                   playerGold={playerGold}
                   playerFatigue={playerData?.fatigue}
                   onBuy={() => {}}
+                  onBuyMore={() => buyMutation.mutate({ itemId: pi.item.id })}
                   onEquip={() => equipMutation.mutate({ playerItemId: pi.playerItemId, equip: true })}
                   onUnequip={() => equipMutation.mutate({ playerItemId: pi.playerItemId, equip: false })}
                   onUse={() => useMutation.mutate({ playerItemId: pi.playerItemId })}
-                  isBuying={false}
+                  isBuying={buyingId === pi.item.id}
                   isEquipping={equippingId === pi.playerItemId}
                   usageCount={pi.usageCount}
                   playerItems={playerItems}

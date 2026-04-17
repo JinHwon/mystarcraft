@@ -188,8 +188,11 @@ function updateResourcesAndTroops(gs: GameState, p: PlayerState): void {
   }
 
   // ── 종족별 유불리 ──
-  const raceResourceBonus = p.race === 'terran' ? 1.5 : 1.0;
-  const raceTroopBonus = p.race === 'zerg' ? 1.5 : 1.0;
+  // 테란: 자원 수급 우수 (MULE 등)
+  // 저그: 병력 생산 우수 (라바 시스템)
+  // 프로토스: 자원 효율 우수 (프로브 + 넥서스 효율), 병력 생산은 보통
+  const raceResourceBonus = p.race === 'terran' ? 1.5 : p.race === 'protoss' ? 1.3 : 1.0;
+  const raceTroopBonus = p.race === 'zerg' ? 1.5 : p.race === 'protoss' ? 1.15 : 1.0;
 
   // ── 자원 증가 ──
   // 기본 자원 증가: 빌드 기본률 * 1.5 * 멀티 수 * 능력치 * 패널티들
@@ -470,6 +473,10 @@ export function progressGame(gs: GameState): void {
   let s1 = gs.player1.supply * 2.5 + gs.player1.resources / 60;
   let s2 = gs.player2.supply * 2.5 + gs.player2.resources / 60;
   
+  // 프로토스 유불리 보정: 전투력이 높은 종족이므로 병력 가치를 높게 평가
+  if (gs.player1.race === 'protoss') s1 *= 1.25;
+  if (gs.player2.race === 'protoss') s2 *= 1.25;
+
   // 능력치 보정: 전체 능력치 합산의 영향 (최대 ±25%)
   if (gs.player1.stats) {
     const statSum = (gs.player1.stats.attack + gs.player1.stats.defense + gs.player1.stats.control + gs.player1.stats.strategy + gs.player1.stats.sense) / 5;
@@ -481,7 +488,12 @@ export function progressGame(gs: GameState): void {
   }
   
   const total = s1 + s2;
-  gs.player1Advantage = total > 0 ? (s1 / total) * 100 : 50;
+  const rawAdvantage = total > 0 ? (s1 / total) * 100 : 50;
+  
+  // 점진적 유불리 전환: 초반 턴에서는 50:50에 가깝게, 점차 실제 유불리로 전환
+  // 턴 1: 100% 보정(50:50), 턴 15: 0% 보정(실제 유불리)
+  const blendFactor = Math.max(0, 1 - gs.turn / 15);
+  gs.player1Advantage = rawAdvantage * (1 - blendFactor) + 50 * blendFactor;
 
   // ── 게임 종료 조건 ──
   // 1. 80% 이상 유리 (병력+자원 합 기준)
