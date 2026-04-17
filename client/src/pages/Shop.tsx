@@ -69,7 +69,6 @@ function ItemCard({
   const statBoosts: StatBoosts = (typeof rawBoosts === 'string' ? (() => { try { return JSON.parse(rawBoosts); } catch { return {}; } })() : rawBoosts as StatBoosts) ?? {};
   const canAfford = playerGold >= item.price;
   const isFatigueItem = item.fatigueRecover && item.fatigueRecover > 0;
-  const canUseFatigueItem = !isFatigueItem || (playerFatigue ?? 0) < 100;
 
   return (
     <div
@@ -180,16 +179,16 @@ function ItemCard({
           <Button
             size="sm"
             className="h-7 px-3 text-xs font-bold"
-            disabled={!canAfford || isBuying || !canUseFatigueItem}
+            disabled={!canAfford || isBuying}
             onClick={onBuy}
-            variant={canAfford && canUseFatigueItem ? "default" : "outline"}
+            variant={canAfford ? "default" : "outline"}
           >
             {isBuying ? (
               <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin mr-1" />
             ) : (
               <ShoppingBag className="w-3 h-3 mr-1" />
             )}
-            {!canUseFatigueItem ? "피로도 부족" : canAfford ? "구매" : "골드 부족"}
+            {canAfford ? "구매" : "골드 부족"}
           </Button>
         )}
       </div>

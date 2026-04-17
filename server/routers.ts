@@ -716,9 +716,27 @@ const practiceRouter = router({
       const playerStatsRecord = Object.fromEntries(
         STAT_KEYS.map(key => [key, (playerStats as any)[key]])
       ) as Record<StatKey, number>;
-      const opponentStatsRecord = Object.fromEntries(
+
+      // 상대 능력치에 착용 아이템 보너스 반영
+      const opponentBaseStats = Object.fromEntries(
         STAT_KEYS.map(key => [key, (opponentStats as any)[key]])
       ) as Record<StatKey, number>;
+
+      let opponentStatsRecord = { ...opponentBaseStats };
+      if (!isAiOpponent && opponent.id > 0) {
+        const opponentEquippedItems = await getPlayerItems(opponent.id);
+        const opponentItemBoosts: Record<string, number> = {};
+        opponentEquippedItems.forEach((pi: any) => {
+          if (!pi.equipped) return;
+          const boosts = (pi.item?.statBoosts ?? {}) as Record<string, number>;
+          Object.entries(boosts).forEach(([k, v]) => {
+            opponentItemBoosts[k] = (opponentItemBoosts[k] ?? 0) + (v ?? 0);
+          });
+        });
+        STAT_KEYS.forEach(key => {
+          opponentStatsRecord[key] = Math.min((opponentStatsRecord[key] ?? 0) + (opponentItemBoosts[key] ?? 0), 1200);
+        });
+      }
 
       const winProbability = calculateWinProbability(
         playerStatsRecord,
@@ -739,9 +757,9 @@ const practiceRouter = router({
         player1WinProbability: winProbability,
       });
 
-      // 상대방의 실제 등급 계산 (능력치 기반)
+      // 상대방의 실제 등급 계산 (능력치 + 아이템 부스트 기반)
       const { calcGrade } = await import("@shared/gameConstants");
-      const opponentTotalStats = STAT_KEYS.reduce((sum, key) => sum + ((opponentStats as any)[key] || 0), 0);
+      const opponentTotalStats = STAT_KEYS.reduce((sum, key) => sum + (opponentStatsRecord[key] || 0), 0);
       const actualOpponentGrade = calcGrade(opponentTotalStats);
       
       return { 
@@ -847,7 +865,7 @@ const practiceRouter = router({
 
       // 보상 계산 - 난이도별 골드 보상 조정
       const rewards = GAME_REWARDS[game.difficulty];
-      const expGained = isWinner ? rewards.expWin : rewards.expLose;
+      let expGained = isWinner ? rewards.expWin : rewards.expLose;
       
       // 난이도별 골드 보상: 초보(10/5), 중수(20/10), 고수(30/15)
       let goldGained: number;
@@ -860,6 +878,13 @@ const practiceRouter = router({
       }
       
       const fatigueUsed = FATIGUE_COST[game.difficulty];
+
+      // 활성 이벤트 보너스 적용 (경험치 2배, 골드 2배)
+      const rewardEvents = await getActiveEvents();
+      const hasExpDouble = rewardEvents.some(e => e.type === 'exp_double');
+      const hasGoldDouble = rewardEvents.some(e => e.type === 'gold_double');
+      if (hasExpDouble) expGained *= 2;
+      if (hasGoldDouble) goldGained *= 2;
 
       // 게임 완료
       await completeGame(input.gameId, winnerId, simulation.player1FinalScore, simulation.player2FinalScore);
@@ -948,15 +973,19 @@ const practiceRouter = router({
         ? Math.max(0, Math.min(6, supplyBase + Math.floor(Math.random() * 3)))
         : Math.max(-8, Math.min(1, supplyBase + Math.floor(Math.random() * 2) - 2));
       
+      // stat_boost 이벤트 활성 시 양수 능력치 변동 2배
+      const hasStatBoost = rewardEvents.some(e => e.type === 'stat_boost');
+      const boostStat = (v: number) => hasStatBoost && v > 0 ? v * 2 : v;
+
       const statChanges: Record<string, number> = {
-        sense: senseChange,
-        control: controlChange,
-        attack: attackChange,
-        harass: harassChange,
-        strategy: economyChange,
-        supply: supplyChange,
-        defense: defenseChange,
-        scout: intelligenceChange,
+        sense: boostStat(senseChange),
+        control: boostStat(controlChange),
+        attack: boostStat(attackChange),
+        harass: boostStat(harassChange),
+        strategy: boostStat(economyChange),
+        supply: boostStat(supplyChange),
+        defense: boostStat(defenseChange),
+        scout: boostStat(intelligenceChange),
       };
 
       await createGameResult({
@@ -985,8 +1014,7 @@ const practiceRouter = router({
       await decreaseItemUsageCount(player.id);
       
       // 무제한 피로도 이벤트 중에는 피로도 감소 안 함
-      const activeEvents = await getActiveEvents();
-      const hasUnlimitedFatigueEvent = activeEvents.some(e => e.type === 'fatigue_unlimited');
+      const hasUnlimitedFatigueEvent = rewardEvents.some(e => e.type === 'fatigue_unlimited');
       if (!hasUnlimitedFatigueEvent) {
         await addFatigueCost(player.id, fatigueUsed);
         

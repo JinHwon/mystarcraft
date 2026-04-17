@@ -131,13 +131,13 @@ export async function buyItem(
     .limit(1);
   
   if (existing.length > 0) {
-    // 이미 보유한 경우 usageCount 증가 (여러 개 구매 가능)
+    // 이미 보유한 경우 usageCount 20 추가 (여러 개 구매 가능)
     await db.update(playerItems)
-      .set({ usageCount: existing[0].usageCount + 1 })
+      .set({ usageCount: existing[0].usageCount + 20 })
       .where(eq(playerItems.id, existing[0].id));
   } else {
-    // 새로 구매하는 경우
-    await db.insert(playerItems).values({ playerId, itemId, equipped: 0, usageCount: 1 });
+    // 새로 구매하는 경우 (기본 사용횟수 20)
+    await db.insert(playerItems).values({ playerId, itemId, equipped: 0, usageCount: 20 });
   }
   
   // 골드 차감

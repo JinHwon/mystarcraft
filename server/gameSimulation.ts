@@ -30,6 +30,7 @@ export interface GameTurn {
   player2Resources: number;
   player1Health: number;
   player2Health: number;
+  player1Advantage: number;
   commentaries: string[];
 }
 

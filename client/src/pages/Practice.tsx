@@ -595,7 +595,32 @@ export default function PracticePage() {
   if (phase === "playing") {
     const turns = gameState.turns || [];
     const currentTurn = turns[Math.min(currentTurnIndex, turns.length - 1)];
-    const commentaries = currentTurn?.commentaries || [];
+    
+    // 현재 턴까지의 모든 해설을 누적
+    const allCommentaries: { text: string; turnIndex: number }[] = [];
+    for (let i = 0; i <= Math.min(currentTurnIndex, turns.length - 1); i++) {
+      const turnCommentaries = turns[i]?.commentaries || [];
+      turnCommentaries.forEach((c: string) => {
+        allCommentaries.push({ text: c, turnIndex: i });
+      });
+    }
+
+    // 현재까지의 턴 데이터 (그래프용)
+    const displayedTurns = turns.slice(0, currentTurnIndex + 1);
+
+    // 유불리 수치
+    const p1Advantage = currentTurn?.player1Advantage ?? 50;
+    const p2Advantage = 100 - p1Advantage;
+
+    // 병력/자원 최대값 (그래프 스케일링용)
+    const maxSupply = Math.max(
+      ...displayedTurns.map((t: any) => Math.max(t.player1Supply ?? 0, t.player2Supply ?? 0)),
+      1
+    );
+    const maxResources = Math.max(
+      ...displayedTurns.map((t: any) => Math.max(t.player1Resources ?? 0, t.player2Resources ?? 0)),
+      1
+    );
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 md:p-4">
@@ -637,27 +662,59 @@ export default function PracticePage() {
             </div>
           </div>
 
+          {/* 유불리 그래프 (실시간) */}
+          <Card className="bg-slate-800 border-slate-700 mb-3">
+            <CardContent className="py-3 px-4">
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="text-blue-400 font-bold">{player1Name}</span>
+                <span className="text-slate-400 font-semibold">유불리</span>
+                <span className="text-purple-400 font-bold">{player2Name}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-blue-400 font-bold text-sm w-10 text-right">{Math.round(p1Advantage)}%</span>
+                <div className="flex-1 h-5 bg-slate-700 rounded-full overflow-hidden relative">
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300 rounded-l-full"
+                    style={{ width: `${p1Advantage}%` }}
+                  />
+                  <div
+                    className="absolute top-0 right-0 h-full bg-gradient-to-l from-purple-500 to-purple-400 transition-all duration-300 rounded-r-full"
+                    style={{ width: `${p2Advantage}%` }}
+                  />
+                  {/* 중앙선 */}
+                  <div className="absolute top-0 left-1/2 w-px h-full bg-slate-300/30" />
+                </div>
+                <span className="text-purple-400 font-bold text-sm w-10">{Math.round(p2Advantage)}%</span>
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
             {/* 플레이어 1 정보 */}
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader>
-                <CardTitle className="text-sm md:text-base text-white">{player1Name}</CardTitle>
+            <Card className="bg-slate-800 border-blue-700/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm md:text-base text-blue-300">{player1Name}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <div className="text-xs text-slate-400">
-                  <p>자원: <span className="text-yellow-400 font-bold">{currentTurn?.player1Resources ?? 0}</span></p>
-                  <p>병력: <span className="text-cyan-400 font-bold">{currentTurn?.player1Troops ?? 0}</span></p>
+                <div className="text-xs text-slate-400 space-y-1">
+                  <div className="flex justify-between">
+                    <span>병력</span>
+                    <span className="text-cyan-400 font-bold">{currentTurn?.player1Supply ?? 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>자원</span>
+                    <span className="text-yellow-400 font-bold">{currentTurn?.player1Resources ?? 0}</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
             {/* 게임 진행 상황 */}
             <Card className="bg-slate-800 border-slate-700">
-              <CardHeader>
+              <CardHeader className="pb-2">
                 <CardTitle className="text-sm md:text-base text-white text-center">게임 진행</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-center">
-                <p className="text-xs text-slate-400">턴: <span className="text-white font-bold">{currentTurnIndex + 1}/{turns.length}</span></p>
                 <div className="w-full bg-slate-700 rounded-full h-2">
                   <div
                     className="bg-blue-500 h-2 rounded-full transition-all"
@@ -668,37 +725,161 @@ export default function PracticePage() {
             </Card>
 
             {/* 플레이어 2 정보 */}
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader>
-                <CardTitle className="text-sm md:text-base text-white">{player2Name}</CardTitle>
+            <Card className="bg-slate-800 border-purple-700/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm md:text-base text-purple-300">{player2Name}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <div className="text-xs text-slate-400">
-                  <p>자원: <span className="text-yellow-400 font-bold">{currentTurn?.player2Resources ?? 0}</span></p>
-                  <p>병력: <span className="text-purple-400 font-bold">{currentTurn?.player2Troops ?? 0}</span></p>
+                <div className="text-xs text-slate-400 space-y-1">
+                  <div className="flex justify-between">
+                    <span>병력</span>
+                    <span className="text-cyan-400 font-bold">{currentTurn?.player2Supply ?? 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>자원</span>
+                    <span className="text-yellow-400 font-bold">{currentTurn?.player2Resources ?? 0}</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
+          {/* 병력 그래프 */}
+          <Card className="bg-slate-800 border-slate-700 mt-3">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs text-slate-400">⚔️ 병력 추이</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="relative h-24 md:h-32">
+                {/* Y축 라벨 */}
+                <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-[9px] text-slate-500 w-8">
+                  <span>{maxSupply}</span>
+                  <span>{Math.round(maxSupply / 2)}</span>
+                  <span>0</span>
+                </div>
+                {/* 그래프 영역 */}
+                <div className="ml-9 h-full relative overflow-hidden">
+                  <svg className="w-full h-full" viewBox={`0 0 ${Math.max(displayedTurns.length, 2)} ${maxSupply}`} preserveAspectRatio="none">
+                    {/* P1 병력 */}
+                    <polyline
+                      fill="none"
+                      stroke="#60A5FA"
+                      strokeWidth={maxSupply * 0.02}
+                      points={displayedTurns.map((t: any, i: number) => `${i},${maxSupply - (t.player1Supply ?? 0)}`).join(' ')}
+                    />
+                    {/* P2 병력 */}
+                    <polyline
+                      fill="none"
+                      stroke="#A78BFA"
+                      strokeWidth={maxSupply * 0.02}
+                      points={displayedTurns.map((t: any, i: number) => `${i},${maxSupply - (t.player2Supply ?? 0)}`).join(' ')}
+                    />
+                  </svg>
+                  {/* 범례 */}
+                  <div className="absolute top-1 right-1 flex gap-3 text-[10px]">
+                    <span className="text-blue-400">● {player1Name}</span>
+                    <span className="text-purple-400">● {player2Name}</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 자원 그래프 */}
+          <Card className="bg-slate-800 border-slate-700 mt-3">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs text-slate-400">💰 자원 추이</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="relative h-24 md:h-32">
+                {/* Y축 라벨 */}
+                <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-[9px] text-slate-500 w-8">
+                  <span>{maxResources}</span>
+                  <span>{Math.round(maxResources / 2)}</span>
+                  <span>0</span>
+                </div>
+                {/* 그래프 영역 */}
+                <div className="ml-9 h-full relative overflow-hidden">
+                  <svg className="w-full h-full" viewBox={`0 0 ${Math.max(displayedTurns.length, 2)} ${maxResources}`} preserveAspectRatio="none">
+                    {/* P1 자원 */}
+                    <polyline
+                      fill="none"
+                      stroke="#FBBF24"
+                      strokeWidth={maxResources * 0.02}
+                      points={displayedTurns.map((t: any, i: number) => `${i},${maxResources - (t.player1Resources ?? 0)}`).join(' ')}
+                    />
+                    {/* P2 자원 */}
+                    <polyline
+                      fill="none"
+                      stroke="#F97316"
+                      strokeWidth={maxResources * 0.02}
+                      points={displayedTurns.map((t: any, i: number) => `${i},${maxResources - (t.player2Resources ?? 0)}`).join(' ')}
+                    />
+                  </svg>
+                  {/* 범례 */}
+                  <div className="absolute top-1 right-1 flex gap-3 text-[10px]">
+                    <span className="text-yellow-400">● {player1Name}</span>
+                    <span className="text-orange-400">● {player2Name}</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 유불리 추이 그래프 */}
+          <Card className="bg-slate-800 border-slate-700 mt-3">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs text-slate-400">📊 유불리 추이</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="relative h-24 md:h-32">
+                {/* Y축 라벨 */}
+                <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-[9px] text-slate-500 w-8">
+                  <span className="text-blue-400">P1</span>
+                  <span>50</span>
+                  <span className="text-purple-400">P2</span>
+                </div>
+                {/* 그래프 영역 */}
+                <div className="ml-9 h-full relative overflow-hidden">
+                  <svg className="w-full h-full" viewBox={`0 0 ${Math.max(displayedTurns.length, 2)} 100`} preserveAspectRatio="none">
+                    {/* 50% 기준선 */}
+                    <line x1="0" y1="50" x2={displayedTurns.length} y2="50" stroke="#475569" strokeWidth="0.5" strokeDasharray="2,2" />
+                    {/* P1 유불리 영역 (50% 위) */}
+                    <polyline
+                      fill="none"
+                      stroke="#60A5FA"
+                      strokeWidth="1.5"
+                      points={displayedTurns.map((t: any, i: number) => `${i},${100 - (t.player1Advantage ?? 50)}`).join(' ')}
+                    />
+                  </svg>
+                  {/* 범례 */}
+                  <div className="absolute top-1 right-1 flex gap-3 text-[10px]">
+                    <span className="text-blue-400">↑ {player1Name} 유리</span>
+                    <span className="text-purple-400">↓ {player2Name} 유리</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* 해설 */}
-          <Card className="bg-slate-800 border-slate-700 mt-4">
-            <CardHeader>
+          <Card className="bg-slate-800 border-slate-700 mt-3">
+            <CardHeader className="pb-2">
               <CardTitle className="text-sm md:text-base text-white">해설</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-1 max-h-48 overflow-y-auto">
-                {commentaries.length === 0 ? (
+              <div className="space-y-1 max-h-64 overflow-y-auto" ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}>
+                {allCommentaries.length === 0 ? (
                   <p className="text-xs text-slate-400">해설이 없습니다.</p>
                 ) : (
-                  commentaries.map((commentary: string, idx: number) => {
+                  allCommentaries.map((item, idx) => {
                     let textColor = "text-slate-300";
-                    if (commentary.includes(player1Name)) textColor = "text-blue-300";
-                    else if (commentary.includes(player2Name)) textColor = "text-purple-300";
+                    if (item.text.includes(player1Name)) textColor = "text-blue-300";
+                    else if (item.text.includes(player2Name)) textColor = "text-purple-300";
                     
                     return (
                       <p key={idx} className={`text-xs ${textColor}`}>
-                        {commentary}
+                        {item.text}
                       </p>
                     );
                   })

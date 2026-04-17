@@ -547,6 +547,7 @@ export function gameStateToTurnData(gs: GameState) {
     player2Resources: Math.round(gs.player2.resources),
     player1Health: gs.player1.health,
     player2Health: gs.player2.health,
+    player1Advantage: gs.player1Advantage,
     commentaries: [...gs.turnCommentaries],
   };
 }
