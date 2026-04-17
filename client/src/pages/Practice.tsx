@@ -42,6 +42,7 @@ export default function PracticePage() {
   const [gameSpeed, setGameSpeed] = useState<1 | 2 | 5>(1);
   const autoPlayIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  const utils = trpc.useUtils();
   const mapsQuery = trpc.practice.getMaps.useQuery();
   const findOpponentMutation = trpc.practice.findOpponent.useMutation();
   const playGameMutation = trpc.practice.playGame.useMutation();
@@ -125,6 +126,10 @@ export default function PracticePage() {
         finalScore: result.finalScore,
         statChanges: result.statChanges,
       }));
+      
+      // 게임 완료 후 플레이어 정보 및 아이템 목록 갱신 (사용횟수 0 아이템 제거 반영)
+      utils.player.get.invalidate();
+      utils.shop.getPlayerItems.invalidate();
       
       setPhase("playing");
       setCurrentCommentaryIndex(0);
