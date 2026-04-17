@@ -183,8 +183,10 @@ export async function toggleEquipItem(
 export async function seedItemsIfEmpty() {
   const db = await getDb();
   if (!db) return;
-  const existing = await db.select().from(items).limit(1);
-  if (existing.length > 0) return;
+
+  // 기존 아이템 이름 목록 조회
+  const existingItems = await db.select({ name: items.name }).from(items);
+  const existingNames = new Set(existingItems.map(i => i.name));
 
   const seedItems = [
     // ── 피로도 회복 아이템 ──
@@ -265,7 +267,9 @@ export async function seedItemsIfEmpty() {
   ];
 
   for (const item of seedItems) {
-    await db.insert(items).values(item);
+    if (!existingNames.has(item.name)) {
+      await db.insert(items).values(item);
+    }
   }
 }
 
@@ -688,7 +692,10 @@ export async function decreaseItemUsageCount(playerId: number) {
   const db = await getDb();
   if (!db) return;
 
-  const playerItemsResult = await db.select().from(playerItems).where(eq(playerItems.playerId, playerId));
+  // 착용 중인 아이템만 사용 횟수 감소
+  const playerItemsResult = await db.select().from(playerItems).where(
+    and(eq(playerItems.playerId, playerId), eq(playerItems.equipped, 1))
+  );
   for (const pi of playerItemsResult) {
     if (pi.usageCount > 0) {
       const newCount = pi.usageCount - 1;
@@ -888,8 +895,10 @@ export async function getHeadToHeadRecord(playerId: number, opponentPlayerId: nu
 export async function seedQuestsIfEmpty() {
   const db = await getDb();
   if (!db) return;
-  const existing = await db.select().from(quests).limit(1);
-  if (existing.length > 0) return;
+
+  // 기존 퀘스트 제목 목록 조회
+  const existingQuests = await db.select({ title: quests.title }).from(quests);
+  const existingTitles = new Set(existingQuests.map(q => q.title));
 
   const seedData = [
     // 일일퀘스트
@@ -963,7 +972,9 @@ export async function seedQuestsIfEmpty() {
   ];
 
   for (const quest of seedData) {
-    await db.insert(quests).values(quest);
+    if (!existingTitles.has(quest.title)) {
+      await db.insert(quests).values(quest);
+    }
   }
 }
 
