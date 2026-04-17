@@ -37,6 +37,7 @@ const getNavItems = (isAdmin: boolean) => {
   ];
   if (isAdmin) {
     items.push({ path: "/admin", label: "관리자 패널", icon: Settings });
+    items.push({ path: "/admin/events", label: "이벤트 관리", icon: Zap });
   }
   return items;
 };

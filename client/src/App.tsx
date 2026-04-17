@@ -9,6 +9,7 @@ import CreatePlayer from "./pages/CreatePlayer";
 import PlayerProfile from "./pages/PlayerProfile";
 import Shop from "./pages/Shop";
 import Admin from "./pages/Admin";
+import AdminEvents from "./pages/AdminEvents";
 import Events from "./pages/Events";
 import Practice from "./pages/Practice";
 import GameResults from "./pages/GameResults";
@@ -34,6 +35,11 @@ function Router() {
       <Route path="/admin">
         <GameLayout>
           <Admin />
+        </GameLayout>
+      </Route>
+      <Route path="/admin/events">
+        <GameLayout>
+          <AdminEvents />
         </GameLayout>
       </Route>
       <Route path="/events">

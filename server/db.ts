@@ -249,6 +249,26 @@ export async function seedItemsIfEmpty() {
     { name: "배틀크루저 야마토 포", description: "강력한 단일 타격 능력을 부여", price: 550, rarity: "rare" as const, iconEmoji: "💥", statBoosts: { attack: 65, strategy: 20 }, fatigueRecover: 0 },
     { name: "코르세어 디스럽션 웹", description: "적 공중 유닛을 무력화하는 기술", price: 480, rarity: "rare" as const, iconEmoji: "🕸️", statBoosts: { control: 45, defense: 35 }, fatigueRecover: 0 },
 
+    // ── 추가 신규 아이템 ──
+    { name: "스캐럽 강화 패치", description: "스캐럽 공격력을 극대화하는 강화 패치", price: 320, rarity: "common" as const, iconEmoji: "🦗", statBoosts: { attack: 45, harass: 20 }, fatigueRecover: 0 },
+    { name: "가디언 방어막", description: "방어력과 생존력을 높이는 에너지 방어막", price: 290, rarity: "common" as const, iconEmoji: "⚔️", statBoosts: { defense: 50, strategy: 15 }, fatigueRecover: 0 },
+    { name: "뮤탈리스크 독", description: "독 공격으로 상대를 약화시키는 독액", price: 310, rarity: "common" as const, iconEmoji: "☠️", statBoosts: { attack: 40, harass: 30 }, fatigueRecover: 0 },
+    { name: "스팀팩 강화제", description: "스팀팩의 효과를 극대화하는 강화제", price: 330, rarity: "common" as const, iconEmoji: "💪", statBoosts: { control: 45, attack: 35 }, fatigueRecover: 0 },
+    { name: "사이오닉 증폭기", description: "사이오닉 에너지를 증폭시키는 장치", price: 350, rarity: "common" as const, iconEmoji: "⚡", statBoosts: { sense: 50, strategy: 25 }, fatigueRecover: 0 },
+
+    // ── 추가 희귀 아이템 ──
+    { name: "테란 전술 컴퓨터", description: "전술 판단력을 극도로 향상시키는 AI 컴퓨터", price: 600, rarity: "rare" as const, iconEmoji: "💻", statBoosts: { strategy: 80, control: 40 }, fatigueRecover: 0 },
+    { name: "프로토스 사이오닉 강화", description: "프로토스의 정신력을 극한까지 끌어올리는 강화제", price: 650, rarity: "rare" as const, iconEmoji: "🔮", statBoosts: { sense: 90, strategy: 50 }, fatigueRecover: 0 },
+    { name: "저그 진화 촉진제", description: "저그의 진화를 가속화하는 생명 촉진제", price: 620, rarity: "rare" as const, iconEmoji: "🧬", statBoosts: { supply: 80, attack: 45 }, fatigueRecover: 0 },
+    { name: "초고속 반응 시스템", description: "반응 속도를 극도로 높이는 신경 강화 시스템", price: 680, rarity: "rare" as const, iconEmoji: "⚙️", statBoosts: { control: 70, harass: 50 }, fatigueRecover: 0 },
+    { name: "완벽한 정찰 체계", description: "모든 정찰 정보를 완벽히 수집하는 시스템", price: 640, rarity: "rare" as const, iconEmoji: "🔍", statBoosts: { scout: 100, sense: 40 }, fatigueRecover: 0 },
+
+    // ── 추가 영웅 아이템 ──
+    { name: "최강 전투 강화 패키지", description: "모든 전투 능력을 극대화하는 종합 강화 패키지", price: 1200, rarity: "epic" as const, iconEmoji: "🎖️", statBoosts: { attack: 100, control: 80, harass: 70 }, fatigueRecover: 0 },
+    { name: "완벽한 방어 시스템", description: "방어와 생존을 완벽히 하는 최고급 방어 시스템", price: 1100, rarity: "epic" as const, iconEmoji: "🛡️", statBoosts: { defense: 110, strategy: 70, supply: 50 }, fatigueRecover: 0 },
+    { name: "초월적 정찰 능력", description: "정찰 능력을 초월적 수준으로 끌어올리는 장비", price: 1150, rarity: "epic" as const, iconEmoji: "👁️", statBoosts: { scout: 120, sense: 80, strategy: 50 }, fatigueRecover: 0 },
+    { name: "절대 우위 전술", description: "전술적 우위를 절대적으로 확보하는 시스템", price: 1300, rarity: "epic" as const, iconEmoji: "🎯", statBoosts: { strategy: 120, control: 90, sense: 70 }, fatigueRecover: 0 },
+
     // ── 추가 영웅 아이템 ──
     { name: "사이언스 베슬 이레디에이트", description: "적 생체 유닛을 녹이는 방사능 무기", price: 850, rarity: "epic" as const, iconEmoji: "☢️", statBoosts: { attack: 60, strategy: 50, sense: 25 }, fatigueRecover: 0 },
     { name: "가디언 아스펙트", description: "공중에서 지상을 폭격하는 변태 능력", price: 880, rarity: "epic" as const, iconEmoji: "🐉", statBoosts: { attack: 70, harass: 50, scout: 20 }, fatigueRecover: 0 },
@@ -1042,6 +1062,55 @@ export async function seedQuestsIfEmpty() {
     { type: "cumulative" as const, title: "레벨 25 달성", description: "선수 레벨 25를 달성하세요", iconEmoji: "🚀", conditionType: "player_level", conditionValue: 25, rewardType: "stat_points", rewardValue: 60, sortOrder: 50 },
     { type: "cumulative" as const, title: "레벨 35 달성", description: "선수 레벨 35를 달성하세요", iconEmoji: "🌟", conditionType: "player_level", conditionValue: 35, rewardType: "stat_points", rewardValue: 100, sortOrder: 51 },
     { type: "cumulative" as const, title: "레벨 45 달성", description: "선수 레벨 45를 달성하세요", iconEmoji: "💫", conditionType: "player_level", conditionValue: 45, rewardType: "stat_points", rewardValue: 200, sortOrder: 52 },
+
+    // ── 신규 일일퀨스트 ──
+    { type: "daily" as const, title: "연습게임 25판 완료", description: "오늘 연습게임을 25판 플레이하세요", iconEmoji: "🎮", conditionType: "practice_games", conditionValue: 25, rewardType: "gold", rewardValue: 400, sortOrder: 23 },
+    { type: "daily" as const, title: "20승 달성", description: "오늘 연습게임에서 20번 승리하세요", iconEmoji: "🔥", conditionType: "practice_wins", conditionValue: 20, rewardType: "stat_points", rewardValue: 20, sortOrder: 24 },
+    { type: "daily" as const, title: "중수 난이도 도전", description: "중수 난이도 연습게임을 1판 플레이하세요", iconEmoji: "⚔️", conditionType: "practice_games", conditionValue: 1, rewardType: "gold", rewardValue: 100, sortOrder: 25 },
+    { type: "daily" as const, title: "중수 난이도 5판", description: "중수 난이도 연습게임을 5판 플레이하세요", iconEmoji: "🗡️", conditionType: "practice_games", conditionValue: 5, rewardType: "gold", rewardValue: 200, sortOrder: 26 },
+    { type: "daily" as const, title: "능력치 배분 10회", description: "능력치 포인트를 10회 배분하세요", iconEmoji: "💪", conditionType: "stat_allocate", conditionValue: 10, rewardType: "gold", rewardValue: 200, sortOrder: 27 },
+    { type: "daily" as const, title: "아이템 구매 5회", description: "상점에서 아이템을 5개 구매하세요", iconEmoji: "🛍️", conditionType: "item_buy", conditionValue: 5, rewardType: "stat_points", rewardValue: 10, sortOrder: 28 },
+    { type: "daily" as const, title: "초보 난이도 10판", description: "초보 난이도 연습게임을 10판 플레이하세요", iconEmoji: "🌱", conditionType: "practice_games", conditionValue: 10, rewardType: "exp", rewardValue: 150, sortOrder: 29 },
+    { type: "daily" as const, title: "12승 달성", description: "오늘 연습게임에서 12번 승리하세요", iconEmoji: "🏆", conditionType: "practice_wins", conditionValue: 12, rewardType: "gold", rewardValue: 250, sortOrder: 30 },
+
+    // ── 신규 누적보상퀘스트 ──
+    { type: "cumulative" as const, title: "2승 달성", description: "누적 2승을 달성하세요", iconEmoji: "⭐", conditionType: "total_wins", conditionValue: 2, rewardType: "gold", rewardValue: 50, sortOrder: 53 },
+    { type: "cumulative" as const, title: "8승 달성", description: "누적 8승을 달성하세요", iconEmoji: "🎯", conditionType: "total_wins", conditionValue: 8, rewardType: "gold", rewardValue: 300, sortOrder: 54 },
+    { type: "cumulative" as const, title: "15승 달성", description: "누적 15승을 달성하세요", iconEmoji: "🏅", conditionType: "total_wins", conditionValue: 15, rewardType: "gold", rewardValue: 400, sortOrder: 55 },
+    { type: "cumulative" as const, title: "25승 달성", description: "누적 25승을 달성하세요", iconEmoji: "💎", conditionType: "total_wins", conditionValue: 25, rewardType: "gold", rewardValue: 600, sortOrder: 56 },
+    { type: "cumulative" as const, title: "40승 달성", description: "누적 40승을 달성하세요", iconEmoji: "🌟", conditionType: "total_wins", conditionValue: 40, rewardType: "stat_points", rewardValue: 30, sortOrder: 57 },
+    { type: "cumulative" as const, title: "60승 달성", description: "누적 60승을 달성하세요", iconEmoji: "🔥", conditionType: "total_wins", conditionValue: 60, rewardType: "stat_points", rewardValue: 40, sortOrder: 58 },
+    { type: "cumulative" as const, title: "90승 달성", description: "누적 90승을 달성하세요", iconEmoji: "💪", conditionType: "total_wins", conditionValue: 90, rewardType: "stat_points", rewardValue: 60, sortOrder: 59 },
+    { type: "cumulative" as const, title: "250승 달성", description: "누적 250승! 베테랑 프로게이머!", iconEmoji: "🎖️", conditionType: "total_wins", conditionValue: 250, rewardType: "stat_points", rewardValue: 120, sortOrder: 60 },
+    { type: "cumulative" as const, title: "400승 달성", description: "누적 400승! 전설의 경지!", iconEmoji: "🏆", conditionType: "total_wins", conditionValue: 400, rewardType: "stat_points", rewardValue: 180, sortOrder: 61 },
+    { type: "cumulative" as const, title: "750승 달성", description: "누적 750승! 불멸의 전설!", iconEmoji: "👑", conditionType: "total_wins", conditionValue: 750, rewardType: "stat_points", rewardValue: 300, sortOrder: 62 },
+
+    // ── 신규 누적보상퀘스트 - 게임 수 ──
+    { type: "cumulative" as const, title: "연습게임 5판", description: "연습게임을 총 5판 플레이하세요", iconEmoji: "🎮", conditionType: "total_games", conditionValue: 5, rewardType: "gold", rewardValue: 50, sortOrder: 63 },
+    { type: "cumulative" as const, title: "연습게임 20판", description: "연습게임을 총 20판 플레이하세요", iconEmoji: "🎲", conditionType: "total_games", conditionValue: 20, rewardType: "gold", rewardValue: 200, sortOrder: 64 },
+    { type: "cumulative" as const, title: "연습게임 75판", description: "연습게임을 총 75판 플레이하세요", iconEmoji: "🏅", conditionType: "total_games", conditionValue: 75, rewardType: "gold", rewardValue: 700, sortOrder: 65 },
+    { type: "cumulative" as const, title: "연습게임 150판", description: "연습게임을 총 150판 플레이하세요", iconEmoji: "💪", conditionType: "total_games", conditionValue: 150, rewardType: "stat_points", rewardValue: 50, sortOrder: 66 },
+    { type: "cumulative" as const, title: "연습게임 400판", description: "연습게임을 총 400판 플레이하세요", iconEmoji: "🔥", conditionType: "total_games", conditionValue: 400, rewardType: "stat_points", rewardValue: 100, sortOrder: 67 },
+    { type: "cumulative" as const, title: "연습게임 900판", description: "연습게임을 총 900판 플레이하세요", iconEmoji: "💫", conditionType: "total_games", conditionValue: 900, rewardType: "stat_points", rewardValue: 250, sortOrder: 68 },
+    { type: "cumulative" as const, title: "연습게임 1250판", description: "연습게임을 총 1250판! 끝없는 열정!", iconEmoji: "🎖️", conditionType: "total_games", conditionValue: 1250, rewardType: "stat_points", rewardValue: 350, sortOrder: 69 },
+
+    // ── 신규 누적보상퀘스트 - 골드 ──
+    { type: "cumulative" as const, title: "골드 초보자", description: "골드를 총 500 이상 획득하세요", iconEmoji: "🪙", conditionType: "total_gold_earned", conditionValue: 500, rewardType: "gold", rewardValue: 100, sortOrder: 70 },
+    { type: "cumulative" as const, title: "골드 상인", description: "골드를 총 2500 이상 획득하세요", iconEmoji: "💰", conditionType: "total_gold_earned", conditionValue: 2500, rewardType: "gold", rewardValue: 300, sortOrder: 71 },
+    { type: "cumulative" as const, title: "골드 거상", description: "골드를 총 7500 이상 획득하세요", iconEmoji: "💎", conditionType: "total_gold_earned", conditionValue: 7500, rewardType: "stat_points", rewardValue: 25, sortOrder: 72 },
+    { type: "cumulative" as const, title: "골드 제국", description: "골드를 총 30000 이상 획득하세요", iconEmoji: "👑", conditionType: "total_gold_earned", conditionValue: 30000, rewardType: "stat_points", rewardValue: 75, sortOrder: 73 },
+    { type: "cumulative" as const, title: "골드 신", description: "골드를 총 250000 이상 획득하세요", iconEmoji: "🏦", conditionType: "total_gold_earned", conditionValue: 250000, rewardType: "stat_points", rewardValue: 400, sortOrder: 74 },
+
+    // ── 신규 누적보상퀘스트 - 레벨 ──
+    { type: "cumulative" as const, title: "레벨 2 달성", description: "선수 레벨 2를 달성하세요", iconEmoji: "📊", conditionType: "player_level", conditionValue: 2, rewardType: "gold", rewardValue: 50, sortOrder: 75 },
+    { type: "cumulative" as const, title: "레벨 7 달성", description: "선수 레벨 7을 달성하세요", iconEmoji: "📈", conditionType: "player_level", conditionValue: 7, rewardType: "gold", rewardValue: 200, sortOrder: 76 },
+    { type: "cumulative" as const, title: "레벨 12 달성", description: "선수 레벨 12를 달성하세요", iconEmoji: "🚀", conditionType: "player_level", conditionValue: 12, rewardType: "gold", rewardValue: 350, sortOrder: 77 },
+    { type: "cumulative" as const, title: "레벨 18 달성", description: "선수 레벨 18을 달성하세요", iconEmoji: "🌟", conditionType: "player_level", conditionValue: 18, rewardType: "stat_points", rewardValue: 30, sortOrder: 78 },
+    { type: "cumulative" as const, title: "레벨 22 달성", description: "선수 레벨 22를 달성하세요", iconEmoji: "⭐", conditionType: "player_level", conditionValue: 22, rewardType: "stat_points", rewardValue: 40, sortOrder: 79 },
+    { type: "cumulative" as const, title: "레벨 28 달성", description: "선수 레벨 28을 달성하세요", iconEmoji: "💫", conditionType: "player_level", conditionValue: 28, rewardType: "stat_points", rewardValue: 70, sortOrder: 80 },
+    { type: "cumulative" as const, title: "레벨 32 달성", description: "선수 레벨 32를 달성하세요", iconEmoji: "🔥", conditionType: "player_level", conditionValue: 32, rewardType: "stat_points", rewardValue: 90, sortOrder: 81 },
+    { type: "cumulative" as const, title: "레벨 38 달성", description: "선수 레벨 38을 달성하세요", iconEmoji: "💪", conditionType: "player_level", conditionValue: 38, rewardType: "stat_points", rewardValue: 140, sortOrder: 82 },
+    { type: "cumulative" as const, title: "레벨 48 달성", description: "선수 레벨 48을 달성하세요", iconEmoji: "🎖️", conditionType: "player_level", conditionValue: 48, rewardType: "stat_points", rewardValue: 250, sortOrder: 83 },
   ];
 
   for (const quest of seedData) {
