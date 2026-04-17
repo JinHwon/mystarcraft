@@ -58,11 +58,11 @@ import {
   getPlayerGradeIndex,
 } from "./db";
 import { eq } from "drizzle-orm";
-import { players } from "../drizzle/schema";
+import { players, playerItems, items } from "../drizzle/schema";
 import { storagePut } from "./storage";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, FATIGUE_MIN_TO_PLAY, MAPS, calcGradeIndex, calcTotalStats, STAT_KEYS, StatKey } from "@shared/gameConstants";
+import { DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, FATIGUE_MIN_TO_PLAY, MAPS, calcGradeIndex, calcTotalStats, STAT_KEYS, StatKey, calcFatigueStatPenalty } from "@shared/gameConstants";
 import { simulateGame, calculateWinProbability } from "./gameSimulation";
 import { type MapCharacteristic } from "./buildSystem";
 import { generatePlayerActions, generateGameCommentary } from "./buildActions";
@@ -78,18 +78,33 @@ const playerRouter = router({
     const gameRecord = await getPlayerGameRecord(player.id);
     const grade = await getPlayerGrade(player.id);
     
-    // 착용 아이템 보너스 포함 등급 계산
-    const equippedItems = await getPlayerItems(player.id);
+    // 착용 아이템 보너스 포함 등급 계산 및 유효 능력치 계산
+    const playerItems = await getPlayerItems(player.id);
     let effectiveGrade: string = grade;
+    let effectiveStats: Record<string, number> = {};
+    
     if (stats) {
       const itemBoosts: Record<string, number> = {};
-      equippedItems.forEach((pi: any) => {
+      playerItems.forEach((pi: any) => {
         if (!pi.equipped) return;
         const boosts = (pi.item?.statBoosts ?? {}) as Record<string, number>;
         Object.entries(boosts).forEach(([k, v]) => {
           itemBoosts[k] = (itemBoosts[k] ?? 0) + (v ?? 0);
         });
       });
+      
+      // 기본 능력치 + 아이템 부스트
+      const boostedStats: Record<string, number> = {};
+      STAT_KEYS.forEach((key) => {
+        boostedStats[key] = Math.min(((stats as any)[key] ?? 0) + (itemBoosts[key] ?? 0), 1200);
+      });
+      
+      // 피로도 페널티 적용
+      const penalty = calcFatigueStatPenalty(player.fatigue ?? 0);
+      STAT_KEYS.forEach((key) => {
+        effectiveStats[key] = Math.floor(boostedStats[key] * (1 - penalty));
+      });
+      
       const effectiveTotal = STAT_KEYS.reduce((sum, key) => {
         return sum + Math.min(((stats as any)[key] ?? 0) + (itemBoosts[key] ?? 0), 1200);
       }, 0);
@@ -97,7 +112,7 @@ const playerRouter = router({
       effectiveGrade = calcGrade(effectiveTotal);
     }
     
-    return { ...player, stats: stats ?? null, gameRecord, grade: effectiveGrade };
+    return { ...player, stats: stats ?? null, gameRecord, grade: effectiveGrade, playerItems, effectiveStats };
   }),
 
   create: protectedProcedure
@@ -287,6 +302,41 @@ const shopRouter = router({
       if (!player) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
       await toggleEquipItem(player.id, input.playerItemId, input.equip);
       return { success: true };
+    }),
+
+  useItem: protectedProcedure
+    .input(z.object({ playerItemId: z.number().int() }))
+    .mutation(async ({ ctx, input }) => {
+      const player = await getPlayerByUserId(ctx.user.id);
+      if (!player) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
+      
+      // 아이템 사용 차감 (피로도 회복 아이템)
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "데이터베이스 연결 실패" });
+      
+      const playerItem = await db.select().from(playerItems).where(eq(playerItems.id, input.playerItemId)).limit(1);
+      if (!playerItem.length) throw new TRPCError({ code: "NOT_FOUND", message: "아이템을 찾을 수 없습니다" });
+      
+      const pi = playerItem[0];
+      const item = await db.select().from(items).where(eq(items.id, pi.itemId)).limit(1);
+      if (!item.length || !item[0].fatigueRecover) throw new TRPCError({ code: "BAD_REQUEST", message: "피로도 회복 아이템이 아닙니다" });
+      
+      // 피로도 회복 적용
+      const playerData = await db.select().from(players).where(eq(players.id, player.id)).limit(1);
+      if (!playerData.length) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
+      
+      const newFatigue = Math.max(0, playerData[0].fatigue - item[0].fatigueRecover);
+      await db.update(players).set({ fatigue: newFatigue }).where(eq(players.id, player.id));
+      
+      // 아이템 사용 차감
+      const newCount = pi.usageCount - 1;
+      if (newCount <= 0) {
+        await db.delete(playerItems).where(eq(playerItems.id, pi.id));
+      } else {
+        await db.update(playerItems).set({ usageCount: newCount }).where(eq(playerItems.id, pi.id));
+      }
+      
+      return { success: true, newFatigue };
     }),
 });
 

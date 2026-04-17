@@ -122,37 +122,27 @@ export async function buyItem(
 
   if (playerGold < item.price) throw new Error("골드가 부족합니다");
 
-  // 피로도 회복 아이템인 경우 즉시 사용
-  if (item.fatigueRecover && item.fatigueRecover > 0) {
-    // 현재 피로도 확인
-    const player = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
-    if (player.length === 0) throw new Error("플레이어를 찾을 수 없습니다");
-    
-    // 피로도 100 이상이면 사용 불가
-    if (player[0].fatigue >= 100) {
-      throw new Error("피로도가 100 이상이면 사용할 수 없습니다");
-    }
-    
-    // 골드만 차감
-    await db.update(players).set({ gold: playerGold - item.price }).where(eq(players.id, playerId));
-    
-    // 피로도 회복
-    const newFatigue = Math.min(100, player[0].fatigue + item.fatigueRecover);
-    await db.update(players).set({ fatigue: newFatigue }).where(eq(players.id, playerId));
-    
-    return item;
-  }
-
-  // 일반 아이템: 소유권 추가
+  // 모든 아이템 (일반 아이템 + 피로도 회복 아이템) 저장
+  // 피로도 회복 아이템도 여러 개 구매 가능
   const existing = await db
     .select()
     .from(playerItems)
     .where(and(eq(playerItems.playerId, playerId), eq(playerItems.itemId, itemId)))
     .limit(1);
-  if (existing.length > 0) throw new Error("이미 보유한 아이템입니다");
-
-  await db.insert(playerItems).values({ playerId, itemId, equipped: 0 });
+  
+  if (existing.length > 0) {
+    // 이미 보유한 경우 usageCount 증가 (여러 개 구매 가능)
+    await db.update(playerItems)
+      .set({ usageCount: existing[0].usageCount + 1 })
+      .where(eq(playerItems.id, existing[0].id));
+  } else {
+    // 새로 구매하는 경우
+    await db.insert(playerItems).values({ playerId, itemId, equipped: 0, usageCount: 1 });
+  }
+  
+  // 골드 차감
   await db.update(players).set({ gold: playerGold - item.price }).where(eq(players.id, playerId));
+  
   return item;
 }
 
