@@ -88,10 +88,10 @@ function makePlayer(
     health: 100,
     stats: stats ? {
       attack: stats.attack || 50, defense: stats.defense || 50,
-      speed: stats.speed || 50, economy: stats.economy || 50,
+      speed: stats.speed || 50, economy: stats.sense || stats.economy || 50,
       sense: stats.sense || 50, control: stats.control || 50,
-      harassment: stats.harassment || 50, strategy: stats.strategy || 50,
-      scouting: stats.scouting || 50, massProduction: stats.massProduction || 50,
+      harassment: stats.harass || stats.harassment || 50, strategy: stats.strategy || 50,
+      scouting: stats.scout || stats.scouting || 50, massProduction: stats.supply || stats.massProduction || 50,
     } : undefined,
     multiCount: 1,
     productionFacilities: 1,
@@ -173,8 +173,11 @@ function updateResourcesAndTroops(gs: GameState, p: PlayerState): void {
   let ecoMul = 1.0;
   if (p.stats) ecoMul = 1.0 + (p.stats.economy - 50) / 200;
   // massProduction 높을수록 병력 생산 빠름 (최대 +50%)
+  // supply(물량) 능력치도 병력 생산에 추가 보너스 (최대 +30%)
   let troopMul = 1.0;
-  if (p.stats) troopMul = 1.0 + (p.stats.massProduction - 50) / 200;
+  if (p.stats) {
+    troopMul = 1.0 + (p.stats.massProduction - 50) / 200 + (p.stats.massProduction - 50) / 350;
+  }
   // sense 높을수록 멀티 확장/생산기지 건설 확률 증가 (별도 처리)
 
   // ── 앞마당 파괴 시 자원 수급 50% 감소 ──
@@ -259,6 +262,13 @@ function resolveEngagement(gs: GameState): { winnerIsP1: boolean; decisive: bool
   // ── 랜덤 ±8% (줄여서 병력/능력치 영향력 강화) ──
   p1Pow *= 1 + (Math.random() - 0.5) * 0.16;
   p2Pow *= 1 + (Math.random() - 0.5) * 0.16;
+
+  // ── 초반 러쉬 방어: scouting 높으면 초반(턴 15 이하) 교전에서 방어 보너스 ──
+  // 정찰을 잘 하면 러쉬를 미리 감지하여 대비할 수 있음 (최대 +30%)
+  if (gs.turn <= 15) {
+    if (p1.stats) p1Pow *= 1.0 + Math.max(0, (p1.stats.scouting - 50)) / 350;
+    if (p2.stats) p2Pow *= 1.0 + Math.max(0, (p2.stats.scouting - 50)) / 350;
+  }
 
   // 종족별 유불리: 프로토스는 전투 승률 1.5배 높음
   if (p1.race === 'protoss') p1Pow *= 1.5;
@@ -395,14 +405,22 @@ export function progressGame(gs: GameState): void {
       }
     } else if (evt.type === "harass") {
       // ── 견제: 자원 피해 + 자원 수급률 감소 효과 ──
-      const dmg = 300 + Math.random() * 500;
+      // 공격자의 harassment 능력치가 높으면 피해 증가 (최대 +60%)
+      // 방어자의 scouting 능력치가 높으면 피해 감소 (최대 -40%)
+      const attacker = evt.playerId === 1 ? gs.player1 : gs.player2;
+      const defender = evt.playerId === 1 ? gs.player2 : gs.player1;
+      const harassBonus = attacker.stats ? 1.0 + (attacker.stats.harassment - 50) / 150 : 1.0;
+      const scoutDefense = defender.stats ? Math.max(0.6, 1.0 - (defender.stats.scouting - 50) / 250) : 1.0;
+      const dmg = (300 + Math.random() * 500) * harassBonus * scoutDefense;
       if (evt.playerId === 1) {
         gs.player2.resources = Math.max(0, gs.player2.resources - dmg);
-        // 견제 받으면 2~4턴 동안 자원 수급률 감소
-        gs.player2.harassedTurns = Math.min(4, gs.player2.harassedTurns + 2);
+        // 견제 받으면 2~4턴 동안 자원 수급률 감소 (scouting 높으면 지속시간 감소)
+        const harassDuration = defender.stats ? Math.max(1, 2 - Math.floor((defender.stats.scouting - 50) / 200)) : 2;
+        gs.player2.harassedTurns = Math.min(4, gs.player2.harassedTurns + harassDuration);
       } else {
         gs.player1.resources = Math.max(0, gs.player1.resources - dmg);
-        gs.player1.harassedTurns = Math.min(4, gs.player1.harassedTurns + 2);
+        const harassDuration = defender.stats ? Math.max(1, 2 - Math.floor((defender.stats.scouting - 50) / 200)) : 2;
+        gs.player1.harassedTurns = Math.min(4, gs.player1.harassedTurns + harassDuration);
       }
       // 결정적 견제: 상대 자원이 100 이하로 떨어지면
       const targetRes = evt.playerId === 1 ? gs.player2.resources : gs.player1.resources;
@@ -413,7 +431,13 @@ export function progressGame(gs: GameState): void {
         gs.turnCommentaries.push(`[중립] ${attacker} 선수의 견제가 치명적이었습니다! 상대 경제가 붕괴되었습니다!`);
       }
     } else if (evt.type === "resource_drain") {
-      const drain = 200 + Math.random() * 400;
+      // 공격자의 harassment가 높으면 자원 드레인 피해 증가
+      // 방어자의 scouting이 높으면 피해 감소
+      const drainAttacker = evt.playerId === 1 ? gs.player1 : gs.player2;
+      const drainDefender = evt.playerId === 1 ? gs.player2 : gs.player1;
+      const drainHarassBonus = drainAttacker.stats ? 1.0 + (drainAttacker.stats.harassment - 50) / 200 : 1.0;
+      const drainScoutDefense = drainDefender.stats ? Math.max(0.7, 1.0 - (drainDefender.stats.scouting - 50) / 300) : 1.0;
+      const drain = (200 + Math.random() * 400) * drainHarassBonus * drainScoutDefense;
       if (evt.playerId === 1) {
         gs.player2.resources = Math.max(0, gs.player2.resources - drain);
         // 자원 드레인도 수급률에 영향

@@ -837,6 +837,20 @@ const practiceRouter = router({
         STAT_KEYS.map(key => [key, (playerStatsRaw as any)?.[key] || 500])
       ) as Record<StatKey, number>;
       
+      // 착용 아이템 부스트 반영
+      const equippedItems = await getPlayerItems(player.id);
+      for (const pi of equippedItems) {
+        if (pi.equipped !== 1 || pi.usageCount <= 0) continue;
+        const boosts = (typeof pi.item.statBoosts === 'string'
+          ? (() => { try { return JSON.parse(pi.item.statBoosts as string); } catch { return {}; } })()
+          : pi.item.statBoosts ?? {}) as Record<string, number>;
+        for (const [k, v] of Object.entries(boosts)) {
+          if (k in playerStatsForSim && typeof v === 'number') {
+            (playerStatsForSim as any)[k] = Math.min(1200, ((playerStatsForSim as any)[k] || 0) + v);
+          }
+        }
+      }
+      
       let aiStatsForSim: Record<StatKey, number> | undefined;
       if (isAiGame && input.aiOpponent) {
         aiStatsForSim = Object.fromEntries(
