@@ -163,6 +163,15 @@ export async function toggleEquipItem(
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+
+  // 착용 시 사용 횟수 체크
+  if (equip) {
+    const item = await db.select().from(playerItems).where(and(eq(playerItems.id, playerItemId), eq(playerItems.playerId, playerId))).limit(1);
+    if (item.length > 0 && item[0].usageCount <= 0) {
+      throw new Error("사용 횟수가 소진된 아이템은 착용할 수 없습니다");
+    }
+  }
+
   await db
     .update(playerItems)
     .set({ equipped: equip ? 1 : 0 })
@@ -223,6 +232,36 @@ export async function seedItemsIfEmpty() {
     { name: "메딕의 치료 키트", description: "피로도 15 회복 + 수비력 향상", price: 350, rarity: "rare" as const, iconEmoji: "🏥", statBoosts: { defense: 30 }, fatigueRecover: 15 },
     { name: "프로토스 실드 배터리", description: "피로도 20 회복 + 방어력 향상", price: 500, rarity: "rare" as const, iconEmoji: "🔋", statBoosts: { defense: 40, sense: 20 }, fatigueRecover: 20 },
     { name: "저그 여왕의 축복", description: "피로도 30 회복 + 물량/센스 향상", price: 700, rarity: "epic" as const, iconEmoji: "🐛", statBoosts: { supply: 40, sense: 30 }, fatigueRecover: 30 },
+
+    // ── 추가 일반 아이템 ──
+    { name: "고스트 클로킹 장치", description: "은밀한 정찰 능력을 부여하는 클로킹 기술", price: 300, rarity: "common" as const, iconEmoji: "👻", statBoosts: { scout: 40, harass: 15 }, fatigueRecover: 0 },
+    { name: "파이어뱃 화염방사기", description: "근접 전투력을 높이는 화염 무기", price: 250, rarity: "common" as const, iconEmoji: "🔥", statBoosts: { attack: 35, defense: 10 }, fatigueRecover: 0 },
+    { name: "드론 채취 모듈", description: "자원 채취 효율을 높이는 모듈", price: 200, rarity: "common" as const, iconEmoji: "⛏️", statBoosts: { supply: 30, sense: 10 }, fatigueRecover: 0 },
+    { name: "질럿 사이블레이드", description: "근접 전투의 달인이 되는 사이블레이드", price: 280, rarity: "common" as const, iconEmoji: "⚔️", statBoosts: { attack: 25, control: 20 }, fatigueRecover: 0 },
+    { name: "SCV 수리 키트", description: "건물 수리 속도를 높이는 도구", price: 180, rarity: "common" as const, iconEmoji: "🔧", statBoosts: { defense: 25, supply: 15 }, fatigueRecover: 0 },
+
+    // ── 추가 희귀 아이템 ──
+    { name: "발키리 미사일 팩", description: "광역 공격력을 부여하는 미사일 시스템", price: 480, rarity: "rare" as const, iconEmoji: "🚀", statBoosts: { attack: 55, harass: 25 }, fatigueRecover: 0 },
+    { name: "럴커 가시 강화제", description: "매복 공격력을 극대화하는 강화제", price: 520, rarity: "rare" as const, iconEmoji: "🦔", statBoosts: { defense: 50, attack: 35 }, fatigueRecover: 0 },
+    { name: "옵저버 센서 어레이", description: "은폐 유닛 탐지 능력을 높이는 센서", price: 450, rarity: "rare" as const, iconEmoji: "📡", statBoosts: { scout: 55, sense: 30 }, fatigueRecover: 0 },
+    { name: "배틀크루저 야마토 포", description: "강력한 단일 타격 능력을 부여", price: 550, rarity: "rare" as const, iconEmoji: "💥", statBoosts: { attack: 65, strategy: 20 }, fatigueRecover: 0 },
+    { name: "코르세어 디스럽션 웹", description: "적 공중 유닛을 무력화하는 기술", price: 480, rarity: "rare" as const, iconEmoji: "🕸️", statBoosts: { control: 45, defense: 35 }, fatigueRecover: 0 },
+
+    // ── 추가 영웅 아이템 ──
+    { name: "사이언스 베슬 이레디에이트", description: "적 생체 유닛을 녹이는 방사능 무기", price: 850, rarity: "epic" as const, iconEmoji: "☢️", statBoosts: { attack: 60, strategy: 50, sense: 25 }, fatigueRecover: 0 },
+    { name: "가디언 아스펙트", description: "공중에서 지상을 폭격하는 변태 능력", price: 880, rarity: "epic" as const, iconEmoji: "🐉", statBoosts: { attack: 70, harass: 50, scout: 20 }, fatigueRecover: 0 },
+    { name: "다크 아칸 마엘스트롬", description: "적 생체 유닛을 마비시키는 사이오닉", price: 920, rarity: "epic" as const, iconEmoji: "🌊", statBoosts: { control: 65, defense: 55, sense: 25 }, fatigueRecover: 0 },
+    { name: "인페스티드 테란 폭탄", description: "자폭 공격으로 적진을 초토화", price: 800, rarity: "epic" as const, iconEmoji: "💀", statBoosts: { attack: 75, harass: 55 }, fatigueRecover: 0 },
+
+    // ── 추가 전설 아이템 ──
+    { name: "멩스크의 황제 왕관", description: "테란 황제의 카리스마가 깃든 왕관. 전략과 센스 극대화", price: 2800, rarity: "legendary" as const, iconEmoji: "👑", statBoosts: { strategy: 110, sense: 90, defense: 70 }, fatigueRecover: 0 },
+    { name: "피닉스의 불멸 갑옷", description: "전설의 프로토스 영웅의 갑옷. 죽음도 두렵지 않다", price: 2500, rarity: "legendary" as const, iconEmoji: "🦾", statBoosts: { defense: 120, attack: 80, control: 60 }, fatigueRecover: 0 },
+    { name: "듀란의 비밀 연구 자료", description: "사미르 듀란의 극비 연구. 모든 능력을 균형있게 강화", price: 3000, rarity: "legendary" as const, iconEmoji: "📜", statBoosts: { sense: 80, control: 80, strategy: 80, scout: 80 }, fatigueRecover: 0 },
+
+    // ── 추가 특수 아이템 (능력치 + 피로도) ──
+    { name: "테란 보급품 상자", description: "피로도 10 회복 + 물량 향상", price: 300, rarity: "common" as const, iconEmoji: "📦", statBoosts: { supply: 25 }, fatigueRecover: 10 },
+    { name: "프로토스 넥서스 에너지", description: "피로도 25 회복 + 전략/센스 향상", price: 600, rarity: "rare" as const, iconEmoji: "💫", statBoosts: { strategy: 30, sense: 25 }, fatigueRecover: 25 },
+    { name: "저그 진화 촉매제", description: "피로도 40 회복 + 공격/컨트롤 향상", price: 900, rarity: "epic" as const, iconEmoji: "🧫", statBoosts: { attack: 45, control: 35 }, fatigueRecover: 40 },
   ];
 
   for (const item of seedItems) {
@@ -243,12 +282,19 @@ export async function recoverFatigueIfNeeded(playerId: number) {
   const now = new Date();
   const lastRecovery = p.lastFatigueRecovery ? new Date(p.lastFatigueRecovery) : null;
 
-  // 자정 기준으로 회복 여부 판단
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const lastRecoveryDate = lastRecovery ? new Date(lastRecovery.getFullYear(), lastRecovery.getMonth(), lastRecovery.getDate()) : null;
+  // KST(UTC+9) 기준 자정으로 회복 여부 판단
+  const kstOffset = 9 * 60; // KST는 UTC+9
+  const kstNow = new Date(now.getTime() + kstOffset * 60 * 1000);
+  const todayKST = `${kstNow.getUTCFullYear()}-${String(kstNow.getUTCMonth() + 1).padStart(2, '0')}-${String(kstNow.getUTCDate()).padStart(2, '0')}`;
 
-  if (!lastRecoveryDate || lastRecoveryDate < today) {
-    // 새로운 날이므로 피로도 회복
+  let lastRecoveryKST: string | null = null;
+  if (lastRecovery) {
+    const kstLast = new Date(lastRecovery.getTime() + kstOffset * 60 * 1000);
+    lastRecoveryKST = `${kstLast.getUTCFullYear()}-${String(kstLast.getUTCMonth() + 1).padStart(2, '0')}-${String(kstLast.getUTCDate()).padStart(2, '0')}`;
+  }
+
+  if (!lastRecoveryKST || lastRecoveryKST < todayKST) {
+    // KST 기준 새로운 날이므로 피로도 회복
     await db
       .update(players)
       .set({ fatigue: 100, lastFatigueRecovery: now.toISOString() })
@@ -645,7 +691,13 @@ export async function decreaseItemUsageCount(playerId: number) {
   const playerItemsResult = await db.select().from(playerItems).where(eq(playerItems.playerId, playerId));
   for (const pi of playerItemsResult) {
     if (pi.usageCount > 0) {
-      await db.update(playerItems).set({ usageCount: pi.usageCount - 1 }).where(eq(playerItems.id, pi.id));
+      const newCount = pi.usageCount - 1;
+      if (newCount <= 0) {
+        // 사용 횟수가 0이 되면 아이템 삭제
+        await db.delete(playerItems).where(eq(playerItems.id, pi.id));
+      } else {
+        await db.update(playerItems).set({ usageCount: newCount }).where(eq(playerItems.id, pi.id));
+      }
     }
   }
 }
@@ -890,6 +942,24 @@ export async function seedQuestsIfEmpty() {
     { type: "cumulative" as const, title: "S등급 달성", description: "선수 등급 S를 달성하세요. 프로 중의 프로!", iconEmoji: "💎", conditionType: "player_grade", conditionValue: 6, rewardType: "stat_points", rewardValue: 200, sortOrder: 27 },
     { type: "cumulative" as const, title: "SS등급 달성", description: "선수 등급 SS! 전설의 영역!", iconEmoji: "👑", conditionType: "player_grade", conditionValue: 7, rewardType: "stat_points", rewardValue: 300, sortOrder: 28 },
     { type: "cumulative" as const, title: "SSS등급 달성", description: "최고 등급 SSS! 신의 경지!", iconEmoji: "🏆", conditionType: "player_grade", conditionValue: 8, rewardType: "stat_points", rewardValue: 500, sortOrder: 29 },
+
+    // ── 추가 일일퀘스트 ──
+    { type: "daily" as const, title: "연습게임 20판 완료", description: "오늘 연습게임을 20판 플레이하세요", iconEmoji: "🎮", conditionType: "practice_games", conditionValue: 20, rewardType: "stat_points", rewardValue: 15, sortOrder: 11 },
+    { type: "daily" as const, title: "15승 달성", description: "오늘 연습게임에서 15번 승리하세요", iconEmoji: "🏅", conditionType: "practice_wins", conditionValue: 15, rewardType: "gold", rewardValue: 300, sortOrder: 12 },
+    { type: "daily" as const, title: "고수 난이도 5판", description: "고수 난이도 연습게임을 5판 플레이하세요", iconEmoji: "💀", conditionType: "practice_advanced", conditionValue: 5, rewardType: "gold", rewardValue: 250, sortOrder: 13 },
+    { type: "daily" as const, title: "고수 난이도 10판", description: "고수 난이도 연습게임을 10판 플레이하세요", iconEmoji: "🔱", conditionType: "practice_advanced", conditionValue: 10, rewardType: "stat_points", rewardValue: 10, sortOrder: 14 },
+    { type: "daily" as const, title: "능력치 배분 3회", description: "능력치 포인트를 3회 배분하세요", iconEmoji: "📈", conditionType: "stat_allocate", conditionValue: 3, rewardType: "gold", rewardValue: 100, sortOrder: 15 },
+    { type: "daily" as const, title: "아이템 구매 3회", description: "상점에서 아이템을 3개 구매하세요", iconEmoji: "🛍️", conditionType: "item_buy", conditionValue: 3, rewardType: "exp", rewardValue: 200, sortOrder: 16 },
+
+    // ── 추가 누적보상퀘스트 - 승수 ──
+    { type: "cumulative" as const, title: "1000승 달성", description: "누적 1000승! 불멸의 전설!", iconEmoji: "🌟", conditionType: "total_wins", conditionValue: 1000, rewardType: "stat_points", rewardValue: 500, sortOrder: 30 },
+
+    // ── 추가 누적보상퀘스트 - 게임 수 ──
+    { type: "cumulative" as const, title: "연습게임 2000판", description: "연습게임을 총 2000판! 끝없는 도전!", iconEmoji: "🎖️", conditionType: "total_games", conditionValue: 2000, rewardType: "stat_points", rewardValue: 500, sortOrder: 31 },
+
+    // ── 추가 누적보상퀘스트 - 골드 ──
+    { type: "cumulative" as const, title: "골드 대부호", description: "골드를 총 50000 이상 획득하세요", iconEmoji: "💸", conditionType: "total_gold_earned", conditionValue: 50000, rewardType: "stat_points", rewardValue: 100, sortOrder: 32 },
+    { type: "cumulative" as const, title: "골드 전설", description: "골드를 총 500000 이상 획득하세요", iconEmoji: "🏦", conditionType: "total_gold_earned", conditionValue: 500000, rewardType: "stat_points", rewardValue: 500, sortOrder: 33 },
   ];
 
   for (const quest of seedData) {
@@ -910,8 +980,11 @@ export async function getPlayerQuestProgress(playerId: number) {
 }
 
 function getTodayDateString(): string {
+  // KST(UTC+9) 기준으로 오늘 날짜 반환 - 한국 시간 자정에 초기화되도록
   const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const kstOffset = 9 * 60; // KST는 UTC+9
+  const kstTime = new Date(now.getTime() + kstOffset * 60 * 1000);
+  return `${kstTime.getUTCFullYear()}-${String(kstTime.getUTCMonth() + 1).padStart(2, '0')}-${String(kstTime.getUTCDate()).padStart(2, '0')}`;
 }
 
 export async function getOrCreateQuestProgress(playerId: number, questId: number, questType: string) {
@@ -983,12 +1056,17 @@ export async function getDailyGameCount(playerId: number): Promise<number> {
   const startOfDay = `${today} 00:00:00`;
   const endOfDay = `${today} 23:59:59`;
 
+  // KST 기준 시작/끝 시간을 UTC로 변환하여 쿼리
+  // KST 00:00:00 = UTC 전날 15:00:00, KST 23:59:59 = UTC 당일 14:59:59
+  const kstStartUTC = new Date(`${today}T00:00:00+09:00`).toISOString().slice(0, 19).replace('T', ' ');
+  const kstEndUTC = new Date(`${today}T23:59:59+09:00`).toISOString().slice(0, 19).replace('T', ' ');
+
   const result = await db.select({ count: sql<number>`COUNT(*)` })
     .from(gameResults)
     .where(and(
       eq(gameResults.playerId, playerId),
-      sql`${gameResults.createdAt} >= ${startOfDay}`,
-      sql`${gameResults.createdAt} <= ${endOfDay}`,
+      sql`${gameResults.createdAt} >= ${kstStartUTC}`,
+      sql`${gameResults.createdAt} <= ${kstEndUTC}`,
     ));
 
   return Number(result[0]?.count ?? 0);
@@ -999,16 +1077,18 @@ export async function getDailyWinCount(playerId: number): Promise<number> {
   if (!db) return 0;
 
   const today = getTodayDateString();
-  const startOfDay = `${today} 00:00:00`;
-  const endOfDay = `${today} 23:59:59`;
+
+  // KST 기준 시작/끝 시간을 UTC로 변환하여 쿼리
+  const kstStartUTC = new Date(`${today}T00:00:00+09:00`).toISOString().slice(0, 19).replace('T', ' ');
+  const kstEndUTC = new Date(`${today}T23:59:59+09:00`).toISOString().slice(0, 19).replace('T', ' ');
 
   const result = await db.select({ count: sql<number>`COUNT(*)` })
     .from(gameResults)
     .where(and(
       eq(gameResults.playerId, playerId),
       eq(gameResults.isWinner, 1),
-      sql`${gameResults.createdAt} >= ${startOfDay}`,
-      sql`${gameResults.createdAt} <= ${endOfDay}`,
+      sql`${gameResults.createdAt} >= ${kstStartUTC}`,
+      sql`${gameResults.createdAt} <= ${kstEndUTC}`,
     ));
 
   return Number(result[0]?.count ?? 0);
@@ -1019,8 +1099,10 @@ export async function getDailyAdvancedGameCount(playerId: number): Promise<numbe
   if (!db) return 0;
 
   const today = getTodayDateString();
-  const startOfDay = `${today} 00:00:00`;
-  const endOfDay = `${today} 23:59:59`;
+
+  // KST 기준 시작/끝 시간을 UTC로 변환하여 쿼리
+  const kstStartUTC = new Date(`${today}T00:00:00+09:00`).toISOString().slice(0, 19).replace('T', ' ');
+  const kstEndUTC = new Date(`${today}T23:59:59+09:00`).toISOString().slice(0, 19).replace('T', ' ');
 
   const result = await db.select({ count: sql<number>`COUNT(*)` })
     .from(gameResults)
@@ -1028,8 +1110,8 @@ export async function getDailyAdvancedGameCount(playerId: number): Promise<numbe
     .where(and(
       eq(gameResults.playerId, playerId),
       eq(games.difficulty, 'advanced'),
-      sql`${gameResults.createdAt} >= ${startOfDay}`,
-      sql`${gameResults.createdAt} <= ${endOfDay}`,
+      sql`${gameResults.createdAt} >= ${kstStartUTC}`,
+      sql`${gameResults.createdAt} <= ${kstEndUTC}`,
     ));
 
   return Number(result[0]?.count ?? 0);

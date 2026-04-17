@@ -40,16 +40,18 @@ export default function Admin() {
     }
   }, [getPlayerInfoQuery.data]);
 
-  // 검색 필터링
+  // 검색 필터링 (선수가 있는 계정만 표시)
   const filteredUsers = useMemo(() => {
     if (!usersQuery.data) return [];
-    return usersQuery.data.filter((user) => {
-      const query = searchQuery.toLowerCase();
-      return (
-        (user.name?.toLowerCase() || "").includes(query) ||
-        (user.email?.toLowerCase() || "").includes(query)
-      );
-    });
+    return usersQuery.data
+      .filter((user) => user.playerId !== null) // 선수 ID가 있는 계정만
+      .filter((user) => {
+        const query = searchQuery.toLowerCase();
+        return (
+          (user.name?.toLowerCase() || "").includes(query) ||
+          (user.email?.toLowerCase() || "").includes(query)
+        );
+      });
   }, [usersQuery.data, searchQuery]);
 
   // 페이지네이션
