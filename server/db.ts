@@ -973,9 +973,9 @@ export async function seedQuestsIfEmpty() {
     ids.push(q.id);
     titleMap.set(q.title, ids);
   }
-  for (const [, ids] of titleMap) {
+  for (const [, ids] of Array.from(titleMap)) {
     if (ids.length > 1) {
-      ids.sort((a, b) => a - b);
+      ids.sort((a: number, b: number) => a - b);
       const duplicateIds = ids.slice(1); // 첫 번째(가장 작은 id)만 남김
       for (const dupId of duplicateIds) {
         // 해당 퀘스트의 진행도도 삭제
