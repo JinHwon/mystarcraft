@@ -967,6 +967,7 @@ export async function seedQuestsIfEmpty() {
   const db = await getDb();
   if (!db) return;
 
+<<<<<<< Updated upstream
   // 중복 퀘스트 정리: 한 번만 실행
   if (!questDeduped) {
     questDeduped = true;
@@ -987,6 +988,24 @@ export async function seedQuestsIfEmpty() {
             await db.delete(quests).where(eq(quests.id, dupId));
           }
         }
+=======
+  // 중복 퀘스트 정리: 같은 title이 여러 개 있으면 가장 작은 id만 남기고 삭제
+  const allExisting = await db.select({ id: quests.id, title: quests.title }).from(quests);
+  const titleMap = new Map<string, number[]>();
+  for (const q of allExisting) {
+    const ids = titleMap.get(q.title) || [];
+    ids.push(q.id);
+    titleMap.set(q.title, ids);
+  }
+  for (const [, ids] of Array.from(titleMap)) {
+    if (ids.length > 1) {
+      ids.sort((a: number, b: number) => a - b);
+      const duplicateIds = ids.slice(1); // 첫 번째(가장 작은 id)만 남김
+      for (const dupId of duplicateIds) {
+        // 해당 퀘스트의 진행도도 삭제
+        await db.delete(playerQuestProgress).where(eq(playerQuestProgress.questId, dupId));
+        await db.delete(quests).where(eq(quests.id, dupId));
+>>>>>>> Stashed changes
       }
     } catch (e) {
       console.error("Quest dedup error:", e);
