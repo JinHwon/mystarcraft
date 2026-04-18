@@ -961,27 +961,35 @@ export async function getHeadToHeadRecord(playerId: number, opponentPlayerId: nu
 
 // ── Quest System ─────────────────────────────────────────────────
 
+let questDeduped = false;
+
 export async function seedQuestsIfEmpty() {
   const db = await getDb();
   if (!db) return;
 
-  // 중복 퀘스트 정리: 같은 title이 여러 개 있으면 가장 작은 id만 남기고 삭제
-  const allExisting = await db.select({ id: quests.id, title: quests.title }).from(quests);
-  const titleMap = new Map<string, number[]>();
-  for (const q of allExisting) {
-    const ids = titleMap.get(q.title) || [];
-    ids.push(q.id);
-    titleMap.set(q.title, ids);
-  }
-  for (const [, ids] of titleMap) {
-    if (ids.length > 1) {
-      ids.sort((a, b) => a - b);
-      const duplicateIds = ids.slice(1); // 첫 번째(가장 작은 id)만 남김
-      for (const dupId of duplicateIds) {
-        // 해당 퀘스트의 진행도도 삭제
-        await db.delete(playerQuestProgress).where(eq(playerQuestProgress.questId, dupId));
-        await db.delete(quests).where(eq(quests.id, dupId));
+  // 중복 퀘스트 정리: 한 번만 실행
+  if (!questDeduped) {
+    questDeduped = true;
+    try {
+      const allExisting = await db.select({ id: quests.id, title: quests.title }).from(quests);
+      const titleMap = new Map<string, number[]>();
+      for (const q of allExisting) {
+        const ids = titleMap.get(q.title) || [];
+        ids.push(q.id);
+        titleMap.set(q.title, ids);
       }
+      for (const [, ids] of titleMap) {
+        if (ids.length > 1) {
+          ids.sort((a, b) => a - b);
+          const duplicateIds = ids.slice(1);
+          for (const dupId of duplicateIds) {
+            await db.delete(playerQuestProgress).where(eq(playerQuestProgress.questId, dupId));
+            await db.delete(quests).where(eq(quests.id, dupId));
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Quest dedup error:", e);
     }
   }
 
@@ -1197,18 +1205,26 @@ export async function getOrCreateQuestProgress(playerId: number, questId: number
   }
 
   // 새로 생성
-  await db.insert(playerQuestProgress).values({
-    playerId,
-    questId,
-    progress: 0,
-    completed: 0,
-    rewardClaimed: 0,
-    lastResetDate: questType === 'daily' ? today : null,
-  });
+  try {
+    await db.insert(playerQuestProgress).values({
+      playerId,
+      questId,
+      progress: 0,
+      completed: 0,
+      rewardClaimed: 0,
+      lastResetDate: questType === 'daily' ? today : null,
+    });
+  } catch (e) {
+    // 이미 존재하는 경우 (race condition) 다시 조회
+  }
 
   const created = await db.select().from(playerQuestProgress)
     .where(and(eq(playerQuestProgress.playerId, playerId), eq(playerQuestProgress.questId, questId)))
     .limit(1);
+  if (!created[0]) {
+    // 생성 실패 시 기본값 반환
+    return { id: 0, playerId, questId, progress: 0, completed: 0, rewardClaimed: 0, lastResetDate: questType === 'daily' ? today : null, createdAt: '', updatedAt: '' };
+  }
   return created[0];
 }
 
