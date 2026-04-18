@@ -1,22 +1,22 @@
 /**
- * 동적 게임 엔진 v20.0
+ * 동적 게임 엔진 v19.0
  * 
- * 핵심:
- * 1. 병력 MAX 200, 증가 속도 현실적으로 조절
- * 2. 빌드오더 테크트리: 배럭→팩토리→스타포트 순서대로만 건설 가능
- * 3. 각 생산건물에서 해당 유닛만 생산 가능
- * 4. 자원 부족 시 병력 생산 비례 감소
- * 5. 유닛 조합에 따른 유불리 반영
- * 6. 견제 성공/실패, 본진 파괴=즉시 종료
- * 7. 멀티/앞마당 파괴 시 자원 수급 복귀
- * 8. 초반 러쉬 빌드 시스템
+ * 핵심 메커니즘:
+ * 1. 본진(1) + 앞마당/멀티로 자원 수급, 멀티가 많을수록 자원 수급량 증가
+ * 2. 생산건물(배럭/팩토리/스타포트, 해처리, 게이트/로보/스타게이트)을 지어야 병력 생산
+ * 3. 생산건물이 많을수록 병력 생산↑ + 자원 소모↑
+ * 4. 비생산건물(사이버네틱스코어, 스포닝풀, 레어 등)은 1번만 건설
+ * 5. 견제 성공 → 상대 병력/자원/생산기지 피해, 실패 → 공격자 피해
+ * 6. 본진 파괴 → 즉시 게임 종료
+ * 7. 앞마당/멀티 파괴 → 병력/자원 대폭 감소, 자원 수급량 해당 멀티 이전으로 복귀
+ * 8. 초반 러쉬 빌드 → 상대가 무난한 빌드(멀티)면 유리, 막히면 불리
+ * 9. 종족전 밸런스: T vs Z 55:45, T vs P 45:55, Z vs P 55:45
+ * 10. 맵 종족 유불리 + 맵 특성(러쉬거리/자원/복잡도) 반영
  */
 
 import { generateTurnCommentary, generateGameEndCommentary } from "./conciseCommentary";
 import {
   initializeBuildOrder,
-  updateBuildOrder,
-  canBuildBuilding,
   type BuildOrderState,
 } from "@shared/buildOrder";
 import {
@@ -50,20 +50,24 @@ export interface PlayerState {
     sense: number; control: number; harassment: number; strategy: number;
     scouting: number; massProduction: number;
   };
+  /** 멀티 수 (본진 포함, 최소 1) */
   multiCount: number;
-  /** 생산건물 종류별 개수 */
-  productionBuildings: Record<string, number>;
-  /** 총 생산건물 수 (편의용) */
+  /** 생산건물 수 */
   productionFacilities: number;
+  /** 앞마당 파괴 여부 */
   frontBaseDestroyed: boolean;
+  /** 견제 받는 중 (턴 수 카운트) */
   harassedTurns: number;
+  /** 생산기지 피해 수준 (0~3) */
   productionDamage: number;
+  /** 본진 체력 (0이 되면 게임 종료) */
   baseHealth: number;
-  /** 현재 보유 유닛 조합 */
-  unitComposition: Record<string, number>;
+  /** 비생산 건물 건설 여부 */
+  builtTechBuildings: Set<string>;
   hasObserver: boolean; hasVessel: boolean; hasArbiter: boolean;
   hasRecall: boolean; hasEMP: boolean; hasStasisField: boolean;
   buildStrategy?: "barracks_first" | "cc_first" | "gateway_first" | "hatch_first";
+  /** 초반 러쉬 빌드 사용 여부 */
   isRushing: boolean;
   buildOrder: BuildOrderState;
   producedUnitsFirstTime: Set<string>;
@@ -85,65 +89,10 @@ export interface GameState {
   mapRaceAdvantage?: Record<string, number>;
 }
 
-// ── 종족별 건물/유닛 정의 ──
-
-/** 생산건물: 여러 개 건설 가능, 테크트리 순서 필요 */
-const PRODUCTION_TECH_ORDER: Record<string, string[]> = {
-  terran: ["배럭", "팩토리", "스타포트"],
-  protoss: ["게이트웨이", "로보틱스 팩토리", "스타게이트"],
-  zerg: ["해처리"],
-};
-
-/** 건물별 생산 가능 유닛 */
-const BUILDING_UNITS: Record<string, string[]> = {
-  "배럭": ["마린", "메딕", "파이어뱃"],
-  "팩토리": ["벌쳐", "탱크", "골리앗"],
-  "스타포트": ["배틀크루저", "사이언스 베슬"],
-  "게이트웨이": ["질럿", "드래군"],
-  "로보틱스 팩토리": ["옵저버", "리버"],
-  "스타게이트": ["케리어", "아비터"],
-  "해처리": ["저글링", "히드라", "뮤탈리스크", "럴커", "울트라리스크"],
-};
-
-/** 유닛 전투력 가중치 (고급 유닛일수록 높음) */
-const UNIT_POWER: Record<string, number> = {
-  "마린": 1.0, "메딕": 0.5, "파이어뱃": 1.2,
-  "벌쳐": 1.3, "탱크": 2.5, "골리앗": 1.8,
-  "배틀크루저": 4.0, "사이언스 베슬": 1.5,
-  "질럿": 1.2, "드래군": 1.5,
-  "옵저버": 0.3, "리버": 3.0,
-  "케리어": 4.5, "아비터": 2.0,
-  "저글링": 0.6, "히드라": 1.5,
-  "뮤탈리스크": 2.0, "럴커": 2.2, "울트라리스크": 3.5,
-};
-
-/** 유닛 상성 보너스: [공격유닛][방어유닛] = 보너스 배율 */
-const UNIT_COUNTERS: Record<string, Record<string, number>> = {
-  "탱크":   { "질럿": 1.5, "저글링": 1.8, "히드라": 1.3 },
-  "벌쳐":   { "저글링": 1.6, "질럿": 1.3 },
-  "마린":   { "뮤탈리스크": 0.7, "럴커": 0.5, "탱크": 0.6 },
-  "파이어뱃": { "저글링": 1.8, "질럿": 1.4 },
-  "골리앗": { "뮤탈리스크": 1.5, "케리어": 1.3 },
-  "질럿":   { "마린": 1.3, "히드라": 0.8, "탱크": 0.5 },
-  "드래군": { "벌쳐": 1.3, "뮤탈리스크": 1.4, "탱크": 0.7 },
-  "리버":   { "마린": 2.0, "저글링": 2.0, "히드라": 1.5 },
-  "케리어": { "히드라": 1.3, "마린": 1.5 },
-  "저글링": { "탱크": 0.4, "리버": 0.3, "파이어뱃": 0.5 },
-  "히드라": { "뮤탈리스크": 1.3, "질럿": 1.2 },
-  "뮤탈리스크": { "마린": 1.4, "프로브": 2.0 },
-  "럴커":   { "마린": 1.8, "질럿": 1.5, "저글링": 1.5 },
-  "울트라리스크": { "마린": 1.5, "질럿": 1.3, "탱크": 0.8 },
-};
-
 function makePlayer(
   id: number, name: string, race: "terran" | "zerg" | "protoss",
   stats?: Record<string, number>
 ): PlayerState {
-  // 초기 생산건물: 종족별 기본 1개
-  const initialProd: Record<string, number> = {};
-  const firstBuilding = PRODUCTION_TECH_ORDER[race]?.[0];
-  if (firstBuilding) initialProd[firstBuilding] = 1;
-
   return {
     id, name, race,
     supply: GAME_INITIAL_TROOPS,
@@ -157,13 +106,12 @@ function makePlayer(
       scouting: stats.scout || stats.scouting || 50, massProduction: stats.supply || stats.massProduction || 50,
     } : undefined,
     multiCount: 1,
-    productionBuildings: initialProd,
     productionFacilities: 1,
     frontBaseDestroyed: false,
     harassedTurns: 0,
     productionDamage: 0,
     baseHealth: 100,
-    unitComposition: {},
+    builtTechBuildings: new Set(),
     hasObserver: false, hasVessel: false, hasArbiter: false,
     hasRecall: false, hasEMP: false, hasStasisField: false,
     isRushing: false,
@@ -192,6 +140,20 @@ export function initializeGameState(
   };
 }
 
+// ── 종족별 생산건물 / 비생산건물 정의 ──
+
+const PRODUCTION_BUILDINGS: Record<string, string[]> = {
+  terran: ["배럭", "팩토리", "스타포트"],
+  protoss: ["게이트웨이", "로보틱스 팩토리", "스타게이트"],
+  zerg: ["해처리"],
+};
+
+const TECH_BUILDINGS: Record<string, string[]> = {
+  terran: ["엔지니어링 베이", "아카데미", "아머리", "사이언스 퍼실리티"],
+  protoss: ["사이버네틱스 코어", "템플러 아카이브", "플릿 비콘", "옵저버토리"],
+  zerg: ["스포닝풀", "레어", "하이브", "에볼루션 챔버"],
+};
+
 // ── 빌드 전략 ──
 
 function getRaceBuildStrategies(race: "terran" | "zerg" | "protoss") {
@@ -202,141 +164,117 @@ function getRaceBuildStrategies(race: "terran" | "zerg" | "protoss") {
   }
 }
 
-// ── 테크트리에 따른 건물 건설 ──
-
-function getNextBuildableProduction(p: PlayerState): string | null {
-  const techOrder = PRODUCTION_TECH_ORDER[p.race] || [];
-  // 테크트리 순서대로 확인: 이전 건물이 있어야 다음 건물 건설 가능
-  for (let i = 0; i < techOrder.length; i++) {
-    const building = techOrder[i];
-    if (i === 0) continue; // 첫 건물은 이미 있음
-    const prevBuilding = techOrder[i - 1];
-    // 이전 건물이 있고, 현재 건물이 없으면 건설 가능
-    if ((p.productionBuildings[prevBuilding] ?? 0) > 0 && (p.productionBuildings[building] ?? 0) === 0) {
-      return building;
-    }
-  }
-  return null;
+function isRushBuild(strategy: string): boolean {
+  return strategy === "barracks_first" || strategy === "gateway_first";
 }
 
-function getExistingProductionBuildings(p: PlayerState): string[] {
-  return Object.entries(p.productionBuildings).filter(([, count]) => count > 0).map(([name]) => name);
-}
+// ── 건물 건설 액션 ──
 
 function tryBuildAction(gs: GameState, p: PlayerState): void {
   const t = gs.turn;
-  if (t < 3) return;
-
-  // 1) 테크트리 상 다음 생산건물 건설 (1개만)
-  const nextProd = getNextBuildableProduction(p);
-  if (nextProd && p.resources > 500 && Math.random() < 0.12 + (p.stats ? (p.stats.strategy - 50) / 800 : 0)) {
-    p.productionBuildings[nextProd] = 1;
-    p.productionFacilities++;
-    p.resources -= 350;
-    updateBuildOrder(p.buildOrder, nextProd);
-    gs.turnCommentaries.push(`${p.name} 선수가 ${nextProd}을 건설! 새로운 유닛 생산이 가능해집니다.`);
-    return;
+  
+  // 비생산 건물: 1번만 건설 (턴 5~15, 자원 400 이상)
+  if (t >= 5 && t <= 20 && p.resources > 400) {
+    const techList = TECH_BUILDINGS[p.race] || [];
+    const unbuilt = techList.filter(b => !p.builtTechBuildings.has(b));
+    if (unbuilt.length > 0 && Math.random() < 0.15) {
+      const building = unbuilt[Math.floor(Math.random() * unbuilt.length)];
+      p.builtTechBuildings.add(building);
+      p.resources -= 200;
+      gs.turnCommentaries.push(`${p.name} 선수가 ${building}을 건설했습니다.`);
+    }
   }
-
-  // 2) 기존 생산건물 추가 건설 (물량 증가)
-  const existing = getExistingProductionBuildings(p);
-  if (existing.length > 0 && p.productionFacilities < 8) {
-    const prodChance = 0.08 + (p.stats ? (p.stats.massProduction - 50) / 600 + (p.stats.strategy - 50) / 1200 : 0);
-    const cost = 300 + p.productionFacilities * 60;
-    if (p.resources > cost + 400 && Math.random() < prodChance) {
-      const building = existing[Math.floor(Math.random() * existing.length)];
-      p.productionBuildings[building] = (p.productionBuildings[building] ?? 0) + 1;
+  
+  // 생산건물 추가: 자원 충분하고 확률 통과 시
+  const prodChance = calcProductionBuildChance(p);
+  if (p.resources > 800 && p.productionFacilities < 8 && Math.random() < prodChance) {
+    const prodList = PRODUCTION_BUILDINGS[p.race] || [];
+    const building = prodList[Math.floor(Math.random() * prodList.length)];
+    const cost = 300 + p.productionFacilities * 50; // 생산건물이 많을수록 비용 증가
+    if (p.resources >= cost) {
       p.productionFacilities++;
       p.resources -= cost;
-      gs.turnCommentaries.push(`${p.name} 선수가 ${building}을 추가 건설! (총 ${p.productionFacilities}개) 병력 생산↑ 자원 소모↑`);
+      gs.turnCommentaries.push(`${p.name} 선수가 ${building}을 추가 건설! (생산건물 ${p.productionFacilities}개) 병력 생산이 빨라지지만 자원 소모도 늘어납니다.`);
     }
   }
 }
 
-// ── 유닛 생산 (건물별 가능 유닛만) ──
+// ── 유닛 생산 액션 ──
 
-function getProducibleUnits(p: PlayerState): string[] {
-  const units: string[] = [];
-  for (const [building, count] of Object.entries(p.productionBuildings)) {
-    if (count > 0 && BUILDING_UNITS[building]) {
-      for (const unit of BUILDING_UNITS[building]) {
-        if (!units.includes(unit)) units.push(unit);
-      }
+function tryUnitAction(gs: GameState, p: PlayerState): void {
+  if (gs.turn >= 6 && p.resources > 200 && Math.random() < 0.35) {
+    const units: Record<string, string[]> = {
+      terran: ["마린", "메딕", "파이어뱃", "벌쳐", "탱크"],
+      protoss: ["질럿", "드래군", "옵저버", "리버"],
+      zerg: ["저글링", "히드라", "뮤탈리스크", "럴커"],
+    };
+    const list = units[p.race] || [];
+    if (list.length) {
+      const unit = list[Math.floor(Math.random() * list.length)];
+      p.lastAction = { type: "unit_produced", data: unit };
     }
-  }
-  return units;
-}
-
-function produceUnits(gs: GameState, p: PlayerState): void {
-  if (p.resources <= 50 || p.supply >= GAME_MAX_TROOPS) return;
-
-  const availableUnits = getProducibleUnits(p);
-  if (availableUnits.length === 0) return;
-
-  // 자원 기반 생산량: 자원이 적으면 적게, 많으면 많이
-  const resourceFactor = Math.min(1.0, p.resources / 1500);
-  const damagePenalty = Math.max(0.25, 1.0 - p.productionDamage * 0.25);
-  
-  // 능력치 보정
-  let troopMul = 1.0;
-  if (p.stats) troopMul = 1.0 + (p.stats.massProduction - 50) / 300;
-
-  // 종족별 보너스
-  const raceTroopBonus = p.race === 'zerg' ? 1.4 : p.race === 'protoss' ? 1.1 : 1.0;
-
-  // 기본 생산량: 생산건물 수 × 자원비례 × 능력치 × 종족 (턴당 1~4 정도)
-  const baseInc = 1.0 * p.productionFacilities * resourceFactor * damagePenalty * troopMul * raceTroopBonus;
-  const variance = 1.0 + (Math.random() - 0.5) * 0.3;
-  const actualInc = Math.max(0, baseInc * variance);
-
-  if (actualInc > 0) {
-    p.supply = Math.min(GAME_MAX_TROOPS, p.supply + actualInc);
-
-    // 자원 소모: 생산량에 비례 + 생산건물 유지비
-    const prodCost = actualInc * (15 + Math.random() * 5);
-    const maintenanceCost = p.productionFacilities * (15 + Math.random() * 8);
-    p.resources = Math.max(0, p.resources - prodCost - maintenanceCost);
-
-    // 유닛 조합 업데이트 (랜덤 배분)
-    const unitsToAdd = Math.round(actualInc);
-    for (let i = 0; i < unitsToAdd; i++) {
-      const unit = availableUnits[Math.floor(Math.random() * availableUnits.length)];
-      p.unitComposition[unit] = (p.unitComposition[unit] ?? 0) + 1;
-    }
-  } else {
-    // 생산 못해도 유지비는 소모
-    const maintenanceCost = p.productionFacilities * (8 + Math.random() * 4);
-    p.resources = Math.max(0, p.resources - maintenanceCost);
   }
 }
 
-// ── 자원 증가 ──
+// ── 자원/병력 증가 ──
 
-function updateResources(gs: GameState, p: PlayerState): void {
+function updateResourcesAndTroops(gs: GameState, p: PlayerState): void {
   if (gs.gameEnded) return;
   const strat = p.buildStrategy || "barracks_first";
   const rRate = BUILD_RESOURCE_RATES[strat] || 100;
+  const tRate = BUILD_TROOP_RATES[strat] || 1.0;
 
+  // 능력치 보정
   let ecoMul = 1.0;
-  if (p.stats) ecoMul = 1.0 + (p.stats.economy - 50) / 250;
+  if (p.stats) ecoMul = 1.0 + (p.stats.economy - 50) / 200;
+  let troopMul = 1.0;
+  if (p.stats) {
+    troopMul = 1.0 + (p.stats.massProduction - 50) / 200 + (p.stats.massProduction - 50) / 350;
+  }
 
+  // 앞마당 파괴 시 자원 수급 50% 감소
   const frontPenalty = p.frontBaseDestroyed ? 0.5 : 1.0;
+
+  // 견제 받는 중이면 자원 수급 감소
   let harassPenalty = 1.0;
   if (p.harassedTurns > 0) {
     harassPenalty = Math.max(0.6, 1.0 - p.harassedTurns * 0.1);
     p.harassedTurns = Math.max(0, p.harassedTurns - 1);
   }
 
-  const raceResourceBonus = p.race === 'terran' ? 1.4 : p.race === 'protoss' ? 1.25 : 1.0;
+  // 종족별 보너스
+  const raceResourceBonus = p.race === 'terran' ? 1.5 : p.race === 'protoss' ? 1.3 : 1.0;
+  const raceTroopBonus = p.race === 'zerg' ? 1.5 : p.race === 'protoss' ? 1.15 : 1.0;
 
-  // 자원 = 기본률 × 멀티 수 × 능력치 × 패널티
-  const resInc = rRate * 0.8 * p.multiCount * ecoMul * frontPenalty * harassPenalty * raceResourceBonus;
+  // ── 자원 증가: 멀티 수에 비례 (본진=1, 앞마당=2, 멀티=3...) ──
+  const resInc = rRate * 1.2 * p.multiCount * ecoMul * frontPenalty * harassPenalty * raceResourceBonus;
   const resVar = 1.0 + (Math.random() - 0.5) * 0.2;
   p.resources = Math.min(GAME_MAX_RESOURCES, p.resources + resInc * resVar);
+
+  // ── 병력 증가: 생산건물 수 × 자원 기반 ──
+  const productionDamagePenalty = Math.max(0.25, 1.0 - p.productionDamage * 0.25);
+  const effectiveProduction = p.productionFacilities * productionDamagePenalty;
+
+  if (p.resources > 100) {
+    const baseTroopInc = 3.0 * effectiveProduction * tRate * troopMul * frontPenalty * raceTroopBonus;
+    const troopVar = 1.0 + (Math.random() - 0.5) * 0.2;
+    const actualTroopInc = baseTroopInc * troopVar;
+    p.supply = Math.min(GAME_MAX_TROOPS, p.supply + actualTroopInc);
+
+    // 병력 생산 시 자원 소모 (생산건물 많을수록 소모 증가)
+    const resourceCostPerTroop = 12 + Math.random() * 4;
+    const resourceCost = actualTroopInc * resourceCostPerTroop;
+    // 생산건물 유지비
+    const facilityMaintenanceCost = p.productionFacilities * (20 + Math.random() * 10);
+    p.resources = Math.max(0, p.resources - resourceCost - facilityMaintenanceCost);
+  } else {
+    // 자원 부족 시 병력 생산 불가, 유지비만 소모
+    const facilityMaintenanceCost = p.productionFacilities * (10 + Math.random() * 5);
+    p.resources = Math.max(0, p.resources - facilityMaintenanceCost);
+  }
 }
 
-// ── 종족전 밸런스 ──
-
+// ── 종족전 밸런스 보정 ──
 function getMatchupBonus(race1: string, race2: string): { p1: number; p2: number } {
   const key = `${race1}-${race2}`;
   switch (key) {
@@ -350,132 +288,104 @@ function getMatchupBonus(race1: string, race2: string): { p1: number; p2: number
   }
 }
 
-// ── 유닛 조합 전투력 계산 ──
-
-function calcCompositionPower(comp: Record<string, number>): number {
-  let total = 0;
-  for (const [unit, count] of Object.entries(comp)) {
-    total += (UNIT_POWER[unit] ?? 1.0) * count;
-  }
-  return total;
-}
-
-function calcCounterBonus(attacker: Record<string, number>, defender: Record<string, number>): number {
-  let bonus = 0;
-  let totalUnits = 0;
-  for (const [atkUnit, atkCount] of Object.entries(attacker)) {
-    const counters = UNIT_COUNTERS[atkUnit];
-    if (!counters) continue;
-    for (const [defUnit, defCount] of Object.entries(defender)) {
-      if (counters[defUnit]) {
-        bonus += (counters[defUnit] - 1.0) * Math.min(atkCount, defCount);
-        totalUnits += Math.min(atkCount, defCount);
-      }
-    }
-  }
-  return totalUnits > 0 ? 1.0 + bonus / (totalUnits * 2) : 1.0;
-}
-
 // ── 전투 시스템 ──
 
 function resolveEngagement(gs: GameState): { winnerIsP1: boolean; decisive: boolean } {
   const p1 = gs.player1, p2 = gs.player2;
 
-  // 기본 전투력 = 병력 수
-  let p1Pow = p1.supply * 1.5;
-  let p2Pow = p2.supply * 1.5;
+  let p1Pow = p1.supply * 2.0;
+  let p2Pow = p2.supply * 2.0;
 
-  // 유닛 조합 전투력 보정
-  const p1CompPow = calcCompositionPower(p1.unitComposition);
-  const p2CompPow = calcCompositionPower(p2.unitComposition);
-  if (p1CompPow > 0) p1Pow += p1CompPow * 0.5;
-  if (p2CompPow > 0) p2Pow += p2CompPow * 0.5;
+  p1Pow += p1.resources / 200;
+  p2Pow += p2.resources / 200;
 
-  // 유닛 상성 보너스
-  p1Pow *= calcCounterBonus(p1.unitComposition, p2.unitComposition);
-  p2Pow *= calcCounterBonus(p2.unitComposition, p1.unitComposition);
-
-  // 자원 보정
-  p1Pow += p1.resources / 300;
-  p2Pow += p2.resources / 300;
-
-  // 능력치 보정
   if (p1.stats) {
     const bonus = (p1.stats.attack * 1.5 + p1.stats.control * 1.2 + p1.stats.strategy + p1.stats.defense * 0.8 + p1.stats.sense * 0.5) / 250;
-    p1Pow *= (1 + (bonus - 1) * 0.35);
+    p1Pow *= (1 + (bonus - 1) * 0.4);
   }
   if (p2.stats) {
     const bonus = (p2.stats.attack * 1.5 + p2.stats.control * 1.2 + p2.stats.strategy + p2.stats.defense * 0.8 + p2.stats.sense * 0.5) / 250;
-    p2Pow *= (1 + (bonus - 1) * 0.35);
+    p2Pow *= (1 + (bonus - 1) * 0.4);
   }
 
-  // 랜덤
   p1Pow *= 1 + (Math.random() - 0.5) * 0.16;
   p2Pow *= 1 + (Math.random() - 0.5) * 0.16;
 
-  // 초반 러쉬 방어
+  // 초반 러쉬 방어: scouting 높으면 초반 교전에서 방어 보너스
   if (gs.turn <= 15) {
     if (p1.stats) p1Pow *= 1.0 + Math.max(0, (p1.stats.scouting - 50)) / 350;
     if (p2.stats) p2Pow *= 1.0 + Math.max(0, (p2.stats.scouting - 50)) / 350;
   }
 
-  // 종족전 + 맵 종족 유불리
-  const mb = getMatchupBonus(p1.race, p2.race);
-  p1Pow *= mb.p1; p2Pow *= mb.p2;
+  // 종족전 밸런스
+  const matchupBonus = getMatchupBonus(p1.race, p2.race);
+  p1Pow *= matchupBonus.p1;
+  p2Pow *= matchupBonus.p2;
+
+  // 맵 종족 유불리
   if (gs.mapRaceAdvantage) {
-    const d = ((gs.mapRaceAdvantage[p1.race] ?? 50) - (gs.mapRaceAdvantage[p2.race] ?? 50)) / 200;
-    p1Pow *= 1 + d; p2Pow *= 1 - d;
+    const p1MapAdv = gs.mapRaceAdvantage[p1.race] ?? 50;
+    const p2MapAdv = gs.mapRaceAdvantage[p2.race] ?? 50;
+    const mapAdvDiff = (p1MapAdv - p2MapAdv) / 200;
+    p1Pow *= 1 + mapAdvDiff;
+    p2Pow *= 1 - mapAdvDiff;
   }
 
   const winP1 = p1Pow >= p2Pow;
 
-  // 피해 계산
-  const ratio = winP1 ? (p1.supply / Math.max(1, p2.supply)) : (p2.supply / Math.max(1, p1.supply));
-  const dom = Math.min(2.0, ratio);
-  const winLoss = Math.max(0.05, 0.25 - (dom - 1) * 0.15);
-  const loseLoss = Math.min(0.70, 0.30 + (dom - 1) * 0.25);
+  const supplyRatio = winP1
+    ? (p1.supply / Math.max(1, p2.supply))
+    : (p2.supply / Math.max(1, p1.supply));
+  const dominance = Math.min(2.0, supplyRatio);
+
+  const winLoss = Math.max(0.05, 0.25 - (dominance - 1) * 0.15);
+  const loseLoss = Math.min(0.70, 0.30 + (dominance - 1) * 0.25);
+
+  const winResLoss = 100 + Math.random() * 200 + (winP1 ? p1.supply : p2.supply) * 1.5;
+  const loseResLoss = 300 + Math.random() * 500 + (winP1 ? p2.supply : p1.supply) * 2.0;
 
   if (winP1) {
     p1.supply = Math.max(3, p1.supply - Math.round(p1.supply * winLoss));
     p2.supply = Math.max(3, p2.supply - Math.round(p2.supply * loseLoss));
-    p1.resources = Math.max(0, p1.resources - (100 + Math.random() * 200));
-    p2.resources = Math.max(0, p2.resources - (300 + Math.random() * 500));
+    p1.resources = Math.max(0, p1.resources - winResLoss);
+    p2.resources = Math.max(0, p2.resources - loseResLoss);
   } else {
     p2.supply = Math.max(3, p2.supply - Math.round(p2.supply * winLoss));
     p1.supply = Math.max(3, p1.supply - Math.round(p1.supply * loseLoss));
-    p2.resources = Math.max(0, p2.resources - (100 + Math.random() * 200));
-    p1.resources = Math.max(0, p1.resources - (300 + Math.random() * 500));
-  }
-
-  // 유닛 조합도 비례 감소
-  const loser = winP1 ? p2 : p1;
-  for (const unit of Object.keys(loser.unitComposition)) {
-    loser.unitComposition[unit] = Math.max(0, Math.round(loser.unitComposition[unit] * (1 - loseLoss)));
-  }
-  const winner = winP1 ? p1 : p2;
-  for (const unit of Object.keys(winner.unitComposition)) {
-    winner.unitComposition[unit] = Math.max(0, Math.round(winner.unitComposition[unit] * (1 - winLoss)));
+    p2.resources = Math.max(0, p2.resources - winResLoss);
+    p1.resources = Math.max(0, p1.resources - loseResLoss);
   }
 
   const loserSupply = winP1 ? p2.supply : p1.supply;
-  const decisive = loserSupply <= 15;
+  const loserResources = winP1 ? p2.resources : p1.resources;
+  const loserTotal = loserSupply + loserResources / 100;
+  const decisive = loserSupply <= 15 || loserTotal <= 20;
+
   return { winnerIsP1: winP1, decisive };
 }
 
-// ── 견제 시스템 ──
+// ── 견제 시스템 (성공/실패 판정) ──
 
 function resolveHarass(gs: GameState, attackerId: number): { success: boolean; dmg: number } {
   const attacker = attackerId === 1 ? gs.player1 : gs.player2;
   const defender = attackerId === 1 ? gs.player2 : gs.player1;
-  const atkH = attacker.stats?.harassment ?? 50;
-  const defS = defender.stats?.scouting ?? 50;
-  const defD = defender.stats?.defense ?? 50;
-  const chance = 0.5 + (atkH - (defS + defD) / 2) / 400;
-  const success = Math.random() < Math.max(0.2, Math.min(0.85, chance));
+
+  // 성공 확률: 공격자 harassment vs 방어자 scouting+defense
+  const atkHarass = attacker.stats?.harassment ?? 50;
+  const defScout = defender.stats?.scouting ?? 50;
+  const defDef = defender.stats?.defense ?? 50;
+  
+  const successChance = 0.5 + (atkHarass - (defScout + defDef) / 2) / 400;
+  const success = Math.random() < Math.max(0.2, Math.min(0.85, successChance));
+
   if (success) {
-    return { success: true, dmg: (250 + Math.random() * 400) * (1.0 + (atkH - 50) / 150) };
+    const harassBonus = 1.0 + (atkHarass - 50) / 150;
+    const dmg = (300 + Math.random() * 500) * harassBonus;
+    return { success: true, dmg };
   } else {
-    return { success: false, dmg: 150 + Math.random() * 250 };
+    // 실패 시 공격자가 피해
+    const failDmg = 150 + Math.random() * 300;
+    return { success: false, dmg: failDmg };
   }
 }
 
@@ -486,84 +396,92 @@ export function progressGame(gs: GameState): void {
   gs.turn++;
   gs.turnCommentaries = [];
 
-  // 턴 1: 빌드 선택
+  // ── 초반 빌드 선택 (턴 1) ──
   if (gs.turn === 1) {
     for (const p of [gs.player1, gs.player2]) {
       const strats = getRaceBuildStrategies(p.race);
       const s = strats[Math.floor(Math.random() * strats.length)];
       p.buildStrategy = s;
-      p.isRushing = (s === "barracks_first" || s === "gateway_first");
+      p.isRushing = isRushBuild(s);
       p.lastAction = { type: s, data: s };
     }
   }
 
-  // 초반 러쉬 판정 (턴 8~12)
+  // ── 초반 러쉬 판정 (턴 8~12) ──
   if (gs.turn >= 8 && gs.turn <= 12) {
     for (const [rusher, target] of [[gs.player1, gs.player2], [gs.player2, gs.player1]] as [PlayerState, PlayerState][]) {
-      if (rusher.isRushing && !target.isRushing && Math.random() < 0.12) {
+      if (rusher.isRushing && !target.isRushing && Math.random() < 0.15) {
+        // 러쉬 vs 멀티 빌드: 러쉬 성공/실패 판정
         const rushPow = rusher.supply * 1.5 + (rusher.stats?.attack ?? 50) / 5;
         const defPow = target.supply * 1.0 + (target.stats?.defense ?? 50) / 5 + (target.stats?.scouting ?? 50) / 8;
-        if (rushPow > defPow * (0.9 + Math.random() * 0.2)) {
+        const rushSuccess = rushPow > defPow * (0.9 + Math.random() * 0.2);
+        
+        if (rushSuccess) {
           target.supply = Math.max(3, target.supply * 0.4);
           target.resources = Math.max(0, target.resources * 0.5);
           target.baseHealth -= 30 + Math.random() * 20;
-          gs.turnCommentaries.push(`${rusher.name} 선수의 초반 러쉬 성공! ${target.name} 선수 큰 피해!`);
+          gs.turnCommentaries.push(`${rusher.name} 선수의 초반 러쉬가 성공! ${target.name} 선수가 큰 피해를 입었습니다!`);
           if (target.baseHealth <= 0) {
-            gs.gameEnded = true; gs.winner = rusher.id;
-            gs.turnCommentaries.push(`${target.name} 선수의 본진 파괴! ${rusher.name} 선수 승리! GG!`);
+            gs.gameEnded = true;
+            gs.winner = rusher.id;
+            gs.turnCommentaries.push(`${rusher.name} 선수의 러쉬로 ${target.name} 선수의 본진이 파괴되었습니다! GG!`);
             return;
           }
         } else {
           rusher.supply = Math.max(3, rusher.supply * 0.6);
           rusher.resources = Math.max(0, rusher.resources * 0.7);
           rusher.isRushing = false;
-          gs.turnCommentaries.push(`${target.name} 선수가 러쉬를 완벽 방어! ${rusher.name} 선수 불리!`);
+          gs.turnCommentaries.push(`${target.name} 선수가 ${rusher.name} 선수의 러쉬를 완벽하게 방어! 러쉬 실패로 ${rusher.name} 선수가 불리해졌습니다.`);
         }
       }
     }
   }
 
-  // 자원 증가
-  updateResources(gs, gs.player1);
-  updateResources(gs, gs.player2);
+  // 자원/병력 증가
+  updateResourcesAndTroops(gs, gs.player1);
+  updateResourcesAndTroops(gs, gs.player2);
 
   // 건물 건설
   tryBuildAction(gs, gs.player1);
   tryBuildAction(gs, gs.player2);
 
-  // 유닛 생산
-  produceUnits(gs, gs.player1);
-  produceUnits(gs, gs.player2);
+  // 유닛 생산 액션
+  tryUnitAction(gs, gs.player1);
+  tryUnitAction(gs, gs.player2);
 
-  // 멀티 확장
+  // ── 멀티 확장 ──
   for (const p of [gs.player1, gs.player2]) {
-    const multiChance = 0.10 + (p.stats ? (p.stats.economy - 50) / 800 + (p.stats.sense - 50) / 1000 : 0);
-    const multiCost = 400 + p.multiCount * 200;
+    const multiChance = calcMultiExpandChance(p);
+    const multiCost = 400 + p.multiCount * 200; // 멀티가 많을수록 비용 증가
     if (p.resources > multiCost + 500 && p.multiCount < 4 && Math.random() < multiChance) {
       p.multiCount++;
       p.resources -= multiCost;
-      gs.turnCommentaries.push(`${p.name} 선수가 ${p.multiCount === 2 ? '앞마당' : `${p.multiCount}번째 멀티`}를 확장!`);
+      gs.turnCommentaries.push(`${p.name} 선수가 ${p.multiCount === 2 ? '앞마당' : `${p.multiCount}번째 멀티`}를 확장! 자원 수급이 늘어납니다.`);
     }
   }
 
-  // 앞마당 복구
+  // ── 앞마당 복구 ──
   for (const p of [gs.player1, gs.player2]) {
-    if (p.frontBaseDestroyed && Math.random() < 0.08 + (p.stats ? (p.stats.defense - 50) / 500 : 0)) {
-      p.frontBaseDestroyed = false;
-      gs.turnCommentaries.push(`${p.name} 선수가 앞마당을 복구!`);
+    if (p.frontBaseDestroyed) {
+      const repairChance = 0.08 + (p.stats ? (p.stats.defense - 50) / 500 : 0);
+      if (Math.random() < repairChance) {
+        p.frontBaseDestroyed = false;
+        gs.turnCommentaries.push(`${p.name} 선수가 앞마당을 복구했습니다!`);
+      }
     }
     if (p.productionDamage > 0 && Math.random() < 0.12) {
       p.productionDamage = Math.max(0, p.productionDamage - 1);
     }
   }
 
-  // 이벤트
+  // ── 이벤트 생성 ──
   const ctx = {
     turn: gs.turn,
     player1: { id: gs.player1.id, name: gs.player1.name, race: gs.player1.race, supply: gs.player1.supply, resources: gs.player1.resources, multiCount: gs.player1.multiCount },
     player2: { id: gs.player2.id, name: gs.player2.name, race: gs.player2.race, supply: gs.player2.supply, resources: gs.player2.resources, multiCount: gs.player2.multiCount },
     player1Advantage: gs.player1Advantage,
   };
+
   const evt = generateGameEvent(ctx);
   let decisive = false;
 
@@ -573,73 +491,84 @@ export function progressGame(gs: GameState): void {
       decisive = result.decisive;
       gs.turnCommentaries.push(evt.commentary);
       if (decisive) {
-        gs.turnCommentaries.push(`[중립] ${result.winnerIsP1 ? gs.player1.name : gs.player2.name} 선수의 대승!`);
+        const winner = result.winnerIsP1 ? gs.player1.name : gs.player2.name;
+        gs.turnCommentaries.push(`[중립] ${winner} 선수의 대승! 결정적인 전투였습니다!`);
       }
     } else if (evt.type === "harass") {
-      const hr = resolveHarass(gs, evt.playerId);
-      const atk = evt.playerId === 1 ? gs.player1 : gs.player2;
-      const def = evt.playerId === 1 ? gs.player2 : gs.player1;
-      if (hr.success) {
-        def.resources = Math.max(0, def.resources - hr.dmg);
-        def.supply = Math.max(3, def.supply - Math.round(hr.dmg / 80));
-        if (Math.random() < 0.3) def.productionDamage = Math.min(3, def.productionDamage + 1);
-        def.harassedTurns = Math.min(4, def.harassedTurns + 2);
+      // 견제: 성공/실패 판정
+      const harassResult = resolveHarass(gs, evt.playerId);
+      const attacker = evt.playerId === 1 ? gs.player1 : gs.player2;
+      const defender = evt.playerId === 1 ? gs.player2 : gs.player1;
+      
+      if (harassResult.success) {
+        // 견제 성공: 상대 자원/병력/생산기지 피해
+        defender.resources = Math.max(0, defender.resources - harassResult.dmg);
+        defender.supply = Math.max(3, defender.supply - Math.round(harassResult.dmg / 80));
+        if (Math.random() < 0.3) {
+          defender.productionDamage = Math.min(3, defender.productionDamage + 1);
+        }
+        const harassDuration = defender.stats ? Math.max(1, 2 - Math.floor((defender.stats.scouting - 50) / 200)) : 2;
+        defender.harassedTurns = Math.min(4, defender.harassedTurns + harassDuration);
         gs.turnCommentaries.push(evt.commentary);
-        if (def.resources <= 100) { decisive = true; gs.turnCommentaries.push(`[중립] ${atk.name} 선수의 견제가 치명적!`); }
+        
+        if (defender.resources <= 100) {
+          decisive = true;
+          gs.turnCommentaries.push(`[중립] ${attacker.name} 선수의 견제가 치명적이었습니다! 상대 경제가 붕괴!`);
+        }
       } else {
-        atk.supply = Math.max(3, atk.supply - Math.round(hr.dmg / 60));
-        atk.resources = Math.max(0, atk.resources - hr.dmg * 0.5);
-        gs.turnCommentaries.push(`${def.name} 선수가 견제를 방어! ${atk.name} 선수 병력 피해!`);
+        // 견제 실패: 공격자가 병력/자원 피해
+        attacker.supply = Math.max(3, attacker.supply - Math.round(harassResult.dmg / 60));
+        attacker.resources = Math.max(0, attacker.resources - harassResult.dmg * 0.5);
+        gs.turnCommentaries.push(`${defender.name} 선수가 ${attacker.name} 선수의 견제를 방어! 오히려 견제 병력이 큰 피해를 입었습니다.`);
       }
     } else if (evt.type === "resource_drain") {
-      const dr = resolveHarass(gs, evt.playerId);
-      const dAtk = evt.playerId === 1 ? gs.player1 : gs.player2;
-      const dDef = evt.playerId === 1 ? gs.player2 : gs.player1;
-      if (dr.success) {
-        dDef.resources = Math.max(0, dDef.resources - dr.dmg * 0.7);
-        dDef.harassedTurns = Math.min(4, dDef.harassedTurns + 1);
+      const drainResult = resolveHarass(gs, evt.playerId);
+      const drainAttacker = evt.playerId === 1 ? gs.player1 : gs.player2;
+      const drainDefender = evt.playerId === 1 ? gs.player2 : gs.player1;
+      if (drainResult.success) {
+        drainDefender.resources = Math.max(0, drainDefender.resources - drainResult.dmg * 0.7);
+        drainDefender.harassedTurns = Math.min(4, drainDefender.harassedTurns + 1);
         gs.turnCommentaries.push(evt.commentary);
       } else {
-        dAtk.supply = Math.max(3, dAtk.supply - Math.round(dr.dmg / 80));
-        gs.turnCommentaries.push(`${dDef.name} 선수가 자원 견제를 방어!`);
+        drainAttacker.supply = Math.max(3, drainAttacker.supply - Math.round(drainResult.dmg / 80));
+        gs.turnCommentaries.push(`${drainDefender.name} 선수가 자원 견제를 방어했습니다.`);
       }
     } else if (evt.type === "multi_destroy") {
-      const mAtk = evt.playerId === 1 ? gs.player1 : gs.player2;
-      const mDef = evt.playerId === 1 ? gs.player2 : gs.player1;
-      if (Math.random() < 0.35 && !mDef.frontBaseDestroyed) {
-        mDef.frontBaseDestroyed = true;
-        mDef.resources = Math.max(0, mDef.resources * 0.5);
-        mDef.supply = Math.max(3, mDef.supply * 0.8);
-        gs.turnCommentaries.push(`${mAtk.name} 선수가 앞마당 파괴! 자원/병력 큰 타격!`);
-      } else if (mDef.multiCount > 1) {
-        mDef.multiCount--;
-        mDef.resources = Math.max(0, mDef.resources * 0.6);
-        mDef.supply = Math.max(3, mDef.supply * 0.75);
-        gs.turnCommentaries.push(`${mAtk.name} 선수가 멀티 파괴! (멀티 ${mDef.multiCount}개)`);
+      // 멀티/앞마당 파괴: 자원 수급량이 해당 멀티 이전으로 복귀
+      const destroyFront = Math.random() < 0.35;
+      const atkPlayer = evt.playerId === 1 ? gs.player1 : gs.player2;
+      const defPlayer = evt.playerId === 1 ? gs.player2 : gs.player1;
+      
+      if (destroyFront && !defPlayer.frontBaseDestroyed) {
+        defPlayer.frontBaseDestroyed = true;
+        defPlayer.resources = Math.max(0, defPlayer.resources * 0.5);
+        defPlayer.supply = Math.max(3, defPlayer.supply * 0.8);
+        gs.turnCommentaries.push(`${atkPlayer.name} 선수가 ${defPlayer.name} 선수의 앞마당을 파괴! 자원 수급과 병력에 큰 타격!`);
+      } else if (defPlayer.multiCount > 1) {
+        defPlayer.multiCount--;
+        defPlayer.resources = Math.max(0, defPlayer.resources * 0.6);
+        defPlayer.supply = Math.max(3, defPlayer.supply * 0.75);
+        gs.turnCommentaries.push(`${atkPlayer.name} 선수가 ${defPlayer.name} 선수의 멀티를 파괴! 자원 수급이 크게 줄었습니다. (멀티 ${defPlayer.multiCount}개)`);
       } else {
-        mDef.baseHealth -= 25 + Math.random() * 25;
-        mDef.resources = Math.max(0, mDef.resources * 0.4);
-        mDef.supply = Math.max(3, mDef.supply * 0.5);
-        gs.turnCommentaries.push(`${mAtk.name} 선수가 본진 공격! 심각한 피해!`);
-        if (mDef.baseHealth <= 0) {
-          gs.gameEnded = true; gs.winner = mAtk.id;
-          gs.turnCommentaries.push(`${mDef.name} 선수 본진 파괴! GG!`);
+        // 본진 공격
+        defPlayer.baseHealth -= 25 + Math.random() * 25;
+        defPlayer.resources = Math.max(0, defPlayer.resources * 0.4);
+        defPlayer.supply = Math.max(3, defPlayer.supply * 0.5);
+        gs.turnCommentaries.push(`${atkPlayer.name} 선수가 ${defPlayer.name} 선수의 본진을 공격! 심각한 피해!`);
+        if (defPlayer.baseHealth <= 0) {
+          gs.gameEnded = true;
+          gs.winner = atkPlayer.id;
+          gs.turnCommentaries.push(`${defPlayer.name} 선수의 본진이 파괴되었습니다! ${atkPlayer.name} 선수 승리! GG!`);
           return;
         }
       }
     } else if (evt.type === "production_hit") {
-      const hDef = evt.playerId === 1 ? gs.player2 : gs.player1;
-      hDef.productionDamage = Math.min(3, hDef.productionDamage + 1);
-      hDef.resources = Math.max(0, hDef.resources - 200);
-      if (hDef.productionFacilities > 1 && Math.random() < 0.25) {
-        // 생산건물 1개 파괴
-        const blds = Object.entries(hDef.productionBuildings).filter(([, c]) => c > 0);
-        if (blds.length > 0) {
-          const [bName] = blds[Math.floor(Math.random() * blds.length)];
-          hDef.productionBuildings[bName]--;
-          hDef.productionFacilities--;
-          gs.turnCommentaries.push(`생산건물 ${bName} 파괴! (남은 ${hDef.productionFacilities}개)`);
-        }
+      const hitPlayer = evt.playerId === 1 ? gs.player2 : gs.player1;
+      hitPlayer.productionDamage = Math.min(3, hitPlayer.productionDamage + 1);
+      hitPlayer.resources = Math.max(0, hitPlayer.resources - 200);
+      if (hitPlayer.productionFacilities > 1 && Math.random() < 0.25) {
+        hitPlayer.productionFacilities--;
+        gs.turnCommentaries.push(`생산건물이 파괴되었습니다! (남은 생산건물 ${hitPlayer.productionFacilities}개)`);
       }
       gs.turnCommentaries.push(evt.commentary);
     } else if (evt.type === "tech_upgrade") {
@@ -650,84 +579,116 @@ export function progressGame(gs: GameState): void {
   }
 
   // ── 유불리 계산 ──
-  let s1 = gs.player1.supply * 2.0 + gs.player1.resources / 80;
-  let s2 = gs.player2.supply * 2.0 + gs.player2.resources / 80;
-
-  // 유닛 조합 전투력 반영
-  const c1 = calcCompositionPower(gs.player1.unitComposition);
-  const c2 = calcCompositionPower(gs.player2.unitComposition);
-  s1 += c1 * 0.3;
-  s2 += c2 * 0.3;
-
-  // 프로토스 보정
-  if (gs.player1.race === 'protoss') s1 *= 1.12;
-  if (gs.player2.race === 'protoss') s2 *= 1.12;
-
-  // 종족전 + 맵 종족 유불리
-  const am = getMatchupBonus(gs.player1.race, gs.player2.race);
-  s1 *= am.p1; s2 *= am.p2;
+  let s1 = gs.player1.supply * 2.5 + gs.player1.resources / 60;
+  let s2 = gs.player2.supply * 2.5 + gs.player2.resources / 60;
+  
+  // 프로토스 유불리 보정
+  if (gs.player1.race === 'protoss') s1 *= 1.15;
+  if (gs.player2.race === 'protoss') s2 *= 1.15;
+  
+  // 종족전 밸런스
+  const advMatchup = getMatchupBonus(gs.player1.race, gs.player2.race);
+  s1 *= advMatchup.p1;
+  s2 *= advMatchup.p2;
+  
+  // 맵 종족 유불리
   if (gs.mapRaceAdvantage) {
-    const d = ((gs.mapRaceAdvantage[gs.player1.race] ?? 50) - (gs.mapRaceAdvantage[gs.player2.race] ?? 50)) / 200;
-    s1 *= 1 + d; s2 *= 1 - d;
+    const p1MapAdv = gs.mapRaceAdvantage[gs.player1.race] ?? 50;
+    const p2MapAdv = gs.mapRaceAdvantage[gs.player2.race] ?? 50;
+    const mapAdvDiff = (p1MapAdv - p2MapAdv) / 200;
+    s1 *= 1 + mapAdvDiff;
+    s2 *= 1 - mapAdvDiff;
   }
 
   // 능력치 보정
   if (gs.player1.stats) {
-    const ss = (gs.player1.stats.attack + gs.player1.stats.defense + gs.player1.stats.control + gs.player1.stats.strategy + gs.player1.stats.sense) / 5;
-    s1 *= 1 + (ss - 50) / 400;
+    const statSum = (gs.player1.stats.attack + gs.player1.stats.defense + gs.player1.stats.control + gs.player1.stats.strategy + gs.player1.stats.sense) / 5;
+    s1 *= 1 + (statSum - 50) / 400;
   }
   if (gs.player2.stats) {
-    const ss = (gs.player2.stats.attack + gs.player2.stats.defense + gs.player2.stats.control + gs.player2.stats.strategy + gs.player2.stats.sense) / 5;
-    s2 *= 1 + (ss - 50) / 400;
+    const statSum = (gs.player2.stats.attack + gs.player2.stats.defense + gs.player2.stats.control + gs.player2.stats.strategy + gs.player2.stats.sense) / 5;
+    s2 *= 1 + (statSum - 50) / 400;
   }
-
+  
   // 맵 특성 보정
   if (gs.mapTraits && gs.player1.stats && gs.player2.stats) {
     const mt = gs.mapTraits;
-    let b1 = 0, b2 = 0;
+    let mapBonus1 = 0, mapBonus2 = 0;
     if (mt.rushDistance <= 30) {
       const w = (30 - mt.rushDistance) / 30;
-      b1 += ((gs.player1.stats.harassment + gs.player1.stats.attack + gs.player1.stats.strategy) / 3 - 50) / 600 * w;
-      b2 += ((gs.player2.stats.harassment + gs.player2.stats.attack + gs.player2.stats.strategy) / 3 - 50) / 600 * w;
+      mapBonus1 += ((gs.player1.stats.harassment + gs.player1.stats.attack + gs.player1.stats.strategy) / 3 - 50) / 600 * w;
+      mapBonus2 += ((gs.player2.stats.harassment + gs.player2.stats.attack + gs.player2.stats.strategy) / 3 - 50) / 600 * w;
     }
     if (mt.resources > 55) {
       const w = (mt.resources - 55) / 45;
-      b1 += ((gs.player1.stats.massProduction + gs.player1.stats.defense + gs.player1.stats.sense) / 3 - 50) / 600 * w;
-      b2 += ((gs.player2.stats.massProduction + gs.player2.stats.defense + gs.player2.stats.sense) / 3 - 50) / 600 * w;
+      mapBonus1 += ((gs.player1.stats.massProduction + gs.player1.stats.defense + gs.player1.stats.sense) / 3 - 50) / 600 * w;
+      mapBonus2 += ((gs.player2.stats.massProduction + gs.player2.stats.defense + gs.player2.stats.sense) / 3 - 50) / 600 * w;
     }
     if (mt.complexity > 55) {
       const w = (mt.complexity - 55) / 45;
-      b1 += ((gs.player1.stats.sense + gs.player1.stats.control + gs.player1.stats.scouting) / 3 - 50) / 600 * w;
-      b2 += ((gs.player2.stats.sense + gs.player2.stats.control + gs.player2.stats.scouting) / 3 - 50) / 600 * w;
+      mapBonus1 += ((gs.player1.stats.sense + gs.player1.stats.control + gs.player1.stats.scouting) / 3 - 50) / 600 * w;
+      mapBonus2 += ((gs.player2.stats.sense + gs.player2.stats.control + gs.player2.stats.scouting) / 3 - 50) / 600 * w;
     }
-    s1 *= 1 + b1; s2 *= 1 + b2;
+    s1 *= 1 + mapBonus1;
+    s2 *= 1 + mapBonus2;
   }
-
+  
   const total = s1 + s2;
-  const raw = total > 0 ? (s1 / total) * 100 : 50;
-  const blend = Math.max(0, 1 - gs.turn / 15);
-  gs.player1Advantage = raw * (1 - blend) + 50 * blend;
+  const rawAdvantage = total > 0 ? (s1 / total) * 100 : 50;
+  const blendFactor = Math.max(0, 1 - gs.turn / 15);
+  gs.player1Advantage = rawAdvantage * (1 - blendFactor) + 50 * blendFactor;
 
-  // 게임 종료
-  if (gs.player1.baseHealth <= 0 || gs.player2.baseHealth <= 0) {
+  // ── 게임 종료 조건 ──
+  const endByAdvantage = gs.player1Advantage > 80 || gs.player1Advantage < 20;
+  const endByDecisive = decisive && (gs.player1Advantage > 70 || gs.player1Advantage < 30);
+  const p1Collapsed = gs.player1.supply <= 10 && gs.player1.resources <= 200;
+  const p2Collapsed = gs.player2.supply <= 10 && gs.player2.resources <= 200;
+  const endByCollapse = (p1Collapsed || p2Collapsed) && gs.turn >= 15;
+  // 본진 체력 0 이하
+  const p1BaseDead = gs.player1.baseHealth <= 0;
+  const p2BaseDead = gs.player2.baseHealth <= 0;
+  
+  if (p1BaseDead || p2BaseDead) {
     gs.gameEnded = true;
-    gs.winner = gs.player1.baseHealth <= 0 ? gs.player2.id : gs.player1.id;
-    const loser = gs.player1.baseHealth <= 0 ? gs.player1.name : gs.player2.name;
-    gs.turnCommentaries.push(`${loser} 선수 본진 파괴! GG!`);
-  } else if (gs.turn >= 120 || gs.player1Advantage > 80 || gs.player1Advantage < 20 ||
-    (decisive && (gs.player1Advantage > 70 || gs.player1Advantage < 30)) ||
-    ((gs.player1.supply <= 10 && gs.player1.resources <= 200) || (gs.player2.supply <= 10 && gs.player2.resources <= 200)) && gs.turn >= 15) {
+    gs.winner = p1BaseDead ? gs.player2.id : gs.player1.id;
+    const loser = p1BaseDead ? gs.player1.name : gs.player2.name;
+    const winner = p1BaseDead ? gs.player2.name : gs.player1.name;
+    gs.turnCommentaries.push(`${loser} 선수의 본진이 파괴되었습니다! ${winner} 선수 승리! GG!`);
+  } else if (gs.turn >= 120 || endByAdvantage || endByDecisive || endByCollapse) {
     gs.gameEnded = true;
     gs.winner = gs.player1Advantage > 50 ? gs.player1.id : gs.player2.id;
   }
 
+  // 턴별 해설
   const comms = generateTurnCommentary(gs, gs.player1.name, gs.player2.name);
   if (comms?.length) gs.turnCommentaries.push(...comms);
 
+  // 종료 해설
   if (gs.gameEnded) {
-    const end = generateGameEndCommentary(gs.player1.name, gs.player2.name, gs.winner === gs.player1.id);
+    const isP1Win = gs.winner === gs.player1.id;
+    const end = generateGameEndCommentary(gs.player1.name, gs.player2.name, isP1Win);
     if (end) gs.turnCommentaries.push(end);
   }
+}
+
+// ── 능력치 기반 확률 계산 ──
+
+function calcMultiExpandChance(p: PlayerState): number {
+  let chance = 0.12;
+  if (p.stats) {
+    chance += (p.stats.economy - 50) / 800;
+    chance += (p.stats.sense - 50) / 1000;
+  }
+  return Math.max(0.05, Math.min(0.25, chance));
+}
+
+function calcProductionBuildChance(p: PlayerState): number {
+  let chance = 0.10;
+  if (p.stats) {
+    chance += (p.stats.massProduction - 50) / 600;
+    chance += (p.stats.strategy - 50) / 1200;
+  }
+  return Math.max(0.05, Math.min(0.22, chance));
 }
 
 export function progressTurn(gs: GameState): void { progressGame(gs); }
