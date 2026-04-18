@@ -548,6 +548,26 @@ const questRouter = router({
     return progressList;
   }),
 
+  getRewardableCount: protectedProcedure.query(async ({ ctx }) => {
+    const player = await getPlayerByUserId(ctx.user.id);
+    if (!player) return 0;
+
+    await seedQuestsIfEmpty();
+    const allQuestsList = await getAllQuests();
+    let rewardableCount = 0;
+
+    for (const quest of allQuestsList) {
+      const prog = await getOrCreateQuestProgress(player.id, quest.id, quest.type);
+      
+      // 완료했지만 보상을 수령하지 않은 퀘스트
+      if (prog.completed === 1 && prog.rewardClaimed !== 1) {
+        rewardableCount++;
+      }
+    }
+
+    return rewardableCount;
+  }),
+
   claimReward: protectedProcedure
     .input(z.object({ questId: z.number().int() }))
     .mutation(async ({ ctx, input }) => {

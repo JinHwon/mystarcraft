@@ -154,9 +154,10 @@ export default function RankingPage() {
                         {' '}
                         <span className="text-red-400">{player.losses ?? 0}패</span>
                       </span>
-                      {/* 상대전적 표시 */}
-                      {currentPlayer && currentPlayer.id !== player.playerId && (
-                        <span className="text-center">
+                      {/* 센스 + 상대전적 표시 */}
+                      <div className="text-center flex flex-col items-center gap-1">
+                        <span className="text-sm text-slate-300">{player.sense}</span>
+                        {currentPlayer && currentPlayer.id !== player.playerId && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -167,11 +168,10 @@ export default function RankingPage() {
                           >
                             {selectedOpponent === player.playerId && headToHead
                               ? `${headToHead.wins}승 ${headToHead.losses}패`
-                              : "⚔️"}
+                              : "⚔️ 상대전적"}
                           </button>
-                        </span>
-                      )}
-                      <span className="text-center text-sm text-slate-300">{player.sense}</span>
+                        )}
+                      </div>
                       <span className="text-center text-sm text-slate-300">{player.control}</span>
                       <span className="text-center text-sm text-slate-300">{player.attack}</span>
                       <span className="text-center text-sm text-slate-300">{player.harass}</span>

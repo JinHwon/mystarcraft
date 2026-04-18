@@ -1,4 +1,5 @@
 import { trpc } from "@/lib/trpc";
+import { Badge } from "@/components/ui/badge";
 import { getLoginUrl } from "@/const";
 import { useLocation } from "wouter";
 import { useEffect, useState } from "react";
@@ -60,6 +61,9 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
   const navItems = getNavItems(user?.role === "admin");
   const [location, navigate] = useLocation();
   const { data: player, isLoading: playerLoading } = trpc.player.get.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
+  const { data: rewardableCount = 0 } = trpc.quest.getRewardableCount.useQuery(undefined, {
     enabled: isAuthenticated,
   });
 
@@ -187,6 +191,9 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
                 >
                   <Icon className="w-4 h-4 shrink-0" />
                   <span className="flex-1 text-left">{label}</span>
+                  {path === "/events" && rewardableCount > 0 && (
+                    <Badge variant="destructive" className="ml-auto text-xs h-5 px-1.5">{rewardableCount}</Badge>
+                  )}
                   {isActive && <ChevronRight className="w-3 h-3" />}
                 </button>
               );
@@ -291,6 +298,9 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
                 >
                   <Icon className="w-4 h-4 shrink-0" />
                   <span className="flex-1 text-left">{label}</span>
+                  {path === "/events" && rewardableCount > 0 && (
+                    <Badge variant="destructive" className="ml-auto text-xs h-5 px-1.5">{rewardableCount}</Badge>
+                  )}
                   {isActive && <ChevronRight className="w-3 h-3" />}
                 </button>
               );
