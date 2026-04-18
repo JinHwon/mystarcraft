@@ -25,6 +25,11 @@ export default function Events() {
   const quests = questsQuery.data ?? [];
   const progressList = progressQuery.data ?? [];
 
+  // getProgress 함수 먼저 정의
+  const getProgress = (questId: number) => {
+    return progressList.find((p) => p.questId === questId);
+  };
+
   const dailyQuests = quests
     .filter((q) => q.type === "daily")
     .sort((a, b) => a.sortOrder - b.sortOrder);
@@ -46,6 +51,11 @@ export default function Events() {
     return a.sortOrder - b.sortOrder;
   });
 
+<<<<<<< Updated upstream
+=======
+  // 이 부분의 getProgress 호출 제거 (이미 위에서 정의됨)
+
+>>>>>>> Stashed changes
   const handleClaim = async (questId: number) => {
     try {
       const result = await claimMutation.mutateAsync({ questId });
