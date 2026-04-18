@@ -550,7 +550,7 @@ export default function PracticePage() {
                           .filter((pi: any) => pi.item?.fatigueRecover && pi.item.fatigueRecover > 0)
                           .map((pi: any) => (
                             <Button
-                              key={pi.id}
+                              key={pi.playerItemId}
                               onClick={() => handleUseRecoveryItem(pi)}
                               disabled={playGameMutation.isPending || findOpponentMutation.isPending}
                               className="text-xs md:text-sm bg-green-600 hover:bg-green-700 disabled:opacity-50"

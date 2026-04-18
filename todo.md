@@ -379,3 +379,14 @@
 - [x] 피로도 회복템 시스템 개선 - 여러 개 구매 가능 (1개씩 카운팅), 보유 아이템에서 사용 가능, 사용 시 1개씩 소모
 - [x] 에너지 드링크 사용 오류 수정 - Practice.tsx handleUseRecoveryItem에서 playerItemId 사용
 - [x] 경기결과 화면 변경 - 팝업 방식에서 전체 페이지 방식으로 변경
+
+
+## 버그 수정 (v58.0) - Practice 페이지 에러
+
+- [ ] API Mutation 에러 수정 - HTML 응답이 JSON으로 파싱되는 문제 (서버 에러 응답)
+- [ ] React Key Prop 경고 수정 - PracticePage에서 리스트 렌더링 시 key prop 누락
+
+## 버그 수정 (v58.0) - Practice 페이지 에러 - 완료
+
+- [x] API Mutation 에러 수정 - server/routers.ts shop.useItem에 소유 검증 추가, 피로도 회복 로직 수정, 타입 안전성 개선
+- [x] React Key Prop 경고 수정 - Practice.tsx recovery item 버튼 key prop 수정 (pi.id → pi.playerItemId)

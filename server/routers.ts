@@ -57,7 +57,7 @@ import {
   getTotalGoldEarned,
   getPlayerGradeIndex,
 } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { players, playerItems, items } from "../drizzle/schema";
 import { storagePut } from "./storage";
 import { TRPCError } from "@trpc/server";
@@ -314,7 +314,9 @@ const shopRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "데이터베이스 연결 실패" });
       
-      const playerItem = await db.select().from(playerItems).where(eq(playerItems.id, input.playerItemId)).limit(1);
+      const playerItem = await db.select().from(playerItems).where(
+        and(eq(playerItems.id, input.playerItemId), eq(playerItems.playerId, player.id))
+      ).limit(1);
       if (!playerItem.length) throw new TRPCError({ code: "NOT_FOUND", message: "아이템을 찾을 수 없습니다" });
       
       const pi = playerItem[0];
@@ -325,7 +327,9 @@ const shopRouter = router({
       const playerData = await db.select().from(players).where(eq(players.id, player.id)).limit(1);
       if (!playerData.length) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
       
-      const newFatigue = Math.max(0, playerData[0].fatigue - item[0].fatigueRecover);
+      // 피로도 회복 (감소 아님)
+      const fatigueRecover = Number(item[0].fatigueRecover) || 0;
+      const newFatigue = Math.min(100, Math.max(0, playerData[0].fatigue - fatigueRecover));
       await db.update(players).set({ fatigue: newFatigue }).where(eq(players.id, player.id));
       
       // 아이템 사용 차감
