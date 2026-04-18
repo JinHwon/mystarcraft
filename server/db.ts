@@ -965,6 +965,26 @@ export async function seedQuestsIfEmpty() {
   const db = await getDb();
   if (!db) return;
 
+  // 중복 퀘스트 정리: 같은 title이 여러 개 있으면 가장 작은 id만 남기고 삭제
+  const allExisting = await db.select({ id: quests.id, title: quests.title }).from(quests);
+  const titleMap = new Map<string, number[]>();
+  for (const q of allExisting) {
+    const ids = titleMap.get(q.title) || [];
+    ids.push(q.id);
+    titleMap.set(q.title, ids);
+  }
+  for (const [, ids] of titleMap) {
+    if (ids.length > 1) {
+      ids.sort((a, b) => a - b);
+      const duplicateIds = ids.slice(1); // 첫 번째(가장 작은 id)만 남김
+      for (const dupId of duplicateIds) {
+        // 해당 퀘스트의 진행도도 삭제
+        await db.delete(playerQuestProgress).where(eq(playerQuestProgress.questId, dupId));
+        await db.delete(quests).where(eq(quests.id, dupId));
+      }
+    }
+  }
+
   // 기존 퀘스트 제목 목록 조회
   const existingQuests = await db.select({ title: quests.title }).from(quests);
   const existingTitles = new Set(existingQuests.map(q => q.title));

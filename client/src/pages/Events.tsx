@@ -34,6 +34,14 @@ export default function Events() {
 
   const displayedQuests = activeTab === "daily" ? dailyQuests : cumulativeQuests;
 
+  // 보상 수령한 퀘스트를 아래로 정렬
+  const sortedQuests = [...displayedQuests].sort((a, b) => {
+    const aClaimed = getProgress(a.id)?.rewardClaimed ? 1 : 0;
+    const bClaimed = getProgress(b.id)?.rewardClaimed ? 1 : 0;
+    if (aClaimed !== bClaimed) return aClaimed - bClaimed;
+    return a.sortOrder - b.sortOrder;
+  });
+
   const getProgress = (questId: number) => {
     return progressList.find((p) => p.questId === questId);
   };
@@ -43,7 +51,7 @@ export default function Events() {
       const result = await claimMutation.mutateAsync({ questId });
       const reward = REWARD_LABELS[result.rewardType];
       toast.success(`${reward?.icon ?? "🎁"} ${reward?.label ?? "보상"} +${result.rewardValue} 획득!`);
-      progressQuery.refetch();
+      await progressQuery.refetch();
     } catch (error: any) {
       toast.error(error?.message ?? "보상 수령 실패");
     }
@@ -129,7 +137,7 @@ export default function Events() {
 
       {/* 퀘스트 목록 */}
       <div className="space-y-3">
-        {displayedQuests.map((quest) => {
+        {sortedQuests.map((quest) => {
           const progress = getProgress(quest.id);
           const progressValue = progress?.progress ?? 0;
           const isCompleted = progress?.completed ?? false;
@@ -269,7 +277,7 @@ export default function Events() {
           );
         })}
 
-        {displayedQuests.length === 0 && (
+        {sortedQuests.length === 0 && (
           <div className="text-center py-12 text-gray-500">
             등록된 퀘스트가 없습니다
           </div>

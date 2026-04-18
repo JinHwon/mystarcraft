@@ -871,7 +871,8 @@ const practiceRouter = router({
         opponentFatigue,
         "balanced",
         playerStatsForSim,
-        aiStatsForSim
+        aiStatsForSim,
+        { rushDistance: map.rushDistance, resources: map.resources, complexity: map.complexity }
       );
 
       const winnerId = simulation.winnerId;

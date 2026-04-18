@@ -85,7 +85,8 @@ export async function simulateGame(
   player2Fatigue: number,
   mapCharacteristic: MapCharacteristic = "balanced",
   overridePlayer1Stats?: Record<StatKey, number>,
-  overridePlayer2Stats?: Record<StatKey, number>
+  overridePlayer2Stats?: Record<StatKey, number>,
+  mapTraits?: { rushDistance: number; resources: number; complexity: number }
 ): Promise<GameSimulationResult> {
   // 선수 능력치 조회 (override가 있으면 사용)
   let player1StatsRaw = overridePlayer1Stats || null;
@@ -120,7 +121,9 @@ export async function simulateGame(
     player2Name,
     player2Race,
     player1EffectiveStats,
-    player2EffectiveStats
+    player2EffectiveStats,
+    mapTraits,
+    mapRaceAdvantage
   );
 
   // 게임 진행
