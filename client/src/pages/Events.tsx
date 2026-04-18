@@ -34,6 +34,10 @@ export default function Events() {
 
   const displayedQuests = activeTab === "daily" ? dailyQuests : cumulativeQuests;
 
+  const getProgress = (questId: number) => {
+    return progressList.find((p) => p.questId === questId);
+  };
+
   // 보상 수령한 퀘스트를 아래로 정렬
   const sortedQuests = [...displayedQuests].sort((a, b) => {
     const aClaimed = getProgress(a.id)?.rewardClaimed ? 1 : 0;
@@ -41,10 +45,6 @@ export default function Events() {
     if (aClaimed !== bClaimed) return aClaimed - bClaimed;
     return a.sortOrder - b.sortOrder;
   });
-
-  const getProgress = (questId: number) => {
-    return progressList.find((p) => p.questId === questId);
-  };
 
   const handleClaim = async (questId: number) => {
     try {
