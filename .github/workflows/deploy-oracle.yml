@@ -45,8 +45,16 @@ jobs:
           BRANCH: ${{ github.event.inputs.branch || 'main' }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "$ORACLE_SSH_KEY" > ~/.ssh/oracle_key
+          # 윈도우 줄바꿈(CRLF)·앞뒤 공백 제거 후 마지막 줄바꿈 보장
+          printf '%s\n' "$ORACLE_SSH_KEY" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | sed '/^$/d' > ~/.ssh/oracle_key
           chmod 600 ~/.ssh/oracle_key
+          # 키 형식 진단 (비밀 내용은 출력하지 않고 첫 줄 머리글과 줄 수만 표시)
+          echo "키 첫 줄: $(head -n1 ~/.ssh/oracle_key | grep -oE '^(-----BEGIN [A-Z ]+-----|PuTTY-User-Key-File-[0-9]+|ssh-[a-z0-9]+|ecdsa-[a-z0-9-]+)' || echo '알 수 없는 형식')"
+          echo "키 줄 수: $(wc -l < ~/.ssh/oracle_key)"
+          if ! ssh-keygen -y -f ~/.ssh/oracle_key > /dev/null 2>&1; then
+            echo "::error::ORACLE_SSH_KEY 를 개인키로 읽을 수 없습니다. -----BEGIN ... PRIVATE KEY----- 부터 -----END ... PRIVATE KEY----- 까지 전체를 등록했는지 확인하세요 (.pub 공개키, PuTTY .ppk 는 사용 불가)."
+            exit 1
+          fi
           ssh-keyscan -T 15 -H "$ORACLE_HOST" >> ~/.ssh/known_hosts 2>/dev/null
           ssh -i ~/.ssh/oracle_key -o ServerAliveInterval=30 "$ORACLE_USER@$ORACLE_HOST" \
             "BRANCH='$BRANCH' DOMAIN='mystarcraft.duckdns.org' bash -s" < deploy/remote-deploy.sh
