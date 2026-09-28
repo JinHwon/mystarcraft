@@ -44,23 +44,30 @@ ok "node $(node -v), pnpm $(pnpm -v), pm2 $(pm2 -v)"
 
 step 2/8 "MySQL 컨테이너 시작"
 sudo docker compose -f deploy/docker-compose.yml --env-file .env up -d
-echo -n "MySQL 준비 대기"
-for i in $(seq 1 60); do
-  if sudo docker exec mystarcraft-mysql mysqladmin ping -h 127.0.0.1 --silent 2>/dev/null; then break; fi
-  echo -n "."; sleep 2
+echo "MySQL 준비 대기 (작은 서버는 최초 초기화에 몇 분 걸릴 수 있음)"
+MYSQL_READY=""
+for i in $(seq 1 150); do
+  if sudo docker exec mystarcraft-mysql mysql -u"${MYSQL_USER:-mystarcraft}" -p"$MYSQL_PASSWORD" -e "SELECT 1" "${MYSQL_DATABASE:-mystarcraft}" >/dev/null 2>&1; then MYSQL_READY=1; break; fi
+  [ $((i % 15)) -eq 0 ] && echo "  ...대기 중 ($((i * 4))초)"
+  sleep 4
 done
-echo; ok "MySQL 실행 중 (127.0.0.1:${MYSQL_PORT:-3307})"
+[ -n "$MYSQL_READY" ] || die "MySQL 이 10분 안에 준비되지 않았습니다 - sudo docker logs mystarcraft-mysql 로 확인하세요"
+ok "MySQL 실행 중 (127.0.0.1:${MYSQL_PORT:-3307})"
 
 step 3/8 "의존성 설치"
 pnpm install --frozen-lockfile < /dev/null
 ok "완료"
 
 step 4/8 "DB 테이블 생성 (drizzle-kit push)"
-pnpm db:sync
+pnpm db:sync < /dev/null
 ok "완료"
 
 step 5/8 "빌드"
-pnpm build
+if [ -n "${PREBUILT_DIST:-}" ] && [ -f "$PREBUILT_DIST" ]; then
+  rm -rf dist && tar xzf "$PREBUILT_DIST" && echo "GitHub 에서 빌드된 결과 사용"
+else
+  pnpm build
+fi
 mkdir -p "${UPLOAD_DIR:-uploads}"
 ok "완료"
 
@@ -73,8 +80,12 @@ fi
 pm2 save
 # 서버 재부팅 시 pm2 자동 시작 (이미 등록돼 있으면 그대로)
 sudo env PATH="$PATH" "$(command -v pm2)" startup systemd -u "$USER" --hp "$HOME" >/dev/null || true
-sleep 3
-curl -fsS "http://127.0.0.1:${PORT}/api/health" >/dev/null || die "헬스체크 실패 - pm2 logs mystarcraft 로 확인하세요"
+HEALTHY=""
+for i in $(seq 1 30); do
+  if curl -fsS "http://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1; then HEALTHY=1; break; fi
+  sleep 2
+done
+[ -n "$HEALTHY" ] || { pm2 logs mystarcraft --lines 40 --nostream; die "헬스체크 실패 - 위 로그를 확인하세요"; }
 ok "http://127.0.0.1:${PORT} 에서 실행 중"
 
 step 7/8 "nginx 설정"
