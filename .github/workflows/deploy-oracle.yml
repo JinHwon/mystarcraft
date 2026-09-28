@@ -55,8 +55,23 @@ jobs:
             echo "::error::ORACLE_SSH_KEY 를 개인키로 읽을 수 없습니다. -----BEGIN ... PRIVATE KEY----- 부터 -----END ... PRIVATE KEY----- 까지 전체를 등록했는지 확인하세요 (.pub 공개키, PuTTY .ppk 는 사용 불가)."
             exit 1
           fi
-          ssh-keyscan -T 15 -H "$ORACLE_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-          ssh -i ~/.ssh/oracle_key -o ServerAliveInterval=30 "$ORACLE_USER@$ORACLE_HOST" \
+          # 키 지문 (비밀 아님) - 서버 ~/.ssh/authorized_keys 에 있는 키와 비교용
+          echo "키 지문: $(ssh-keygen -l -f ~/.ssh/oracle_key | awk '{print $2, $NF}')"
+          ssh-keyscan -T 15 -H "$ORACLE_HOST" >> ~/.ssh/known_hosts 2>/dev/null || echo "⚠ 서버 호스트키 조회 실패 (주소/22포트 확인)"
+          # 접속 가능한 계정 찾기 (지정 계정 → ubuntu → opc)
+          LOGIN_USER=""
+          for u in "$ORACLE_USER" ubuntu opc; do
+            if ssh -i ~/.ssh/oracle_key -o BatchMode=yes -o ConnectTimeout=15 "$u@$ORACLE_HOST" true 2>/dev/null; then
+              LOGIN_USER="$u"; break
+            fi
+            echo "✗ $u 계정으로 접속 거절됨"
+          done
+          if [ -z "$LOGIN_USER" ]; then
+            echo "::error::서버가 이 키를 거절했습니다. ORACLE_HOST 가 이 키로 접속하는 서버 주소인지, 키가 그 서버용인지 확인하세요."
+            exit 1
+          fi
+          echo "✓ $LOGIN_USER 계정으로 접속 성공"
+          ssh -i ~/.ssh/oracle_key -o ServerAliveInterval=30 "$LOGIN_USER@$ORACLE_HOST" \
             "BRANCH='$BRANCH' DOMAIN='mystarcraft.duckdns.org' bash -s" < deploy/remote-deploy.sh
 
       - name: Health check
