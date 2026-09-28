@@ -121,7 +121,9 @@ export default function Home() {
               <Sword className="w-4 md:w-5 h-4 md:h-5 mr-2" />
               지금 시작하기
             </Button>
-            <p className="text-xs text-muted-foreground">Manus 계정으로 로그인하여 시작하세요</p>
+            <p className="text-xs text-muted-foreground">
+              {getLoginUrl() === "/login" ? "아이디로 로그인하거나 회원가입하여 시작하세요" : "Manus 계정으로 로그인하여 시작하세요"}
+            </p>
           </div>
         </div>
 

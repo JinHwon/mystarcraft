@@ -132,6 +132,8 @@ const playerRouter = router({
         race: input.race,
         photo: input.photoUrl || undefined,
       });
+      // 능력치 행을 바로 만들어 두어야 다른 선수의 상대 매칭 대상에 포함된다
+      await ensurePlayerStats(playerId);
       return { playerId };
     }),
 
@@ -139,7 +141,7 @@ const playerRouter = router({
     .input(
       z.object({
         base64: z.string(),
-        mimeType: z.string().default("image/jpeg"),
+        mimeType: z.string().regex(/^image\/(png|jpe?g|gif|webp)$/, "지원하지 않는 이미지 형식입니다").default("image/jpeg"),
       })
     )
     .mutation(async ({ ctx, input }) => {

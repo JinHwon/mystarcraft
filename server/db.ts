@@ -1,10 +1,21 @@
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, items, playerItems, players, playerStats, users, events, maps, games, gameResults, quests, playerQuestProgress } from "../drizzle/schema";
+import { InsertUser, items, playerItems, players, playerStats, users, events, maps, games, gameResults, quests, playerQuestProgress, localCredentials } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { StatKey } from "@shared/gameConstants";
 import { desc, eq, and, ne, sql } from "drizzle-orm";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+
+/**
+ * MySQL DATETIME/TIMESTAMP 형식(UTC, "YYYY-MM-DD HH:MM:SS")으로 변환
+ * MySQL 8은 ISO 문자열의 "T"/"Z"를 거부하므로 저장 전에 변환한다.
+ */
+export function toMysqlDatetime(value: Date | string | null | undefined): string | null | undefined {
+  if (value === null || value === undefined || value === "") return value as null | undefined;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return value as string;
+  return date.toISOString().slice(0, 19).replace("T", " ");
+}
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
@@ -45,6 +56,38 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     console.error("[Database] Failed to upsert user:", error);
     throw error;
   }
+}
+
+/**
+ * 자체 로그인 계정 생성. 중복 아이디면 false 반환 (기존 계정을 덮어쓰지 않도록 upsert 대신 insert 사용)
+ */
+export async function createLocalUser(openId: string, name: string, passwordHash: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  try {
+    await db.transaction(async tx => {
+      await tx.insert(localCredentials).values({ openId, passwordHash });
+      await tx.insert(users).values({
+        openId,
+        name,
+        loginMethod: "local",
+        role: openId === ENV.ownerOpenId ? "admin" : "user",
+        lastSignedIn: new Date(),
+      });
+    });
+    return true;
+  } catch (error: any) {
+    const code = error?.code ?? error?.cause?.code;
+    if (code === "ER_DUP_ENTRY") return false;
+    throw error;
+  }
+}
+
+export async function getLocalPasswordHash(openId: string): Promise<string | null> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.select().from(localCredentials).where(eq(localCredentials.openId, openId)).limit(1);
+  return result[0]?.passwordHash ?? null;
 }
 
 export async function createPlayer(userId: number, playerData: { name: string; race: string; photo?: string }): Promise<number> {
@@ -370,7 +413,7 @@ export async function recoverFatigueIfNeeded(playerId: number) {
     // KST 기준 새로운 날이므로 피로도 회복
     await db
       .update(players)
-      .set({ fatigue: 100, lastFatigueRecovery: now.toISOString() })
+      .set({ fatigue: 100, lastFatigueRecovery: toMysqlDatetime(now)! })
       .where(eq(players.id, playerId));
   }
 }
@@ -500,8 +543,8 @@ export async function createEvent(eventData: any) {
   if (!db) throw new Error("Database not available");
   const normalizedData = {
     ...eventData,
-    startTime: eventData.startTime instanceof Date ? eventData.startTime.toISOString() : eventData.startTime,
-    endTime: eventData.endTime instanceof Date ? eventData.endTime.toISOString() : eventData.endTime,
+    startTime: toMysqlDatetime(eventData.startTime),
+    endTime: toMysqlDatetime(eventData.endTime),
   };
   const result = await db.insert(events).values(normalizedData);
   return Number((result as any)[0]?.insertId ?? (result as any).insertId);
@@ -512,8 +555,8 @@ export async function updateEvent(eventId: number, eventData: any) {
   if (!db) throw new Error("Database not available");
   const normalizedData = {
     ...eventData,
-    startTime: eventData.startTime instanceof Date ? eventData.startTime.toISOString() : eventData.startTime,
-    endTime: eventData.endTime instanceof Date ? eventData.endTime.toISOString() : eventData.endTime,
+    startTime: toMysqlDatetime(eventData.startTime),
+    endTime: toMysqlDatetime(eventData.endTime),
   };
   await db.update(events).set(normalizedData).where(eq(events.id, eventId));
 }
@@ -596,7 +639,7 @@ export async function getGameById(gameId: number) {
 export async function completeGame(gameId: number, winnerId: number, player1Score: number, player2Score: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(games).set({ winnerId, player1ActualScore: player1Score, player2ActualScore: player2Score, completedAt: new Date().toISOString() }).where(eq(games.id, gameId));
+  await db.update(games).set({ winnerId, player1ActualScore: player1Score, player2ActualScore: player2Score, completedAt: toMysqlDatetime(new Date())! }).where(eq(games.id, gameId));
 }
 
 export async function createGameResult(resultData: any) {
@@ -701,9 +744,10 @@ export async function findOpponentByDifficulty(difficulty: string, currentPlayer
       .where(eq(playerStats.playerId, opponent.id))
       .limit(1);
     
-    if (stats.length === 0) continue;
-    
-    const totalStats = STAT_KEYS.reduce((sum: number, key: string) => sum + ((stats[0] as any)[key] || 0), 0);
+    // 능력치 행이 아직 없는 선수는 초기 능력치(0)로 간주
+    const totalStats = stats.length === 0
+      ? 0
+      : STAT_KEYS.reduce((sum: number, key: string) => sum + ((stats[0] as any)[key] || 0), 0);
     const gradeIndex = calcGradeIndex(totalStats);
     
     if (gradeIndex >= range.minIndex && gradeIndex <= range.maxIndex) {

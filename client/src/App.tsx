@@ -5,6 +5,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
+import Login from "./pages/Login";
 import CreatePlayer from "./pages/CreatePlayer";
 import PlayerProfile from "./pages/PlayerProfile";
 import Shop from "./pages/Shop";
@@ -21,6 +22,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/login" component={Login} />
       <Route path="/create-player" component={CreatePlayer} />
       <Route path="/profile">
         <GameLayout>

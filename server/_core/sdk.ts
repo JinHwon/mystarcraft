@@ -171,7 +171,8 @@ class SDKServer {
     return this.signSession(
       {
         openId,
-        appId: ENV.appId,
+        // 단독 배포(VITE_APP_ID 미설정) 시에도 세션 검증이 통과하도록 기본값 사용
+        appId: ENV.appId || "mystarcraft",
         name: options.name || "",
       },
       options

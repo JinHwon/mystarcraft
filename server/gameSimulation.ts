@@ -59,7 +59,8 @@ export function calculateWinProbability(
   const player1Total = calcTotalStats(player1Stats);
   const player2Total = calcTotalStats(player2Stats);
 
-  let player1WinProb = (player1Total / (player1Total + player2Total)) * 100;
+  const sumTotal = player1Total + player2Total;
+  let player1WinProb = sumTotal > 0 ? (player1Total / sumTotal) * 100 : 50;
 
   const player1Advantage = mapRaceAdvantage[player1Race] || 0;
   const player2Advantage = mapRaceAdvantage[player2Race] || 0;
