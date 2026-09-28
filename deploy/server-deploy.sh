@@ -25,22 +25,30 @@ git pull --ff-only origin "$BRANCH"
 echo -e "${GREEN}✓ 완료${NC}"
 
 echo -e "\n${BLUE}[2/5]${NC} 의존성 설치 중..."
-pnpm install --frozen-lockfile
+pnpm install --frozen-lockfile < /dev/null
 echo -e "${GREEN}✓ 완료${NC}"
 
 echo -e "\n${BLUE}[3/5]${NC} DB 스키마 반영 중..."
 # 데이터 손실이 생기는 변경이면 drizzle-kit 이 확인을 요청합니다 (자동 승인하지 않음)
-pnpm db:sync
+pnpm db:sync < /dev/null
 echo -e "${GREEN}✓ 완료${NC}"
 
 echo -e "\n${BLUE}[4/5]${NC} 빌드 중..."
-pnpm build
+if [ -n "${PREBUILT_DIST:-}" ] && [ -f "$PREBUILT_DIST" ]; then
+  rm -rf dist && tar xzf "$PREBUILT_DIST" && echo "GitHub 에서 빌드된 결과 사용"
+else
+  pnpm build
+fi
 echo -e "${GREEN}✓ 완료${NC}"
 
 echo -e "\n${BLUE}[5/5]${NC} 백엔드 재시작 중..."
 pm2 restart mystarcraft --update-env
-sleep 3
-if curl -fsS "http://127.0.0.1:${PORT}/api/health" >/dev/null; then
+HEALTHY=""
+for i in $(seq 1 30); do
+  if curl -fsS "http://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1; then HEALTHY=1; break; fi
+  sleep 2
+done
+if [ -n "$HEALTHY" ]; then
   echo -e "${GREEN}✓ 헬스체크 통과${NC}"
 else
   echo -e "${RED}❌ 헬스체크 실패${NC}"

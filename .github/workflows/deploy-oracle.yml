@@ -21,9 +21,13 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
       - name: Check secrets
         id: check
@@ -35,6 +39,14 @@ jobs:
             echo "::warning::ORACLE_HOST / ORACLE_SSH_KEY Secrets 가 없어 배포를 건너뜁니다."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Build (GitHub 러너에서 빌드해 작은 서버의 부담을 줄임)
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm build
+          tar czf /tmp/mystarcraft-dist.tgz dist
 
       - name: Deploy over SSH
         if: steps.check.outputs.skip != 'true'
@@ -71,8 +83,10 @@ jobs:
             exit 1
           fi
           echo "✓ $LOGIN_USER 계정으로 접속 성공"
+          # 스크립트와 빌드 결과를 서버에 복사한 뒤 표준입력을 닫고 실행
+          scp -i ~/.ssh/oracle_key deploy/remote-deploy.sh /tmp/mystarcraft-dist.tgz "$LOGIN_USER@$ORACLE_HOST:/tmp/"
           ssh -i ~/.ssh/oracle_key -o ServerAliveInterval=30 "$LOGIN_USER@$ORACLE_HOST" \
-            "BRANCH='$BRANCH' DOMAIN='mystarcraft.duckdns.org' bash -s" < deploy/remote-deploy.sh
+            "BRANCH='$BRANCH' DOMAIN='mystarcraft.duckdns.org' PREBUILT_DIST=/tmp/mystarcraft-dist.tgz bash /tmp/remote-deploy.sh < /dev/null"
 
       - name: Health check
         if: steps.check.outputs.skip != 'true'

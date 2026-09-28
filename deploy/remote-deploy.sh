@@ -12,10 +12,24 @@ BRANCH="${BRANCH:-main}"
 DOMAIN="${DOMAIN:-mystarcraft.duckdns.org}"
 APP_DIR="$HOME/mystarcraft"
 
-echo "▶ 서버: $(hostname) / 사용자: $(whoami) / 브랜치: $BRANCH / 도메인: $DOMAIN"
+# apt 설치 중 대화형 질문(서비스 재시작 등)으로 멈추지 않도록
+export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1
+# 단계별 시각 출력
+exec > >(while IFS= read -r line; do printf '[%s] %s\n' "$(date +%H:%M:%S)" "$line"; done) 2>&1
 
-command -v git >/dev/null || { sudo apt-get update -y && sudo apt-get install -y git; }
-command -v openssl >/dev/null || sudo apt-get install -y openssl
+echo "▶ 서버: $(hostname) / 사용자: $(whoami) / 브랜치: $BRANCH / 도메인: $DOMAIN"
+echo "▶ 메모리: $(free -m | awk '/Mem:/{print $2"MB 중 "$7"MB 사용 가능"}'), 스왑: $(free -m | awk '/Swap:/{print $2"MB"}'), CPU: $(nproc)코어, $(uname -m)"
+
+# 메모리가 작은 서버(1GB 등)에서 빌드가 멈추지 않도록 스왑 2GB 추가 (없을 때만)
+if [ "$(free -m | awk '/Swap:/{print $2}')" -lt 1024 ] && [ ! -f /swapfile ]; then
+  echo "▶ 스왑 2GB 생성"
+  sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
+  sudo chmod 600 /swapfile && sudo mkswap /swapfile >/dev/null && sudo swapon /swapfile
+  grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
+fi
+
+command -v git >/dev/null || { sudo -E apt-get update -y && sudo -E apt-get install -y git; }
+command -v openssl >/dev/null || sudo -E apt-get install -y openssl
 
 if [ ! -d "$APP_DIR/.git" ]; then
   echo "▶ 저장소 clone"
