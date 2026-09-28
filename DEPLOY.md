@@ -26,7 +26,22 @@ Demo_Trading 과 같은 구조로 배포합니다.
 | 오라클 방화벽 | 보안 목록(Security List)에서 80, 443 인바운드 허용 (Demo_Trading 용으로 이미 열려 있으면 그대로 사용) |
 | Vercel 계정 | GitHub `JinHwon/mystarcraft` 저장소 연결 |
 
-## 1. 오라클 서버 — 최초 1회
+## 자동 배포 (GitHub Actions) — 권장
+
+`main` 에 푸시하면 `.github/workflows/deploy-oracle.yml` 이 SSH 로 서버에 접속해 `deploy/remote-deploy.sh` 를 실행합니다.
+최초 실행 시 clone, `.env` 자동 생성(비밀번호 랜덤), 설치까지 모두 처리하고, 이후에는 업데이트 배포만 합니다.
+
+GitHub 저장소 → Settings → Secrets and variables → Actions → New repository secret:
+
+| 이름 | 값 |
+|---|---|
+| `ORACLE_HOST` | 오라클 서버 공인 IP |
+| `ORACLE_SSH_KEY` | 서버 접속용 개인키 파일 내용 전체 (`-----BEGIN` ~ `-----END` 포함) |
+| `ORACLE_USER` | (선택) 기본 `ubuntu` |
+
+등록 후 Actions 탭 → **Deploy to Oracle** → Run workflow. 아래 1, 3 단계는 수동으로 할 때만 필요합니다.
+
+## 1. 오라클 서버 — 최초 1회 (수동)
 
 ```bash
 ssh -i <키파일> ubuntu@<서버IP>

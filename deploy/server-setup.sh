@@ -70,6 +70,8 @@ else
   pm2 start deploy/ecosystem.config.cjs
 fi
 pm2 save
+# 서버 재부팅 시 pm2 자동 시작 (이미 등록돼 있으면 그대로)
+sudo env PATH="$PATH" "$(command -v pm2)" startup systemd -u "$USER" --hp "$HOME" >/dev/null || true
 sleep 3
 curl -fsS "http://127.0.0.1:${PORT}/api/health" >/dev/null || die "헬스체크 실패 - pm2 logs mystarcraft 로 확인하세요"
 ok "http://127.0.0.1:${PORT} 에서 실행 중"
