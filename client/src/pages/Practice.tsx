@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { RACE_COLORS, RACE_LABELS, DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, FATIGUE_MIN_TO_PLAY, calcFatigueStatPenalty } from "@shared/gameConstants";
+import { RACE_COLORS, RACE_LABELS, DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, FATIGUE_MIN_TO_PLAY, GAME_MAX_RESOURCES, calcFatigueStatPenalty } from "@shared/gameConstants";
 import { Loader2, X, ArrowLeft, User } from "lucide-react";
 import { STAT_LABELS } from "@shared/gameConstants";
 
@@ -132,6 +132,7 @@ export default function PracticePage() {
   const useItemMutation = trpc.shop.useItem.useMutation({
     onSuccess: (result) => {
       utils.player.get.invalidate();
+      utils.practice.estimateWinRate.invalidate();
       setGameState(prev => ({
         ...prev,
         playerFatigue: result.newFatigue,
@@ -142,6 +143,17 @@ export default function PracticePage() {
       console.error("아이템 사용 실패:", error);
     },
   });
+
+  // 실제 승률 (게임 엔진 반복 시뮬레이션 기반)
+  const winRateQuery = trpc.practice.estimateWinRate.useQuery(
+    {
+      gameId: gameState.gameId ?? 0,
+      aiOpponent: gameState.isAiOpponent && gameState.opponentStats
+        ? { race: (gameState.opponentRace || "terran") as "terran" | "zerg" | "protoss", stats: gameState.opponentStats }
+        : undefined,
+    },
+    { enabled: phase === "opponent" && !!gameState.gameId, staleTime: Infinity, refetchOnWindowFocus: false }
+  );
 
   const handleUseRecoveryItem = (playerItem: any) => {
     if (!playerItem || !playerItem.item?.fatigueRecover) return;
@@ -503,6 +515,59 @@ export default function PracticePage() {
                 </div>
               )}
 
+              {/* 능력치 비교 그래프 (내 능력치 vs 상대 능력치) */}
+              {gameState.opponentStats && (() => {
+                const myStats = calculatePlayerEffectiveStats()?.effectiveStats ?? gameState.playerEffectiveStats;
+                if (!myStats) return null;
+                const statKeys = Object.keys(STAT_LABELS) as (keyof typeof STAT_LABELS)[];
+                const scaleMax = Math.max(
+                  ...statKeys.map(k => Math.max(myStats[k] ?? 0, gameState.opponentStats?.[k] ?? 0)),
+                  1
+                );
+                const myTotal = statKeys.reduce((sum, k) => sum + (myStats[k] ?? 0), 0);
+                const oppTotal = statKeys.reduce((sum, k) => sum + (gameState.opponentStats?.[k] ?? 0), 0);
+                return (
+                  <Card className="bg-slate-800 border-slate-700 mb-4 md:mb-6">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm md:text-base text-white">능력치 비교</CardTitle>
+                      <div className="flex gap-4 text-[10px] md:text-xs">
+                        <span className="text-blue-400">● 나 (합계 {myTotal})</span>
+                        <span className="text-red-400">● {gameState.opponentName} (합계 {oppTotal})</span>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {statKeys.map(key => {
+                        const mine = myStats[key] ?? 0;
+                        const theirs = gameState.opponentStats?.[key] ?? 0;
+                        const diff = mine - theirs;
+                        return (
+                          <div key={key} className="grid grid-cols-[3.5rem_1fr_3rem] md:grid-cols-[4.5rem_1fr_3.5rem] items-center gap-2 text-[10px] md:text-xs">
+                            <span className="text-slate-300 font-semibold">{STAT_LABELS[key]}</span>
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-1">
+                                <div className="flex-1 bg-slate-700 rounded-full h-1.5 md:h-2">
+                                  <div className="bg-blue-500 h-1.5 md:h-2 rounded-full transition-all" style={{ width: `${(mine / scaleMax) * 100}%` }} />
+                                </div>
+                                <span className="w-8 text-right text-blue-300">{mine}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <div className="flex-1 bg-slate-700 rounded-full h-1.5 md:h-2">
+                                  <div className="bg-red-500 h-1.5 md:h-2 rounded-full transition-all" style={{ width: `${(theirs / scaleMax) * 100}%` }} />
+                                </div>
+                                <span className="w-8 text-right text-red-300">{theirs}</span>
+                              </div>
+                            </div>
+                            <span className={`text-right font-bold ${diff > 0 ? "text-green-400" : diff < 0 ? "text-red-400" : "text-slate-400"}`}>
+                              {diff > 0 ? `+${diff}` : diff}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+
               {/* 상대 정보 및 승률 */}
               <Card className="bg-slate-800 border-slate-700">
                 <CardHeader>
@@ -526,18 +591,29 @@ export default function PracticePage() {
                     </div>
                   )}
                   
-                  {gameState.winProbability !== undefined && (
+                  {gameState.gameId && (
                     <div>
                       <div className="flex justify-between text-xs md:text-sm text-slate-300 mb-1 md:mb-2">
-                        <span>승률</span>
-                        <span className="font-bold text-blue-400">{gameState.winProbability}%</span>
+                        <span>실제 승률</span>
+                        {winRateQuery.isFetching ? (
+                          <span className="flex items-center text-slate-400"><Loader2 className="w-3 h-3 mr-1 animate-spin" />계산 중...</span>
+                        ) : winRateQuery.data ? (
+                          <span className="font-bold text-blue-400">{winRateQuery.data.winRate.toFixed(1)}%</span>
+                        ) : (
+                          <span className="text-slate-500">-</span>
+                        )}
                       </div>
                       <div className="w-full bg-slate-700 rounded-full h-2 md:h-3">
                         <div
-                          className="bg-blue-500 h-2 md:h-3 rounded-full"
-                          style={{ width: `${gameState.winProbability}%` }}
+                          className="bg-blue-500 h-2 md:h-3 rounded-full transition-all"
+                          style={{ width: `${winRateQuery.data?.winRate ?? 0}%` }}
                         />
                       </div>
+                      {winRateQuery.data && (
+                        <p className="text-[10px] md:text-xs text-slate-500 mt-1">
+                          현재 피로도·착용 아이템·맵·종족 조건으로 경기를 {winRateQuery.data.runs}회 시뮬레이션한 결과입니다
+                        </p>
+                      )}
                     </div>
                   )}
                   
@@ -616,10 +692,7 @@ export default function PracticePage() {
       ...displayedTurns.map((t: any) => Math.max(t.player1Supply ?? 0, t.player2Supply ?? 0)),
       1
     );
-    const maxResources = Math.max(
-      ...displayedTurns.map((t: any) => Math.max(t.player1Resources ?? 0, t.player2Resources ?? 0)),
-      1
-    );
+    const maxResources = GAME_MAX_RESOURCES;
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 md:p-4">
@@ -795,32 +868,6 @@ export default function PracticePage() {
                   <div className="absolute top-1 right-1 flex gap-3 text-[10px]">
                     <span className="text-blue-400">● {player1Name}</span>
                     <span className="text-purple-400">● {player2Name}</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 자원 추이 그래프 */}
-          <Card className="bg-slate-800 border-slate-700 mt-3">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-slate-400">💰 자원 추이</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="relative h-24 md:h-32">
-                <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-[9px] text-slate-500 w-8">
-                  <span>{maxResources}</span>
-                  <span>{Math.round(maxResources / 2)}</span>
-                  <span>0</span>
-                </div>
-                <div className="ml-9 h-full relative overflow-hidden">
-                  <svg className="w-full h-full" viewBox={`0 0 ${Math.max(displayedTurns.length, 2)} ${maxResources}`} preserveAspectRatio="none">
-                    <polyline fill="none" stroke="#FBBF24" strokeWidth={maxResources * 0.02} points={displayedTurns.map((t: any, i: number) => `${i},${maxResources - (t.player1Resources ?? 0)}`).join(' ')} />
-                    <polyline fill="none" stroke="#F97316" strokeWidth={maxResources * 0.02} points={displayedTurns.map((t: any, i: number) => `${i},${maxResources - (t.player2Resources ?? 0)}`).join(' ')} />
-                  </svg>
-                  <div className="absolute top-1 right-1 flex gap-3 text-[10px]">
-                    <span className="text-yellow-400">● {player1Name}</span>
-                    <span className="text-orange-400">● {player2Name}</span>
                   </div>
                 </div>
               </div>

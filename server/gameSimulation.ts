@@ -69,6 +69,101 @@ export function calculateWinProbability(
   return Math.max(5, Math.min(95, Math.round(player1WinProb)));
 }
 
+type Race = "terran" | "zerg" | "protoss";
+type MapTraits = { rushDistance: number; resources: number; complexity: number };
+
+/**
+ * 게임 엔진을 끝까지 진행 (DB 접근 없음)
+ */
+function runSimulation(
+  player1Id: number, player1Name: string, player1Race: Race,
+  player1StatsRaw: Record<StatKey, number>, player1Fatigue: number,
+  player2Id: number, player2Name: string, player2Race: Race,
+  player2StatsRaw: Record<StatKey, number>, player2Fatigue: number,
+  mapRaceAdvantage: Record<string, number>,
+  mapTraits?: MapTraits
+): { gameState: GameState; turns: GameTurn[] } {
+  // 피로도 적용
+  const player1EffectiveStats = calcEffectiveStatsWithFatigue(player1StatsRaw, player1Fatigue);
+  const player2EffectiveStats = calcEffectiveStatsWithFatigue(player2StatsRaw, player2Fatigue);
+
+  const gameState = initializeGameState(
+    player1Id,
+    player1Name,
+    player1Race,
+    player2Id,
+    player2Name,
+    player2Race,
+    player1EffectiveStats,
+    player2EffectiveStats,
+    mapTraits,
+    mapRaceAdvantage
+  );
+
+  const turns: GameTurn[] = [];
+  const maxTurns = 120;
+
+  while (!gameState.gameEnded && turns.length < maxTurns) {
+    progressTurn(gameState);
+    turns.push(gameStateToTurnData(gameState));
+  }
+
+  if (!gameState.gameEnded) {
+    gameState.gameEnded = true;
+    gameState.winner = gameState.player1Advantage >= 50 ? gameState.player1.id : gameState.player2.id;
+  }
+
+  return { gameState, turns };
+}
+
+/** 패배 시 남는 병력/자원 비율 (10~20%) */
+export const LOSER_REMAIN_RATIO_MIN = 0.1;
+export const LOSER_REMAIN_RATIO_MAX = 0.2;
+
+/**
+ * 경기 종료 후 패자의 병력과 자원을 대폭 감소시키고 마지막 턴 데이터에 반영
+ */
+export function applyLoserPenalty(gameState: GameState, turns: GameTurn[]): void {
+  const loser = gameState.winner === gameState.player1.id ? gameState.player2 : gameState.player1;
+  const ratio = LOSER_REMAIN_RATIO_MIN + Math.random() * (LOSER_REMAIN_RATIO_MAX - LOSER_REMAIN_RATIO_MIN);
+  loser.supply = Math.floor(loser.supply * ratio);
+  loser.resources = Math.floor(loser.resources * ratio);
+
+  const last = turns[turns.length - 1];
+  const penaltyCommentary = `패배한 ${loser.name} 선수의 병력과 자원이 크게 무너졌습니다!`;
+  turns[turns.length - 1] = {
+    ...gameStateToTurnData(gameState),
+    commentaries: [...(last?.commentaries ?? []), penaltyCommentary],
+  };
+}
+
+/**
+ * 실제 게임 엔진을 여러 번 돌려 player1의 실제 승률(%)을 추정
+ * - playGame과 동일한 입력(아이템 반영 능력치, 피로도, 맵)을 사용
+ */
+export function estimateWinRate(
+  player1Stats: Record<StatKey, number>,
+  player2Stats: Record<StatKey, number>,
+  player1Race: Race,
+  player2Race: Race,
+  mapRaceAdvantage: Record<string, number>,
+  player1Fatigue: number,
+  player2Fatigue: number,
+  mapTraits?: MapTraits,
+  runs: number = 300
+): { winRate: number; runs: number } {
+  let wins = 0;
+  for (let i = 0; i < runs; i++) {
+    const { gameState } = runSimulation(
+      1, "P1", player1Race, player1Stats, player1Fatigue,
+      2, "P2", player2Race, player2Stats, player2Fatigue,
+      mapRaceAdvantage, mapTraits
+    );
+    if (gameState.winner === 1) wins++;
+  }
+  return { winRate: Math.round((wins / runs) * 1000) / 10, runs };
+}
+
 /**
  * 게임 시뮬레이션 실행
  */
@@ -108,37 +203,14 @@ export async function simulateGame(
     ) as Record<StatKey, number>;
   }
 
-  // 피로도 적용
-  const player1EffectiveStats = calcEffectiveStatsWithFatigue(player1StatsRaw, player1Fatigue);
-  const player2EffectiveStats = calcEffectiveStatsWithFatigue(player2StatsRaw, player2Fatigue);
-
-   // 게임 진행
-  const gameState = initializeGameState(
-    player1Id,
-    player1Name,
-    player1Race,
-    player2Id,
-    player2Name,
-    player2Race,
-    player1EffectiveStats,
-    player2EffectiveStats,
-    mapTraits,
-    mapRaceAdvantage
+  const { gameState, turns } = runSimulation(
+    player1Id, player1Name, player1Race, player1StatsRaw, player1Fatigue,
+    player2Id, player2Name, player2Race, player2StatsRaw, player2Fatigue,
+    mapRaceAdvantage, mapTraits
   );
 
-  // 게임 진행
-  const turns: GameTurn[] = [];
-  const maxTurns = 120;
-
-  while (!gameState.gameEnded && turns.length < maxTurns) {
-    progressTurn(gameState);
-    turns.push(gameStateToTurnData(gameState));
-  }
-
-  if (!gameState.gameEnded) {
-    gameState.gameEnded = true;
-    gameState.winner = gameState.player1Advantage >= 50 ? gameState.player1.id : gameState.player2.id;
-  }
+  // 패배 페널티: 경기 종료 후 패자의 병력과 자원을 대폭 감소
+  applyLoserPenalty(gameState, turns);
 
   // 최종 스코어 계산
   const player1FinalScore = Math.round(

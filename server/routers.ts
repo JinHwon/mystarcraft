@@ -42,6 +42,7 @@ import {
   getPlayerGameRecord,
   getPlayerGrade,
   ensurePlayerStats,
+  getPlayerById,
   applyGameStatChange,
   getRankingList,
   getHeadToHeadRecord,
@@ -63,7 +64,7 @@ import { storagePut } from "./storage";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, FATIGUE_MIN_TO_PLAY, MAPS, calcGradeIndex, calcTotalStats, STAT_KEYS, StatKey, calcFatigueStatPenalty } from "@shared/gameConstants";
-import { simulateGame, calculateWinProbability } from "./gameSimulation";
+import { simulateGame, calculateWinProbability, estimateWinRate } from "./gameSimulation";
 import { type MapCharacteristic } from "./buildSystem";
 import { generatePlayerActions, generateGameCommentary } from "./buildActions";
 import { calculateStatChanges, applyReverseSystem } from "./statDynamicSystem";
@@ -625,6 +626,28 @@ const questRouter = router({
     }),
 });
 
+/** 시뮬레이션용 선수 능력치 (기본 능력치 + 착용 아이템 부스트, 피로도 미적용) */
+async function getPlayerSimStats(playerId: number): Promise<Record<StatKey, number>> {
+  const playerStatsRaw = await getPlayerStats(playerId);
+  const statsForSim = Object.fromEntries(
+    STAT_KEYS.map(key => [key, (playerStatsRaw as any)?.[key] || 500])
+  ) as Record<StatKey, number>;
+
+  const equippedItems = await getPlayerItems(playerId);
+  for (const pi of equippedItems) {
+    if (pi.equipped !== 1 || pi.usageCount <= 0) continue;
+    const boosts = (typeof pi.item.statBoosts === 'string'
+      ? (() => { try { return JSON.parse(pi.item.statBoosts as string); } catch { return {}; } })()
+      : pi.item.statBoosts ?? {}) as Record<string, number>;
+    for (const [k, v] of Object.entries(boosts)) {
+      if (k in statsForSim && typeof v === 'number') {
+        (statsForSim as any)[k] = Math.min(1200, ((statsForSim as any)[k] || 0) + v);
+      }
+    }
+  }
+  return statsForSim;
+}
+
 // ── Practice Game Router ────────────────────────────────────────
 
 const practiceRouter = router({
@@ -632,6 +655,66 @@ const practiceRouter = router({
     await seedMapsIfEmpty();
     return await getAllMaps();
   }),
+
+  // 실제 승률: playGame과 동일한 조건으로 게임 엔진을 여러 번 돌려 추정
+  estimateWinRate: protectedProcedure
+    .input(z.object({
+      gameId: z.number().int(),
+      aiOpponent: z.object({
+        race: z.enum(["terran", "zerg", "protoss"]),
+        stats: z.record(z.string(), z.number()),
+      }).optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const game = await getGameById(input.gameId);
+      if (!game) throw new TRPCError({ code: "NOT_FOUND", message: "게임을 찾을 수 없습니다" });
+
+      const player = await getPlayerByUserId(ctx.user.id);
+      if (!player || (player.id !== game.player1Id && player.id !== game.player2Id)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "이 게임에 참여할 수 없습니다" });
+      }
+
+      const maps = await getAllMaps();
+      const map = maps.find(m => m.id === game.mapId);
+      if (!map) throw new TRPCError({ code: "NOT_FOUND", message: "맵을 찾을 수 없습니다" });
+      const raceAdvantage = typeof map.raceAdvantage === 'string'
+        ? JSON.parse(map.raceAdvantage)
+        : map.raceAdvantage;
+
+      const playerStatsForSim = await getPlayerSimStats(player.id);
+
+      let opponentStats: Record<StatKey, number>;
+      let opponentRace: "terran" | "zerg" | "protoss";
+      let opponentFatigue: number;
+      if (input.aiOpponent) {
+        opponentStats = Object.fromEntries(
+          STAT_KEYS.map(key => [key, input.aiOpponent!.stats[key] || 500])
+        ) as Record<StatKey, number>;
+        opponentRace = input.aiOpponent.race;
+        opponentFatigue = 100;
+      } else {
+        const opponentPlayerId = player.id === game.player1Id ? game.player2Id : game.player1Id;
+        const opponent = await getPlayerById(opponentPlayerId);
+        if (!opponent) throw new TRPCError({ code: "NOT_FOUND", message: "상대 선수를 찾을 수 없습니다" });
+        const raw = await getPlayerStats(opponent.id) || await ensurePlayerStats(opponent.id);
+        opponentStats = Object.fromEntries(
+          STAT_KEYS.map(key => [key, (raw as any)?.[key] || 500])
+        ) as Record<StatKey, number>;
+        opponentRace = opponent.race as "terran" | "zerg" | "protoss";
+        opponentFatigue = opponent.fatigue;
+      }
+
+      return estimateWinRate(
+        playerStatsForSim,
+        opponentStats,
+        player.race as "terran" | "zerg" | "protoss",
+        opponentRace,
+        raceAdvantage,
+        player.fatigue,
+        opponentFatigue,
+        { rushDistance: map.rushDistance, resources: map.resources, complexity: map.complexity }
+      );
+    }),
 
   findOpponent: protectedProcedure
     .input(z.object({
@@ -856,24 +939,7 @@ const practiceRouter = router({
 
       // 게임 시뮬레이션 실행
       // AI 상대인 경우 능력치를 직접 전달
-      const playerStatsRaw = await getPlayerStats(player.id);
-      const playerStatsForSim = Object.fromEntries(
-        STAT_KEYS.map(key => [key, (playerStatsRaw as any)?.[key] || 500])
-      ) as Record<StatKey, number>;
-      
-      // 착용 아이템 부스트 반영
-      const equippedItems = await getPlayerItems(player.id);
-      for (const pi of equippedItems) {
-        if (pi.equipped !== 1 || pi.usageCount <= 0) continue;
-        const boosts = (typeof pi.item.statBoosts === 'string'
-          ? (() => { try { return JSON.parse(pi.item.statBoosts as string); } catch { return {}; } })()
-          : pi.item.statBoosts ?? {}) as Record<string, number>;
-        for (const [k, v] of Object.entries(boosts)) {
-          if (k in playerStatsForSim && typeof v === 'number') {
-            (playerStatsForSim as any)[k] = Math.min(1200, ((playerStatsForSim as any)[k] || 0) + v);
-          }
-        }
-      }
+      const playerStatsForSim = await getPlayerSimStats(player.id);
       
       let aiStatsForSim: Record<StatKey, number> | undefined;
       if (isAiGame && input.aiOpponent) {
