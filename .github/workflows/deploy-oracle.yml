@@ -21,7 +21,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -71,8 +71,10 @@ jobs:
             exit 1
           fi
           echo "✓ $LOGIN_USER 계정으로 접속 성공"
+          # 스크립트를 서버에 복사한 뒤 표준입력을 닫고 실행 (설치 중 명령이 스크립트 내용을 읽어버리는 문제 방지)
+          ssh -i ~/.ssh/oracle_key "$LOGIN_USER@$ORACLE_HOST" "cat > /tmp/mystarcraft-remote-deploy.sh" < deploy/remote-deploy.sh
           ssh -i ~/.ssh/oracle_key -o ServerAliveInterval=30 "$LOGIN_USER@$ORACLE_HOST" \
-            "BRANCH='$BRANCH' DOMAIN='mystarcraft.duckdns.org' bash -s" < deploy/remote-deploy.sh
+            "BRANCH='$BRANCH' DOMAIN='mystarcraft.duckdns.org' bash /tmp/mystarcraft-remote-deploy.sh < /dev/null"
 
       - name: Health check
         if: steps.check.outputs.skip != 'true'

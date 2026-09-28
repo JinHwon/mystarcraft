@@ -10,6 +10,7 @@
 #    bash deploy/server-setup.sh
 # ========================================
 set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1
 
 GREEN='\033[0;32m'; BLUE='\033[0;34m'; RED='\033[0;31m'; NC='\033[0m'
 step() { echo -e "\n${BLUE}[$1]${NC} $2"; }
@@ -29,7 +30,7 @@ PORT="${PORT:-3100}"
 step 1/8 "필수 패키지 확인 (Node.js 22, pnpm, pm2, Docker, nginx, certbot)"
 if ! command -v node >/dev/null || [ "$(node -v | cut -d. -f1 | tr -d v)" -lt 20 ]; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-  sudo apt-get install -y nodejs
+  sudo -E apt-get install -y nodejs
 fi
 command -v pnpm >/dev/null || sudo npm install -g pnpm@10
 command -v pm2  >/dev/null || sudo npm install -g pm2
@@ -37,8 +38,8 @@ if ! command -v docker >/dev/null; then
   curl -fsSL https://get.docker.com | sudo sh
   sudo usermod -aG docker "$USER"
 fi
-command -v nginx   >/dev/null || sudo apt-get install -y nginx
-command -v certbot >/dev/null || sudo apt-get install -y certbot python3-certbot-nginx
+command -v nginx   >/dev/null || sudo -E apt-get install -y nginx
+command -v certbot >/dev/null || sudo -E apt-get install -y certbot python3-certbot-nginx
 ok "node $(node -v), pnpm $(pnpm -v), pm2 $(pm2 -v)"
 
 step 2/8 "MySQL 컨테이너 시작"
@@ -51,7 +52,7 @@ done
 echo; ok "MySQL 실행 중 (127.0.0.1:${MYSQL_PORT:-3307})"
 
 step 3/8 "의존성 설치"
-pnpm install --frozen-lockfile
+pnpm install --frozen-lockfile < /dev/null
 ok "완료"
 
 step 4/8 "DB 테이블 생성 (drizzle-kit push)"
