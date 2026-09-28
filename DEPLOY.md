@@ -70,7 +70,7 @@ pm2 logs mystarcraft
 
 ## 2. Vercel — 프론트엔드
 
-1. `vercel.json` 의 `YOUR-BACKEND-DOMAIN` 을 실제 백엔드 도메인으로 바꾸고 커밋/푸시
+1. `vercel.json` 의 백엔드 도메인이 `mystarcraft.duckdns.org` 로 설정되어 있는지 확인 (도메인을 바꾸면 여기도 수정)
 2. Vercel → **Add New Project** → `JinHwon/mystarcraft` 선택
 3. 설정은 `vercel.json` 이 지정하므로 그대로 둡니다
    - Install: `pnpm install --frozen-lockfile`
