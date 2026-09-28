@@ -2,6 +2,24 @@
 // Uses the Biz-provided storage proxy (Authorization: Bearer <token>)
 
 import { ENV } from './_core/env';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
+// Manus 스토리지 미설정 시 로컬 디스크에 저장 (오라클 서버 단독 배포용)
+export const LOCAL_UPLOAD_DIR = path.resolve(process.env.UPLOAD_DIR || 'uploads');
+
+function isForgeConfigured(): boolean {
+  return !!ENV.forgeApiUrl && !!ENV.forgeApiKey;
+}
+
+async function localStoragePut(relKey: string, data: Buffer | Uint8Array | string): Promise<{ key: string; url: string }> {
+  const key = appendHashSuffix(normalizeKey(relKey)).replace(/[^a-zA-Z0-9/_.-]/g, '_').replace(/\.\.+/g, '.');
+  const filePath = path.join(LOCAL_UPLOAD_DIR, key);
+  if (!filePath.startsWith(LOCAL_UPLOAD_DIR + path.sep)) throw new Error('Invalid storage key');
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, data);
+  return { key, url: `/api/uploads/${key}` };
+}
 
 type StorageConfig = { baseUrl: string; apiKey: string };
 
@@ -80,6 +98,7 @@ export async function storagePut(
   data: Buffer | Uint8Array | string,
   contentType = "application/octet-stream"
 ): Promise<{ key: string; url: string }> {
+  if (!isForgeConfigured()) return localStoragePut(relKey, data);
   const { baseUrl, apiKey } = getStorageConfig();
   const key = appendHashSuffix(normalizeKey(relKey));
   const uploadUrl = buildUploadUrl(baseUrl, key);

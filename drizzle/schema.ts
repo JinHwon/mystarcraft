@@ -1,20 +1,20 @@
-import { mysqlTable, mysqlSchema, AnyMySqlColumn, int, mysqlEnum, varchar, text, timestamp, json, index, tinyint } from "drizzle-orm/mysql-core"
+import { mysqlTable, mysqlSchema, AnyMySqlColumn, int, mysqlEnum, varchar, text, timestamp, json, index, uniqueIndex, tinyint } from "drizzle-orm/mysql-core"
 import { sql } from "drizzle-orm"
 
 export const events = mysqlTable("events", {
-	id: int().autoincrement().notNull(),
+	id: int().autoincrement().notNull().primaryKey(),
 	type: mysqlEnum(['exp_double','fatigue_unlimited','gold_double','stat_boost']).notNull(),
 	name: varchar({ length: 100 }).notNull(),
 	description: text(),
 	isActive: tinyint().default(0).notNull(),
 	startTime: timestamp({ mode: 'string' }),
 	endTime: timestamp({ mode: 'string' }),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
 export const gameResults = mysqlTable("game_results", {
-	id: int().autoincrement().notNull(),
+	id: int().autoincrement().notNull().primaryKey(),
 	gameId: int().notNull(),
 	playerId: int().notNull(),
 	opponentId: int().default(0).notNull(),
@@ -23,11 +23,11 @@ export const gameResults = mysqlTable("game_results", {
 	goldGained: int().default(0).notNull(),
 	statChanges: json().notNull(),
 	fatigueUsed: int().default(0).notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
 export const games = mysqlTable("games", {
-	id: int().autoincrement().notNull(),
+	id: int().autoincrement().notNull().primaryKey(),
 	player1Id: int().notNull(),
 	player2Id: int().notNull(),
 	mapId: int().notNull(),
@@ -38,24 +38,24 @@ export const games = mysqlTable("games", {
 	player1WinProbability: int().default(50).notNull(),
 	player1ActualScore: int().default(0).notNull(),
 	player2ActualScore: int().default(0).notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 	completedAt: timestamp({ mode: 'string' }),
 });
 
 export const items = mysqlTable("items", {
-	id: int().autoincrement().notNull(),
+	id: int().autoincrement().notNull().primaryKey(),
 	name: varchar({ length: 100 }).notNull(),
 	description: text(),
 	price: int().notNull(),
 	rarity: mysqlEnum(['common','rare','epic','legendary']).default('common').notNull(),
 	statBoosts: json().notNull(),
 	iconEmoji: varchar({ length: 10 }).default('⚔️').notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 	fatigueRecover: int().default(0).notNull(),
 });
 
 export const maps = mysqlTable("maps", {
-	id: int().autoincrement().notNull(),
+	id: int().autoincrement().notNull().primaryKey(),
 	name: varchar({ length: 100 }).notNull(),
 	description: text(),
 	raceAdvantage: json().notNull(),
@@ -63,20 +63,20 @@ export const maps = mysqlTable("maps", {
 	resources: int().default(50).notNull(),
 	complexity: int().default(50).notNull(),
 	iconEmoji: varchar({ length: 10 }).default('🗺️').notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
 export const playerItems = mysqlTable("player_items", {
-	id: int().autoincrement().notNull(),
+	id: int().autoincrement().notNull().primaryKey(),
 	playerId: int().notNull(),
 	itemId: int().notNull(),
 	equipped: tinyint().default(0).notNull(),
 	usageCount: int().default(20).notNull(),
-	purchasedAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	purchasedAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
 export const playerStats = mysqlTable("player_stats", {
-	id: int().autoincrement().notNull(),
+	id: int().autoincrement().notNull().primaryKey(),
 	playerId: int().notNull(),
 	sense: int().default(500).notNull(),
 	control: int().default(500).notNull(),
@@ -93,7 +93,7 @@ export const playerStats = mysqlTable("player_stats", {
 ]);
 
 export const players = mysqlTable("players", {
-	id: int().autoincrement().notNull(),
+	id: int().autoincrement().notNull().primaryKey(),
 	userId: int().notNull(),
 	name: varchar({ length: 100 }).notNull(),
 	race: mysqlEnum(['terran','zerg','protoss']).notNull(),
@@ -104,28 +104,39 @@ export const players = mysqlTable("players", {
 	statPoints: int().default(0).notNull(),
 	gold: int().default(1000).notNull(),
 	grade: mysqlEnum(['S','A','B','C','D']).default('D').notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	fatigue: int().default(100).notNull(),
-	lastFatigueRecovery: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	lastFatigueRecovery: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 },
 (table) => [
 	index("players_userId_unique").on(table.userId),
 ]);
 
 export const users = mysqlTable("users", {
-	id: int().autoincrement().notNull(),
+	id: int().autoincrement().notNull().primaryKey(),
 	openId: varchar({ length: 64 }).notNull(),
 	name: text(),
 	email: varchar({ length: 320 }),
 	loginMethod: varchar({ length: 64 }),
 	role: mysqlEnum(['user','admin']).default('user').notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	lastSignedIn: timestamp({ mode: 'date' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 },
 (table) => [
-	index("users_openId_unique").on(table.openId),
+	uniqueIndex("users_openId_unique").on(table.openId),
+]);
+
+// 자체 로그인(아이디/비밀번호) 자격 증명. users 행이 API로 노출돼도 해시가 새지 않도록 별도 테이블에 보관
+export const localCredentials = mysqlTable("local_credentials", {
+	id: int().autoincrement().notNull().primaryKey(),
+	openId: varchar({ length: 64 }).notNull(),
+	passwordHash: varchar({ length: 255 }).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+},
+(table) => [
+	uniqueIndex("local_credentials_openId_unique").on(table.openId),
 ]);
 
 export type User = typeof users.$inferSelect;
@@ -143,7 +154,7 @@ export type Event = typeof events.$inferSelect;
 // ── Quest System ─────────────────────────────────────────────────
 
 export const quests = mysqlTable("quests", {
-	id: int().autoincrement().notNull(),
+	id: int().autoincrement().notNull().primaryKey(),
 	type: mysqlEnum(['daily','cumulative']).notNull(),
 	title: varchar({ length: 200 }).notNull(),
 	description: text(),
@@ -154,18 +165,18 @@ export const quests = mysqlTable("quests", {
 	rewardValue: int().notNull(),
 	sortOrder: int().default(0).notNull(),
 	isActive: tinyint().default(1).notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
 export const playerQuestProgress = mysqlTable("player_quest_progress", {
-	id: int().autoincrement().notNull(),
+	id: int().autoincrement().notNull().primaryKey(),
 	playerId: int().notNull(),
 	questId: int().notNull(),
 	progress: int().default(0).notNull(),
 	completed: tinyint().default(0).notNull(),
 	rewardClaimed: tinyint().default(0).notNull(),
 	lastResetDate: varchar({ length: 10 }), // 'YYYY-MM-DD' for daily quest reset tracking
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [

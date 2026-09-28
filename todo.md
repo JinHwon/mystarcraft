@@ -396,8 +396,19 @@
 
 - [x] 큐스트 알림 배지 - 사이드 메뉴 큐스트 항목에 보상 가능한 큐스트 표시 (GameLayout.tsx에 배지 추가, server/routers.ts에 getRewardableCount 프로시저 추가)
 - [x] 래링 화면 센스 항목 - PC 버전 래링에서 상대전적 버튼 조정 (Ranking.tsx에서 센스 항목 아래에 상대전적 버튼 통합)
-- [ ] 능력치 비교 그래프 - 상대 선수 화면에서 내 능력치 vs 상대 능력치 시각화
-- [ ] 실제 승률 표기 - 상대 선수 화면의 승률을 정확한 값으로 표시
-- [ ] 자원 추이 삭제 - 경기 화면에서 자원 추이 항목 제거
-- [ ] 자원 최대값 설정 - 경기 화면의 자원 max값을 20000으로 설정
-- [ ] 패배 시 페널티 - 경기 종료 후 패배만 플레이어 병력과 자본 대폭 감소
+- [x] 능력치 비교 그래프 - 상대 선수 화면에서 내 능력치 vs 상대 능력치 시각화 (Practice.tsx 능력치 비교 카드: 항목별 막대 + 차이값 + 합계)
+- [x] 실제 승률 표기 - 상대 선수 화면의 승률을 정확한 값으로 표시 (practice.estimateWinRate: 실제 게임 엔진 300회 시뮬레이션, 회복제 사용 시 재계산)
+- [x] 자원 추이 삭제 - 경기 화면에서 자원 추이 항목 제거
+- [x] 자원 최대값 설정 - 경기 화면의 자원 max값을 20000으로 설정 (GAME_MAX_RESOURCES 고정 스케일)
+- [x] 패배 시 페널티 - 경기 종료 후 패배만 플레이어 병력과 자본 대폭 감소 (gameSimulation.applyLoserPenalty: 패자 병력/자원 10~20%만 남김)
+- [x] Events.tsx 머지 충돌 마커 및 getProgress 중복 선언 제거 (빌드 오류 수정)
+
+## 배포 (v60.0) - 오라클 백엔드 + Vercel 프론트엔드 (Demo_Trading 방식)
+
+- [x] 아이디/비밀번호 자체 로그인 (/login, /api/auth/local/*) - Manus OAuth 없이 동작, 해시는 local_credentials 테이블에 분리 저장
+- [x] 선수 사진 로컬 디스크 저장 (/api/uploads) - Manus 스토리지 미설정 시
+- [x] schema.ts 를 새 MySQL 8 에 바로 적용 가능하도록 수정 (PK, users.openId unique, CURRENT_TIMESTAMP 기본값)
+- [x] MySQL 8 호환: DATETIME 저장 형식 변환 (ISO 문자열 거부 문제)
+- [x] 신규 선수 능력치 행 즉시 생성 (다른 선수의 매칭 대상에 포함되도록)
+- [x] deploy/ (docker-compose MySQL, pm2, nginx, server-setup.sh, server-deploy.sh), vercel.json, DEPLOY.md
+- [ ] 오라클 서버에서 server-setup.sh 실행 및 Vercel 프로젝트 연결 (백엔드 도메인 결정 필요)
