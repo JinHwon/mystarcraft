@@ -69,3 +69,9 @@ python tools\legacy\extract_mysc.py "D:\MYSC3\mysc" --repo .
   원하지 않으면 올리기 전에 GitHub 저장소 **Settings → General → Danger Zone → Change repository visibility** 에서 비공개(Private)로 바꾸세요. 자동 배포는 비공개여도 그대로 동작합니다.
 - 사이트(mystarcraft.duckdns.org)에 올라간 그림은 저장소 공개 여부와 상관없이 사이트 방문자에게 보입니다.
 - 선수 사진·해설 문장은 원작 제작자와 선수 본인의 권리가 있는 자료입니다. 공개 서비스에 쓸지는 직접 판단해 주세요.
+
+## 추출 결과를 게임에 반영하는 방법 (개발용)
+
+1. 추출 결과를 `client/public/legacy/`(그림)와 `data/legacy/`(문자열)에 넣습니다.
+2. `python tools/legacy/build_lines.py` 를 실행하면 `server/bw/legacyLines.ts`(원작 해설 문장 묶음)가 다시 만들어집니다.
+3. 중계 화면은 `server/bw/legacyCommentary.ts` 가 경기 이벤트(건설·교전·견제·기지 파괴·GG)를 보고 원작 문장을 골라 씁니다.

@@ -8,11 +8,22 @@ import { cn } from "@/lib/utils";
 import { STAT_LABELS, type StatKey } from "@shared/gameConstants";
 import { legacyGrade, totalOf } from "@shared/career/rules";
 import { mapView } from "@shared/career/view";
+import { ORIG_PLAYERS } from "@shared/career/originalData";
 
 export const LEGACY_FONT: CSSProperties = { fontFamily: '"Gulim","굴림","Dotum","돋움","Malgun Gothic","Apple SD Gothic Neo",sans-serif' };
 
 /** 게임 안 이름과 이미지 파일 이름이 다른 맵 */
-const MAP_IMG_ALIAS: Record<string, string> = { 카트리나SE: "카트리나", 라이드of발키리: "라오발" };
+const MAP_IMG_ALIAS: Record<string, string> = {
+  카트리나SE: "카트리나", 라이드of발키리: "라오발", 네오레퀴엠: "레퀴엠", 로키2: "로키", 몬티홀SE: "몬티홀", 몽환2: "몽환",
+  운고로분화구: "운고로", 비잔티움3: "비잔티움2", 네오메두사: "메두사", 카르타고3: "카르타고", 신단장의능선: "단장의능선", 아웃사이더SE: "아웃사이더",
+};
+
+/** 원작 사진 파일 이름: 동명이인은 뒤 선수가 "이름1" (이영호1, 김윤환1, 박성준1) */
+function photoName(id: number | undefined, name: string) {
+  if (id === undefined) return name;
+  const first = ORIG_PLAYERS.findIndex(r => r[1] === name);
+  return first >= 0 && first !== id ? `${name}1` : name;
+}
 
 export const legacySrc = (dir: string, name: string) => `/legacy/${encodeURIComponent(dir)}/${encodeURIComponent(name)}.gif`;
 
@@ -45,11 +56,11 @@ export function MapImage({ mapId, size = 72 }: { mapId: number; size?: number })
   );
 }
 
-export function PlayerPhoto({ name, size = 64 }: { name: string; size?: number }) {
+export function PlayerPhoto({ id, name, size = 64 }: { id?: number; name: string; size?: number }) {
   return (
     <div className="border border-neutral-500 bg-neutral-800 shrink-0" style={{ width: size, height: size * 1.05 }}>
       <LegacyImg
-        dir="선수" name={name} className="w-full h-full object-cover"
+        dir="선수" name={photoName(id, name)} className="w-full h-full object-cover"
         fallback={<div className="w-full h-full flex items-end justify-center overflow-hidden text-neutral-500" style={{ fontSize: size * 0.8, lineHeight: 1 }}>👤</div>}
       />
     </div>

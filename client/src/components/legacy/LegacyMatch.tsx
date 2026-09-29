@@ -111,8 +111,7 @@ export function EntryScreen({ s, match, entry, setEntry, onSubmit, submitting, o
 
         <div className="grid grid-cols-[1fr_minmax(112px,1fr)_1fr] gap-2 mt-3 items-start">
           <div className="space-y-1.5">
-            <SideLabel lines={["MY TEAM", "PLAYER"]} color="#3aa0ff" />
-            <LegacyImg dir="기타" name="아군" className="w-full max-h-16 object-contain" fallback={null} />
+            <LegacyImg dir="기타" name="아군" className="w-full max-h-24 object-contain" fallback={<SideLabel lines={["MY TEAM", "PLAYER"]} color="#3aa0ff" />} />
             <div className="border-2 border-neutral-300 p-1 min-h-[220px]">
               {mine.map(p => {
                 const at = entry.findIndex(x => x === p.id);
@@ -155,8 +154,7 @@ export function EntryScreen({ s, match, entry, setEntry, onSubmit, submitting, o
           </div>
 
           <div className="space-y-1.5">
-            <SideLabel lines={["OTHER TEAM", "PLAYER"]} color="#ff3a3a" />
-            <LegacyImg dir="기타" name="적군" className="w-full max-h-16 object-contain" fallback={null} />
+            <LegacyImg dir="기타" name="적군" className="w-full max-h-24 object-contain" fallback={<SideLabel lines={["OTHER TEAM", "PLAYER"]} color="#ff3a3a" />} />
             <div className="border-2 border-neutral-300 p-1 min-h-[220px]">
               {theirs.map(p => (
                 <div key={p.id} className="flex justify-between text-[13px] leading-[1.35] px-0.5 text-white">
@@ -185,7 +183,7 @@ function PlayerCard({ p, vsRace, before }: { p: CPlayer; vsRace: CPlayer["race"]
         <div className="text-[9px] text-neutral-300 text-center leading-tight pt-1 w-12">
           {rec ? "전적" : "전적없음"}<br />vs {R[vsRace]}<br /><br />{rec?.[0] ?? 0} 승<br />{rec?.[1] ?? 0} 패
         </div>
-        <PlayerPhoto name={p.name} size={58} />
+        <PlayerPhoto id={p.id} name={p.name} size={58} />
       </div>
       <div className="text-[12px] text-white mt-0.5">{nameRace(p)}</div>
     </div>
@@ -293,7 +291,7 @@ function Broadcast({ s, stageName, lp, rp, mapId, set, leftIsA, score, leftTeam,
         <div className="flex-1 min-h-0 grid grid-cols-[76px_1fr_76px] gap-2 mt-2">
           <div className="flex flex-col items-center justify-between">
             <div className="flex flex-col items-center">
-              <PlayerPhoto name={lp.name} size={56} />
+              <PlayerPhoto id={lp.id} name={lp.name} size={56} />
               <span className="text-[11px] mt-0.5 text-center">{nameRace(lp)}</span>
               {done && leftWon && <Winner />}
             </div>
@@ -307,7 +305,7 @@ function Broadcast({ s, stageName, lp, rp, mapId, set, leftIsA, score, leftTeam,
           </div>
           <div className="flex flex-col items-center justify-between">
             <div className="flex flex-col items-center">
-              <PlayerPhoto name={rp.name} size={56} />
+              <PlayerPhoto id={rp.id} name={rp.name} size={56} />
               <span className="text-[11px] mt-0.5 text-center">{nameRace(rp)}</span>
               {done && !leftWon && <Winner />}
             </div>

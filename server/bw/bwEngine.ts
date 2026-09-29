@@ -112,6 +112,31 @@ export interface GameState {
   turnCommentaries: string[];
   mapTraits?: { rushDistance: number; resources: number; complexity: number };
   mapRaceAdvantage?: Record<string, number>;
+  /** 원작식 해설용 경기 이벤트 기록 (있을 때만 쌓음) */
+  feed?: FeedEvent[];
+}
+
+type Side = 1 | 2;
+/** 원작식 해설을 고르기 위한 구조화된 경기 이벤트 */
+export type FeedEvent = { t: number } & (
+  | { k: "plan"; side: Side; plan: string; style: string }
+  | { k: "build"; side: Side; key: string; count: number }
+  | { k: "expand"; side: Side; idx: number }
+  | { k: "unit"; side: Side; key: string; count: number }
+  | { k: "tech"; side: Side; key: string }
+  | { k: "attack"; side: Side; units: Record<string, number>; vs: Record<string, number>; target: number; early: boolean }
+  | { k: "fight"; winner: Side; attacker: Side; winUnits: Record<string, number>; loseUnits: Record<string, number>; close: boolean; crush: boolean; upset: boolean; target: number }
+  | { k: "base"; victim: Side; idx: number; killed: number }
+  | { k: "raid"; side: Side; killed: number }
+  | { k: "harass"; side: Side; kind: string; killed: number }
+  | { k: "push"; side: Side }
+  | { k: "counter"; side: Side }
+  | { k: "gg"; loser: Side }
+  | { k: "judge"; winner: Side }
+);
+
+function emit(gs: GameState, ev: FeedEvent extends infer E ? (E extends { t: number } ? Omit<E, "t"> : never) : never) {
+  gs.feed?.push({ ...ev, t: gs.time } as FeedEvent);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -525,6 +550,7 @@ function completeJobs(gs: GameState, p: BwPlayer, dt: number) {
       p.workers += 1;
     } else if (j.kind === "unit") {
       p.units[j.key] = (p.units[j.key] ?? 0) + (j.count ?? 1);
+      if (gs.feed && !p.announced.has("f:u:" + j.key)) { p.announced.add("f:u:" + j.key); emit(gs, { k: "unit", side: p.side as Side, key: j.key, count: p.units[j.key] }); }
       const th = NOTABLE_UNITS[j.key];
       if (th && !p.announced.has("u:" + j.key) && (p.units[j.key] ?? 0) >= th) {
         p.announced.add("u:" + j.key);
@@ -533,6 +559,7 @@ function completeJobs(gs: GameState, p: BwPlayer, dt: number) {
     } else if (j.kind === "building") {
       p.pendingBuildings[j.key] = Math.max(0, (p.pendingBuildings[j.key] ?? 0) - 1);
       p.buildings[j.key] = (p.buildings[j.key] ?? 0) + 1;
+      if (gs.feed && (p.buildings[j.key] ?? 0) <= 2) emit(gs, { k: "build", side: p.side as Side, key: j.key, count: p.buildings[j.key] });
       if (BUILDINGS[j.key].role === "gas") {
         const b = p.bases.find(x => x.gasPending && !x.hasGas && x.alive);
         if (b) { b.gasPending = false; b.hasGas = true; }
@@ -544,6 +571,7 @@ function completeJobs(gs: GameState, p: BwPlayer, dt: number) {
     } else if (j.kind === "tech") {
       p.pendingTechs.delete(j.key);
       p.techs.add(j.key);
+      emit(gs, { k: "tech", side: p.side as Side, key: j.key });
       if (NOTABLE_TECHS.has(j.key)) say(gs, techLine(p, j.key));
     } else if (j.kind === "expand") {
       const resFactor = clamp((gs.mapTraits?.resources ?? 50) / 50, 0.7, 1.4);
@@ -554,6 +582,7 @@ function completeJobs(gs: GameState, p: BwPlayer, dt: number) {
         hasGas: false, gasPending: false, alive: true, ready: true,
       });
       eventsOf(gs, p).push({ type: "multi_expansion", time: gs.time });
+      emit(gs, { k: "expand", side: p.side as Side, idx });
       say(gs, `${p.name} 선수 ${p.bases[idx].name} ${nameOf(j.key)} 완성! 기지 ${townHalls(p)}개 체제입니다.`);
     }
   }
@@ -1198,6 +1227,7 @@ function battle(gs: GameState, attacker: BwPlayer, defender: BwPlayer, targetIdx
   const beforeA = armySupply(attacker);
   const beforeD = armySupply(defender);
   const where = field ? "중앙" : `${defender.name} 선수의 ${target!.name}`;
+  emit(gs, { k: "attack", side: attacker.side as Side, units: { ...attackUnits }, vs: { ...defendUnits }, target: targetIdx, early: workerPull > 0 });
   say(gs, `${attacker.name} 선수 공격! ${composition(attackUnits)} 병력이 ${where}으로 진격합니다. (상대 ${composition(defendUnits, 3)})`);
 
   const sa = sideStrength(attacker, aF, defender, dF, false, !field, mapAdvantage(gs, attacker));
@@ -1243,6 +1273,11 @@ function battle(gs: GameState, attacker: BwPlayer, defender: BwPlayer, targetIdx
   const lostD = beforeD - armySupply(defender);
   const closeFight = r > 0.8;
   const winLine = closeFight ? "치열한 접전 끝에" : r < 0.35 ? "압도적으로" : "";
+  emit(gs, {
+    k: "fight", winner: winner.side as Side, attacker: attacker.side as Side,
+    winUnits: { ...(attackerWins ? attackUnits : defendUnits) }, loseUnits: { ...(attackerWins ? defendUnits : attackUnits) },
+    close: closeFight, crush: r < 0.35, upset: upset && winner === under, target: targetIdx,
+  });
   if (upset && winner === under) {
     say(gs, `${winner.name} 선수 기막힌 위치 선정! 병력은 밀렸지만 절묘한 컨트롤로 싸움을 뒤집습니다!`);
   }
@@ -1281,8 +1316,10 @@ function battle(gs: GameState, attacker: BwPlayer, defender: BwPlayer, targetIdx
           defender.buildings[k] = Math.floor((defender.buildings[k] ?? 0) * 0.35);
         }
       }
+      emit(gs, { k: "base", victim: defender.side as Side, idx: targetIdx, killed });
       say(gs, `${defender.name} 선수의 ${target.name}이(가) 무너집니다! ${nameOf(RACE_ROLES[defender.race].townhall)} 파괴${killed ? `, ${workerName(defender)} ${killed}기 사망` : ""}.`);
     } else if (killed > 0) {
+      emit(gs, { k: "raid", side: attacker.side as Side, killed });
       say(gs, `${attacker.name} 선수, 병력을 물리친 뒤 ${workerName(defender)} ${killed}기까지 잡아냅니다. ${defender.name} 선수, ${target.name}은(는) 간신히 지켜냅니다!`);
     }
   }
@@ -1295,6 +1332,7 @@ function wantsToAttack(gs: GameState, p: BwPlayer): boolean {
   const push = p.plan.push;
   if (push && !p.pushDone && gs.time >= push.at && myArmy >= push.minArmySupply) {
     p.pushDone = true;
+    emit(gs, { k: "push", side: p.side as Side });
     say(gs, `${p.name} 선수 ${push.name}! 준비한 타이밍에 병력을 이끌고 나갑니다.`);
     return true;
   }
@@ -1302,6 +1340,7 @@ function wantsToAttack(gs: GameState, p: BwPlayer): boolean {
   // 역습: 방금 막아낸 쪽은 적 병력이 비었을 때 곧바로 치고 나간다
   if (gs.turn - p.counterTurn <= 2 && myArmy >= 8 && armyValue(p) >= armyValue(e) * 1.3) {
     p.counterTurn = -99;
+    emit(gs, { k: "counter", side: p.side as Side });
     say(gs, `${p.name} 선수 역습! 상대 병력이 빠진 틈을 파고듭니다!`);
     return true;
   }
@@ -1437,6 +1476,7 @@ function harass(gs: GameState, p: BwPlayer) {
   }
   p.harassCooldown = 3;
   killed = Math.min(killed, Math.max(0, e.workers - 2));
+  emit(gs, { k: "harass", side: p.side as Side, kind, killed: kind === "corsair_overlord" && text ? 1 : killed });
   if (killed > 0) {
     e.workers -= killed;
     e.workersLost += killed;
@@ -1542,6 +1582,7 @@ function checkGameOver(gs: GameState): void {
       gs.gameEnded = true;
       gs.winner = e.id;
       gs.endReason = noHall ? "기지 전멸" : crushed ? "주력 병력 전멸" : "경제 붕괴";
+      emit(gs, { k: "gg", loser: p.side as Side });
       say(gs, `${p.name} 선수, 더 이상 버티지 못하고 GG를 선언합니다! ${e.name} 선수 승리! (${gs.endReason})`);
       return;
     }
@@ -1551,6 +1592,7 @@ function checkGameOver(gs: GameState): void {
     const winner = evaluate(a) >= evaluate(b) ? a : b;
     gs.winner = winner.id;
     gs.endReason = "장기전 판정";
+    emit(gs, { k: "judge", winner: winner.side as Side });
     say(gs, `경기가 40분을 넘겼습니다. 자원과 병력에서 앞선 ${winner.name} 선수의 판정승입니다!`);
   }
 }
@@ -1591,7 +1633,10 @@ export function progressGame(gs: GameState): void {
 
   // 빌드 공개 (해설자 시점, 1분 40초 무렵)
   if (gs.time >= 100 && gs.time < 100 + TURN_SECONDS) {
-    for (const p of players) say(gs, `${p.name} 선수의 빌드는 ${p.plan.name}. ${p.plan.desc}.`);
+    for (const p of players) {
+      emit(gs, { k: "plan", side: p.side as Side, plan: p.plan.key, style: p.plan.style });
+      say(gs, `${p.name} 선수의 빌드는 ${p.plan.name}. ${p.plan.desc}.`);
+    }
   }
 
   for (const p of players) scouting(gs, p);
