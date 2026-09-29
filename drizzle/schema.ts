@@ -108,6 +108,8 @@ export const players = mysqlTable("players", {
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	fatigue: int().default(100).notNull(),
 	lastFatigueRecovery: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	// 매칭 상대가 없을 때 자동 생성되는 AI 선수 (userId 0). 전적/랭킹/성장은 일반 선수와 동일
+	isBot: tinyint().default(0).notNull(),
 },
 (table) => [
 	index("players_userId_unique").on(table.userId),

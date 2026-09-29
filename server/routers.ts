@@ -43,6 +43,8 @@ import {
   getPlayerGrade,
   ensurePlayerStats,
   getPlayerById,
+  createBotPlayer,
+  autoAllocateBotStatPoints,
   applyGameStatChange,
   getRankingList,
   getHeadToHeadRecord,
@@ -628,6 +630,76 @@ const questRouter = router({
     }),
 });
 
+/**
+ * 경기 결과에 따른 능력치 변동 계산 (능력치 동적 변경 + 역전 시스템)
+ * 플레이어와 AI 상대 모두 같은 규칙으로 성장/하락한다.
+ */
+function computeGameStatChanges(
+  isWinner: boolean,
+  gameEvents: Parameters<typeof calculateStatChanges>[1],
+  myStatsData: any,
+  opponentStatsData: any,
+  hasStatBoost: boolean
+): Record<string, number> {
+  const baseStatChanges = calculateStatChanges(isWinner, gameEvents);
+
+  const myStatsMap = {
+    attack: myStatsData?.attack || 0,
+    defense: myStatsData?.defense || 0,
+    economy: myStatsData?.strategy || 0,
+    intelligence: myStatsData?.scout || 0,
+  };
+  const opponentStatsMap = {
+    attack: opponentStatsData?.attack || 0,
+    defense: opponentStatsData?.defense || 0,
+    economy: opponentStatsData?.strategy || 0,
+    intelligence: opponentStatsData?.scout || 0,
+  };
+
+  // 등급 인덱스 계산 (능력치 합산 기반)
+  const myTotalForGrade = STAT_KEYS.reduce((sum, key) => sum + (myStatsData?.[key] || 0), 0);
+  const opponentTotalForGrade = STAT_KEYS.reduce((sum, key) => sum + (opponentStatsData?.[key] || 0), 0);
+
+  const finalStatChanges = applyReverseSystem(
+    isWinner,
+    myStatsMap,
+    opponentStatsMap,
+    baseStatChanges,
+    calcGradeIndex(myTotalForGrade),
+    calcGradeIndex(opponentTotalForGrade)
+  );
+
+  // attack → 공격력, defense → 수비력, economy → 전략, intelligence → 정찰
+  // 추가로 sense, control, harass, supply도 게임 결과에 따라 변동
+  const attackChange = finalStatChanges.attack;
+  const defenseChange = finalStatChanges.defense;
+  const economyChange = finalStatChanges.economy;
+  const intelligenceChange = finalStatChanges.intelligence;
+
+  const derive = (base: number) => isWinner
+    ? Math.max(0, Math.min(6, base + Math.floor(Math.random() * 3)))
+    : Math.max(-8, Math.min(1, base + Math.floor(Math.random() * 2) - 2));
+
+  // 센스: 경제/정찰, 컨트롤: 공격/방어, 견제: 공격/정찰, 물량: 경제/방어
+  const senseChange = derive(Math.round((economyChange + intelligenceChange) / 2));
+  const controlChange = derive(Math.round((attackChange + defenseChange) / 2));
+  const harassChange = derive(Math.round((attackChange + intelligenceChange) / 2));
+  const supplyChange = derive(Math.round((economyChange + defenseChange) / 2));
+
+  const boostStat = (v: number) => hasStatBoost && v > 0 ? v * 2 : v;
+
+  return {
+    sense: boostStat(senseChange),
+    control: boostStat(controlChange),
+    attack: boostStat(attackChange),
+    harass: boostStat(harassChange),
+    strategy: boostStat(economyChange),
+    supply: boostStat(supplyChange),
+    defense: boostStat(defenseChange),
+    scout: boostStat(intelligenceChange),
+  };
+}
+
 /** 시뮬레이션용 선수 능력치 (기본 능력치 + 착용 아이템 부스트, 피로도 미적용) */
 async function getPlayerSimStats(playerId: number): Promise<Record<StatKey, number>> {
   const playerStatsRaw = await getPlayerStats(playerId);
@@ -685,26 +757,16 @@ const practiceRouter = router({
 
       const playerStatsForSim = await getPlayerSimStats(player.id);
 
-      let opponentStats: Record<StatKey, number>;
-      let opponentRace: "terran" | "zerg" | "protoss";
-      let opponentFatigue: number;
-      if (input.aiOpponent) {
-        opponentStats = Object.fromEntries(
-          STAT_KEYS.map(key => [key, input.aiOpponent!.stats[key] || 500])
-        ) as Record<StatKey, number>;
-        opponentRace = input.aiOpponent.race;
-        opponentFatigue = 100;
-      } else {
-        const opponentPlayerId = player.id === game.player1Id ? game.player2Id : game.player1Id;
-        const opponent = await getPlayerById(opponentPlayerId);
-        if (!opponent) throw new TRPCError({ code: "NOT_FOUND", message: "상대 선수를 찾을 수 없습니다" });
-        const raw = await getPlayerStats(opponent.id) || await ensurePlayerStats(opponent.id);
-        opponentStats = Object.fromEntries(
-          STAT_KEYS.map(key => [key, (raw as any)?.[key] || 500])
-        ) as Record<StatKey, number>;
-        opponentRace = opponent.race as "terran" | "zerg" | "protoss";
-        opponentFatigue = opponent.fatigue;
-      }
+      // 상대 (AI 선수 포함) 는 항상 DB 에서 조회. input.aiOpponent 는 예전 클라이언트 호환용으로 무시
+      const opponentPlayerId = player.id === game.player1Id ? game.player2Id : game.player1Id;
+      const opponent = await getPlayerById(opponentPlayerId);
+      if (!opponent) throw new TRPCError({ code: "NOT_FOUND", message: "상대 선수를 찾을 수 없습니다" });
+      const raw = await getPlayerStats(opponent.id) || await ensurePlayerStats(opponent.id);
+      const opponentStats = Object.fromEntries(
+        STAT_KEYS.map(key => [key, (raw as any)?.[key] ?? 500])
+      ) as Record<StatKey, number>;
+      const opponentRace = opponent.race as "terran" | "zerg" | "protoss";
+      const opponentFatigue = opponent.fatigue;
 
       return estimateWinRate(
         playerStatsForSim,
@@ -740,82 +802,23 @@ const practiceRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "피로도가 부족합니다" });
       }
 
-      // 상대 찾기
-      let opponent = await findOpponentByDifficulty(input.difficulty, player.id);
-      let isAiOpponent = false;
-      let aiOpponentStats: Record<StatKey, number> | null = null;
-      
-      // 중수/고수에서 매칭 실패 시 60% 확률로 AI 가상 상대 생성
-      if (!opponent && (input.difficulty === 'intermediate' || input.difficulty === 'advanced')) {
-        const { calcGrade, GRADE_BASE, GRADE_STEP, STAT_KEYS: SK } = await import("@shared/gameConstants");
-        const aiChance = 0.6; // 60% 확률
-        if (Math.random() < aiChance) {
-          // 난이도에 맞는 AI 능력치 생성
-          const range = DIFFICULTY_RANGES[input.difficulty];
-          const targetGradeIndex = range.minIndex + Math.floor(Math.random() * (range.maxIndex - range.minIndex + 1));
-          const targetTotalStats = GRADE_BASE + targetGradeIndex * GRADE_STEP + Math.floor(Math.random() * GRADE_STEP);
-          const avgStat = Math.floor(targetTotalStats / SK.length);
-          
-          // 각 능력치에 약간의 랜덤 편차 추가
-          const aiStats: Record<string, number> = {};
-          let remaining = targetTotalStats;
-          for (let i = 0; i < SK.length - 1; i++) {
-            const variation = Math.floor(Math.random() * 100) - 50; // ±50 편차
-            const stat = Math.max(100, Math.min(1000, avgStat + variation));
-            aiStats[SK[i]] = stat;
-            remaining -= stat;
-          }
-          aiStats[SK[SK.length - 1]] = Math.max(100, Math.min(1000, remaining));
-          
-          aiOpponentStats = aiStats as Record<StatKey, number>;
-          
-          const races = ['terran', 'zerg', 'protoss'] as const;
-          const aiRace = races[Math.floor(Math.random() * races.length)];
-          const aiNames = [
-            'AI_Shadow', 'AI_Storm', 'AI_Blaze', 'AI_Frost', 'AI_Thunder',
-            'AI_Phoenix', 'AI_Dragon', 'AI_Viper', 'AI_Hawk', 'AI_Wolf',
-            'AI_Nova', 'AI_Titan', 'AI_Specter', 'AI_Phantom', 'AI_Sentinel',
-          ];
-          const aiName = aiNames[Math.floor(Math.random() * aiNames.length)];
-          
-          // AI 선수를 DB에 임시 생성하지 않고, 가상 객체로 처리
-          opponent = {
-            id: -1, // AI 식별용 음수 ID
-            userId: -1,
-            name: aiName,
-            race: aiRace,
-            photoUrl: null,
-            level: Math.max(1, targetGradeIndex * 3 + Math.floor(Math.random() * 5)),
-            exp: 0,
-            expToNext: 100,
-            statPoints: 0,
-            gold: 0,
-            grade: calcGrade(targetTotalStats) as any,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            fatigue: 100,
-            lastFatigueRecovery: new Date().toISOString(),
-          };
-          isAiOpponent = true;
-        }
-      }
-      
-      if (!opponent) throw new TRPCError({ code: "NOT_FOUND", message: "상대를 찾을 수 없습니다" });
-
-      // 선수 능력치 조회 (없으면 초기화)
-      const playerStats = await getPlayerStats(player.id) || await ensurePlayerStats(player.id);
-      let opponentStats;
-      if (isAiOpponent && aiOpponentStats) {
-        opponentStats = aiOpponentStats;
-      } else {
-        opponentStats = await getPlayerStats(opponent.id) || await ensurePlayerStats(opponent.id);
-      }
-      if (!playerStats || !opponentStats) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "능력치 조회 실패" });
-
-      // 맵 정보 조회
+      // 맵 정보 조회 (상대/AI 생성 전에 확인)
       const maps = await getAllMaps();
       const map = maps.find(m => m.id === input.mapId);
       if (!map) throw new TRPCError({ code: "NOT_FOUND", message: "맵을 찾을 수 없습니다" });
+
+      // 상대 찾기 - 난이도에 맞는 상대가 없으면 AI 선수를 DB 에 생성 (이후 전적/랭킹/성장이 쌓임)
+      let opponent = await findOpponentByDifficulty(input.difficulty, player.id);
+      if (!opponent) {
+        opponent = await createBotPlayer(input.difficulty);
+      }
+      if (!opponent) throw new TRPCError({ code: "NOT_FOUND", message: "상대를 찾을 수 없습니다" });
+      const isAiOpponent = opponent.isBot === 1;
+
+      // 선수 능력치 조회 (없으면 초기화)
+      const playerStats = await getPlayerStats(player.id) || await ensurePlayerStats(player.id);
+      const opponentStats = await getPlayerStats(opponent.id) || await ensurePlayerStats(opponent.id);
+      if (!playerStats || !opponentStats) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "능력치 조회 실패" });
 
       // 승률 계산
       const raceAdvantage = typeof map.raceAdvantage === 'string' 
@@ -832,7 +835,7 @@ const practiceRouter = router({
       ) as Record<StatKey, number>;
 
       let opponentStatsRecord = { ...opponentBaseStats };
-      if (!isAiOpponent && opponent.id > 0) {
+      {
         const opponentEquippedItems = await getPlayerItems(opponent.id);
         const opponentItemBoosts: Record<string, number> = {};
         opponentEquippedItems.forEach((pi: any) => {
@@ -858,7 +861,7 @@ const practiceRouter = router({
       // 게임 생성
       const gameId = await createGame({
         player1Id: player.id,
-        player2Id: isAiOpponent ? player.id : opponent.id, // AI 상대는 자기 자신 ID 사용
+        player2Id: opponent.id,
         mapId: input.mapId,
         difficulty: input.difficulty,
         player1Race: player.race as "terran" | "zerg" | "protoss",
@@ -873,10 +876,7 @@ const practiceRouter = router({
       
       return { 
         gameId, 
-        opponent: {
-          ...opponent,
-          id: isAiOpponent ? -1 : opponent.id,
-        },
+        opponent,
         opponentGrade: actualOpponentGrade, 
         winProbability,
         opponentStats: opponentStatsRecord,
@@ -904,31 +904,14 @@ const practiceRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "이 게임에 참여할 수 없습니다" });
       }
 
-      const isAiGame = !!input.aiOpponent;
-      
-      // 상대 선수 정보 - AI vs 실제 플레이어
-      let opponentName: string;
-      let opponentRace: "terran" | "zerg" | "protoss";
-      let opponentFatigue: number;
-      let opponentId: number;
-      
-      if (isAiGame && input.aiOpponent) {
-        opponentName = input.aiOpponent.name;
-        opponentRace = input.aiOpponent.race;
-        opponentFatigue = 100; // AI는 항상 피로도 100
-        opponentId = -1; // AI 식별용
-      } else {
-        const opponentPlayerId = player.id === game.player1Id ? game.player2Id : game.player1Id;
-        const db = await getDb();
-        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "데이터베이스 연결 실패" });
-        const opponentUser = await db.select().from(players).where(eq(players.id, opponentPlayerId)).limit(1);
-        const opponent = opponentUser.length > 0 ? opponentUser[0] : null;
-        if (!opponent) throw new TRPCError({ code: "NOT_FOUND", message: "상대 선수를 찾을 수 없습니다" });
-        opponentName = opponent.name;
-        opponentRace = opponent.race as "terran" | "zerg" | "protoss";
-        opponentFatigue = opponent.fatigue;
-        opponentId = opponent.id;
-      }
+      // 상대 선수 정보 (AI 선수도 DB 에 저장된 선수. input.aiOpponent 는 예전 클라이언트 호환용으로 무시)
+      const opponentId = player.id === game.player1Id ? game.player2Id : game.player1Id;
+      const opponent = await getPlayerById(opponentId);
+      if (!opponent) throw new TRPCError({ code: "NOT_FOUND", message: "상대 선수를 찾을 수 없습니다" });
+      const opponentName = opponent.name;
+      const opponentRace = opponent.race as "terran" | "zerg" | "protoss";
+      const opponentFatigue = opponent.fatigue;
+      const isAiGame = opponent.isBot === 1;
 
       // 맵 정보 조회
       const maps = await getAllMaps();
@@ -943,16 +926,9 @@ const practiceRouter = router({
       // AI 상대인 경우 능력치를 직접 전달
       const playerStatsForSim = await getPlayerSimStats(player.id);
       
-      let aiStatsForSim: Record<StatKey, number> | undefined;
-      if (isAiGame && input.aiOpponent) {
-        aiStatsForSim = Object.fromEntries(
-          STAT_KEYS.map(key => [key, input.aiOpponent!.stats[key] || 500])
-        ) as Record<StatKey, number>;
-      }
-      
       const simulation = await simulateGame(
         player.id,
-        isAiGame ? -1 : opponentId,
+        opponentId,
         player.name,
         opponentName,
         player.race as "terran" | "zerg" | "protoss",
@@ -963,7 +939,7 @@ const practiceRouter = router({
         opponentFatigue,
         "balanced",
         playerStatsForSim,
-        aiStatsForSim,
+        undefined,
         { rushDistance: map.rushDistance, resources: map.resources, complexity: map.complexity }
       );
 
@@ -1008,97 +984,17 @@ const practiceRouter = router({
         scoutingFailure: simulation.player1Events?.filter((e: any) => e.type === 'scouting_failure').length || 0,
       };
       
-      const baseStatChanges = calculateStatChanges(isWinner, gameEvents);
       const playerStatsData = await getPlayerStats(player.id);
-      
-      // AI 상대인 경우 전달받은 능력치 사용, 아닌 경우 DB에서 조회
-      let opponentStatsData;
-      if (isAiGame && input.aiOpponent) {
-        opponentStatsData = input.aiOpponent.stats;
-      } else {
-        opponentStatsData = await getPlayerStats(opponentId);
-      }
-      
-      const playerStatsMap = {
-        attack: playerStatsData?.attack || 0,
-        defense: playerStatsData?.defense || 0,
-        economy: playerStatsData?.strategy || 0,
-        intelligence: playerStatsData?.scout || 0,
-      };
-      
-      const opponentStatsMap = {
-        attack: (opponentStatsData as any)?.attack || 0,
-        defense: (opponentStatsData as any)?.defense || 0,
-        economy: (opponentStatsData as any)?.strategy || 0,
-        intelligence: (opponentStatsData as any)?.scout || 0,
-      };
-      
-      // 등급 인덱스 계산 (능력치 합산 기반)
-      const playerTotalForGrade = STAT_KEYS.reduce((sum, key) => sum + ((playerStatsData as any)?.[key] || 0), 0);
-      const opponentTotalForGrade = STAT_KEYS.reduce((sum, key) => sum + ((opponentStatsData as any)?.[key] || 0), 0);
-      const playerGradeIndex = calcGradeIndex(playerTotalForGrade);
-      const opponentGradeIndex = calcGradeIndex(opponentTotalForGrade);
-      
-      const finalStatChanges = applyReverseSystem(
-        isWinner,
-        playerStatsMap,
-        opponentStatsMap,
-        baseStatChanges,
-        playerGradeIndex,
-        opponentGradeIndex
-      );
-      
-      // 전체 능력치 변동 - 게임 해설/이벤트에 따른 영향도 반영
-      // attack → 공격력, defense → 수비력, economy → 전략, intelligence → 정찰
-      // 추가로 sense, control, harass, supply도 게임 결과에 따라 변동
-      const attackChange = finalStatChanges.attack;
-      const defenseChange = finalStatChanges.defense;
-      const economyChange = finalStatChanges.economy;
-      const intelligenceChange = finalStatChanges.intelligence;
-      
-      // 센스: 전략적 판단 관련 - 경제/정찰 이벤트 영향
-      const senseBase = Math.round((economyChange + intelligenceChange) / 2);
-      const senseChange = isWinner 
-        ? Math.max(0, Math.min(6, senseBase + Math.floor(Math.random() * 3)))
-        : Math.max(-8, Math.min(1, senseBase + Math.floor(Math.random() * 2) - 2));
-      
-      // 컨트롤: 전투 관련 - 공격/방어 이벤트 영향
-      const controlBase = Math.round((attackChange + defenseChange) / 2);
-      const controlChange = isWinner
-        ? Math.max(0, Math.min(6, controlBase + Math.floor(Math.random() * 3)))
-        : Math.max(-8, Math.min(1, controlBase + Math.floor(Math.random() * 2) - 2));
-      
-      // 견제: 공격적 플레이 관련 - 공격/정찰 이벤트 영향
-      const harassBase = Math.round((attackChange + intelligenceChange) / 2);
-      const harassChange = isWinner
-        ? Math.max(0, Math.min(6, harassBase + Math.floor(Math.random() * 3)))
-        : Math.max(-8, Math.min(1, harassBase + Math.floor(Math.random() * 2) - 2));
-      
-      // 물량: 경제/방어 관련 - 경제/방어 이벤트 영향
-      const supplyBase = Math.round((economyChange + defenseChange) / 2);
-      const supplyChange = isWinner
-        ? Math.max(0, Math.min(6, supplyBase + Math.floor(Math.random() * 3)))
-        : Math.max(-8, Math.min(1, supplyBase + Math.floor(Math.random() * 2) - 2));
-      
+      const opponentStatsData = await getPlayerStats(opponentId);
+
       // stat_boost 이벤트 활성 시 양수 능력치 변동 2배
       const hasStatBoost = rewardEvents.some(e => e.type === 'stat_boost');
-      const boostStat = (v: number) => hasStatBoost && v > 0 ? v * 2 : v;
-
-      const statChanges: Record<string, number> = {
-        sense: boostStat(senseChange),
-        control: boostStat(controlChange),
-        attack: boostStat(attackChange),
-        harass: boostStat(harassChange),
-        strategy: boostStat(economyChange),
-        supply: boostStat(supplyChange),
-        defense: boostStat(defenseChange),
-        scout: boostStat(intelligenceChange),
-      };
+      const statChanges = computeGameStatChanges(isWinner, gameEvents, playerStatsData, opponentStatsData, hasStatBoost);
 
       await createGameResult({
         gameId: input.gameId,
         playerId: player.id,
-        opponentId: isAiGame ? 0 : opponentId, // AI 상대는 0으로 저장
+        opponentId,
         isWinner,
         expGained,
         goldGained,
@@ -1139,6 +1035,45 @@ const practiceRouter = router({
         }
       }
 
+      // AI 상대도 전적/경험치/능력치가 쌓이며 함께 성장
+      if (isAiGame) {
+        const botWon = !isWinner;
+        const botEvents = simulation.player2Events?.length ? simulation.player2Events : simulation.player1Events ?? [];
+        const botGameEvents = {
+          attackSuccess: botEvents.filter((e: any) => e.type === 'engagement' && e.winner === 2).length,
+          attackFailure: botEvents.filter((e: any) => e.type === 'engagement' && e.winner === 1).length,
+          defenseSuccess: 0,
+          defenseFailure: 0,
+          multiExpanded: botEvents.filter((e: any) => e.type === 'multi_expansion').length,
+          resourceDrained: botEvents.filter((e: any) => e.type === 'resource_drain').length,
+          scoutingSuccess: botEvents.filter((e: any) => e.type === 'scouting_success').length,
+          scoutingFailure: botEvents.filter((e: any) => e.type === 'scouting_failure').length,
+        };
+        const botStatChanges = computeGameStatChanges(
+          botWon,
+          botGameEvents,
+          opponentStatsData,
+          playerStatsData,
+          false
+        );
+        const botExp = botWon ? rewards.expWin : rewards.expLose;
+        await createGameResult({
+          gameId: input.gameId,
+          playerId: opponentId,
+          opponentId: player.id,
+          isWinner: botWon,
+          expGained: botExp,
+          goldGained: 0,
+          statChanges: botStatChanges,
+          fatigueUsed: 0,
+        });
+        await updatePlayerExp(opponentId, botExp);
+        await autoAllocateBotStatPoints(opponentId);
+        for (const [key, value] of Object.entries(botStatChanges)) {
+          if (value !== 0) await applyGameStatChange(opponentId, key as StatKey, value);
+        }
+      }
+
       return { 
         isWinner, 
         expGained, 
@@ -1147,8 +1082,8 @@ const practiceRouter = router({
         turns: simulation.turns,
         finalScore: isWinner ? simulation.player1FinalScore : simulation.player2FinalScore,
         statChanges,
-        opponentName: isAiGame ? input.aiOpponent?.name : opponentName,
-        opponentRace: isAiGame ? input.aiOpponent?.race : opponentRace,
+        opponentName,
+        opponentRace,
         isAiOpponent: isAiGame,
       };
     }),

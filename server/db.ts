@@ -691,6 +691,7 @@ export async function getPlayerGameHistory(playerId: number, limit: number = 10)
           opponentName = opponent.name;
           opponentRace = opponent.race;
           opponentGrade = opponent.grade;
+          isAiOpponent = opponent.isBot === 1;
         }
       }
 
@@ -759,6 +760,86 @@ export async function findOpponentByDifficulty(difficulty: string, currentPlayer
   
   // 랜덤 선택
   return validOpponents[Math.floor(Math.random() * validOpponents.length)];
+}
+
+const BOT_NAMES = [
+  "Shadow", "Storm", "Blaze", "Frost", "Thunder", "Phoenix", "Dragon", "Viper",
+  "Hawk", "Wolf", "Nova", "Titan", "Specter", "Phantom", "Sentinel", "Raven",
+  "Falcon", "Cobra", "Ghost", "Reaper", "Zealot", "Marine", "Hydra", "Mutal",
+];
+
+/**
+ * 매칭 상대가 없을 때 난이도에 맞는 AI 선수를 DB 에 생성한다.
+ * 일반 선수와 같은 테이블에 저장되므로 이후 전적/랭킹/성장이 그대로 쌓이고, 다른 유저의 매칭 상대도 된다.
+ */
+export async function createBotPlayer(difficulty: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const { DIFFICULTY_RANGES, GRADE_BASE, GRADE_STEP, STAT_KEYS } = await import("@shared/gameConstants");
+  const range = DIFFICULTY_RANGES[difficulty as keyof typeof DIFFICULTY_RANGES] ?? DIFFICULTY_RANGES.beginner;
+
+  // 난이도 등급 범위 안의 능력치 합계 목표
+  const gradeIndex = range.minIndex + Math.floor(Math.random() * (range.maxIndex - range.minIndex + 1));
+  const targetTotal = GRADE_BASE + gradeIndex * GRADE_STEP + Math.floor(Math.random() * GRADE_STEP);
+  const avg = Math.floor(targetTotal / STAT_KEYS.length);
+  const stats: Record<string, number> = {};
+  let remaining = targetTotal;
+  STAT_KEYS.forEach((key, i) => {
+    if (i === STAT_KEYS.length - 1) {
+      stats[key] = Math.max(100, Math.min(1200, remaining));
+    } else {
+      stats[key] = Math.max(100, Math.min(1200, avg + Math.floor(Math.random() * 101) - 50));
+      remaining -= stats[key];
+    }
+  });
+
+  const races = ["terran", "zerg", "protoss"] as const;
+  const race = races[Math.floor(Math.random() * races.length)];
+  const name = `AI_${BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)]}${Math.floor(Math.random() * 90) + 10}`;
+  const level = Math.max(1, gradeIndex * 3 + Math.floor(Math.random() * 5));
+
+  const { calcExpToNext } = await import("@shared/gameConstants");
+  const result = await db.insert(players).values({
+    userId: 0,
+    name,
+    race,
+    level,
+    exp: 0,
+    expToNext: calcExpToNext(level),
+    statPoints: 0,
+    gold: 0,
+    fatigue: 100,
+    grade: "D",
+    isBot: 1,
+  });
+  const playerId = Number((result as any)[0]?.insertId ?? (result as any).insertId);
+  await db.insert(playerStats).values({ playerId, ...(stats as any) });
+
+  const created = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
+  return created[0];
+}
+
+/** AI 선수가 레벨업으로 얻은 능력치 포인트를 무작위로 자동 배분 (5포인트 단위) */
+export async function autoAllocateBotStatPoints(playerId: number) {
+  const db = await getDb();
+  if (!db) return;
+  const player = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
+  if (!player[0] || player[0].isBot !== 1 || player[0].statPoints <= 0) return;
+  const stats = await getPlayerStats(playerId);
+  if (!stats) return;
+
+  const { STAT_KEYS } = await import("@shared/gameConstants");
+  const next: Record<string, number> = {};
+  STAT_KEYS.forEach(key => { next[key] = (stats as any)[key] ?? 0; });
+  let points = player[0].statPoints;
+  while (points > 0) {
+    const chunk = Math.min(5, points);
+    const key = STAT_KEYS[Math.floor(Math.random() * STAT_KEYS.length)];
+    next[key] = Math.min(1200, next[key] + chunk);
+    points -= chunk;
+  }
+  await db.update(playerStats).set(next as any).where(eq(playerStats.playerId, playerId));
+  await db.update(players).set({ statPoints: 0 }).where(eq(players.id, playerId));
 }
 
 export async function updatePlayerExp(playerId: number, expGained: number) {
@@ -942,7 +1023,7 @@ export async function getRankingList() {
       lastSignedIn: users.lastSignedIn,
     })
     .from(players)
-    .innerJoin(users, eq(players.userId, users.id))
+    .leftJoin(users, eq(players.userId, users.id))
     .leftJoin(playerStats, eq(players.id, playerStats.playerId));
 
   const { calcGrade } = await import("@shared/gameConstants");
@@ -995,7 +1076,9 @@ export async function getRankingList() {
       defense,
       scout,
       totalStats,
-      lastSignedIn: row.lastSignedIn,
+      // AI 선수는 로그인 기록이 없으므로 마지막 경기(갱신) 시각 사용
+      lastSignedIn: row.lastSignedIn ?? row.player.updatedAt,
+      isBot: row.player.isBot === 1,
       wins,
       losses,
       totalGames: gameResultsData.length,
