@@ -51,7 +51,7 @@ export const PLANS: Plan[] = [
     expand: [[150, 2], [600, 3], [900, 4], [1200, 5]],
     push: { at: 470, minArmySupply: 30, name: "스팀팩 타이밍 러쉬" },
     harass: ["bio_drop"],
-    power: 0.843,
+    power: 0.774,
   },
   {
     key: "tvz_mech", name: "메카닉 (골리앗·탱크)", race: T, vs: Z, weight: 0.15, style: "standard",
@@ -64,7 +64,7 @@ export const PLANS: Plan[] = [
     expand: [[200, 2], [660, 3], [960, 4], [1260, 5]],
     push: { at: 720, minArmySupply: 60, name: "메카닉 진출" },
     harass: ["vulture_raid"],
-    power: 1.4,
+    power: 1.559,
   },
   {
     key: "tvz_bbs", name: "BBS (2배럭 마린 러쉬)", race: T, vs: Z, weight: 0.07, style: "cheese",
@@ -76,7 +76,7 @@ export const PLANS: Plan[] = [
     expand: [[420, 2], [840, 3], [1140, 4]],
     push: { at: 165, minArmySupply: 6, name: "BBS 마린 러쉬" },
     harass: [],
-    power: 0.793,
+    power: 0.706,
   },
 
   // ════════════════════════ 테란 vs 프로토스 ════════════════════════
@@ -91,7 +91,7 @@ export const PLANS: Plan[] = [
     expand: [[230, 2], [660, 3], [960, 4], [1260, 5]],
     push: { at: 660, minArmySupply: 70, name: "탱크 조이기" },
     harass: ["vulture_raid"],
-    power: 1.068,
+    power: 0.943,
   },
   {
     key: "tvp_1f1s", name: "원팩 원스타 (레이스·드랍)", race: T, vs: P, weight: 0.18, style: "aggressive",
@@ -103,7 +103,7 @@ export const PLANS: Plan[] = [
     expand: [[300, 2], [720, 3], [1020, 4], [1320, 5]],
     push: { at: 720, minArmySupply: 60, name: "탱크 진출" },
     harass: ["wraith_cloak", "vulture_raid"],
-    power: 1.4,
+    power: 1.357,
   },
   {
     key: "tvp_2fac", name: "투팩 벌처 타이밍", race: T, vs: P, weight: 0.2, style: "aggressive",
@@ -115,7 +115,7 @@ export const PLANS: Plan[] = [
     expand: [[480, 2], [800, 3], [1100, 4]],
     push: { at: 400, minArmySupply: 26, name: "투팩 벌처·탱크 타이밍" },
     harass: ["vulture_raid"],
-    power: 0.752,
+    power: 0.878,
   },
   {
     key: "tvp_bbs", name: "BBS (2배럭 마린 러쉬)", race: T, vs: P, weight: 0.07, style: "cheese",
@@ -127,7 +127,7 @@ export const PLANS: Plan[] = [
     expand: [[480, 2], [840, 3], [1140, 4]],
     push: { at: 170, minArmySupply: 6, name: "BBS 마린 러쉬" },
     harass: [],
-    power: 0.941,
+    power: 1.084,
   },
 
   // ════════════════════════ 테란 vs 테란 ════════════════════════
@@ -141,7 +141,7 @@ export const PLANS: Plan[] = [
     expand: [[270, 2], [720, 3], [1020, 4], [1320, 5]],
     push: { at: 780, minArmySupply: 70, name: "탱크 라인 전진" },
     harass: ["vulture_raid", "bio_drop"],
-    power: 0.965,
+    power: 0.906,
   },
   {
     key: "tvt_2star", name: "투스타 레이스", race: T, vs: T, weight: 0.28, style: "aggressive",
@@ -153,7 +153,7 @@ export const PLANS: Plan[] = [
     expand: [[420, 2], [840, 3], [1140, 4]],
     push: { at: 540, minArmySupply: 30, name: "레이스·탱크 압박" },
     harass: ["wraith_cloak"],
-    power: 1.042,
+    power: 1.138,
   },
   {
     key: "tvt_bbs", name: "BBS (2배럭 마린 러쉬)", race: T, vs: T, weight: 0.12, style: "cheese",
@@ -165,7 +165,7 @@ export const PLANS: Plan[] = [
     expand: [[480, 2], [840, 3], [1140, 4]],
     push: { at: 165, minArmySupply: 6, name: "BBS 마린 러쉬" },
     harass: [],
-    power: 1.048,
+    power: 1.123,
   },
 
   // ════════════════════════ 프로토스 vs 저그 ════════════════════════
@@ -180,7 +180,7 @@ export const PLANS: Plan[] = [
     expand: [[120, 2], [600, 3], [900, 4], [1200, 5]],
     push: { at: 660, minArmySupply: 60, name: "질럿·아칸 한방 진출" },
     harass: ["corsair_overlord", "dark_templar"],
-    power: 1.106,
+    power: 1.197,
   },
   {
     key: "pvz_2gate", name: "2게이트 질럿 러쉬", race: P, vs: Z, weight: 0.15, style: "aggressive",
@@ -193,7 +193,7 @@ export const PLANS: Plan[] = [
     expand: [[360, 2], [720, 3], [1020, 4]],
     push: { at: 210, minArmySupply: 10, name: "2게이트 질럿 압박" },
     harass: ["dark_templar"],
-    power: 0.75,
+    power: 0.619,
   },
   {
     key: "pvz_ffe_dt", name: "포지 더블 다크템플러", race: P, vs: Z, weight: 0.25, style: "standard",
@@ -205,7 +205,7 @@ export const PLANS: Plan[] = [
     expand: [[120, 2], [660, 3], [960, 4], [1260, 5]],
     push: { at: 720, minArmySupply: 60, name: "템플러 한방 진출" },
     harass: ["dark_templar", "corsair_overlord"],
-    power: 0.958,
+    power: 1.097,
   },
 
   // ════════════════════════ 프로토스 vs 테란 ════════════════════════
@@ -220,7 +220,7 @@ export const PLANS: Plan[] = [
     expand: [[200, 2], [630, 3], [930, 4], [1230, 5]],
     push: { at: 720, minArmySupply: 70, name: "드라군·질럿 한방 진출" },
     harass: ["reaver_drop"],
-    power: 1.093,
+    power: 1.153,
   },
   {
     key: "pvt_dt", name: "다크템플러 드랍", race: P, vs: T, weight: 0.2, style: "aggressive",
@@ -232,7 +232,7 @@ export const PLANS: Plan[] = [
     expand: [[380, 2], [780, 3], [1080, 4]],
     push: { at: 540, minArmySupply: 30, name: "다크 이후 드라군 진출" },
     harass: ["dark_templar"],
-    power: 0.798,
+    power: 0.968,
   },
   {
     key: "pvt_carrier", name: "캐리어 운영", race: P, vs: T, weight: 0.25, style: "greedy",
@@ -245,7 +245,7 @@ export const PLANS: Plan[] = [
     expand: [[200, 2], [600, 3], [900, 4], [1200, 5]],
     push: { at: 900, minArmySupply: 80, name: "캐리어 한방 진출" },
     harass: ["reaver_drop"],
-    power: 1.182,
+    power: 1.214,
   },
 
   // ════════════════════════ 프로토스 vs 프로토스 ════════════════════════
@@ -259,7 +259,7 @@ export const PLANS: Plan[] = [
     expand: [[420, 2], [780, 3], [1080, 4]],
     push: { at: 600, minArmySupply: 40, name: "드라군·리버 진출" },
     harass: ["reaver_drop"],
-    power: 0.9,
+    power: 0.899,
   },
   {
     key: "pvp_2gate_reaver", name: "2게이트 리버", race: P, vs: P, weight: 0.25, style: "aggressive",
@@ -271,7 +271,7 @@ export const PLANS: Plan[] = [
     expand: [[480, 2], [840, 3], [1140, 4]],
     push: { at: 480, minArmySupply: 26, name: "셔틀 리버 압박" },
     harass: ["reaver_drop"],
-    power: 1.075,
+    power: 1.153,
   },
   {
     key: "pvp_dt", name: "다크템플러 러쉬", race: P, vs: P, weight: 0.15, style: "aggressive",
@@ -283,7 +283,7 @@ export const PLANS: Plan[] = [
     expand: [[420, 2], [780, 3], [1080, 4]],
     push: { at: 480, minArmySupply: 20, name: "다크 템플러 진출" },
     harass: ["dark_templar"],
-    power: 1.209,
+    power: 1.101,
   },
   {
     key: "pvp_2gate", name: "2게이트 질럿", race: P, vs: P, weight: 0.15, style: "cheese",
@@ -295,7 +295,7 @@ export const PLANS: Plan[] = [
     expand: [[480, 2], [840, 3], [1140, 4]],
     push: { at: 200, minArmySupply: 10, name: "2게이트 질럿 러쉬" },
     harass: [],
-    power: 1.049,
+    power: 1.094,
   },
 
   // ════════════════════════ 저그 vs 테란 ════════════════════════
@@ -310,7 +310,7 @@ export const PLANS: Plan[] = [
     expand: [[110, 2], [240, 3], [720, 4], [1000, 5], [1300, 6]],
     push: { at: 780, minArmySupply: 60, name: "럴커·저글링 진출" },
     harass: ["muta_harass", "ling_runby"],
-    power: 0.858,
+    power: 0.818,
   },
   {
     key: "zvt_3hat_lurker", name: "3해처리 럴커", race: Z, vs: T, weight: 0.25, style: "standard",
@@ -323,7 +323,7 @@ export const PLANS: Plan[] = [
     expand: [[110, 2], [240, 3], [720, 4], [1000, 5], [1300, 6]],
     push: { at: 540, minArmySupply: 36, name: "럴커 조이기" },
     harass: ["ling_runby"],
-    power: 0.861,
+    power: 0.807,
   },
   {
     key: "zvt_9pool", name: "9드론 발업 저글링", race: Z, vs: T, weight: 0.13, style: "aggressive",
@@ -336,7 +336,7 @@ export const PLANS: Plan[] = [
     expand: [[200, 2], [480, 3], [800, 4], [1100, 5]],
     push: { at: 180, minArmySupply: 5, name: "발업 저글링 러쉬" },
     harass: ["ling_runby", "muta_harass"],
-    power: 1.244,
+    power: 1.269,
   },
   {
     key: "zvt_4pool", name: "4드론 러쉬", race: Z, vs: T, weight: 0.03, style: "cheese",
@@ -348,7 +348,7 @@ export const PLANS: Plan[] = [
     expand: [[330, 2], [600, 3], [900, 4]],
     push: { at: 125, minArmySupply: 3, name: "4드론 저글링 러쉬" },
     harass: ["ling_runby"],
-    power: 1.4,
+    power: 1.6,
   },
 
   // ════════════════════════ 저그 vs 프로토스 ════════════════════════
@@ -363,7 +363,7 @@ export const PLANS: Plan[] = [
     expand: [[110, 2], [220, 3], [700, 4], [1000, 5], [1300, 6]],
     push: { at: 540, minArmySupply: 50, name: "히드라 타이밍 러쉬" },
     harass: ["ling_runby"],
-    power: 1.004,
+    power: 0.929,
   },
   {
     key: "zvp_muta", name: "3해처리 뮤탈", race: Z, vs: P, weight: 0.22, style: "standard",
@@ -376,7 +376,7 @@ export const PLANS: Plan[] = [
     expand: [[110, 2], [240, 3], [720, 4], [1000, 5], [1300, 6]],
     push: { at: 720, minArmySupply: 60, name: "히드라·저글링 진출" },
     harass: ["muta_harass", "ling_runby"],
-    power: 0.842,
+    power: 0.873,
   },
   {
     key: "zvp_9pool", name: "9드론 발업 저글링", race: Z, vs: P, weight: 0.13, style: "aggressive",
@@ -389,7 +389,7 @@ export const PLANS: Plan[] = [
     expand: [[200, 2], [460, 3], [800, 4], [1100, 5]],
     push: { at: 185, minArmySupply: 5, name: "발업 저글링 러쉬" },
     harass: ["ling_runby"],
-    power: 1.254,
+    power: 1.261,
   },
   {
     key: "zvp_4pool", name: "4드론 러쉬", race: Z, vs: P, weight: 0.05, style: "cheese",
@@ -401,7 +401,7 @@ export const PLANS: Plan[] = [
     expand: [[330, 2], [600, 3], [900, 4]],
     push: { at: 125, minArmySupply: 3, name: "4드론 저글링 러쉬" },
     harass: ["ling_runby"],
-    power: 1.4,
+    power: 1.6,
   },
 
   // ════════════════════════ 저그 vs 저그 ════════════════════════
@@ -416,7 +416,7 @@ export const PLANS: Plan[] = [
     expand: [[330, 2], [660, 3], [960, 4]],
     push: { at: 480, minArmySupply: 20, name: "뮤탈리스크 교전" },
     harass: ["muta_harass"],
-    power: 0.984,
+    power: 1.021,
   },
   {
     key: "zvz_12hat", name: "12앞마당", race: Z, vs: Z, weight: 0.25, style: "greedy",
@@ -428,7 +428,7 @@ export const PLANS: Plan[] = [
     expand: [[110, 2], [480, 3], [840, 4]],
     push: { at: 540, minArmySupply: 26, name: "뮤탈리스크 진출" },
     harass: ["muta_harass"],
-    power: 0.949,
+    power: 0.925,
   },
   {
     key: "zvz_4pool", name: "4드론 러쉬", race: Z, vs: Z, weight: 0.15, style: "cheese",
@@ -440,7 +440,7 @@ export const PLANS: Plan[] = [
     expand: [[360, 2], [660, 3]],
     push: { at: 125, minArmySupply: 3, name: "4드론 저글링 러쉬" },
     harass: ["ling_runby"],
-    power: 1.194,
+    power: 1.216,
   },
 ];
 

@@ -47,7 +47,7 @@ for (let it = 0; it < ITER; it++) {
       const r = plan[p.key];
       if (!r || r[1] < 15) continue;
       const wr = Math.min(0.9, Math.max(0.1, r[0] / r[1]));
-      p.power = Math.round(Math.min(1.4, Math.max(0.75, (p.power ?? 1) * Math.pow(0.5 / wr, 0.15))) * 1000) / 1000;
+      p.power = Math.round(Math.min(1.6, Math.max(0.6, (p.power ?? 1) * Math.pow(0.5 / wr, 0.15))) * 1000) / 1000;
     }
   }
   console.log(`iter ${it}: ` + Object.entries(race).map(([k, v]) => `${k} ${(v * 100).toFixed(0)}%`).join(" | "));
