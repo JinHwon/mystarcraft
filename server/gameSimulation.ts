@@ -18,6 +18,7 @@ import {
   type GameState,
   type PlayerSnapshot,
 } from "./bw/bwEngine";
+import { LegacyCaster } from "./bw/legacyCommentary";
 
 /**
  * 게임 턴 데이터 구조
@@ -302,7 +303,7 @@ export interface SetTimeline {
   frames: Array<{ t: number; army: [number, number]; res: [number, number] }>;
 }
 
-const TIME_RE = /^\[(\d+):(\d+)\]\s*/;
+
 
 const HIGHLIGHT_RE = /빌드는|공격!|교전 승리|뒤집|역습!|수비 성공|무너|지켜냅|GG|판정|드랍|난입|급습|견제!/;
 
@@ -324,25 +325,17 @@ export function simulateSet(
     mapTraits, mapRaceAdvantage
   );
   const highlights: string[] = [];
+  // 중계 화면용: 원작 해설 문장으로 중계 (엔진 이벤트 → 원작 문장)
   const timeline: SetTimeline | undefined = withTimeline ? { lines: [], frames: [{ t: 0, army: [0, 0], res: [0, 0] }] } : undefined;
-  const sideOf = (text: string): 0 | 1 | 2 => {
-    const i1 = text.indexOf(`${p1.name} 선수`), i2 = text.indexOf(`${p2.name} 선수`);
-    if (i1 < 0 && i2 < 0) return 0;
-    if (i2 < 0 || (i1 >= 0 && i1 <= i2)) return 1;
-    return 2;
-  };
+  const caster = withTimeline ? new LegacyCaster({ side: 1, name: p1.name, race: p1.race }, { side: 2, name: p2.name, race: p2.race }) : undefined;
+  if (caster) gs.feed = [];
   let turns = 0;
   while (!gs.gameEnded && turns < 125) {
     progressTurn(gs);
     turns++;
-    if (timeline) {
-      for (const c of gs.turnCommentaries) {
-        if (c.includes("현황 |")) continue;
-        const m = TIME_RE.exec(c);
-        const t = m ? Number(m[1]) * 60 + Number(m[2]) : gs.time;
-        const text = c.replace(TIME_RE, "");
-        timeline.lines.push({ t, side: sideOf(text), text });
-      }
+    if (timeline && caster) {
+      caster.feed(gs.feed!.splice(0));
+      caster.quiet(gs.time);
       const d = gameStateToTurnData(gs);
       timeline.frames.push({ t: gs.time, army: [d.p1.armySupply, d.p2.armySupply], res: [d.p1.incomePerMin, d.p2.incomePerMin] });
     }
@@ -354,7 +347,9 @@ export function simulateSet(
   if (!gs.gameEnded) {
     gs.gameEnded = true;
     gs.winner = gs.player1Advantage >= 50 ? gs.player1.id : gs.player2.id;
+    caster?.feed([{ t: gs.time, k: "judge", winner: gs.winner === gs.player1.id ? 1 : 2 }]);
   }
+  if (timeline && caster) timeline.lines = caster.lines();
   // 너무 길면 앞부분(빌드)과 뒷부분(결정적 장면) 위주로 줄임
   const trimmed = highlights.length > 18 ? [...highlights.slice(0, 4), ...highlights.slice(-14)] : highlights;
   return { winnerId: gs.winner ?? p1.id, duration: gs.time, endReason: gs.endReason, highlights: trimmed, timeline };

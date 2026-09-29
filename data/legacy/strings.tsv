@@ -1,0 +1,1710 @@
+주소	섹션	참조수	문자열
+0x526058	.rdata	1	신모군     (T)
+0x52606C	.rdata	1	별             (P)
+0x526084	.rdata	1	카이         (Z)
+0x526098	.rdata	1	한승엽     (T)
+0x5260AC	.rdata	1	한동훈     (P)
+0x5260C0	.rdata	1	피터         (P)
+0x5260D4	.rdata	1	최인규     (T)
+0x5260E8	.rdata	1	최연성     (T)
+0x5260FC	.rdata	1	최수범     (T)
+0x526110	.rdata	1	최가람     (Z)
+0x526124	.rdata	1	진영수     (T)
+0x526138	.rdata	1	주현준     (T)
+0x52614C	.rdata	1	조형근     (Z)
+0x526160	.rdata	1	조용호     (Z)
+0x526174	.rdata	1	전태규     (P)
+0x526188	.rdata	1	장진수     (Z)
+0x52619C	.rdata	1	장진남     (Z)
+0x5261B0	.rdata	1	장육         (Z)
+0x5261C4	.rdata	1	장용석     (T)
+0x5261D8	.rdata	1	임채성     (T)
+0x5261EC	.rdata	1	임성춘     (P)
+0x526200	.rdata	1	임동혁     (Z)
+0x526214	.rdata	1	이창훈     (Z)
+0x526228	.rdata	1	이주영     (Z)
+0x52623C	.rdata	1	이종미     (Z)
+0x526250	.rdata	1	이재훈     (P)
+0x526264	.rdata	1	이재황     (Z)
+0x526278	.rdata	1	이승훈     (P)
+0x52628C	.rdata	1	이병민     (T)
+0x5262A0	.rdata	1	윤종민     (Z)
+0x5262B4	.rdata	1	원종서     (T)
+0x5262C8	.rdata	1	오충훈     (T)
+0x5262DC	.rdata	1	염선희     (T)
+0x5262F0	.rdata	1	안상원     (T)
+0x526304	.rdata	1	심소명     (Z)
+0x526318	.rdata	1	신희승     (T)
+0x52632C	.rdata	1	신정민     (Z)
+0x526340	.rdata	1	손영훈     (P)
+0x526354	.rdata	1	서기수     (P)
+0x526368	.rdata	1	샤쥔춘     (P)
+0x52637C	.rdata	1	변은종     (Z)
+0x526390	.rdata	1	변성철     (Z)
+0x5263A4	.rdata	1	변길섭     (T)
+0x5263B8	.rdata	1	베르트랑 (T)
+0x5263C8	.rdata	1	박찬수     (Z)
+0x5263DC	.rdata	1	박정욱     (T)
+0x5263F0	.rdata	1	박정길     (P)
+0x526404	.rdata	1	박용욱     (P)
+0x526418	.rdata	1	박성훈     (P)
+0x52642C	.rdata	1	박문기     (Z)
+0x526440	.rdata	1	박명수     (Z)
+0x526454	.rdata	1	박동수     (T)
+0x526468	.rdata	1	박대경     (P)
+0x52647C	.rdata	1	박경락     (Z)
+0x526490	.rdata	1	문지훈     (T)
+0x5264A4	.rdata	1	문준희     (P)
+0x5264B8	.rdata	1	문성진     (Z)
+0x5264CC	.rdata	1	마재윤     (Z)
+0x5264E0	.rdata	1	루오시안 (P)
+0x5264F0	.rdata	1	도진광     (P)
+0x526504	.rdata	1	나도현     (T)
+0x526518	.rdata	1	김환중     (P)
+0x52652C	.rdata	1	김현진     (T)
+0x526540	.rdata	1	김태형     (P)
+0x526554	.rdata	1	김창희     (T)
+0x526568	.rdata	1	김창선     (P)
+0x52657C	.rdata	1	김준영     (Z)
+0x526590	.rdata	1	김정환     (Z)
+0x5265A4	.rdata	1	김정민     (T)
+0x5265B8	.rdata	1	김인기     (P)
+0x5265CC	.rdata	1	김윤환     (T)
+0x5265E0	.rdata	1	김원기     (Z)
+0x5265F4	.rdata	1	김영미     (Z)
+0x526608	.rdata	1	김성진     (T)
+0x52661C	.rdata	1	김성제     (P)
+0x526630	.rdata	1	김성기     (T)
+0x526644	.rdata	1	김선기     (T)
+0x526658	.rdata	1	김민제     (P)
+0x52666C	.rdata	1	김동진     (T)
+0x526680	.rdata	1	김동수     (P)
+0x526694	.rdata	1	김대기     (T)
+0x5266A8	.rdata	1	김남기     (Z)
+0x5266BC	.rdata	1	김근백     (Z)
+0x5266D0	.rdata	1	김가을     (Z)
+0x5266E4	.rdata	1	기욤         (P)
+0x5266F8	.rdata	1	권오혁     (P)
+0x52670C	.rdata	1	강도경     (Z)
+0x526720	.rdata	1	강민         (P)
+0x526734	.rdata	1	강구열     (T)
+0x526748	.rdata	1	전태양     (T)
+0x52675C	.rdata	1	전상욱     (T)
+0x526770	.rdata	1	이윤열     (T)
+0x526784	.rdata	1	이예훈     (Z)
+0x526798	.rdata	1	이영한     (Z)
+0x5267AC	.rdata	1	이영호     (P)
+0x5267C0	.rdata	1	신노열     (Z)
+0x5267D4	.rdata	1	박세정     (P)
+0x5267E8	.rdata	1	박성균     (T)
+0x5267FC	.rdata	1	강정우     (T)
+0x526810	.rdata	1	홍진호     (Z)
+0x526824	.rdata	1	한동욱     (T)
+0x526838	.rdata	1	차재욱     (T)
+0x52684C	.rdata	1	오영종     (P)
+0x526860	.rdata	1	안기효     (P)
+0x526874	.rdata	1	손석희     (P)
+0x526888	.rdata	1	서지훈     (T)
+0x52689C	.rdata	1	박태민     (Z)
+0x5268B0	.rdata	1	박정석     (P)
+0x5268C4	.rdata	1	박영민     (P)
+0x5268D8	.rdata	1	민찬기     (T)
+0x5268EC	.rdata	1	김경모     (Z)
+0x526900	.rdata	1	최지성     (T)
+0x526914	.rdata	1	정명호     (Z)
+0x526928	.rdata	1	유병준     (P)
+0x52693C	.rdata	1	안수형     (P)
+0x526950	.rdata	1	신재욱     (P)
+0x526964	.rdata	1	신상호     (P)
+0x526978	.rdata	1	신대근     (Z)
+0x52698C	.rdata	1	박상우     (T)
+0x5269A0	.rdata	1	김성대     (Z)
+0x5269B4	.rdata	1	김도우     (T)
+0x5269C8	.rdata	1	하태준     (P)
+0x5269DC	.rdata	1	최홍희     (P)
+0x5269F0	.rdata	1	조재걸     (P)
+0x526A04	.rdata	1	이호준     (T)
+0x526A18	.rdata	1	이경민     (P)
+0x526A2C	.rdata	1	안준영     (Z)
+0x526A40	.rdata	1	신상문     (T)
+0x526A54	.rdata	1	김학수     (P)
+0x526A68	.rdata	1	김상욱     (Z)
+0x526A7C	.rdata	1	김봉준     (P)
+0x526A90	.rdata	1	강석         (Z)
+0x526AA4	.rdata	1	한두열     (Z)
+0x526AB8	.rdata	1	진영화     (P)
+0x526ACC	.rdata	1	정우용     (T)
+0x526AE0	.rdata	1	장윤철     (P)
+0x526AF4	.rdata	1	조병세     (T)
+0x526B08	.rdata	1	신동원     (Z)
+0x526B1C	.rdata	1	손재범     (P)
+0x526B30	.rdata	1	변형태     (T)
+0x526B44	.rdata	1	김정우     (Z)
+0x526B58	.rdata	1	김민호     (Z)
+0x526B6C	.rdata	1	권수현     (Z)
+0x526B80	.rdata	1	임원기     (P)
+0x526B94	.rdata	1	이학주     (T)
+0x526BA8	.rdata	1	이제동     (Z)
+0x526BBC	.rdata	1	손찬웅     (P)
+0x526BD0	.rdata	1	손주흥     (T)
+0x526BE4	.rdata	1	방태수     (Z)
+0x526BF8	.rdata	1	박준오     (Z)
+0x526C0C	.rdata	1	김태균     (P)
+0x526C20	.rdata	1	김민혁     (T)
+0x526C34	.rdata	1	구성훈     (T)
+0x526C48	.rdata	1	강동현     (Z)
+0x526C5C	.rdata	1	정우서     (Z)
+0x526C70	.rdata	1	전흥식     (P)
+0x526C84	.rdata	1	장민철     (P)
+0x526C98	.rdata	1	임성진     (T)
+0x526CAC	.rdata	1	이재호     (T)
+0x526CC0	.rdata	1	염보성     (T)
+0x526CD4	.rdata	1	서경종     (Z)
+0x526CE8	.rdata	1	박지호     (P)
+0x526CFC	.rdata	1	박수범     (P)
+0x526D10	.rdata	1	김태훈     (Z)
+0x526D24	.rdata	1	김재훈     (P)
+0x526D38	.rdata	1	김동현     (Z)
+0x526D4C	.rdata	1	고석현     (Z)
+0x526D60	.rdata	1	최호선     (T)
+0x526D74	.rdata	1	정윤종     (P)
+0x526D88	.rdata	1	정영철     (Z)
+0x526D9C	.rdata	1	정영재     (T)
+0x526DB0	.rdata	1	정명훈     (T)
+0x526DC4	.rdata	1	임요환     (T)
+0x526DD8	.rdata	1	이승석     (Z)
+0x526DEC	.rdata	1	어윤수     (Z)
+0x526E00	.rdata	1	박재혁     (Z)
+0x526E14	.rdata	1	도재욱     (P)
+0x526E28	.rdata	1	김택용     (P)
+0x526E3C	.rdata	1	고인규     (T)
+0x526E50	.rdata	1	한상봉     (Z)
+0x526E64	.rdata	1	정종현     (T)
+0x526E78	.rdata	1	임진묵     (T)
+0x526E8C	.rdata	1	임정현     (Z)
+0x526EA0	.rdata	1	이동준     (T)
+0x526EB4	.rdata	1	윤용태     (P)
+0x526EC8	.rdata	1	박대만     (P)
+0x526EDC	.rdata	1	노준규     (T)
+0x526EF0	.rdata	1	김영진     (T)
+0x526F04	.rdata	1	김승현     (P)
+0x526F18	.rdata	1	김민철     (Z)
+0x526F2C	.rdata	1	김명운     (Z)
+0x526F40	.rdata	1	김동주     (T)
+0x526F54	.rdata	1	조일장     (Z)
+0x526F68	.rdata	1	조성호     (P)
+0x526F7C	.rdata	1	이신형     (T)
+0x526F90	.rdata	1	서지수     (T)
+0x526FA4	.rdata	1	박종수     (P)
+0x526FB8	.rdata	2	박성준     (Z)
+0x526FCC	.rdata	1	김현우     (Z)
+0x526FE0	.rdata	1	김윤환     (Z)
+0x526FF4	.rdata	1	김윤중     (P)
+0x527008	.rdata	1	김구현     (P)
+0x52701C	.rdata	1	김성현     (T)
+0x527030	.rdata	1	김동건     (T)
+0x527044	.rdata	1	김경효     (T)
+0x527058	.rdata	1	허영무     (P)
+0x52706C	.rdata	1	최윤선     (P)
+0x527080	.rdata	1	차명환     (Z)
+0x527094	.rdata	1	주영달     (Z)
+0x5270A8	.rdata	1	조기석     (T)
+0x5270BC	.rdata	1	임태규     (P)
+0x5270D0	.rdata	1	이정현     (Z)
+0x5270E4	.rdata	1	이성은     (T)
+0x5270F8	.rdata	1	유준희     (Z)
+0x52710C	.rdata	1	송병구     (P)
+0x527120	.rdata	1	박대호     (T)
+0x527134	.rdata	1	김기현     (T)
+0x527148	.rdata	1	황병영     (T)
+0x52715C	.rdata	1	최용주     (Z)
+0x527170	.rdata	1	이영호     (T)
+0x527184	.rdata	1	우정호     (P)
+0x527198	.rdata	1	배병우     (Z)
+0x5271AC	.rdata	1	박지수     (T)
+0x5271C0	.rdata	1	박재영     (P)
+0x5271D4	.rdata	1	남승현     (T)
+0x5271E8	.rdata	1	김재춘     (Z)
+0x5271FC	.rdata	1	김대엽     (P)
+0x527210	.rdata	1	고강민     (Z)
+0x527224	.rdata	1	강현우     (P)
+0x527243	.rdata	0	B폴라리스랩소디
+0x527258	.rdata	1	그랜드라인
+0x527268	.rdata	1	로드런너
+0x527274	.rdata	1	심판의날
+0x527280	.rdata	1	네오문글레이브
+0x527294	.rdata	1	태풍의눈
+0x5272A0	.rdata	1	투혼
+0x5272A8	.rdata	1	신용오름
+0x5272B4	.rdata	1	매치포인트
+0x5272C4	.rdata	1	신의정원
+0x5272D0	.rdata	1	아웃사이더SE
+0x5272E0	.rdata	1	배틀로얄
+0x5272EC	.rdata	1	신단장의능선
+0x5272FC	.rdata	1	달의눈물
+0x527308	.rdata	1	카르타고3
+0x527314	.rdata	1	네오메두사
+0x527324	.rdata	1	신청풍명월
+0x527334	.rdata	1	데스티네이션
+0x527344	.rdata	1	신추풍령
+0x527350	.rdata	1	플라즈마
+0x52735C	.rdata	1	왕의귀환
+0x527368	.rdata	1	비잔티움3
+0x527374	.rdata	1	데토네이션F
+0x527384	.rdata	1	머큐리
+0x52738C	.rdata	1	아테나2
+0x527398	.rdata	1	티아매트
+0x5273A4	.rdata	1	화랑도
+0x5273AC	.rdata	1	폭풍의언덕
+0x5273BC	.rdata	1	콜로세움2
+0x5273C8	.rdata	1	오델로
+0x5273D0	.rdata	1	안드로메다
+0x5273E0	.rdata	1	블리츠X
+0x5273EC	.rdata	1	트로이
+0x5273F4	.rdata	1	히치하이커
+0x527404	.rdata	1	팔진도
+0x52740C	.rdata	1	파이썬
+0x527414	.rdata	1	타우크로스
+0x527424	.rdata	1	카트리나SE
+0x527434	.rdata	1	지오메트리
+0x527444	.rdata	1	조디악
+0x52744C	.rdata	1	운고로분화구
+0x52745C	.rdata	1	알포인트
+0x527468	.rdata	1	아카디아2
+0x527474	.rdata	1	신백두대간
+0x527484	.rdata	1	블루스톰
+0x527490	.rdata	1	백마고지
+0x52749C	.rdata	1	몽환2
+0x5274A4	.rdata	1	몬티홀SE
+0x5274B0	.rdata	1	리버스템플
+0x5274C0	.rdata	1	루나
+0x5274C8	.rdata	1	롱기누스2
+0x5274D4	.rdata	1	로키2
+0x5274DC	.rdata	1	러시아워3
+0x5274E8	.rdata	1	라이드of발키리
+0x5274FC	.rdata	1	데스페라도
+0x52750C	.rdata	1	레이드어썰트2
+0x52751C	.rdata	1	네오레퀴엠
+0x52752C	.rdata	1	비프로스트3
+0x52753C	.rdata	1	무소속
+0x527544	.rdata	1	위메이드 FOX
+0x527554	.rdata	1	공군 ACE
+0x527568	.rdata	1	하이트 Sparkyz
+0x527588	.rdata	1	화승 OZ
+0x527594	.rdata	1	MBC게임 HERO
+0x5275B4	.rdata	1	웅진 Stars
+0x5275D0	.rdata	1	삼성전자 KHAN
+0x5275E0	.rdata	1	KT 롤스터
+0x527654	.rdata	1	병력
+0x527846	.rdata	0	읽/
+0x527876	.rdata	0	읽/
+0x5278A6	.rdata	0	읽/
+0x5278D6	.rdata	0	읽/
+0x527906	.rdata	0	읽/
+0x527936	.rdata	0	읽/
+0x527AD0	.rdata	0	획걱ㅒ/
+0x527B04	.rdata	0	획걱ㅒ/
+0x527B38	.rdata	0	획걱ㅒ/
+0x527B6C	.rdata	0	획걱ㅒ/
+0x527BA0	.rdata	0	뙾㉩댱/
+0x527BD4	.rdata	0	뙾㉩댱/
+0x527C08	.rdata	0	뙾㉩댱/
+0x527C3C	.rdata	0	뙾㉩댱/
+0x527C70	.rdata	0	뙾㉩댱/
+0x527C9C	.rdata	0	읽/
+0x527CC4	.rdata	0	읽/
+0x527CCA	.rdata	0	潽씼.
+0x527CEC	.rdata	0	읽/
+0x527CF4	.rdata	0	빭.
+0x527D14	.rdata	0	읽/
+0x527D1E	.rdata	0	읠.
+0x527D3C	.rdata	0	읽/
+0x527D46	.rdata	0	읠.
+0x527D64	.rdata	0	읽/
+0x527D98	.rdata	0	읽/
+0x527DC4	.rdata	0	읽/
+0x527DF4	.rdata	0	읽/
+0x527E20	.rdata	0	읽/
+0x527E50	.rdata	0	읽/
+0x527E80	.rdata	0	읽/
+0x527EAC	.rdata	0	읽/
+0x527ED8	.rdata	0	읽/
+0x527F00	.rdata	0	읽/
+0x527FD0	.rdata	0	읽/
+0x527FF8	.rdata	0	읽/
+0x528000	.rdata	0	쑲.
+0x528020	.rdata	0	읽/
+0x52802A	.rdata	0	쳤.
+0x528048	.rdata	0	읽/
+0x528050	.rdata	0	뙾띇.
+0x528070	.rdata	0	읽/
+0x5280A0	.rdata	0	읽/
+0x5280C8	.rdata	0	읽/
+0x5280F0	.rdata	0	읽/
+0x528118	.rdata	0	읽/
+0x528140	.rdata	0	읽/
+0x528170	.rdata	0	읽/
+0x5281A4	.rdata	0	읽/
+0x5281CC	.rdata	0	읽/
+0x5281F4	.rdata	0	읽/
+0x528306	.rdata	0	젾.
+0x5283AA	.rdata	0	꽮.
+0x528452	.rdata	0	꽻.
+0x5284CC	.rdata	0	읽席.
+0x52851C	.rdata	0	띞끆暾.
+0x5285A0	.rdata	0	댦획.
+0x5285EE	.rdata	0	붒眺읗2
+0x528674	.rdata	0	삹2
+0x52869C	.rdata	0	阿먕.
+0x5286C2	.rdata	0	뫕캐.
+0x52871A	.rdata	0	읗2
+0x528812	.rdata	0	케캐.
+0x52888E	.rdata	0	먕Ч삹.
+0x5288BA	.rdata	0	먕Ч.
+0x528936	.rdata	0	먕.
+0x5289B2	.rdata	0	甕ㅒ겉.
+0x5289DA	.rdata	0	획席읠.
+0x528A78	.rdata	0	甕삹.
+0x528BCA	.rdata	0	ㅒ먕3
+0x528C1E	.rdata	0	캬.
+0x528C6C	.rdata	0	뮤徽.
+0x528C94	.rdata	0	冒휘.
+0x528D36	.rdata	0	뵾.
+0x528D5E	.rdata	0	뙴.
+0x528F16	.rdata	0	샧.
+0x528F66	.rdata	0	휘.
+0x528FB4	.rdata	0	끞翩.
+0x528FDE	.rdata	0	휘.
+0x52902C	.rdata	0	뮤휘.
+0x52907C	.rdata	0	끞環.
+0x5290CC	.rdata	0	⒜휘.
+0x52911C	.rdata	0	좇根.
+0x529142	.rdata	0	貽뙾끆.
+0x52916E	.rdata	0	뮤.
+0x5291BE	.rdata	0	휘.
+0x52920E	.rdata	0	샧.
+0x529236	.rdata	0	끞.
+0x52925E	.rdata	0	졠.
+0x5292AE	.rdata	0	먕뫕.
+0x529302	.rdata	0	궉.
+0x529350	.rdata	0	㈕궉.
+0x52937A	.rdata	0	휘.
+0x529446	.rdata	0	쉬.
+0x529494	.rdata	0	읠휘.
+0x5294E6	.rdata	0	케.
+0x5295DA	.rdata	0	케.
+0x529792	.rdata	0	케.
+0x529858	.rdata	0	冒케.
+0x529998	.rdata	0	캐쉬.
+0x529A10	.rdata	0	輔뫥.
+0x529A38	.rdata	0	좇궉.
+0x529A8A	.rdata	0	휘.
+0x529B7E	.rdata	0	걱.
+0x529BCC	.rdata	0	冒궉.
+0x529BF6	.rdata	0	궉.
+0x529C1E	.rdata	0	끞.
+0x529C94	.rdata	0	읠휘.
+0x529D5C	.rdata	0	쉬㉩.
+0x529E26	.rdata	0	궉.
+0x529E9C	.rdata	0	좇걱.
+0x529EEC	.rdata	0	캐걱.
+0x529FB4	.rdata	0	쉬環.
+0x52A054	.rdata	0	좇궉.
+0x52A11C	.rdata	0	걱㈕.
+0x52A146	.rdata	0	졠.
+0x52A1BE	.rdata	0	뵾.
+0x52A20E	.rdata	0	걱.
+0x52A2FE	.rdata	0	탬.
+0x52A3EE	.rdata	0	휘.
+0x52A48A	.rdata	0	Η環졠.
+0x52A4B6	.rdata	0	케.
+0x52A52C	.rdata	0	쉬끞.
+0x52A57E	.rdata	0	뵾.
+0x52A5A4	.rdata	0	輔휘.
+0x52A5CE	.rdata	0	휘.
+0x52A66E	.rdata	0	끞.
+0x52A696	.rdata	0	졠.
+0x52A6E4	.rdata	0	끆휘.
+0x52A7AE	.rdata	0	궉.
+0x52A966	.rdata	0	케.
+0x52A9B4	.rdata	0	環졠.
+0x52A9DC	.rdata	0	끆늠.
+0x52AB1E	.rdata	0	걱.
+0x52AC10	.rdata	0	쉬ⓙ.
+0x52ACFE	.rdata	0	꽽輔瞥.
+0x52AEB8	.rdata	0	羈걱.
+0x52AF5A	.rdata	0	샧.
+0x52AFD2	.rdata	0	걱.
+0x52B1C4	.rdata	3	굴림
+0x52B280	.rdata	1	복잡도
+0x52B294	.rdata	2	자원
+0x52B29C	.rdata	1	러시거리
+0x52B2C4	.rdata	1	견제
+0x52B2CC	.rdata	1	전략
+0x52B2D4	.rdata	1	물량
+0x52B2DC	.rdata	1	공격력
+0x52B2E4	.rdata	1	수비력
+0x52B2EC	.rdata	1	컨트롤
+0x52B2F4	.rdata	1	센스
+0x52B2FC	.rdata	1	정찰
+0x52B35C	.rdata	1	이번시즌
+0x52B380	.rdata	5	패
+0x52B384	.rdata	5	승
+0x52B388	.rdata	1	상대전적
+0x52B394	.rdata	1	전적없음
+0x52B3A0	.rdata	1	연패
+0x52B3A8	.rdata	1	연승
+0x52B400	.rdata	1	총 전적
+0x52B40C	.rdata	3	위
+0x52B418	.rdata	1	포스트시즌 진출 실패
+0x52B434	.rdata	1	준 플레이오프 진출 !
+0x52B450	.rdata	1	플레이오프 진출 !
+0x52B468	.rdata	1	결승전 진출 !!!
+0x52B47C	.rdata	2	이 번   시 즌   성 적
+0x52B51C	.rdata	2	개인리그
+0x52B528	.rdata	6	준우승
+0x52B530	.rdata	6	우승
+0x52B538	.rdata	3	프로리그
+0x52B560	.rdata	1	슇솛솛(@
+0x52B56C	.rdata	1	스나이핑할 수 없는 상태 입니다.
+0x52B594	.rdata	1	이 선수는 더 사용 할 수 없습니다
+0x52B5BC	.rdata	1	컨디션이 최대 입니다
+0x52B5D8	.rdata	1	대상을 선택해 주세요
+0x52B5F4	.rdata	1	아이템이 없습니다
+0x52B60C	.rdata	1	아이템을 사용했습니다
+0x52B638	.rdata	1	듀얼 토너먼트 진출
+0x52B650	.rdata	7	종료되었습니다
+0x52B684	.rdata	1	우리팀 참가 현황
+0x52B698	.rdata	2	예선 통과자 명단
+0x52B6AC	.rdata	6	경기가 진행중입니다
+0x52B6C4	.rdata	6	진행되지 않았습니다
+0x52B6DC	.rdata	8	조
+0x52B6EC	.rdata	1	P C 방   예 선   토 너 먼 트
+0x52B710	.rdata	2	< 승자전 >  < 패자전 >
+0x52B72C	.rdata	2	< 1 경기 >  < 2 경기 >
+0x52B750	.rdata	4	< 최종전 >
+0x52B760	.rdata	2	< 패자전 >
+0x52B770	.rdata	2	< 승자전 >
+0x52B780	.rdata	8	< 2 경기 >
+0x52B79C	.rdata	6	< 1 경기 >
+0x52B7DC	.rdata	5	시작합니다
+0x52B7EC	.rdata	1	듀 얼   토 너 먼 트
+0x52B804	.rdata	3	미 정
+0x52B80C	.rdata	1	마 이 스 타 리 그   32 강
+0x52B82C	.rdata	6	< 3 경기 >
+0x52B860	.rdata	3	슇솛솛.@
+0x52B86C	.rdata	1	마 이 스 타 리 그   16 강
+0x52B88C	.rdata	2	< 1 경기 >  < 5 경기 >
+0x52B8A8	.rdata	2	< 5 경기 >
+0x52B8B8	.rdata	4	< 4 경기 >
+0x52B8CD	.rdata	0	픉@
+0x52B8D4	.rdata	1	마 이 스 타 리 그   8 강
+0x52B8F4	.rdata	1	마 이 스 타 리 그   4 강
+0x52B91C	.rdata	1	마 이 스 타 리 그   결 승
+0x52B93C	.rdata	1	대기자 명단
+0x52B94C	.rdata	1	선수의 지명 →
+0x52B960	.rdata	1	지명을 시작합니다
+0x52B978	.rdata	1	32강  H조
+0x52B984	.rdata	1	32강  G조
+0x52B990	.rdata	1	32강  F조
+0x52B99C	.rdata	1	32강  E조
+0x52B9A8	.rdata	1	32강  D조
+0x52B9B4	.rdata	1	32강  C조
+0x52B9C0	.rdata	1	32강  B조
+0x52B9CC	.rdata	1	32강  A조
+0x52B9D8	.rdata	1	시드 선수 →
+0x52B9E8	.rdata	1	마 이 스 타 리 그   조 지 명 식
+0x52BA10	.rdata	1	스타리그 종료
+0x52BA2C	.rdata	1	우승을 축하합니다
+0x52BA50	.rdata	1	< 결승 >
+0x52BA5C	.rdata	1	< 4 강 >
+0x52BA68	.rdata	1	< 8 강 >
+0x52BA74	.rdata	1	< 16 강 >
+0x52BAFC	.rdata	1	개
+0x52BB00	.rdata	2	치어풀
+0x52BB08	.rdata	1	팬미팅을 합니다
+0x52BB1C	.rdata	1	능력치를 향상시킵니다.
+0x52BB38	.rdata	1	연습을 열심히 합니다
+0x52BB54	.rdata	1	쉬면서 컨디션을 회복합니다.
+0x52BB78	.rdata	3	소모 행동력
+0x52BB88	.rdata	1	휴식을 취합니다
+0x52BB9C	.rdata	1	컨디션
+0x52BBA4	.rdata	1	행동력
+0x52BBAC	.rdata	1	선수들
+0x52BBB4	.rdata	1	선 수   행 동
+0x52BBC4	.rdata	1	요구 금액
+0x52BBD0	.rdata	1	방출 이득
+0x52BBDC	.rdata	6	만원
+0x52BBE4	.rdata	2	보유 금액
+0x52BBF0	.rdata	1	방출 선수 양쪽에 선택
+0x52BC0C	.rdata	1	교환할 양측 선수 선택
+0x52BC28	.rdata	1	무소속 선수 선택
+0x52BC54	.rdata	1	선수 수
+0x52BC60	.rdata	1	선 수   영 입
+0x52BC70	.rdata	1	◇     맵   추 첨   결 과     ◇
+0x52BC9D	.rdata	0	퓿@
+0x52BCA4	.rdata	1	♨ ... 대회 종료 ... ♨
+0x52BCC0	.rdata	1	☆ 준우승을 축하합니다 ! ☆
+0x52BCE4	.rdata	1	☆♪ 우승을 축하 합니다 !! ♬☆
+0x52BD0C	.rdata	1	♧♣♧♣   결승   ♣♧♣♧
+0x52BD2C	.rdata	1	♧♣♧  4강  ♧♣♧
+0x52BD44	.rdata	1	♧♣  8강  ♣♧
+0x52BD58	.rdata	1	♧  12강  ♧
+0x52BD68	.rdata	1	○- 대회 종료 -○
+0x52BD80	.rdata	1	< 결승전 >
+0x52BD90	.rdata	1	< 4 강전 >
+0x52BDA0	.rdata	1	○- 시즌 종료 -○
+0x52BDB8	.rdata	2	☆- 준우승 -☆
+0x52BDCC	.rdata	2	☆♪☆- 우승 -☆♬☆
+0x52BDE8	.rdata	1	플레이 오프
+0x52BDF8	.rdata	1	준 플레이 오프
+0x52BE0C	.rdata	1	마이스타리그 결승
+0x52BE24	.rdata	1	마이스타리그 4강
+0x52BE38	.rdata	2	마이프로리그 결승
+0x52BE50	.rdata	2	플레이오프
+0x52BE60	.rdata	2	준플레이오프
+0x52BE70	.rdata	2	슇솛솛Q@
+0x52BE7C	.rdata	1	포 스 트   시 즌   종 료
+0x52BE9C	.rdata	1	포 스 트   시 즌   일 정
+0x52BEBC	.rdata	1	선 수   정 보
+0x52BEDC	.rdata	1	[ 아이템 ]
+0x52BEEC	.rdata	2	[ 선수들 ]
+0x52BEF8	.rdata	1	[ 종류 ]
+0x52BF30	.rdata	9	ffffff\n@아 이 템   상 점
+0x52BF6C	.rdata	1	전적
+0x52BF9C	.rdata	1	현 재   순 위  ▷▷
+0x52BFD0	.rdata	1	경 기   결 과
+0x52BFE0	.rdata	1	┃연습전┃
+0x52BFF0	.rdata	1	┃비공식┃
+0x52C010	.rdata	1	┃결정전┃
+0x52C020	.rdata	1	┃에이스┃
+0x52C02C	.rdata	1	PC방 예선전
+0x52C05D	.rdata	0	픁@
+0x52C06D	.rdata	0	픃@
+0x52C0A4	.rdata	1	< 에이스 결정전 >
+0x52C0DF	.rdata	0	@연 습   경 기
+0x52C0F8	.rdata	1	전체 능력치＋44
+0x52C10D	.rdata	0	`C@광택 썬글라스
+0x52C158	.rdata	1	8강
+0x52C160	.rdata	1	16강
+0x52C168	.rdata	1	32강
+0x52C174	.rdata	1	조지명식
+0x52C184	.rdata	2	듀얼토너먼트
+0x52C1A8	.rdata	1	정 규   시 즌   일 정
+0x52C1C0	.rdata	1	정 규   시 즌   종 료
+0x52C1D8	.rdata	1	아름다운 목걸이다.
+0x52C1EC	.rdata	2	컨디션 회복
+0x52C228	.rdata	1	▽   프 로 게 임 단   선 택   ▽
+0x52C262	.rdata	0	퓾
+0x52C270	.rdata	1	힘의 반지
+0x52C280	.rdata	1	공격력＋110
+0x52C290	.rdata	1	수비력＋110
+0x52C29C	.rdata	1	멋진 글귀가 새겨져 있다.
+0x52C2B8	.rdata	1	가지고 싶은 욕구가 샘솟는 반지.
+0x52C2D8	.rdata	1	즉시 사용
+0x52C2E4	.rdata	1	별 목걸이
+0x52C2F8	.rdata	1	전체 능력치＋15
+0x52C308	.rdata	1	반짝이는 두개의 별이 박힌
+0x52C324	.rdata	1	하지만 강한 기운이 느껴져.
+0x52C340	.rdata	1	악마의 펜던트
+0x52C350	.rdata	1	대형 LCD모니터
+0x52C360	.rdata	1	컨디션－4
+0x52C378	.rdata	1	살짝 기분 나쁜 걸..
+0x52C38C	.rdata	1	폼이 꽤나 나겠는 걸?
+0x52C3A4	.rdata	1	소형 LCD모니터
+0x52C3B4	.rdata	1	센스＋40
+0x52C3C0	.rdata	1	총 전적 :
+0x52C3CC	.rdata	1	멋진 선글라스 구나!
+0x52C3E0	.rdata	1	CRT 평면모니터
+0x52C3F4	.rdata	1	손목 아대
+0x52C400	.rdata	1	센스＋20
+0x52C410	.rdata	1	컨트롤＋20
+0x52C41C	.rdata	1	구입 (B)
+0x52C428	.rdata	1	경기할 때 착용하면
+0x52C43C	.rdata	1	성능이 정말 좋다.
+0x52C450	.rdata	1	핫팩
+0x52C45C	.rdata	2	컨디션＋1
+0x52C46C	.rdata	1	쌀쌀한 날씨도
+0x52C484	.rdata	1	이거면 문제 없겠다.
+0x52C4A4	.rdata	1	정찰＋80
+0x52C4B0	.rdata	1	컨디션＋4
+0x52C4BC	.rdata	1	누르는 소리가 좋다.
+0x52C4D0	.rdata	1	넓은 시야에 선명한 색상,
+0x52C4EC	.rdata	1	눈이 아주 편안한 걸!
+0x52C504	.rdata	1	양산형 키보드
+0x52C514	.rdata	1	정찰＋60
+0x52C520	.rdata	1	컨디션＋3
+0x52C534	.rdata	1	화질도 깨끗하고
+0x52C544	.rdata	1	이정도면 눈이 아프진 않지.
+0x52C570	.rdata	2	정찰＋40
+0x52C57C	.rdata	1	컨디션＋2
+0x52C58C	.rdata	1	어디보자...
+0x52C598	.rdata	1	정확하고 튼튼한 고급 키보드.
+0x52C5C8	.rdata	1	수비력＋100
+0x52C5D4	.rdata	1	이렇게 날카로운 키보드라면
+0x52C5F0	.rdata	1	이 정도면 강하게 두들겨도
+0x52C61C	.rdata	2	물량＋100
+0x52C628	.rdata	1	최근 전적  :
+0x52C638	.rdata	1	수비력＋100, 전략＋40
+0x52C650	.rdata	1	고장나지는 않겠어.
+0x52C670	.rdata	1	물량＋60
+0x52C680	.rdata	1	수비력＋60
+0x52C694	.rdata	1	가볍고 튼튼하며
+0x52C6A4	.rdata	1	움직임이 부드러운 고급 마우스.
+0x52C6C8	.rdata	1	물량＋30
+0x52C6D8	.rdata	1	수비력＋30
+0x52C6E4	.rdata	1	움직임이 끝내준다!
+0x52C6F8	.rdata	2	시드권은 문제 없겠는걸.
+0x52C728	.rdata	1	견제＋60
+0x52C734	.rdata	1	컨트롤＋60, 공격력＋30
+0x52C74C	.rdata	1	정확도도 뛰어나다.
+0x52C760	.rdata	1	대세는 패승승승!
+0x52C77C	.rdata	1	상대 선수 예측시
+0x52C790	.rdata	2	컨트롤＋80, 공격력＋60
+0x52C7A8	.rdata	1	견제＋60, 전략+40
+0x52C7C8	.rdata	1	이렇게 날카로운 마우스라면
+0x52C7F8	.rdata	1	컨트롤＋30, 공격력＋15
+0x52C818	.rdata	1	견제＋30
+0x52C82C	.rdata	1	가볍고 날렵하며
+0x52C83C	.rdata	1	꽤나 쓸만한 마우스군.
+0x52C854	.rdata	1	미키마우스
+0x52C860	.rdata	1	팬들에게 선물 받은거다
+0x52C87C	.rdata	1	견제＋15
+0x52C894	.rdata	1	장난감인줄 알았더니
+0x52C8A8	.rdata	1	승리시 전원 컨디션 ＋1
+0x52C8C0	.rdata	1	한경기 동안
+0x52C8D4	.rdata	1	전체 능력치 ＋75
+0x52C8E8	.rdata	1	그렇다면 승리는 뻔한거지.
+0x52C910	.rdata	1	스나이핑
+0x52C91C	.rdata	1	맘 편하게 경기해보자.
+0x52C940	.rdata	1	프로리그 결승
+0x52C950	.rdata	1	상대의 카드는 뻔하다
+0x52C968	.rdata	1	전체 능력치 ±??
+0x52C97C	.rdata	1	세레모니
+0x52C988	.rdata	1	이런 춤을 춰보는건 어때?
+0x52C9A8	.rdata	1	소지금 ＋15
+0x52C9C4	.rdata	1	이번 경기를 승리한다면
+0x52C9DC	.rdata	1	, 스탑 러커죠!!
+0x52C9EC	.rdata	1	츄잉껌
+0x52C9FC	.rdata	1	패했을 경우
+0x52CA14	.rdata	1	능력치 감소 －66%
+0x52CA34	.rdata	1	긴장하지 말고 껌을 씹으며
+0x52CA5C	.rdata	1	비타비타
+0x52CA70	.rdata	1	즉시 컨디션 ＋3
+0x52CA84	.rdata	1	힘들고 지칠 때
+0x52CA94	.rdata	1	비타민을 마시면 기운이 날거다.
+0x52CAC0	.rdata	1	매직무지개 포션
+0x52CAD4	.rdata	1	전체 능력치 ＋?
+0x52CAEC	.rdata	1	마법으로 정제한거라
+0x52CB00	.rdata	1	효과는 작아도 부작용이 없다네.
+0x52CB24	.rdata	1	무지개 포션
+0x52CB30	.rdata	1	소지금이 부족합니다
+0x52CB44	.rdata	2	컨디션－3
+0x52CB50	.rdata	1	공기의 흐름이 보이나요?
+0x52CB68	.rdata	1	여러 포션을 섞어서 만들었지.
+0x52CB88	.rdata	1	이번 시즌 전적 :
+0x52CB9C	.rdata	1	하얀 포션
+0x52CBA8	.rdata	1	센스 ±??
+0x52CBB4	.rdata	1	전체 시즌 성적 :
+0x52CBC8	.rdata	1	자네는 상대의 눈빛만 봐도
+0x52CBE4	.rdata	1	정신이 하나도 없구나.
+0x52CBFC	.rdata	1	보라 포션
+0x52CC08	.rdata	1	전략 ±??
+0x52CC14	.rdata	1	연습 경기 (Z)
+0x52CC24	.rdata	1	스타는 전략게임이란다.
+0x52CC3C	.rdata	1	피가 뜨겁게 끓어오르지?
+0x52CC54	.rdata	1	초록 포션
+0x52CC60	.rdata	1	정찰 ±??
+0x52CC78	.rdata	1	정말로 이걸 마시면
+0x52CC8C	.rdata	1	상 대 전 적 조 회
+0x52CCA0	.rdata	1	주황 포션
+0x52CCAC	.rdata	1	견제 ±??
+0x52CCC4	.rdata	1	찰랑 거리는 모양이
+0x52CCD8	.rdata	1	 선수 해처리 취소!!
+0x52CCEC	.rdata	1	검은 포션
+0x52CCF8	.rdata	1	물량 ±??
+0x52CD04	.rdata	1	아이템 상점 (Z)
+0x52CD14	.rdata	1	왼손은 거들 뿐이라니?
+0x52CD2C	.rdata	1	호랑이 기운이 솟아났다
+0x52CD44	.rdata	1	노란 포션
+0x52CD54	.rdata	1	컨트롤 ±??
+0x52CD70	.rdata	1	담긴 병부터 섬세하단다.
+0x52CD88	.rdata	1	, 리버를 잡아야 하는데!
+0x52CDA0	.rdata	1	푸른 포션
+0x52CDB0	.rdata	1	수비력 ±??
+0x52CDCC	.rdata	1	이걸 마시면 침착해지지.
+0x52CDE4	.rdata	1	, 프로브만 썰어주고요!
+0x52CDFC	.rdata	1	붉은 포션
+0x52CE0C	.rdata	1	공격력 ±??
+0x52CE18	.rdata	8	컨디션－1
+0x52CE2C	.rdata	1	단숨에 마셔보렴.
+0x52CE40	.rdata	1	, 깜짝 저글링 러쉬!
+0x52CE54	.rdata	1	비타 포션
+0x52CE60	.rdata	1	컨디션＋?
+0x52CE74	.rdata	1	전체 능력치－2
+0x52CE84	.rdata	1	피곤할 땐 이만한게 없지.
+0x52CEAC	.rdata	1	맛도 정말 좋다구.
+0x52CEC0	.rdata	1	, 저글링 달려드는데요!
+0x52CED8	.rdata	1	맛있게 마셨다
+0x52CEF0	.rdata	1	먹은것 같긴한데...
+0x52CF0C	.rdata	1	정신이 몽롱해진다...
+0x52CF28	.rdata	1	구입 불가능 품목입니다
+0x52CF44	.rdata	1	이미 최대 수치입니다
+0x52CF5C	.rdata	1	컨디션이 최대입니다
+0x52CF70	.rdata	1	구입하였습니다
+0x52CF8C	.rdata	1	컨디션이 너무 낮습니다
+0x52CFA4	.rdata	1	선수를 선택하세요
+0x52CFBC	.rdata	1	이미 장착 중입니다
+0x52CFE4	.rdata	1	구매 가격 :
+0x52CFF4	.rdata	1	보유 금액 :
+0x52D008	.rdata	1	경기
+0x52D010	.rdata	1	사용 :
+0x52D018	.rdata	1	이길 확률 ↑
+0x52D07C	.rdata	2	전
+0x52D084	.rdata	1	◁◁ 선수 정보 (Z)
+0x52D098	.rdata	1	팀별 상대전적 조회
+0x52D0D4	.rdata	6	회
+0x52D0E0	.rdata	1	, 상대 진영에서 시즈모드!!
+0x52D110	.rdata	1	연패 중
+0x52D11C	.rdata	1	연승 중
+0x52D12C	.rdata	1	스타리그 결승
+0x52D13C	.rdata	1	스타리그 4강
+0x52D14C	.rdata	1	스타리그 8강
+0x52D15C	.rdata	1	스타리그 16강
+0x52D16C	.rdata	1	스타리그 32강
+0x52D18C	.rdata	1	현재
+0x52D1D3	.rdata	0	D, 상대 진영까지 탱크포격이 닿습니다.
+0x52D204	.rdata	1	, 골리앗 탱크! 골리앗 탱크! 너무 많아요!
+0x52D238	.rdata	1	, 골리앗이 많아서 캐리어가 접근을 못해요!
+0x52D264	.rdata	1	, 골리앗 계속오고! 탱크들 시즈모드!
+0x52D294	.rdata	1	, 화력이 너무쎄요! 질럿 드라군 녹아요!
+0x52D2BC	.rdata	1	, 탱크 포격에 프로브까지 몰살!!
+0x52D2E3	.rdata	0	@, 먼저 자리잡고 시즈모드!!
+0x52D30C	.rdata	1	, 메카닉의 화력이 장난이 아닙니다!
+0x52D33C	.rdata	1	, 저그병력이 접근하기도 힘든 화력이죠.
+0x52D368	.rdata	1	, 갖춰진 메카닉의 힘을 보여주네요.
+0x52D38C	.rdata	1	, 탱크들 좋은 자리잡았습니다!
+0x52D3AC	.rdata	1	, 역시 컨트롤이 일품입니다.
+0x52D3EB	.rdata	0	C, 좌우에서 테란 병력 둘러쌉니다!
+0x52D414	.rdata	1	, 뛰어난 컨트롤을 보여주고 있습니다!
+0x52D440	.rdata	1	, 극강의 전투력을 발휘하고 있어요!
+0x52D484	.rdata	1	 선수 넥서스 취소!!
+0x52D49C	.rdata	1	 선수 커맨드 취소!!
+0x52D4BA	.rdata	0	잸, 러커로 후속 병력 끊어주고!
+0x52D4E4	.rdata	1	 선수.. 본진이 날아간 심각한 상황!
+0x52D50C	.rdata	1	 선수 상대 앞마당 파괴 합니다!!
+0x52D530	.rdata	1	, 상대 멀티 넥서스 부쉈어요!!
+0x52D558	.rdata	1	, 상대 멀티 커맨드 파괴합니다!!
+0x52D578	.rdata	1	, 상대 멀티 해처리 파괴!!
+0x52D598	.rdata	1	, 멀티지역 자원 채취불가!
+0x52D5C0	.rdata	1	, 본진 커맨드 띄울 수 밖에 없고!
+0x52D5E8	.rdata	1	, 앞마당 커맨드 들 수 밖에 없죠!
+0x52D610	.rdata	1	, 질럿이 탱크에 잘 달라 붙었어요!
+0x52D638	.rdata	1	, 벌처가 빠진 틈을 놓치지 않네요!
+0x52D660	.rdata	1	, 나온 병력을 사방에서 둘러치고!
+0x52D684	.rdata	1	, 스커지로 베슬 떨궈주고.
+0x52D6A4	.rdata	1	, 사방에서 달려드는데!
+0x52D6CC	.rdata	1	, 러커를 여기저기 잘심어 놨어요!
+0x52D6F0	.rdata	1	, 드론까지 줄여줍니다!
+0x52D724	.rdata	1	, 베슬 잘 줄여줍니다!
+0x52D74C	.rdata	1	, 스커지로 베슬 잘 줄여주네요.
+0x52D773	.rdata	0	@, 질럿 떨구고! 마인 역대박!
+0x52D798	.rdata	1	, 질럿이 탱크에 잘 달라붙었어요!
+0x52D7BC	.rdata	1	, 셔틀로 질럿 떨구면서! 진영 좋아요!
+0x52D7EE	.rdata	0	뽂
+0x52D808	.rdata	1	, 마인!! 마인 대박!!
+0x52D82C	.rdata	1	, 순식간에 드라군 녹입니다!
+0x52D852	.rdata	0	뺺
+0x52D864	.rdata	1	, 마인!! 마인!!
+0x52D884	.rdata	1	, 드라군 하나 둘 줄여주고!
+0x52D8A4	.rdata	1	, 마인이 제대로 꽂혔어요!
+0x52D8C4	.rdata	1	, 소수 병력으로 멀티 타격!
+0x52D8EC	.rdata	1	, 저그의 예상보다 병력이 많아요!
+0x52D910	.rdata	1	, 멀티쪽 견제 들어가는데요.
+0x52D934	.rdata	1	, 울트라 머리위로! 스톰샤워!
+0x52D958	.rdata	1	, 스톰으로 저글링 녹여버리고!
+0x52D980	.rdata	1	, 다크스웜 위로 뿌려지는 스톰!
+0x52D9A0	.rdata	1	, 뮤탈에 스톰 한방! 두방!
+0x52D9C8	.rdata	1	, 뮤탈 위로 스톰 샤워! 녹입니다!
+0x52D9EC	.rdata	1	, 스톰으로 뮤탈을 한번에 녹입니다!
+0x52DA10	.rdata	1	, 스톰! 스톰! 천지스톰!
+0x52DA34	.rdata	1	, 다크스웜 위로 스톰 샤워!!
+0x52DA50	.rdata	1	, 스톰으로 다크스웜을 무력화 시킵니다!
+0x52DA80	.rdata	1	, 러커위로 스톰! 스톰!
+0x52DAA0	.rdata	1	, 스톰으로 러커 제거하고!
+0x52DAC8	.rdata	1	, 러커 뭉친 곳에 떨어지는 스톰!
+0x52DAEC	.rdata	1	, 스톰이 정통으로 꽂힙니다!
+0x52DB10	.rdata	1	, 히드라 머리위에 스톰 샤워!!
+0x52DB38	.rdata	1	, 히드라 뭉친 곳에 정확히 스톰!
+0x52DB60	.rdata	1	, 스톰 한방에 저글링 몇 킬인가요!
+0x52DB8C	.rdata	1	, 스톰으로 저글링 완전히 녹입니다!
+0x52DBB4	.rdata	1	, 저글링 뭉친 곳에 정확히 스톰!
+0x52DBDC	.rdata	1	, 골리앗 머리 위로 스톰 작렬!!
+0x52DBFC	.rdata	1	, 스톰! 스톰! 천지 스톰!!
+0x52DC24	.rdata	1	, 골리앗 모인곳에 정확한 스톰!
+0x52DC44	.rdata	1	, 탱크들 위로 스톰 작렬!!
+0x52DC64	.rdata	1	, 스톰! 스톰! 스톰 샤워!!
+0x52DC9E	.rdata	0	@A, 적절한 EMP! 아비터가 뻘쭘하죠.
+0x52DCC4	.rdata	1	, 드라군 뭉친 곳에 정확한 스톰!
+0x52DCF4	.rdata	1	, 질럿들 달라 붙으며 스톰 작렬 합니다!
+0x52DD2B	.rdata	0	C 선수 GG를 칠 수 밖에 없지요.
+0x52DD50	.rdata	1	, 적절하게 뭉친 곳에 스테시스!
+0x52DD74	.rdata	1	, 아비터를 이용한 각개격파!
+0x52DD90	.rdata	1	, 뒤쪽 탱크들 얼려주고!
+0x52DDAC	.rdata	1	, EMP 쇼크 잘 날렸구요.
+0x52DDC8	.rdata	1	, 드라군 한가운데 EMP!
+0x52DE34	.rdata	1	경기가 종료되었습니다.
+0x52DE4C	.rdata	1	, 뮤탈 무시하고 드론사냥!
+0x52DE68	.rdata	1	 선수가 엄청난 장기전 끝에 승리를 거두네요.
+0x52DE98	.rdata	1	 선수, 끝까지 집중력있게 마무리 짓네요.
+0x52DECC	.rdata	1	 선수가 굉장한 뒷심으로 승리를 거둡니다.
+0x52DF00	.rdata	1	 선수의 전투력은 나날이 상승하는 것 같네요.
+0x52DF2C	.rdata	1	 선수의 중후반 운영이 돋보이는 경기였습니다.
+0x52DF60	.rdata	1	 선수, 멋진 경기 보여주었습니다.
+0x52DF94	.rdata	1	 선수는 역시 끝낼 수 있을 때 끝내버리죠.
+0x52DFC0	.rdata	1	 선수는 상대 허점을 놓치지 않아요.
+0x52DFF0	.rdata	1	 선수는 이기는 법을 아는 선수 같아요.
+0x52E020	.rdata	1	 선수가 초반에 손쉽게 승리를 따냅니다.
+0x52E04C	.rdata	1	 선수의 초반 전투력은 정말 무섭네요.
+0x52E074	.rdata	1	 선수, 아주 무섭게 끝내버리네요.
+0x52E098	.rdata	1	 선수 결국 GG를 선언합니다.
+0x52E0B4	.rdata	1	, 셔틀 플레이로 SCV 줄여주고!
+0x52E0D4	.rdata	1	 선수 GG~!! GG~!!
+0x52E0FC	.rdata	1	 선수, 승리의 댄스를 선보입니다!
+0x52E124	.rdata	1	 선수, 관중석으로 돌진 합니다!
+0x52E154	.rdata	1	 선수, 카메라를 향해 윙크를 날리네요!
+0x52E17C	.rdata	1	팽팽한 대치 상황이 유지되는데요.
+0x52E1A4	.rdata	1	좋은 자리를 잡기위한 눈치싸움.
+0x52E1C4	.rdata	1	양 선수 모두 함부로 들어갈 수 없죠.
+0x52E1E8	.rdata	1	대전 시작했습니다.
+0x52E210	.rdata	1	마이스타리그. 경기 시작했습니다.
+0x52E238	.rdata	1	마이프로리그. 경기 시작했습니다.
+0x52E264	.rdata	1	 선수를 응원하는 치어풀이 보이네요.
+0x52E294	.rdata	1	 선수, 상대를 노리고 나온 것 같은데요!
+0x52E2BC	.rdata	1	, 큰 피해없이 셔틀플레이 막아주고 있어요.
+0x52E2F0	.rdata	1	, 셔틀 보고 드론 미리 잘뺐네요.
+0x52E310	.rdata	1	, 셔틀 견제에 큰 피해 입지 않고 있습니다.
+0x52E34C	.rdata	1	, 셔틀 플레이로 드론 줄여주고!
+0x52E36C	.rdata	1	, 드론에 스톰!! 한번더!!
+0x52E394	.rdata	1	, 견제오던 셔틀을 스커지로 격추!
+0x52E3C4	.rdata	1	, 셔틀 내리기전에 스커지로 격추합니다.
+0x52E3EC	.rdata	1	, 스커지로 셔틀 플레이 원천봉쇄 하고있어요.
+0x52E420	.rdata	1	, 셔틀 보고 SCV 빠르게 잘뺐네요.
+0x52E444	.rdata	1	, 터렛으로 셔틀 견제 원천봉쇄 하고있어요.
+0x52E470	.rdata	1	, 셔틀 플레이로 프로브 줄여주고!
+0x52E494	.rdata	1	, SCV에 스톰!! 한번더!!
+0x52E4B0	.rdata	1	, 스톰견제 좋은데요!
+0x52E4E0	.rdata	2	, 꼼꼼하게 셔틀플레이 막아주고 있어요.
+0x52E508	.rdata	1	, 프로브 잘뺐고 셔틀과 하이템플러 잡아냅니다.
+0x52E538	.rdata	1	, 셔틀 게릴라 안당합니다.
+0x52E554	.rdata	1	, 울트라가 역부족입니다 저글링도 녹아요!
+0x52E580	.rdata	1	, 프로브에 스톰!! 한번더!!
+0x52E5AC	.rdata	2	, 셔틀이 돌아가서. 하이템플러! 스톰!
+0x52E5D8	.rdata	1	, 계속해서 오버로드 잘 줄여줍니다.
+0x52E608	.rdata	1	, 스커지 피해서 커세어로 잘 괴롭힙니다.
+0x52E630	.rdata	1	, 오버로드 잡아주면서 괴롭히고.
+0x52E65C	.rdata	1	, 계속해서 오버로드 잘 잡아줍니다.
+0x52E688	.rdata	1	, 집요하게 커세어로 잘 괴롭힙니다.
+0x52E6B8	.rdata	1	, 커세어로 꾸준히 오버로드 잡아줍니다.
+0x52E6E4	.rdata	1	, 뮤탈 몰아내며 오버로드 잡아주고.
+0x52E708	.rdata	1	, 오버로드를 씨를 말리는데요.
+0x52E738	.rdata	1	, 커세어로 여기저기서 정신없게 해주고!
+0x52E764	.rdata	1	, 커세어가 계속해서 오버로드 잡고요.
+0x52E794	.rdata	1	, 히드라 잘 피해서 오버로드 잡아줍니다.
+0x52E7C4	.rdata	1	, 히드라 있어도 커세어로 잘 괴롭힙니다.
+0x52E7EC	.rdata	3	, 커세어가 맵 구석구석에서 오버로드 잡아주고.
+0x52E820	.rdata	1	, 오버로드 하나씩 잡아줍니다.
+0x52E848	.rdata	1	, 커세어가 오버로드를 잡아주고.
+0x52E870	.rdata	1	, 커세어로 오버로드 줄여줍니다.
+0x52E894	.rdata	1	, 울트라가 하나 둘 쓰러지고!
+0x52E8C4	.rdata	1	, 병력이 모자라요! 성큰까지 깨집니다!
+0x52E8EC	.rdata	1	, 성큰깨지고! 스웜으로 역부족입니다!
+0x52E914	.rdata	1	, 뮤탈 다 어디갔나요?
+0x52E934	.rdata	1	, 아칸에 뮤탈은 녹았어요!!
+0x52E95C	.rdata	1	, 스웜 뿌려보지만 병력이 없어요!
+0x52E984	.rdata	1	, 스웜속의 질럿들을 뭘로 잡나요!
+0x52E9A8	.rdata	1	, 러커 배치가 아주 좋습니다.
+0x52E9CC	.rdata	1	, 성큰! 러커! 다크스웜!
+0x52E9F0	.rdata	1	, 러커와 스웜으로 수비합니다.
+0x52EA18	.rdata	1	, 러커도 역부족 입니다! 못막아요!
+0x52EA3C	.rdata	1	, 여기서 못막으면 안되는데요!
+0x52EA6C	.rdata	1	, 성큰과 러커 라인이 힘없이 뚫립니다!
+0x52EA94	.rdata	2	, 옵저버 떨구며 시간 벌어줍니다.
+0x52EAB8	.rdata	1	, 성큰 심시티가 너무 좋아요.
+0x52EAD8	.rdata	1	, 질럿으로 성큰 깨고 본진입성!!
+0x52EAF8	.rdata	1	, 병력 다 어디갔나요?
+0x52EB1C	.rdata	1	, 질럿 계속 옵니다 못막아요!!
+0x52EB40	.rdata	2	, 성큰이! 성큰이 못버팁니다!!
+0x52EB64	.rdata	3	, 천지 스톰작렬하며 적진입성!
+0x52EB94	.rdata	3	, 일꾼에 까지 스톰 뿌리며 승기잡습니다.
+0x52EBC4	.rdata	3	, 아칸들 앞세워 본진까지 들이닥칩니다.
+0x52EBF4	.rdata	1	, 리버 내리고! 자리 잘 잡아야 합니다.
+0x52EC24	.rdata	1	, 셔틀 플레이로 교란작전 잘하고 있어요.
+0x52EC54	.rdata	1	, 리버로 빈틈을 찾아 상대를 괴롭힙니다!
+0x52EC88	.rdata	1	, 스커지가 셔틀을 놓쳤어요! 드론 빼야죠!
+0x52ECB4	.rdata	1	, 뮤탈이 커세어에게 접근을 못하네요.
+0x52ECDC	.rdata	1	, 리버에게 생각보다 너무 휘둘리는데요.
+0x52ED08	.rdata	2	, 리버! 리버가 너무 많아요!
+0x52ED38	.rdata	2	, 엄청납니다. 저그병력 접근도 못해요.
+0x52ED64	.rdata	2	, 히드라로 셔틀 잘쫓아 다니는데요.
+0x52ED88	.rdata	2	, 리버 드랍을 효과적으로 막아내고 있습니다.
+0x52EDC0	.rdata	2	, 셔틀에 대한 수비가 탄탄합니다.
+0x52EDE4	.rdata	1	, 레이스를 줄여주지를 못하네요!
+0x52EE04	.rdata	1	, 쏘고 빠지는 리버!
+0x52EE24	.rdata	1	, 리버로 재미 보겠는데요!
+0x52EE58	.rdata	2	, 웹까지 뿌리면 히드라가 달려들 수가 없죠.
+0x52EE84	.rdata	2	, 리버떨어지고 웹까지 둘러 칩니다!
+0x52EEAC	.rdata	2	, 좋은 자리에 리버드랍! 웹까지!
+0x52EED8	.rdata	1	, 커세어가 뮤탈을 완전히 녹입니다!
+0x52EF08	.rdata	3	, 저그 상대로 최고의 조합을 갖췄습니다.
+0x52EF34	.rdata	1	, 엄청납니다. 뮤탈은 접근도 못해요.
+0x52EF64	.rdata	1	, 사방에서 스커지 달려들며 셔틀 격추!
+0x52EF98	.rdata	1	, 앞에서 뮤탈 뒤에서 스커지! 컨트롤 좋아요.
+0x52EFC4	.rdata	1	, 커세어만 제압하면 리버는 그냥 잡거든요!.
+0x52EFF4	.rdata	1	, 커세어를 잘 모으고 있습니다.
+0x52F020	.rdata	1	, 뮤탈 몰아내며 리버 자리잡습니다.
+0x52F04C	.rdata	1	, 커세어 호위하며 안전하게 리버드랍!
+0x52F07C	.rdata	1	, 리버 내리자 재빨리 탱크로 잡아내고!
+0x52F0A4	.rdata	1	, 터렛 배치가 좋아요! 셔틀! 셔틀! 격추!
+0x52F0D0	.rdata	1	, 리버 잡고! 스캐럽도 불발!
+0x52F0EC	.rdata	1	, 지금은 리버로 피해를 주기 힘들어보이죠.
+0x52F12C	.rdata	1	, 리버를 잃지만 않아도 됩니다.
+0x52F154	.rdata	1	, 리버로 정말 잘 괴롭혀줍니다.
+0x52F174	.rdata	1	, 무리하지 않고 리버로 시간 잘 벌고 있어요.
+0x52F1A8	.rdata	1	, 리버 보고 SCV 잘 뺐어요.
+0x52F1D8	.rdata	1	, SCV 피해를 받았지만 리버는 잡았고요.
+0x52F200	.rdata	1	, 탱크가 깊숙히 자리잡았습니다!
+0x52F220	.rdata	1	, 셔틀 잃으면 큰일나요.
+0x52F250	.rdata	1	, 지금은 리버로 피해를 주려하면 안돼요.
+0x52F278	.rdata	2	, 오늘은 리버가 말을 잘 안듣네요.
+0x52F2A0	.rdata	1	, 리버에 조금 휘둘리는 모습이죠.
+0x52F2C4	.rdata	1	, 여기서 흔들리면 안됩니다.
+0x52F2EA	.rdata	0	HD, 레이스에 탱크들 터져나가고!.
+0x52F30C	.rdata	2	, 리버대박! 스캐럽! 한방 더!
+0x52F334	.rdata	2	, SCV 뭉친 곳에 작렬하는 스캐럽!
+0x52F35C	.rdata	1	, 반응속도 빨라요. 리버 일점사!
+0x52F380	.rdata	1	, 리버 잡았고! 역습 가야죠!
+0x52F3B0	.rdata	1	, 기다리고 있던 드라군으로 셔틀 격추!
+0x52F3E0	.rdata	2	, 셔틀 돌려보지만 딱히 빈틈이 없어요.
+0x52F40C	.rdata	1	, 리버로 피해를 주려는데 힘들어요.
+0x52F438	.rdata	1	, 셔틀로 눈치보지만 수비 견고하고.
+0x52F45C	.rdata	1	, 리버 보고 프로브 잘 뺐어요.
+0x52F488	.rdata	1	, 프로브 잡혔지만 리버도 잡아주고.
+0x52F4B8	.rdata	1	, 리버는 잡았는데! 프로브도 좀 잃었죠.
+0x52F4E0	.rdata	1	, 리버로 프로브만 잡고 빠집니다.
+0x52F504	.rdata	1	, 질럿 던지며 리버로 프로브 쏘고 빠집니다.
+0x52F53C	.rdata	1	, 프로브 잡고! 리버는 살리네요.
+0x52F564	.rdata	1	, 리버 대박!! 스캐럽!! 한방 더!!
+0x52F58C	.rdata	3	, 수비병력 빠진 사이 리버 드랍!
+0x52F5AC	.rdata	1	, 프로브 뭉친 곳에 작렬하는 스캐럽!!
+0x52F5D8	.rdata	1	, 다크가 언제 들어왔나요!
+0x52F60C	.rdata	1	, 4질럿드랍! 성큰 한 개는 순식간에 부수죠!
+0x52F640	.rdata	1	, 방어 타워가 없는 본진으로 다크를 드랍!
+0x52F66C	.rdata	1	, 회심의 다크드랍! 드론 썰어줍니다!
+0x52F698	.rdata	2	, 다크가 오는 곳마다 오버가 있어요.
+0x52F6C8	.rdata	2	, 다크 잘 잡아줍니다. 휘둘리지 않아요.
+0x52F6F0	.rdata	2	, 다크 예상하고 수비 잘해놨어요.
+0x52F71C	.rdata	2	, 다크가 파고들어 드론을 잡아줍니다!
+0x52F750	.rdata	1	, 다크가 언제 들어갔나요! 드론만 일점사!
+0x52F77C	.rdata	2	, 다크 난입! 드론들 비상이죠! 일못해요!
+0x52F7A4	.rdata	1	, 셔틀에서 다크가 떨어집니다!
+0x52F7D0	.rdata	1	, 다크가 본진과 멀티를 동시에 타격!
+0x52F7F4	.rdata	1	, 본진에 드랍되는 질럿 다크!
+0x52F820	.rdata	1	, 다크로 테란병력 묶어놓고 있습니다.
+0x52F848	.rdata	1	, 이미 다크가 파고들 틈이 없네요.
+0x52F86C	.rdata	1	, 터렛이 있어서 다크 난입은 힘들어요.
+0x52F89C	.rdata	1	, 스캔뿌리고 다크잡아냅니다.
+0x52F8BC	.rdata	1	, 스캔으로 다크 잡아주고.
+0x52F8DC	.rdata	1	, 스캔! 다크 잡아줍니다.
+0x52F910	.rdata	1	, 터렛 피해서 다크로 최대한 괴롭혀야돼요.
+0x52F93C	.rdata	1	, 터렛 지어져있지만 빈틈을 찾았어요!
+0x52F964	.rdata	1	, 터렛시야 밖에서 잘 괴롭혀요.
+0x52F998	.rdata	1	, 다크드랍! 터렛 한 개는 순식간에 부수죠!
+0x52F9C8	.rdata	1	, 입구쪽이 아닌 본진으로 다크를 드랍!
+0x52F9F8	.rdata	1	, 회심의 다크드랍! 순식간에 터렛부수고!
+0x52FA20	.rdata	1	, 다크에 피해를 너무 보는데요!
+0x52FA50	.rdata	1	, 마인으로 다크를 잡는게 쉽지가 않아요!
+0x52FA78	.rdata	1	, 다크에 휘둘립니다! 일못해요!
+0x52FAAC	.rdata	1	, 마인이 꼼꼼 해서 다크 난입은 힘들어요.
+0x52FAE4	.rdata	1	, 마인 위치 절묘한데요. 다크가 접근을 못해요.
+0x52FB14	.rdata	1	, 다크오기 전에 미리 마인매설 잘해뒀죠!
+0x52FB3C	.rdata	1	, 옵저버로 보고 다크잡아줍니다.
+0x52FB5C	.rdata	1	, 무난하게 다크 막아내고.
+0x52FB78	.rdata	1	, 다크에 대비해 이미 옵저버가 나와있죠.
+0x52FBB0	.rdata	1	, 옵저버 피해서 다크로 난입!!
+0x52FBE4	.rdata	1	, 어느새 난입한 다크로 프로브 잡고 있네요!
+0x52FC10	.rdata	1	, 다크가 어디로 들어간거죠? 프로브 하나! 둘!
+0x52FC48	.rdata	1	, 다크로 상대병력 묶어놓고 있습니다.
+0x52FC7C	.rdata	1	, 캐논피해 파고들어보려 하지만 빈틈이 없죠.
+0x52FCB0	.rdata	1	, 이미 캐논이 있어서 다크 난입은 힘들어요.
+0x52FCE4	.rdata	1	, 캐논 사각에서 다크로 최대한 피해줍니다.
+0x52FD10	.rdata	1	, 벌처 나와서 신경쓰이게 하죠.
+0x52FD37	.rdata	0	C, 탱크 다 잡아주고!! 드라군 계속옵니다!!
+0x52FD68	.rdata	1	, 옵저버 있나요? 없어요! 다크가 안보여요!
+0x52FD98	.rdata	1	, 다크에 속수무책!! 프로브 일못해요!!
+0x52FDC8	.rdata	1	, 다크에 휘둘립니다! 옵저버 멀었나요!
+0x52FDF0	.rdata	1	, 리버 동원한 기습공격으로 큰 이득 봅니다.
+0x52FE24	.rdata	2	, 현란한 셔틀 컨트롤! 리버대박!
+0x52FE54	.rdata	2	, 질럿들 녹이고 스톰피하는 셔틀 리버!
+0x52FE80	.rdata	2	, 리버의 활약으로 승기 잡았습니다!
+0x52FEAC	.rdata	2	, 셔틀 동반해 본진까지 들이닥칩니다.
+0x52FEE0	.rdata	2	, 드라군 리버싸움에서 압승하며 진격합니다!
+0x52FF18	.rdata	1	, 셔틀로 시선끌고 드라군으로 이득 많이 봤어요.
+0x52FF4C	.rdata	1	, 상대 공격에 재빠르게 반응하며 리버대박!!
+0x52FF80	.rdata	1	, 수비하면서 리버로 이득 많이 보고있습니다.
+0x52FFAC	.rdata	1	, 현란한 셔틀 컨트롤! 리버 일점사!
+0x52FFE0	.rdata	3	, 리버! 리버! 드라군 한가운데 스캐럽적중!!
+0x53000C	.rdata	1	, 셔틀리버 동원해 상대 진영 입성!!
+0x53003C	.rdata	1	, 빠른 리버로 승기 잡았습니다!
+0x53006C	.rdata	1	, 리버대박!! 상대병력 녹이는 영웅리버!
+0x530094	.rdata	1	, 리콜에 크게 휘둘리지 않습니다.
+0x5300B8	.rdata	1	, 리콜을 기다리고 있었죠!
+0x5300D4	.rdata	1	, 리콜로 정신없는 난전 이끌어 줍니다.
+0x530100	.rdata	1	, 리콜 대비가 확실하네요.
+0x530120	.rdata	1	, 멀티지역에 대규모 리콜!!
+0x530140	.rdata	1	, 시공을 가로지르는 리콜!!
+0x53015C	.rdata	1	, EMP로 리콜 의도을 무산시킵니다.
+0x53018C	.rdata	1	, 아비터에 EMP 명중!
+0x5301A4	.rdata	1	, 스캔 뿌리고 도망가는 캐리어 떨굽니다!
+0x5301CC	.rdata	1	, 아! 정확한 EMP!!
+0x5301F0	.rdata	1	, 골리앗으로 캐리어 일점사!!
+0x530210	.rdata	1	, 캐리어로 자원줄 말리고 있습니다.
+0x530244	.rdata	1	, 캐리어의 퇴로를 차단하고!
+0x530270	.rdata	1	, 캐리어로 정신없게 견제 해줍니다.
+0x530298	.rdata	1	, 캐리어가 동에 번쩍 서에 번쩍!
+0x5302B8	.rdata	1	, 캐리어 컨트롤만 잘하면 이기는 상황!
+0x5302E4	.rdata	1	, 캐리어가 많이 모였어요!!
+0x530318	.rdata	1	, 캐리어로 탱크 다 잡아주고! 승기잡았죠!
+0x530344	.rdata	1	, 캐리어로 도망가는 탱크 다 잡아주고!
+0x53036C	.rdata	1	, 캐리어~ 이제 모이거든요!!
+0x530388	.rdata	1	, 입구 위험해요! 탱크 잘 살려야 됩니다.
+0x5303BC	.rdata	1	, 캐리어가 모이고 있어요!
+0x5303E4	.rdata	1	, 캐리어에 탱크들이 제거됩니다!
+0x530410	.rdata	1	, 골리앗이 빨리 나와야 할텐데요!! .
+0x530438	.rdata	1	, 캐리어에 후퇴할 수 밖에 없어요!
+0x53045C	.rdata	1	, 어택땅! 어택땅만 해도 돼요!
+0x530488	.rdata	1	, 지상 물량으로 테란을 압도합니다!!
+0x5304B0	.rdata	1	, 질럿 줄줄이 계속 달려옵니다!
+0x5304E0	.rdata	2	, 테란 진영 돌파합니다!! 탱크 일점사!!
+0x530514	.rdata	1	, 탱크 다 잡아주고!! 드라군 계속 옵니다!!
+0x530540	.rdata	2	, 드라군!! 드라군!! 몰아붙입니다!!
+0x530568	.rdata	1	, SCV 더 나와서 디팟 고칩니다.
+0x530598	.rdata	1	, 입구 뚫리면 안돼요! SCV 더 나와야죠.
+0x5305C0	.rdata	1	, 드라군 물량으로 리버를 제압하네요!
+0x5305EC	.rdata	1	, 상대 진영까지 드라군 입성!
+0x530618	.rdata	1	, 일점사 컨트롤로 리버 잡아내주고!
+0x53063C	.rdata	1	, 드라군 잘 펼치며 리버에게 밀리지 않습니다!
+0x53066C	.rdata	1	, 마린 컨트롤 좋습니다 질럿 잡아주고.
+0x53069C	.rdata	1	, 드라군 싸움 잘했는데요!
+0x5306C0	.rdata	1	, 드라군으로 승기 잡았습니다!
+0x5306EC	.rdata	1	, 드라군 나오면서 질럿 몰아냅니다.
+0x530714	.rdata	1	, 드라군으로 질럿들 추격 합니다!
+0x53073C	.rdata	1	, 드라군으로 질럿들을 쫓아갑니다.
+0x530760	.rdata	1	, 맞는 드론 잘뺐고! 피해없이 첫 질럿잡습니다.
+0x530790	.rdata	1	, 질럿은 무난하게 막아내네요.
+0x5307B0	.rdata	1	, 마린으로 질럿 잡아내고.
+0x5307D4	.rdata	1	, 질럿 컨트롤 아주 좋은데요.
+0x5307FC	.rdata	1	, 질럿찌르기로 이득 많이 보네요.
+0x530828	.rdata	1	, 마린에 보너스로 SCV까지 잡아주고!
+0x53084C	.rdata	1	, 질럿 찔러 넣어 프로브 두 기까지 잡고!
+0x53088C	.rdata	1	, 찔러본 질럿은 드론 한 기잡고 전사.
+0x5308BC	.rdata	1	, 질럿 찔러 넣어 드론 두 기까지 잡고!
+0x5308EC	.rdata	1	, 원 질럿 프로브로 드론 1킬! 2킬! 3킬!
+0x530920	.rdata	1	, 프로브 잘뺐고! 피해없이 첫 질럿잡습니다.
+0x53094C	.rdata	1	, 첫 질럿은 프로브 한 기잡고 전사.
+0x530982	.rdata	0	츮, 질럿으로 성큰 깨고 본진 난입!!
+0x5309AC	.rdata	1	, 원 질럿으로 프로브 1킬! 2킬! 3킬!
+0x5309D0	.rdata	2	, 성큰 하나씩 깨져나갑니다!!
+0x5309F0	.rdata	1	, 줄줄이 달려오는 질럿!
+0x530A18	.rdata	1	, 진출 해보지만 러커가 있어요!
+0x530A50	.rdata	1	, 옵저버 앞세워 질럿으로 러커밭을 뚫어보는데!
+0x530A80	.rdata	1	, 질럿 펼쳐서 러커 줄여주고! 계속 전진합니다.
+0x530AB0	.rdata	1	 선수 히드라 뮤탈 조합이죠.
+0x530ACC	.rdata	1	, 스커지로 옵저버 격추!
+0x530AE4	.rdata	1	, 옵저버 잡았어요! 질럿 뺄 수 밖에 없죠.
+0x530B10	.rdata	1	, 질럿으로 흔들어서 뮤탈 수비할 시간을 벌고!
+0x530B44	.rdata	1	, 줄줄이 달려가는 질럿!
+0x530B64	.rdata	2	, 성큰파괴! 질럿 계속추가!
+0x530B90	.rdata	1	, 뮤탈 모이기전에 질럿으로 강행돌파!
+0x530BBC	.rdata	1	, 뮤탈 무시하고 질럿 계속 보냅니다.
+0x530BE0	.rdata	1	, 드라군 못나오게 질럿 계속 보냅니다.
+0x530C1C	.rdata	1	, 히드라가 부족해요! 위험합니다!
+0x530C44	.rdata	1	, 질럿들 히드라에 달라 붙습니다!
+0x530C68	.rdata	1	, 질럿으로 히드라 몰아냅니다.
+0x530C8C	.rdata	1	, 질럿 움직임이 공격적입니다.
+0x530CB8	.rdata	1	, 저글링 더 뽑아야 돼요 위험합니다!
+0x530CDC	.rdata	2	, 질럿 계속 옵니다 못막아요!
+0x530D00	.rdata	2	, 성큰이! 성큰이 못버팁니다!
+0x530D24	.rdata	1	, 질럿들로 강하게 압박합니다!
+0x530D4C	.rdata	1	, 질럿 계속 나오면서 압박합니다.
+0x530D74	.rdata	1	, 질럿들의 움직임이 공격적입니다.
+0x530D9C	.rdata	1	, 질럿으로 드라군을 제압하나요!
+0x530DCC	.rdata	1	, 질럿으로 드라군 못나오게 압박합니다.
+0x530DF8	.rdata	1	, 질럿으로 계속적인 압박 가합니다.
+0x530E1C	.rdata	1	, 초반부터 공격적으로 질럿보내는데요.
+0x530E4C	.rdata	1	, 질럿들 상대 본진까지 입성!!
+0x530E74	.rdata	1	, 초반부터 질럿으로 압박합니다!
+0x530E9C	.rdata	1	, 질럿들로 초반부터 압박하고요.
+0x530EBC	.rdata	1	, 자원줄 못지키죠! 남은 자원이 얼마나 되나요?
+0x530EEC	.rdata	1	, 배틀 싸움에서 밀리나요!
+0x530F08	.rdata	1	, 골리앗 덕분에 배틀 싸움에서 이득 보는데요.
+0x530F48	.rdata	1	, 배틀 숫자가 많이 줄었어요!!
+0x530F70	.rdata	1	, 야마토! 야마토! 잘 싸웠어요.
+0x530FA4	.rdata	1	, 탱크 자리 좋구요! 수비로 이득보는데요.
+0x530FD0	.rdata	1	, 골리앗 다잡히면 배틀은 뭘로 막나요!!
+0x531004	.rdata	1	, 스캔 뿌리고 먼저 야마토 발사!
+0x53102C	.rdata	1	, 탱크가 먼저 자리 잘 잡았어요.
+0x531050	.rdata	1	, 배틀로 이득보고 빠집니다.
+0x53106C	.rdata	1	, 드랍쉽 으로 여기저기 드론 잡아줍니다!
+0x5310A0	.rdata	1	, 배틀을 막을 수가 없어요!
+0x5310CC	.rdata	1	, 버티는 것도 마지막인 것 같습니다!
+0x5310F0	.rdata	1	, 배틀로 탱크 걷어내며 전진!
+0x531118	.rdata	1	, 배틀이 엄호하며 탱크 전진 배치.
+0x53113C	.rdata	1	, 배틀이 점점 모이고 있어요.
+0x531164	.rdata	1	, 드랍쉽에 크게 휘둘리지 않아요.
+0x53118C	.rdata	1	, 드랍쉽에 피해 많이 보면 안돼요.
+0x5311B4	.rdata	1	, 드랍쉽 미리보고 병력 보냅니다.
+0x5311E0	.rdata	1	, 드랍쉽!! 적진 한가운데 떨어집니다!
+0x531208	.rdata	1	, 스커지로 드랍쉽 내리기도 전에 격추!
+0x531234	.rdata	1	, 드랍쉽으로 정신없게 만들죠.
+0x53125C	.rdata	1	, 날아오는 드랍쉽 스커지로 격추!
+0x53128C	.rdata	1	, 스커지로 드랍쉽 중간에 잡아버립니다.
+0x5312C2	.rdata	0	횹, 상대 이동 경로에서 드랍쉽 요격!
+0x5312EC	.rdata	1	, 드랍쉽 떨구며 여기저기 공격합니다!
+0x53131C	.rdata	1	, 드랍쉽 동원하여 멀티쪽 공략해봅니다.
+0x531348	.rdata	1	, 드랍쉽으로 멀티쪽 견제 시도합니다.
+0x531370	.rdata	1	, 드랍쉽으로 자원줄 타격합니다.
+0x5313A0	.rdata	1	, 상대 멀티에 드랍쉽으로 자리 잡습니다!
+0x5313C8	.rdata	1	, 기동성을 이용한 드랍쉽 플레이!
+0x5313F0	.rdata	1	, 상대 심장부에 회심의 드랍 성공!
+0x531420	.rdata	1	, 상대 본진에 드랍쉽으로 자리 잡았어요!
+0x53144C	.rdata	1	, 상대 팩토리 지역에 대규모 드랍!!
+0x531474	.rdata	1	, 드랍쉽 잡아주는 플레이 좋죠!
+0x531494	.rdata	1	, 먼저 자리 잘 잡았어요!
+0x5314B0	.rdata	1	, 뒤로 시선 돌리고 정면으로 공격!
+0x5314DC	.rdata	1	, 난전 만들고 정면 돌파!
+0x5314F8	.rdata	1	, 클로킹 레이스로 집요하게 괴롭힙니다.
+0x531524	.rdata	1	, 드랍쉽 떨구며 탱크 전진!
+0x53154C	.rdata	1	, 스캔!! 스캔!! 레이스 떨구고!
+0x53157C	.rdata	1	, 스캔 뿌리고 도망가는 레이스 일점사!
+0x5315A4	.rdata	1	, 레이스 잡아주면서 수비잘합니다.
+0x5315D4	.rdata	1	, 스캔 피해서 레이스로 잘 괴롭힙니다.
+0x531604	.rdata	1	, 클로킹 레이스로 계속 신경 쓰이게하죠.
+0x53162C	.rdata	1	, 레이스로 시간 잘 벌고 있어요.
+0x53164C	.rdata	1	, 레이스로 탱크라인 걷어내며 전진!
+0x531680	.rdata	1	, 레이스 클로킹~ 스캔 없지요!
+0x5316A8	.rdata	1	, 레이스로 이득 많이 보는데요.
+0x5316DC	.rdata	1	,  레이스로 최대한 피해를 주어야 합니다.
+0x531708	.rdata	1	, 레이스로 일꾼 하나씩 잡아줍니다.
+0x531730	.rdata	1	, 레이스로 마음놓고 SCV줄여주죠.
+0x531754	.rdata	2	, 성큰이!! 성큰이 못 버티나요!!
+0x531774	.rdata	1	, 아! 못밀어내나요?!
+0x5317A4	.rdata	1	, 탱크 계속 잡히면 멀티를 못지킵니다!
+0x5317D8	.rdata	1	, 레이스로 시야확보하며 탱크 전진합니다.
+0x531804	.rdata	1	, 성큰이 부족할 것 같거든요!
+0x531824	.rdata	1	, 레이스 싸움에서 졌어요!
+0x531854	.rdata	1	, 레이스가 더 적어요! 레이스 도망가죠!
+0x531888	.rdata	1	, 레이스 싸움에서 지면 탱크는 못지켜요!!
+0x5318B4	.rdata	1	, 레이스 교전에서 이득 많이 보네요!
+0x5318D8	.rdata	1	, 무빙샷으로 상대 레이스 줄여줍니다.
+0x531900	.rdata	1	, 뛰어난 레이스 컨트롤!!
+0x531928	.rdata	1	, 탱크로 자원줄까지 타격합니다!
+0x531948	.rdata	1	, 캐리어에게 맞으면서 시즈모드!!.
+0x53196C	.rdata	1	, 레이스로 승기 잡나요!
+0x53198C	.rdata	1	, 레이스에 속수무책인데요!
+0x5319A8	.rdata	1	, 다크 잡은 이후 바로 전진합니다.
+0x5319D0	.rdata	1	, 레이스를 뭘로막나요!
+0x5319F0	.rdata	1	, 골리앗으로 진출합니다!
+0x531A0C	.rdata	1	, 골리앗이 꽤 모였어요.
+0x531A38	.rdata	1	, 골리앗 무리해서 잃으면 큰일납니다.
+0x531A60	.rdata	1	, 골리앗으로 캐리어 밀어냅니다.
+0x531A98	.rdata	1	, 캐리어에 휘둘리지 않고 탱크들도 전진합니다.
+0x531AC8	.rdata	1	, 골리앗 탱크! 캐리어에 밀리지 않아요.
+0x531AF4	.rdata	1	, 레이스 몰아내며 탱크들 전진합니다.
+0x531B1C	.rdata	2	, 골리앗 탱크 전진 배치 합니다.
+0x531B40	.rdata	4	, 탱크들 전진하여 시즈모드!
+0x531B64	.rdata	3	, 골리앗 앞세워 전진합니다.
+0x531B8C	.rdata	1	, 캐리어 무시하고 벌처탱크 돌진!
+0x531BBC	.rdata	1	, 캐리어 보고 오히려 공격을 선택합니다.
+0x531BE4	.rdata	2	, 못막나요! 디파일러! 다크스웜!
+0x531C04	.rdata	1	, 탱크 다풀고 전진합니다!
+0x531C34	.rdata	1	, 탱크 전진하며 벌처들 계속 추가합니다.
+0x531C60	.rdata	1	, 탱크들 서서히 전진하며 시즈모드!.
+0x531C88	.rdata	2	, 탱크 뭉친 곳에 리버 일점사!!
+0x531CB0	.rdata	2	, 질럿 떨구고! 리버 스캐럽 발사!
+0x531CE4	.rdata	2	, 드라군이 맞아주고 탱크옆에 리버 내리고!
+0x531D14	.rdata	1	, 터렛으로 수비하고 탱크들 전진합니다.
+0x531D40	.rdata	1	, 터렛 짓고 탱크는 전진 배치합니다.
+0x531D74	.rdata	1	, 마인과 터렛으로 리버수비하며 전진합니다.
+0x531DA0	.rdata	1	, 스캔 피하는 다크! 컨트롤 좋아요.
+0x531DDC	.rdata	1	, 스캔 뿌리지만 살짝 피하고 다시 들어가는 다크.
+0x531E10	.rdata	1	, 다크로 상대 전진을 잘 늦춰 주고 있습니다.
+0x531E3C	.rdata	1	, 스캔으로 다크 잡아주며 전진합니다.
+0x531E64	.rdata	1	, 스캔 뿌리며 다크 잡아냅니다.
+0x531E84	.rdata	1	, 뒤로 돌아간 벌처로 SCV줄여주고!
+0x531EA8	.rdata	1	, 초반부터 과감한 전진!
+0x531ED4	.rdata	1	, 벌처 탱크 센터로 전진 배치합니다.
+0x531EF8	.rdata	1	, 벌처 앞세우며 탱크들 전진 하여 자리 잡습니다.
+0x531F34	.rdata	1	, 아아 탱크들 마인에 폭사!!
+0x531F54	.rdata	1	, 마인! 마인 조심해야죠!
+0x531F7C	.rdata	1	, 마인 때문에 전진이 쉽지 않아요.
+0x531FA0	.rdata	2	, 벌처 탱크 전진 배치 합니다.
+0x531FCC	.rdata	2	, 벌처 밀어넣으며 탱크들 전진합니다.
+0x531FF8	.rdata	2	, 탱크 자리싸움에서 밀리지 않습니다!
+0x532028	.rdata	1	, 상대 탱크나오기 전에 밀어 붙입니다!
+0x532050	.rdata	1	, 벌처가 프로브 많이 잡는데요.
+0x532080	.rdata	1	, 벌처! 맞으면서 프로브만 일점사합니다.
+0x5320AC	.rdata	1	, 사방에 마인심고 맵을 장악합니다!
+0x5320D4	.rdata	1	, 벌처로 정신없이 휘저어줍니다!
+0x532104	.rdata	1	, 벌처로 마인 심으며 맵을 장악합니다.
+0x53212C	.rdata	1	, 마인! 스웜을 무력화 시킵니다.
+0x53214C	.rdata	1	, 벌처가 올걸 알고 있죠.
+0x53216C	.rdata	1	, 무난하게 벌처 막아주고.
+0x532190	.rdata	1	, 난입하는 벌처 잡아줍니다.
+0x5321B0	.rdata	1	, 벌처로 성큰 강요합니다.
+0x5321CC	.rdata	1	, 기가막힌 컨트롤로 러커 잡아버리네요.
+0x5321F4	.rdata	1	, 벌처 컨트롤 좋구요.
+0x532214	.rdata	1	, 벌처로 재미 좀 보는데요!
+0x532234	.rdata	1	, 성큰 무시하고 벌처 난입!
+0x532254	.rdata	1	, 벌처로 드론 찍어주고요!
+0x532278	.rdata	1	, 벌처로 강하게 압박합니다!
+0x532294	.rdata	2	, 벌처로 승기 잡았어요!
+0x5322B0	.rdata	1	, 마린으로 벌처 못막죠!
+0x5322D8	.rdata	1	, 물량으로 울트라를 제압합니다!
+0x532304	.rdata	1	, 전투에서 크게 승리하며 전진합니다!
+0x53232C	.rdata	1	, 진형 좋아요~! 울트라도 달려들지 못합니다!
+0x532360	.rdata	1	, 디파 미리미리 잡아주면서 진격!
+0x532384	.rdata	1	, 다크스웜도 소용없는 물량!
+0x5323B0	.rdata	1	, 맵 전체를 장악하며 승기 잡습니다.
+0x5323E0	.rdata	1	, 스웜 때문에 공격에 애를 먹고 있어요.
+0x53240C	.rdata	1	, 디파를 미리미리 줄여줘야 하는데요.
+0x532438	.rdata	1	, 병력 진출하지만 다크스웜에 후퇴.
+0x53245C	.rdata	1	, 스웜속으로 돌진하는 파벳!
+0x532488	.rdata	1	, 근성으로 스웜을 뚫고 전진합니다.
+0x5324B0	.rdata	1	, 디파일러 끊어주면서 전진합니다.
+0x5324DC	.rdata	1	, 러커 다잡아주고 해처리까지 타격!!
+0x532500	.rdata	2	, 마린메딕 진출! 주도권 주지 않겠다는 거죠.
+0x532530	.rdata	1	, 성큰으로 막아야 하는데요!!
+0x532550	.rdata	1	, 성큰 더 늘려야 됩니다!!
+0x53256C	.rdata	1	, 뮤탈컨트롤이 무시무시하네요.
+0x53258C	.rdata	1	, 탱크 앞세워 전진!
+0x5325B0	.rdata	1	, 탱크 호위하며 전진합니다.
+0x5325D8	.rdata	1	, 진출합니다. 탱크가 빠르거든요.
+0x532600	.rdata	1	, 러커 잡아주고 해처리까지 타격!!
+0x53262C	.rdata	2	, 러커 다 잡고! 적진까지 몰아칩니다!
+0x532654	.rdata	2	, 진형 좋아요! 강력한 한방입니다.
+0x532678	.rdata	2	, 러커 몰아내며 전진합니다.
+0x5326A4	.rdata	2	, 병력 정비해서 센터로 진출합니다.
+0x5326CC	.rdata	2	, 타이밍잡고 병력 진출 합니다.
+0x5326FC	.rdata	2	, 스캔뿌리며 마린펼쳐서 러커잡습니다!
+0x53272C	.rdata	1	, 기가 막힌 컨트롤로 러커 잡아버리네요.
+0x532758	.rdata	2	, 마린이 러커를 무서워하지 않아요!!
+0x53277C	.rdata	1	, 뮤탈컨트롤에 집중해야 합니다.
+0x53279C	.rdata	1	, 드론 빨리 나와야죠!
+0x5327C0	.rdata	1	, 막아내기 힘들어 보이는데요!
+0x5327EC	.rdata	2	, 뮤탈에 휘둘리지 않고 진출합니다.
+0x532810	.rdata	2	, 뮤탈 몰아내며 나가봅니다.
+0x53282C	.rdata	1	, 드론 동원해 막아보지만 피해가 누적됩니다.
+0x53285C	.rdata	1	, 성큰 더 지어야죠!
+0x532884	.rdata	2	, 드론까지 나와서 막아야돼요!!
+0x5328A4	.rdata	1	, 뮤탈 움직임이 살아있습니다!
+0x5328C4	.rdata	1	, 파이어벳 앞세워 전진!
+0x5328F0	.rdata	1	, 마린메딕으로 저그진영 압박합니다.
+0x53291C	.rdata	1	, 성큰봐서 여차하면 뚫겠다는 거죠.
+0x532944	.rdata	1	, 드론이 수비하느라 일을 못해요!
+0x532968	.rdata	1	, SCV 동원해 막아보지만 피해가 누적됩니다.
+0x53299C	.rdata	1	, 여기서 뚫리면 안되거든요!!
+0x5329BC	.rdata	1	, 초반부터 머린으로 압박!
+0x5329E0	.rdata	1	, 마린이 센터까지 나와봅니다.
+0x532A14	.rdata	1	, 마린으로 압박합니다. 성큰 지으라는 거죠.
+0x532A44	.rdata	1	, 일도 못하고 수비하느라 피해가 크죠!
+0x532A6C	.rdata	1	, 저글링과 드론으로 나온 마린 다 잡고!
+0x532A9C	.rdata	1	, 여기서 밀리면 안되거든요!!
+0x532ABC	.rdata	1	, 초반부터 마린으로 압박!
+0x532AE4	.rdata	1	, 초반부터 강한 압박 펼칩니다.
+0x532B08	.rdata	1	, 마린으로 압박을 시도합니다!
+0x532B28	.rdata	1	, 드라군으로 탱크 일점사!!
+0x532B5C	.rdata	1	, 맞는 드라군 잘 빼고 마린들 줄여줍니다.
+0x532B88	.rdata	1	, 마인 일점사! 무난하게 막아내네요.
+0x532BBC	.rdata	1	, 마린이 맞아주면서 탱크가 퉁퉁! 마인매설!
+0x532BF0	.rdata	1	, 탱크 잘빼고 마인 심는 컨트롤도 좋은데요.
+0x532C20	.rdata	1	, 드라군 한 기 잡아주고! 컨트롤 좋아요!
+0x532C48	.rdata	1	, 올인하지 말고 벙커 취소해야죠.
+0x532C74	.rdata	1	, 벙커를 지키지 못하고 후퇴합니다.
+0x532C98	.rdata	1	, 드론만 줄여주고 돌아갑니다.
+0x532CBC	.rdata	1	, 포기하고 이제 수비해야죠!
+0x532CF1	.rdata	0	@쏡, 뮤탈로 야금야금 피해주고있어요.
+0x532D18	.rdata	1	, 해처리를 못지키나요! 망했어요!
+0x532D3C	.rdata	1	, 벙커! 벙커! 마린 들어가죠!
+0x532D68	.rdata	1	, 울트라! 울트라! 계속되는 어택땅!!
+0x532D94	.rdata	1	, 울트라가 줄줄이 계속 달려옵니다!!
+0x532DBC	.rdata	1	, 울트라가 아칸들을 둘러쌉니다! 
+0x532DE4	.rdata	1	, 울트라 앞세워 저글링 달려들고!
+0x532E10	.rdata	1	, 울트라가 질럿들에게 돌진합니다!!
+0x532E34	.rdata	1	, 아드레날린 저글링들이 계속해서 달려듭니다.
+0x532E6C	.rdata	1	, 울트라를 잡을 수 가 없어요!
+0x532E8C	.rdata	1	, 베슬이 남아나질 않네요!
+0x532EB8	.rdata	1	, 버티긴하는데 힘들어요. 어렵습니다.
+0x532EE0	.rdata	1	, 울트라 앞세워 저글링 달립니다!
+0x532F04	.rdata	1	, 울트라가 테란진영으로 돌진합니다!!
+0x532F2C	.rdata	1	, 울트라 앞세워 달려들고!
+0x532F58	.rdata	1	, 토스 진영에 히드라가 입성합니다!
+0x532F7C	.rdata	1	, 달려드는 저그병력을 순식간에 녹입니다!
+0x532FB0	.rdata	1	, 히드라에 작렬하는 스캐럽!
+0x532FDC	.rdata	1	, 뮤탈로 유인하고 히드라 달려듭니다!
+0x533008	.rdata	1	, 사방에서 달려드는 히드라와 뮤탈!
+0x53303C	.rdata	1	, 앞에서 히드라 뒤에서 뮤탈! 리버 일점사!
+0x53306C	.rdata	1	, 웹이 예술이네요! 저그병력을 녹입니다!
+0x533098	.rdata	1	, 순식간에 메카닉병력을 제압합니다!
+0x5330BC	.rdata	1	, 계속해서 밀려오는 히드라!
+0x5330E4	.rdata	1	, 물량으로 메카닉을 제압합니다!
+0x533108	.rdata	1	, 뮤탈과 히드라 달려듭니다!
+0x533124	.rdata	1	, 탱크부터 제압해야죠!
+0x533148	.rdata	1	, 탱크들을 걷어낼 수 있을지!
+0x533180	.rdata	1	, 미리 대기 하다가 드랍된 병력 다 잡아줍니다.
+0x5331B4	.rdata	1	, 드랍에 별피해 없이 잘 막아내고 있습니다.
+0x5331EA	.rdata	0	;D, 소수 오버로드 드랍으로 크게 흔들어 줍니다!
+0x53321C	.rdata	1	, 저글링 드랍으로 큰 피해 주고 있습니다.
+0x53324C	.rdata	1	, 멀티마다 저글링 드랍하고 다크스웜!
+0x533274	.rdata	1	, 본진까지 스웜으로 뒤덮이고 맙니다!
+0x5332A8	.rdata	1	, 캐논들이 스웜으로 뒤덮입니다!
+0x5332C8	.rdata	1	, 포토 사거리 밖에서 잘 괴롭혀 주네요.
+0x5332F0	.rdata	1	, 질럿들 더 펼쳐야죠!
+0x533310	.rdata	1	, 싸우는 위치가 안좋아요!
+0x533330	.rdata	1	, 이렇게 싸우는 건 손해죠!
+0x53335C	.rdata	1	, 미네랄 지역까지 스웜이 쳐집니다!
+0x53338C	.rdata	1	, 본진까지 스웜으로 뒤덮이고 맙니다!!
+0x5333CC	.rdata	1	, 스웜뿌리며 전진!
+0x5333EC	.rdata	1	, 스웜 잘뿌리고 있습니다!
+0x533414	.rdata	1	, 디파일러 추가되면서 계속전진!
+0x53343C	.rdata	1	, 길목 곳곳에 마인을 매설합니다.
+0x533464	.rdata	1	, 마인으로 디파일러를 대비합니다.
+0x533494	.rdata	2	, 프로브만 살짝 잡고 빠집니다.
+0x5334B8	.rdata	1	, 러커 달려들며 캐논라인 파괴!
+0x5334D8	.rdata	1	, 저그병력이 뭐 이리 많나요! 계속옵니다!
+0x533514	.rdata	1	, 질럿들 싸우는 위치가 안좋아요!
+0x533538	.rdata	1	, 옵저버 잘지켜야죠 옵저버!
+0x533554	.rdata	1	, 저글링에 둘러 쌓였죠!
+0x533580	.rdata	1	, 러커가 뭐 이리 많나요! 계속옵니다!
+0x5335A8	.rdata	2	, 러커 달려들며 벙커까지 파괴!
+0x5335DC	.rdata	3	, 저글링 던져주고 미네랄 옆에 러커 버로우!!
+0x53360C	.rdata	1	, 러커가 뭐 이리 많나요! 계속 옵니다!
+0x533634	.rdata	1	, 뮤탈로 스커지 떨구는 컨트롤!
+0x53365C	.rdata	1	, 뮤탈로 스커지를 다잡아버리나요!
+0x533680	.rdata	1	, 현란한 뮤탈 움직임! 곡예비행을 보는 것 같죠.
+0x5336BC	.rdata	1	, 스커지로 뮤탈 많이 떨굽니다!
+0x5336F0	.rdata	1	, 뮤탈로 유인하고 사방에서 달려드는 스커지!
+0x533720	.rdata	1	, 스커지로 순식간에 상대 뮤탈 줄여주고!
+0x53374C	.rdata	1	, 뮤탈에 피해를 전혀 안보고 있어요.
+0x533770	.rdata	1	, 기지에 빈틈이 안보이네요.
+0x533794	.rdata	1	, 뮤탈이 찌를 곳을 안주네요.
+0x5337B4	.rdata	1	, 뮤탈로 템플러 한기! 두기! 세기!
+0x5337D8	.rdata	1	, SCV 계속 줄여줍니다.
+0x5337F0	.rdata	1	, 커세어 없는 틈을 잘 노려 프로브 잡아주고.
+0x53381C	.rdata	1	, 터렛공사 완벽하네요.
+0x53383C	.rdata	1	, 뮤탈에 흔들리지 않아요.
+0x533858	.rdata	1	, 수비가 아주 좋은데요!
+0x53387C	.rdata	1	, 오늘 뮤탈움직임 괜찮아요.
+0x53389C	.rdata	1	, 뮤탈로 시간 벌고 있어요.
+0x5338CC	.rdata	1	, 남은 뮤탈이 월등히 많아요!!
+0x5338EC	.rdata	1	, 뮤탈로 재미좀 보고 있어요.
+0x533910	.rdata	1	, 뮤탈로 마린들 잘 줄여주고.
+0x533954	.rdata	1	, 깔끔한 뮤탈 컨트롤!!
+0x533978	.rdata	1	, 마린들 야금야금 줄여줍니다.
+0x5339A0	.rdata	1	, 뮤탈로 SCV 계속해서 잡아내고!
+0x5339C0	.rdata	1	, 뮤탈로 커세어 쫓아가며 일점사!
+0x5339F4	.rdata	1	, 일점사로 프로브 줄여줍니다.
+0x533A1C	.rdata	1	, 프로브 일점사 잘해주고 있어요.
+0x533A40	.rdata	1	, 커세어만 줄여주면 리버는 보너스죠!
+0x533A83	.rdata	0	A, 토스진영을 뮤탈로 뒤덮어 버리고 있습니다!
+0x533AB0	.rdata	1	, 뮤탈 일점사로 템플러만 끊어 줍니다.
+0x533AD8	.rdata	1	 선수 옵저버 나왔습니다.
+0x533AF4	.rdata	1	, 뮤탈로 템플러만 저격!
+0x533B14	.rdata	1	, 뮤탈로 드론 잡고 빠지죠.
+0x533B30	.rdata	1	, 드론만 잡고 빠집니다.
+0x533B4C	.rdata	1	, 오버로드 끊어줍니다.
+0x533B80	.rdata	1	, 포토캐논 한두개는 순식간에 파괴합니다!
+0x533BAC	.rdata	1	, 뮤탈로 캐논 파괴하며 게이트 장악!
+0x533BD4	.rdata	1	, 뮤탈로 포토캐논 한개씩 일점사!
+0x533C00	.rdata	1	, 가장자리 부터 캐논 제거해 줍니다.
+0x533C30	.rdata	1	, 취약한 부분을 잘 찾아서 파고드네요.
+0x533C60	.rdata	1	, 커세어 다 잡아주고 뮤탈로 휘젓습니다!
+0x533C8C	.rdata	1	, 뮤탈 물량으로 커세어를 압도합니다!
+0x533CD0	.rdata	1	, 뮤탈에 속수무책이죠!
+0x533CEC	.rdata	2	, 커세어 전멸시킵니다!
+0x533D18	.rdata	2	, 커세어 다잡고 리버도 도망 못가죠!
+0x533D50	.rdata	3	, 토스 진영을 뮤탈로 뒤덮어 버리고 있습니다!
+0x533D84	.rdata	3	, 커세어 살짝 뒤로 빼면서 뮤탈 녹입니다.
+0x533DB8	.rdata	2	, 달려드는 스커지를 순식간에 녹여버립니다.
+0x533DE8	.rdata	2	, 커세어 잘 뭉쳐서 뮤탈을 몰아냅니다.
+0x533E14	.rdata	2	, 뮤탈로 유인하고 스커지 달려듭니다!
+0x533E3C	.rdata	2	, 뮤탈 펼치면서 커세어 일점사!
+0x533E5C	.rdata	1	, 히드라로 리버 일점사! 히드라 계속옵니다!
+0x533E8C	.rdata	1	, 나온 토스병력 전멸시킵니다!
+0x533EC0	.rdata	1	, 뮤탈 많이 남았고 저글링 계속 추가됩니다!
+0x533EEC	.rdata	1	, 다수의 저글링! 포토캐논에 달라 붙습니다!
+0x533F18	.rdata	1	, 뮤탈 펼치면서 아칸 일점사!
+0x533F44	.rdata	1	, 저글링 뮤탈 사방에서 달려듭니다!
+0x533F68	.rdata	1	, 앞에서 저글링 뒤에서 뮤탈!!
+0x533F98	.rdata	1	, 엄청난 뮤탈! 막기 힘들 것 같은데요!
+0x533FC8	.rdata	1	, 저글링까지 달려오면 막을 수 가 없죠!
+0x533FF8	.rdata	1	, 골리앗이 쌓이지 않게 하는게 중요해요.
+0x534020	.rdata	1	, 적극적으로 골리앗 줄여줍니다.
+0x53404C	.rdata	1	, 저글링을 더 섞어주면 좋을텐데요.
+0x534074	.rdata	3	, 뮤탈이 테란진영을 뒤덮습니다!
+0x5340A0	.rdata	2	, 마린 전멸시켰어요!! 뮤탈 많아요!!
+0x5340C4	.rdata	2	, 저글링까지 테란 본진 난입!!
+0x5340EC	.rdata	1	, 뮤탈 싸움에서 승기 잡았습니다!
+0x534114	.rdata	1	, 모인 뮤탈로 스커지 요리합니다!
+0x534154	.rdata	1	아! 뮤탈 싸우는데요!
+0x534184	.rdata	1	양 선수 모두 뮤탈 빼지 않고 싸워줍니다!
+0x5341B0	.rdata	1	붙었어요! 누구 뮤탈이 더 많은가요?!
+0x5341D8	.rdata	1	, 스커지가 빨리 나와야 하는데!
+0x534204	.rdata	1	, 기동성 좋은 저글링으로 멀티 타격.
+0x534230	.rdata	1	, 저글링을 돌려서 멀티 공략합니다.
+0x534264	.rdata	1	, 저글링 우회하며 토스병력을 묶어둡니다.
+0x534290	.rdata	1	, 숨김저글링으로 빈집을 공략합니다!
+0x5342BC	.rdata	1	, 저글링 우회하여 테란 진영에 난입!
+0x5342E0	.rdata	1	, 저글링으로 뒤를 노립니다!
+0x534304	.rdata	1	, 특공 저글링으로 드론사냥!
+0x534334	.rdata	1	, 저글링 뚫고 들어가서 드론만 일점사!
+0x53435C	.rdata	1	, 숨김 저글링! 드론만 강제어택!
+0x53438C	.rdata	1	, 엄청난 물량으로 포토라인 파괴합니다!
+0x5343BC	.rdata	1	, 계속 몰아치며 수비할 시간을 안줍니다.
+0x5343E4	.rdata	1	, 빈틈을 찾아 저글링으로 본진 난입!
+0x534418	.rdata	2	, 히드라 머리위로 웹 뿌립니다!
+0x534448	.rdata	2	, 웹으로 효과적인 수비를 하고 있습니다.
+0x534470	.rdata	1	, 웹치고 리버로 히드라 녹입니다.
+0x5344A0	.rdata	2	, 다수의 히드라가 토스진영 장악합니다!
+0x5344CC	.rdata	2	, 계속 몰아치며 게이트 장악합니다!
+0x534504	.rdata	2	, 물량 엄청납니다! 어택땅만 해도 이기겠어요!
+0x53453C	.rdata	1	, 다수의 히드라가 순식간에 포토를 파괴합니다!
+0x53456C	.rdata	1	, 캐논을 하나! 둘! 방어선 뚫었는데요!!
+0x53459C	.rdata	1	, 캐논을 순식간에 모두 파괴하는 히드라!
+0x5345D0	.rdata	1	, 다수의 히드라로 캐논라인을 위협합니다.
+0x534600	.rdata	1	, 저글링 던지며 히드라로 캐논 일점사!
+0x534634	.rdata	1	, 캐논 사거리 밖에서 바리케이트 제거합니다.
+0x534668	.rdata	1	, 다수의 저글링! 질럿 감싸서 모두 잡아먹고!
+0x534698	.rdata	1	, 저글링으로 토스병력을 둘러 쌉니다!!
+0x5346C0	.rdata	1	, 저글링이 많습니다! 계속와요!
+0x5346E0	.rdata	1	, 저글링으로 순식간에 파벳까지 잡아먹고!!
+0x534718	.rdata	1	, 저글링으로 캐논 파괴하고!!
+0x53474C	.rdata	1	, 캐논에 달려드는 저글링! 저글링 많습니다!
+0x534778	.rdata	1	, 저글링이 캐논 무시하고 난입합니다!
+0x5347A0	.rdata	1	, 마린을 순식간에 둘러쌉니다!
+0x5347C3	.rdata	0	D, 저글링 계속해서 달려옵니다!
+0x5347F0	.rdata	1	, 저글링으로 앞에 있던 병력 잡아주고!
+0x534818	.rdata	1	선수 일꾼 컨트롤 잘 해야합니다!
+0x53484C	.rdata	1	, 다수의 저글링! 마린을 덮칩니다!
+0x534874	.rdata	2	, 저글링 계속해서 달려옵니다!!
+0x534898	.rdata	1	, SCV 피해 엄청 주고 있어요!
+0x5348B8	.rdata	1	 선수 다수의 히드라를 모읍니다.
+0x5348D8	.rdata	1	, 저글링이 많거든요!
+0x5348FA	.rdata	0	뺻
+0x5348FF	.rdata	0	B 선수 두번째 바락건설 합니다.
+0x53493C	.rdata	1	, 저글링이 더 많아요!
+0x534954	.rdata	1	두 선수 모두 센터에 집중하고 있습니다.
+0x534982	.rdata	0	틾두 선수 모두 공격적인 2게이트!
+0x5349A4	.rdata	1	선수 일꾼 피해 너무 큰데요?!
+0x5349C4	.rdata	1	선수 일꾼 나와서 막아야죠!
+0x5349E0	.rdata	1	 선수 9드론에 바로 스포닝풀 건설합니다.
+0x534A08	.rdata	1	, 센터를 장악했습니다.
+0x534A28	.rdata	1	, 공격 주도권 잡았습니다.
+0x534A44	.rdata	1	, 센터로 진출합니다.
+0x534A6C	.rdata	1	양 선수 계속해서 병력 보냅니다!
+0x534AA0	.rdata	1	병력들이 돌고 도는 눈치싸움이 치열합니다.
+0x534ACC	.rdata	1	, 마린 탱크에 벌처동반하여 압박합니다.
+0x534AF4	.rdata	1	 선수 울트라 나오고 있습니다!
+0x534B14	.rdata	1	 선수 디파일러 나왔어요!
+0x534B30	.rdata	1	 선수 러커 변태합니다.
+0x534B48	.rdata	1	 선수 멀티지역 커맨드 건설 합니다.
+0x534B6C	.rdata	1	 선수 뮤탈 찍었죠.
+0x534B80	.rdata	1	 선수 배틀 생산 체제를 갖추고 있어요.
+0x534BB0	.rdata	1	 선수 저글링 누릅니다.
+0x534BD8	.rdata	1	 선수 추가 멀티 더 가져갑니다.
+0x534C00	.rdata	1	 선수 멀티지역 해처리 건설합니다.
+0x534C24	.rdata	1	 선수 하이브테크 준비합니다.
+0x534C44	.rdata	1	 선수 히드라덴 짓습니다.
+0x534C70	.rdata	1	 선수 뮤탈 생략하고 러커를 가네요!
+0x534C98	.rdata	1	 선수 스파이어 건설들어갑니다.
+0x534CBC	.rdata	1	 선수 레어 올리고 있습니다.
+0x534CE8	.rdata	1	 선수 앞마당에 해처리 건설하는 중!
+0x534D1C	.rdata	1	 선수 스포닝풀 없이 3해처리까지 늘립니다!
+0x534D4C	.rdata	1	 선수 본진에 해처리 추가로 건설합니다.
+0x534D74	.rdata	1	 선수 이제 스포닝풀 건설합니다.
+0x534D9C	.rdata	1	 선수 스포닝풀부터 건설합니다.
+0x534DBC	.rdata	1	 선수 스포닝풀 건설합니다.
+0x534DF0	.rdata	1	 선수 오버로드 이후 12드론까지 눌렀어요.
+0x534E29	.rdata	0	@쏣 선수 옵저버부터 준비합니다.
+0x534E4C	.rdata	1	 선수 오버로드 속도업 됐어요.
+0x534E6C	.rdata	1	무난히 수비하면 앞마당이 빠른쪽이 유리하죠.
+0x534E98	.rdata	1	, 벙커링 시도 합니다!!
+0x534EC0	.rdata	1	 선수 배틀 모였어요! 출동합니다.
+0x534EE4	.rdata	1	 선수 이제 드랍쉽 운용합니다.
+0x534F04	.rdata	1	 선수 골리앗도 나왔구요.
+0x534F24	.rdata	1	 선수 메카닉을 준비했네요.
+0x534F40	.rdata	1	 선수 레이스 나왔어요!
+0x534F60	.rdata	1	 선수 탱크 추가되었습니다.
+0x534F7C	.rdata	1	 선수 벌처 나왔습니다.
+0x534F98	.rdata	1	 선수 탱크 추가되었고.
+0x534FB4	.rdata	1	 선수 메딕 추가됩니다.
+0x534FD0	.rdata	1	 선수 마린뽑고 있구요.
+0x534FF8	.rdata	1	 선수 추가 멀티 더 건설합니다.
+0x535018	.rdata	1	양쪽 똑같이 공격적인 빌드로 출발합니다.
+0x535040	.rdata	1	 선수 3바락 불꽃이죠!
+0x535064	.rdata	1	 선수 커맨드센터 건설합니다.
+0x535098	.rdata	1	 선수 노바락에 앞마당 커맨드 건설합니다!
+0x5350C4	.rdata	1	 선수 앞마당 상황 해제 시킵니다.
+0x5350EC	.rdata	1	 선수도 배틀 체제 따라갑니다.
+0x535110	.rdata	1	 선수 스타포트 두개째 건설!
+0x535130	.rdata	1	 선수 스타포트 올라갑니다.
+0x535154	.rdata	1	 선수 2팩토리째 건설 합니다!
+0x535174	.rdata	1	 선수 팩토리 건설 중이죠.
+0x535194	.rdata	1	 선수 선팩토리를 올립니다!
+0x5351B0	.rdata	1	 선수 터렛 준비합니다.
+0x5351D4	.rdata	1	 선수 아카데미 건설 합니다.
+0x5351F0	.rdata	1	선수 위치 변경 PgUp↑ PgDn↓
+0x535214	.rdata	1	 선수 바락건설 합니다.
+0x535234	.rdata	1	 선수 곧바로 바락 건설!!
+0x535254	.rdata	1	 선수 베슬까지 나왔습니다.
+0x535274	.rdata	1	 선수 캐리어 출동합니다!
+0x53529C	.rdata	1	 선수 커세어 리버체제 갖춥니다.
+0x5352BC	.rdata	1	 선수 하템까지 나왔구요.
+0x5352DC	.rdata	1	 선수 다크템플러 나왔구요!
+0x5352F8	.rdata	1	 선수 리버 나왔습니다!
+0x535318	.rdata	1	 선수 질럿들 발업 됐어요.
+0x53533C	.rdata	1	 선수 드라군도 추가 됩니다.
+0x535358	.rdata	1	 선수 게이트웨이 완성.
+0x535374	.rdata	1	 선수 캐논 건설합니다.
+0x535394	.rdata	1	 선수 아비터 준비합니다.
+0x5353B0	.rdata	1	 선수 캐리어 준비하죠!!
+0x5353D4	.rdata	1	 선수 스타 게이트 건설합니다.
+0x5353FC	.rdata	1	 선수 추가 넥서스 더 짓습니다.
+0x535424	.rdata	1	 선수 멀티 넥서스 소환 합니다.
+0x535450	.rdata	1	 선수 앞마당에 넥서스 소환 합니다.
+0x535474	.rdata	1	 선수 로보틱스도 올라갑니다.
+0x535494	.rdata	1	 선수 로보틱스 올라갑니다.
+0x5354B8	.rdata	1	 선수 코어 건설들어 갔구요.
+0x5354DC	.rdata	1	 선수 게이트 더 늘리는데요!
+0x5354FC	.rdata	1	 선수 두 번째 게이트 건설.
+0x535518	.rdata	1	 선수 포지 소환합니다.
+0x535530	.rdata	1	 선수 게이트 소환.
+0x535550	.rdata	1	 선수 아비터가 등장했어요.
+0x535582	.rdata	0	줔두 선수 모두 공격적인 빌드를 선택했어요.
+0x5355B4	.rdata	1	양 선수의 스파이어 속도가 꽤 차이나네요!!
+0x5355E8	.rdata	1	같은 2해처리지만 후반 갈수록 자원차가 나죠.
+0x53561C	.rdata	1	저글링을 막아 낼 수 있느냐가 관건인데요!
+0x53564C	.rdata	1	이렇게되면 앞마당 지켜내기 힘들텐데요!
+0x535680	.rdata	1	무난히 수비하면 해처리 빠른쪽이 유리하죠.
+0x5356AC	.rdata	1	9드론으로 얼마나 피해를 주느냐가 관건이죠!!
+0x5356D8	.rdata	1	출발은 9드론이 더 가난한데요.
+0x5356F8	.rdata	1	두 선수 모두 과감한 선택!
+0x535720	.rdata	1	똑같이 트윈 해처리 짓고 있습니다.
+0x53575C	.rdata	1	두 선수 모두 안정적인 12풀 빌드를 선택했습니다.
+0x535791	.rdata	0	@쏤다크를 눈치채고 잘 막아 낼 수 있을까요!
+0x5357BC	.rdata	1	 선수 멀티지역 상황 해제 시킵니다.
+0x5357E4	.rdata	1	 선수 본진 상황 해제 시킵니다.
+0x535816	.rdata	0	틿
+0x535819	.rdata	0	자E
+0x535821	.rdata	0	픝E
+0x53582A	.rdata	0	츯
+0x53582D	.rdata	0	자D
+0x535832	.rdata	0	횻GDI+ 라이브러리를 초기화할 수 없습니다.
+0x535868	.rdata	1	양 선수의 팩토리 건설속도가 상당히 차이나죠!!
+0x535898	.rdata	1	이제 서서히 준비한 빌드가 갈라지네요.
+0x5358F0	.rdata	1	두 선수 모두 레이스를 선택!!
+0x535920	.rdata	1	오랜만에 화끈한 레이스 싸움 나오나요!!
+0x535950	.rdata	1	같은 레이스라면 2스타포트가 유리하죠!!
+0x535980	.rdata	1	두 선수의 선택이 극단적으로 갈라졌어요!
+0x5359AC	.rdata	1	무난히 수비성공 하느냐가 관건인데요!
+0x5359D4	.rdata	1	8바락으로 피해못주면 힘들어지죠.
+0x535A08	.rdata	1	이렇게 되면 엄청난 물량전이 나오겠는걸요.
+0x535A3C	.rdata	1	양쪽 진영 별다른 초반 움직임은 없습니다.
+0x535A74	.rdata	1	두 선수 공교롭게도 같은 초반빌드를 준비했네요.
+0x535AA4	.rdata	1	 선수 안전하게 옵저버토리부터 올립니다.
+0x535AD0	.rdata	1	 선수 옵저버 없이 리버를 준비합니다!
+0x535AF8	.rdata	1	 선수 이제 템플러테크 준비합니다.
+0x535B20	.rdata	2	 선수 곧바로 템플러테크 올립니다!
+0x535B44	.rdata	1	두 선수 모두 공격적이예요!!
+0x535B68	.rdata	1	다크 나오기전에 끝내야돼요!
+0x535B90	.rdata	1	두 선수 모두 다크를 준비합니다!
+0x535BBC	.rdata	1	옵저버 나오기전에 뭔가 해야할텐데요.
+0x535BEC	.rdata	1	일반적인 리버싸움으로 흘러가겠는데요.
+0x535C18	.rdata	1	초반은 똑같이 원게이트 출발입니다.
+0x535C84	.rdata	1	저그는 이미 하이브인데 테란은 아직 베슬도 없어요!!
+0x535CB8	.rdata	1	두 선수 일단 무난하게 출발하고 있습니다.
+0x535CE8	.rdata	1	8바락으로 피해 줄 수 있을지 지켜봐야죠!
+0x535D18	.rdata	1	일단 벙커링은 막고 시작하겠다는 거죠.
+0x535D74	.rdata	1	똑같이  가난한 빌드로 출발합니다.
+0x535DB4	.rdata	1	 선수 리버를 준비하죠!!
+0x535DD4	.rdata	1	골리앗은 아직 보이지 않고!
+0x535E00	.rdata	1	앞마당 타이밍이 너무 차이나거든요.
+0x535E30	.rdata	1	앞마당 짓는 타이밍이 차이가 꽤 나네요.
+0x535E5C	.rdata	1	이정도면 앞마당 타이밍은 비슷하네요.
+0x535E88	.rdata	1	토스보다 테란의 앞마당이 더 빠르죠.
+0x535EB4	.rdata	1	리버를 피해없이 막아 낼 수 있을까요!
+0x535F08	.rdata	1	 선수 템플러 테크도 올리고요.
+0x535F38	.rdata	1	 선수 커세어 없이 템플러 테크 올리고요.
+0x535F60	.rdata	1	추가 멀티 허용하면 힘들어지죠.
+0x535F88	.rdata	1	커세어 리버를 어떻게 상대할까요.
+0x535FB0	.rdata	1	2게이트 질럿을 막을 수 있을까요!
+0x535FE0	.rdata	1	무난하게 서로 앞마당 먹고 시작합니다.
+0x536008	.rdata	1	포토 깔고 앞마당 가져가라는 거죠.
+0x536040	.rdata	1	알림
+0x536074	.rdata	1	포션     (6)
+0x536084	.rdata	1	기타     (5)
+0x536094	.rdata	1	모니터 (4)
+0x5360A4	.rdata	1	키보드 (3)
+0x5360B4	.rdata	1	마우스 (2)
+0x5360C4	.rdata	1	소모품 (1)
+0x5360FC	.rdata	1	선수 순위 (X)
+0x53610C	.rdata	1	시즌 요약 (C)
+0x536128	.rdata	1	실행 (C)
+0x536138	.rdata	1	행동 관리 (C)
+0x536148	.rdata	1	선수 정보 (X)
+0x536534	.rdata	0	잜J
+0x536538	.rdata	0	블J
+0x537464	.rdata	0	똴K
+0x537468	.rdata	0	셩K
+0x537474	.rdata	0	꽝K
+0x537510	.rdata	0	낒K
+0x537544	.rdata	1	선 수   순 위
+0x537554	.rdata	1	엔 트 리   편 성
+0x537568	.rdata	1	손목에 무리가 덜 가겠군.
+0x537584	.rdata	1	이거라면 게임할 맛 나겠는 걸!
+0x5375A4	.rdata	1	먹기는 힘들어도 효과는 좋다네.
+0x5375C4	.rdata	1	뭘 할지 한눈에 알아챌 수 있나?
+0x5375E4	.rdata	1	잔머리가 아니라 전략이라고.
+0x537600	.rdata	1	물량 앞에 장사가 어디 있더냐?
+0x537620	.rdata	1	마실 때도 섬세하게 마셔야해.
+0x537640	.rdata	1	다만 졸음이 몰려올 수도 있어.
+0x537660	.rdata	1	, 벌처로 퇴로를 차단하고!
+0x53767C	.rdata	1	, 탱크위로 스톰을 정확하게 뿌려줍니다!
+0x5376A4	.rdata	1	, 상대 병력 머리위로 내리 치는 스톰!!
+0x5376CC	.rdata	1	, 리버 드랍! 셔틀 움직임이 좋네요.
+0x5376F0	.rdata	1	, 리버는 잡았는데! SCV도 좀 잃었죠.
+0x537714	.rdata	1	, 포토캐논 있지만 빈틈을 찾았어요!
+0x537738	.rdata	1	, 옵저버 잡아주면서 수비 합니다.
+0x53775C	.rdata	1	, 드랍에 휘둘리지 않고 잘하고 있어요.
+0x537FD4	.rdata	0	쟔L
+0x538004	.rdata	0	픓L
+0x53941C	.data	0	P쟇
+0x539421	.data	0	튚
+0x539835	.data	0	좰
+0x539B40	.data	0	쟷K
+0x539E88	.data	2	잖J
+0x539EB0	.data	1	퓿K
+0x539FF4	.data	0	쟱S
+0x53A01C	.data	0	퇼S
+0x53A06C	.data	16	v쟔
+0x53A070	.data	0	v쟔
+0x53A72D	.data	0	쪺
+0x53A731	.data	0	쪺
+0x53A7E8	.data	0	걼盛
+0x53A7FC	.data	0	젓紋 
+0x53A818	.data	0	괓
+0x53A82C	.data	0	젓紋 
+0x53A848	.data	0	괓
+0x53A878	.data	0	괓
+0x53A8A8	.data	0	곐梅晟
+0x53A8B0	.data	0	1~괓
