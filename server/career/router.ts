@@ -9,7 +9,9 @@ import { ACTIONS } from "@shared/career/rules";
 import {
   CareerError,
   advanceWeek,
+  migrateCareer,
   newCareer,
+  proposeTrade,
   releasePlayer,
   rosterOf,
   scoutPlayer,
@@ -26,7 +28,10 @@ async function requireDb() {
 async function load(userId: number): Promise<CareerState | null> {
   const db = await requireDb();
   const rows = await db.select().from(careers).where(eq(careers.userId, userId)).limit(1);
-  return rows[0] ? (JSON.parse(rows[0].state) as CareerState) : null;
+  if (!rows[0]) return null;
+  const s = JSON.parse(rows[0].state) as CareerState;
+  migrateCareer(s);
+  return s;
 }
 
 async function save(userId: number, state: CareerState) {
@@ -111,4 +116,13 @@ export const careerRouter = router({
   release: protectedProcedure
     .input(z.object({ playerId: z.number().int() }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => releasePlayer(s, input.playerId))),
+
+  trade: protectedProcedure
+    .input(z.object({
+      teamId: z.number().int(),
+      give: z.array(z.number().int()).max(5),
+      take: z.array(z.number().int()).min(1).max(5),
+      cash: z.number().int().min(0).max(1_000_000),
+    }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => proposeTrade(s, input.teamId, input.give, input.take, input.cash))),
 });

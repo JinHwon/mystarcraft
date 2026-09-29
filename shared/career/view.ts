@@ -3,7 +3,7 @@
  */
 import { ORIG_MAPS, FREE_AGENT_TEAM } from "./originalData";
 import type { CareerState, CMatch, Race } from "./rules";
-import { totalOf } from "./rules";
+import { TRADE_ACE_PREMIUM, TRADE_PREMIUM, totalOf, tradeValue } from "./rules";
 
 export const rosterOf = (s: CareerState, team: number) => s.players.filter(p => p.team === team);
 export const proTeams = (s: CareerState) => s.teams.filter(t => t.id !== FREE_AGENT_TEAM);
@@ -28,22 +28,35 @@ export const STAGE_NAMES: Record<CMatch["stage"], string> = {
 };
 
 export interface MapView {
-  id: number; name: string; rush: number; res: number; complexity: number;
+  id: number; name: string;
+  /** 러시거리·자원·복잡도 (100 = 보통) */
+  rush: number; res: number; complexity: number;
+  /** 앞 종족 승률 % (50 = 균형) */
   tvz: number; zvp: number; pvt: number;
 }
 export function mapView(id: number): MapView {
-  const [name, rush, res, complexity, tvz, zvp, pvt] = ORIG_MAPS[id];
+  const [name, tvz, zvp, pvt, rush, res, complexity] = ORIG_MAPS[id];
   return { id, name, rush, res, complexity, tvz, zvp, pvt };
 }
 
-/** 맵에서 race 가 상대 종족 vs 에 대해 갖는 상성 (100 = 균형) */
+/** 맵에서 race 가 상대 종족 vs 에 대해 갖는 승률 % (50 = 균형) */
 export function matchupValue(mapId: number, race: Race, vs: Race): number {
-  if (race === vs) return 100;
+  if (race === vs) return 50;
   const m = mapView(mapId);
   const t: Record<string, number> = {
-    terran_zerg: m.tvz, zerg_terran: 200 - m.tvz,
-    zerg_protoss: m.zvp, protoss_zerg: 200 - m.zvp,
-    protoss_terran: m.pvt, terran_protoss: 200 - m.pvt,
+    terran_zerg: m.tvz, zerg_terran: 100 - m.tvz,
+    zerg_protoss: m.zvp, protoss_zerg: 100 - m.zvp,
+    protoss_terran: m.pvt, terran_protoss: 100 - m.pvt,
   };
-  return t[`${race}_${vs}`] ?? 100;
+  return t[`${race}_${vs}`] ?? 50;
+}
+
+/** 트레이드 평가: AI 가 받는 가치 / 요구하는 가치 (1 이상이면 수락) */
+export function evaluateTrade(s: CareerState, teamId: number, myIds: number[], theirIds: number[], cash: number) {
+  const give = theirIds.reduce((sum, id) => sum + tradeValue(s.players[id], s.season), 0);
+  const get = myIds.reduce((sum, id) => sum + tradeValue(s.players[id], s.season), 0) + cash;
+  const ace = rosterOf(s, teamId).sort((a, b) => totalOf(b.stats) - totalOf(a.stats))[0];
+  const premium = ace && theirIds.includes(ace.id) ? TRADE_ACE_PREMIUM : TRADE_PREMIUM;
+  const need = Math.round(give * premium);
+  return { give, get, need, ratio: need > 0 ? get / need : 0, acesInvolved: premium === TRADE_ACE_PREMIUM };
 }

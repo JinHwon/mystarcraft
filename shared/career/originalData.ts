@@ -7,7 +7,10 @@
 export interface OrigTeam { id: number; name: string; short: string; color: string }
 /** [팀ID, 이름, 종족, 레벨, 컨트롤, 공격력, 견제, 전략, 물량, 수비력, 정찰, 센스, 출생연도, 성별, 상태] */
 export type OrigPlayerRow = [number, string, "T" | "Z" | "P", number, number, number, number, number, number, number, number, number, number, "M" | "F", number];
-/** [맵 이름, 러시거리, 자원, 복잡도, TvZ, ZvP, PvT] (종족전 값 100 = 균형, 앞 종족 기준) */
+/**
+ * [맵 이름, T vs Z, Z vs P, P vs T, 러시거리, 자원, 복잡도]
+ * 종족전 값은 앞 종족의 승률(%, 50 = 균형). 러시거리·자원·복잡도는 100 이 보통 (원작 맵 추첨 화면으로 확인)
+ */
 export type OrigMapRow = [string, number, number, number, number, number, number];
 
 /** 무소속(자유계약) 팀 ID */

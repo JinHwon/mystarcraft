@@ -292,7 +292,17 @@ export interface SetResult {
   endReason?: string;
   /** 문자중계 하이라이트 ([mm:ss] 포함) */
   highlights: string[];
+  /** 전체 중계 (원작식 중계 화면용) */
+  timeline?: SetTimeline;
 }
+
+/** 원작식 중계 화면 데이터: 해설 한 줄씩(시간·말한 선수) + 턴별 병력/자원 */
+export interface SetTimeline {
+  lines: Array<{ t: number; side: 0 | 1 | 2; text: string }>;
+  frames: Array<{ t: number; army: [number, number]; res: [number, number] }>;
+}
+
+const TIME_RE = /^\[(\d+):(\d+)\]\s*/;
 
 const HIGHLIGHT_RE = /빌드는|공격!|교전 승리|뒤집|역습!|수비 성공|무너|지켜냅|GG|판정|드랍|난입|급습|견제!/;
 
@@ -304,7 +314,8 @@ export function simulateSet(
   p2: { id: number; name: string; race: Race; stats: Record<StatKey, number>; fatigue: number },
   mapRaceAdvantage: Record<string, number>,
   mapTraits: MapTraits,
-  withHighlights = true
+  withHighlights = true,
+  withTimeline = false
 ): SetResult {
   const gs = initializeGameState(
     p1.id, p1.name, p1.race, p2.id, p2.name, p2.race,
@@ -313,10 +324,28 @@ export function simulateSet(
     mapTraits, mapRaceAdvantage
   );
   const highlights: string[] = [];
+  const timeline: SetTimeline | undefined = withTimeline ? { lines: [], frames: [{ t: 0, army: [0, 0], res: [0, 0] }] } : undefined;
+  const sideOf = (text: string): 0 | 1 | 2 => {
+    const i1 = text.indexOf(`${p1.name} 선수`), i2 = text.indexOf(`${p2.name} 선수`);
+    if (i1 < 0 && i2 < 0) return 0;
+    if (i2 < 0 || (i1 >= 0 && i1 <= i2)) return 1;
+    return 2;
+  };
   let turns = 0;
   while (!gs.gameEnded && turns < 125) {
     progressTurn(gs);
     turns++;
+    if (timeline) {
+      for (const c of gs.turnCommentaries) {
+        if (c.includes("현황 |")) continue;
+        const m = TIME_RE.exec(c);
+        const t = m ? Number(m[1]) * 60 + Number(m[2]) : gs.time;
+        const text = c.replace(TIME_RE, "");
+        timeline.lines.push({ t, side: sideOf(text), text });
+      }
+      const d = gameStateToTurnData(gs);
+      timeline.frames.push({ t: gs.time, army: [d.p1.armySupply, d.p2.armySupply], res: [d.p1.incomePerMin, d.p2.incomePerMin] });
+    }
     if (withHighlights) {
       // 해설에는 이미 [mm:ss] 시간이 붙어 있음
       for (const c of gs.turnCommentaries) if (HIGHLIGHT_RE.test(c)) highlights.push(c);
@@ -328,5 +357,5 @@ export function simulateSet(
   }
   // 너무 길면 앞부분(빌드)과 뒷부분(결정적 장면) 위주로 줄임
   const trimmed = highlights.length > 18 ? [...highlights.slice(0, 4), ...highlights.slice(-14)] : highlights;
-  return { winnerId: gs.winner ?? p1.id, duration: gs.time, endReason: gs.endReason, highlights: trimmed };
+  return { winnerId: gs.winner ?? p1.id, duration: gs.time, endReason: gs.endReason, highlights: trimmed, timeline };
 }

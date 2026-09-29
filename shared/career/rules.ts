@@ -74,6 +74,8 @@ export interface CPlayer {
   action?: ActionKey | null;
   /** 우승 경력 */
   titles?: string[];
+  /** 종족별 통산 전적 [승, 패] */
+  vs?: Partial<Record<Race, [number, number]>>;
 }
 
 export interface CTeam {
@@ -111,6 +113,63 @@ export interface CMatch {
   scoreB?: number;
   winner?: number;
   sets?: SetResult[];
+  /** 양 팀 엔트리 (경기 후 공개) */
+  entryA?: number[];
+  entryB?: number[];
+}
+
+/** 원작식 중계 화면 데이터 (세이브에는 저장하지 않고 경기 직후에만 내려줌) */
+export interface SetTimeline {
+  lines: Array<{ t: number; side: 0 | 1 | 2; text: string }>;
+  frames: Array<{ t: number; army: [number, number]; res: [number, number] }>;
+}
+
+/** 시즌 맵 추첨 개수 (원작 "맵 추첨 결과" 7개, 결승 7세트) */
+export const MAP_POOL_SIZE = 7;
+
+// ── 마이스타리그 (개인리그, MSL 방식) ───────────────────────────────
+/** 진행 단계와 치르는 주차: PC방 예선(1) → 듀얼 토너먼트(2) → 조 지명식·32강(3) → 16강(5) → 8강(7) → 4강(9) → 결승(11) */
+export type MslStage = "pc" | "dual" | "group" | "ro16" | "ro8" | "ro4" | "final" | "done";
+export const MSL_WEEK: Record<Exclude<MslStage, "done">, number> = { pc: 1, dual: 2, group: 3, ro16: 5, ro8: 7, ro4: 9, final: 11 };
+export const MSL_STAGE_NAMES: Record<MslStage, string> = {
+  pc: "PC방 예선", dual: "듀얼 토너먼트", group: "32강 (조 지명식)", ro16: "16강", ro8: "8강", ro4: "4강", final: "결승", done: "종료",
+};
+/** 최종 성적별 상금 (만원, 소속 팀에 지급) */
+export const MSL_PRIZE: Record<string, number> = { 우승: 3000, 준우승: 1500, "4강": 700, "8강": 400, "16강": 200, "32강": 100 };
+
+/** 다전제 한 경기 (스타리그는 선수 대 선수) */
+export interface MslSeries {
+  a: number;
+  b: number;
+  bestOf: number;
+  sa: number;
+  sb: number;
+  winner: number;
+  label: string;
+  sets: SetResult[];
+}
+/** 듀얼 방식 4인 조 (1·2경기 → 승자전·패자전 → 최종전, 2명 통과) */
+export interface MslGroup {
+  name: string;
+  players: number[];
+  games: MslSeries[];
+  qualified: number[];
+}
+export interface MslState {
+  season: number;
+  stage: MslStage;
+  seeds: number[];
+  pcQualifiers: number[];
+  /** PC방 예선 참가 인원 */
+  pcEntrants: number;
+  duals: MslGroup[];
+  nominations: Array<{ by: number; pick: number; group: string }>;
+  groups: MslGroup[];
+  bracket: Array<{ round: "ro16" | "ro8" | "ro4" | "final"; series: MslSeries[] }>;
+  /** 선수별 최종 성적 */
+  placements: Record<number, string>;
+  champion?: number;
+  runnerUp?: number;
 }
 
 export interface CareerState {
@@ -128,12 +187,22 @@ export interface CareerState {
   /** 소식 (최근 순) */
   news: Array<{ season: number; week: number; text: string }>;
   /** 지난 시즌 기록 */
-  history: Array<{ season: number; champion: number; myRank: number; myResult: string }>;
+  history: Array<{ season: number; champion: number; myRank: number; myResult: string; mslChampion?: number; mslRunnerUp?: number }>;
+  /** 이번 시즌 마이스타리그 */
+  msl?: MslState;
+  /** 이번 시즌 맵 추첨 결과 */
+  mapPool?: number[];
 }
 
 export function ageOf(p: Pick<CPlayer, "birth">, season: number): number {
   // 한국식 나이
   return BASE_YEAR + season - 1 - p.birth + 1;
+}
+
+/** 원작식 등급 (F ~ SSS, +). 강현우 4650 → E, 허영무 5850 → B+ 에 맞춘 근사치 */
+const LEGACY_GRADES = ["F", "F+", "E", "E+", "D", "D+", "C", "C+", "B", "B+", "A", "A+", "S", "S+", "SS", "SSS"];
+export function legacyGrade(total: number): string {
+  return LEGACY_GRADES[Math.max(0, Math.min(LEGACY_GRADES.length - 1, Math.floor((total - 4200) / 175)))];
 }
 
 export function totalOf(stats: Record<StatKey, number>): number {
@@ -148,3 +217,14 @@ export function askingPrice(p: CPlayer, season: number): number {
   const ageMul = age <= 22 ? 1.2 : age >= 28 ? 0.6 : 1;
   return Math.max(50, Math.round((base * ageMul) / 10) * 10);
 }
+
+// ── 트레이드 ────────────────────────────────────────────────────
+/** 트레이드용 선수 가치 (요구 금액 기준) */
+export function tradeValue(p: CPlayer, season: number): number {
+  return askingPrice(p, season);
+}
+/** AI 가 요구하는 가치 배율 (에이스를 내줄 때는 훨씬 높게) */
+export const TRADE_PREMIUM = 1.1;
+export const TRADE_ACE_PREMIUM = 1.4;
+/** 트레이드 후 AI 팀 최소 인원 */
+export const AI_MIN_ROSTER = 6;

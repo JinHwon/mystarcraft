@@ -1,33 +1,36 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { FINAL_SETS, PRO_SETS, condMultiplier, totalOf, type CareerState, type CMatch } from "@shared/career/rules";
-import { STAGE_NAMES, mapView, myPendingMatch, rosterOf, standings, teamPower } from "@shared/career/view";
+import { FINAL_SETS, PRO_SETS, type CareerState, type CMatch } from "@shared/career/rules";
+import { STAGE_NAMES, myPendingMatch, rosterOf, standings } from "@shared/career/view";
 import { useCareer, useCareerUpdater } from "@/lib/career";
-import { CondBadge, RaceBadge, TeamBadge } from "@/components/career/Bits";
-import SetReveal from "@/components/career/SetReveal";
+import { TeamBadge } from "@/components/career/Bits";
+import { EntryScreen, MapDrawScreen, MatchViewer, type BroadcastSet } from "@/components/legacy/LegacyMatch";
 
 type Tab = "match" | "table" | "schedule";
 
-function autoEntry(s: CareerState, sets: number): number[] {
-  const ids = rosterOf(s, s.myTeam)
-    .sort((a, b) => totalOf(b.stats) * condMultiplier(b.cond) - totalOf(a.stats) * condMultiplier(a.cond))
-    .map(p => p.id);
-  if (!ids.length) return [];
-  const front = Array.from({ length: sets - 1 }, (_, i) => ids[i % ids.length]);
-  return [...front, ids[0]];
-}
+type MslReportView = { stage: string; label: string; a: number; b: number; sa: number; sb: number; winner: number };
 
-function MapLine({ mapId }: { mapId: number }) {
-  const m = mapView(mapId);
-  const tag = (v: number) => (v >= 110 ? "text-emerald-300" : v <= 90 ? "text-rose-300" : "text-muted-foreground");
+/** 이번 주 마이스타리그 우리 선수 경기 */
+function MslReports({ s, reports }: { s: CareerState; reports: MslReportView[] }) {
+  if (!reports.length) return null;
   return (
-    <div className="text-[11px] text-muted-foreground">
-      🗺️ <b className="text-foreground">{m.name}</b> · 러시 {m.rush} · 자원 {m.res} · 복잡 {m.complexity}
-      <span className="ml-1">
-        TvZ <b className={tag(m.tvz)}>{m.tvz}</b> · ZvP <b className={tag(m.zvp)}>{m.zvp}</b> · PvT <b className={tag(m.pvt)}>{m.pvt}</b>
-      </span>
+    <div className="rounded-2xl bg-card border border-border p-3 space-y-1.5">
+      <div className="text-sm font-bold text-foreground">🎮 마이스타리그 · 우리 선수 경기</div>
+      {reports.map((r, i) => {
+        const A = s.players[r.a], B = s.players[r.b];
+        const mineWon = s.players[r.winner]?.team === s.myTeam;
+        return (
+          <div key={i} className="flex items-center gap-1.5 text-xs">
+            <span className="text-muted-foreground w-24 truncate">{r.stage} {r.label !== r.stage ? r.label : ""}</span>
+            <span className={cn("flex-1 truncate text-right", r.winner === r.a ? "text-foreground font-bold" : "text-muted-foreground")}>{A?.name}</span>
+            <span className="font-mono font-bold w-9 text-center">{r.sa}:{r.sb}</span>
+            <span className={cn("flex-1 truncate", r.winner === r.b ? "text-foreground font-bold" : "text-muted-foreground")}>{B?.name}</span>
+            <span>{mineWon ? "🎉" : "😢"}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -37,48 +40,63 @@ function MatchTab({ s }: { s: CareerState }) {
   const [, navigate] = useLocation();
   const pending = myPendingMatch(s);
   const sets = pending?.stage === "final" ? FINAL_SETS : PRO_SETS;
-  const [entry, setEntry] = useState<number[]>([]);
-  const [played, setPlayed] = useState<{ match: CMatch; state: CareerState } | null>(null);
-  const roster = useMemo(() => rosterOf(s, s.myTeam).sort((a, b) => totalOf(b.stats) - totalOf(a.stats)), [s]);
+  const [entry, setEntry] = useState<(number | undefined)[]>([]);
+  const [viewing, setViewing] = useState<{ before: CareerState; after: CareerState; matchId: number; broadcast: BroadcastSet[] } | null>(null);
+  const [weekDone, setWeekDone] = useState<{ reports: MslReportView[]; matchId?: number } | null>(null);
+  const beforeRef = useRef<CareerState | null>(null);
+  const drawKey = `mysc-mapdraw-${s.season}-${s.myTeam}`;
+  const [showMaps, setShowMaps] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const closeMaps = () => { try { localStorage.setItem(drawKey, "1"); } catch { /* 저장 불가여도 진행 */ } setShowMaps(false); };
+  const openEntry = () => {
+    // 시즌 첫 경기 전에는 원작처럼 맵 추첨 결과부터
+    let seen = true;
+    try { seen = !!localStorage.getItem(drawKey); } catch { /* 무시 */ }
+    if (!seen) setShowMaps(true);
+    setEditing(true);
+  };
 
   useEffect(() => {
     if (!pending) return;
-    setEntry(prev => (prev.length === sets && prev.every(id => s.players[id]?.team === s.myTeam) ? prev : autoEntry(s, sets)));
+    setEntry(prev => (prev.length === sets && prev.every(id => id === undefined || s.players[id]?.team === s.myTeam) ? prev : Array(sets).fill(undefined)));
   }, [pending?.id, sets]);
 
   const advance = trpc.career.advance.useMutation({
     ...updater,
     onSuccess: r => {
       updater.onSuccess(r);
-      const id = (r.result as { playedMatchId?: number }).playedMatchId;
-      const m = id ? r.state.matches.find(x => x.id === id) : undefined;
-      if (m) setPlayed({ match: m, state: r.state });
+      const res = r.result as { playedMatchId?: number; broadcast?: BroadcastSet[]; mslReports?: MslReportView[] };
+      setWeekDone({ reports: res.mslReports ?? [], matchId: res.playedMatchId });
+      setEditing(false);
+      if (res.playedMatchId && beforeRef.current) {
+        setViewing({ before: beforeRef.current, after: r.state, matchId: res.playedMatchId, broadcast: res.broadcast ?? [] });
+      }
       window.scrollTo(0, 0);
     },
   });
+  const submit = (e?: number[]) => { beforeRef.current = s; advance.mutate(e ? { entry: e } : {}); };
 
-  const front = entry.slice(0, sets - 1);
-  const dupFront = new Set(front).size !== front.length;
-  const usedAp = rosterOf(s, s.myTeam).filter(p => p.action).length;
+  if (viewing) {
+    return <MatchViewer {...viewing} onClose={() => setViewing(null)} />;
+  }
 
-  if (played) {
-    const m = played.match;
-    const mySide = m.a === s.myTeam ? "a" : "b";
-    const opp = played.state.teams[mySide === "a" ? m.b : m.a];
-    const won = m.winner === s.myTeam;
+  if (weekDone) {
+    const m = weekDone.matchId ? s.matches.find(x => x.id === weekDone.matchId) : undefined;
+    const won = m?.winner === s.myTeam;
     return (
       <div className="space-y-3">
-        <SetReveal
-          state={played.state}
-          sets={m.sets ?? []}
-          mySide={mySide}
-          title={`${STAGE_NAMES[m.stage]}${m.stage === "regular" ? ` ${m.week}주차` : ""} · vs ${opp.name}`}
-          footer={won ? "🎉 승리! 팀 자금 +200만원" : "😢 패배 · 팀 자금 +50만원"}
-        />
-        <button
-          onClick={() => setPlayed(null)}
-          className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-black"
-        >확인 · 다음 주로</button>
+        {m && (
+          <div className={cn("rounded-2xl border p-4 text-center", won ? "bg-emerald-500/15 border-emerald-400/40" : "bg-rose-500/10 border-rose-400/30")}>
+            <div className="text-xs text-muted-foreground">{STAGE_NAMES[m.stage]}{m.stage === "regular" ? ` ${m.week}주차` : ""}</div>
+            <div className="mt-1 flex items-center justify-center gap-2 font-black text-foreground">
+              <span>{s.teams[m.a].name}</span><span className="font-mono text-lg">{m.scoreA}:{m.scoreB}</span><span>{s.teams[m.b].name}</span>
+            </div>
+            <div className="text-sm mt-1">{won ? "🎉 승리!" : "😢 패배"}</div>
+          </div>
+        )}
+        <MslReports s={s} reports={weekDone.reports} />
+        {!m && !weekDone.reports.length && <div className="rounded-2xl bg-card border border-border p-4 text-center text-sm text-muted-foreground">이번 주 일정이 끝났습니다.</div>}
+        <button onClick={() => setWeekDone(null)} className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-black">확인 · 다음 주로</button>
       </div>
     );
   }
@@ -104,21 +122,34 @@ function MatchTab({ s }: { s: CareerState }) {
             {weekMatches.length ? weekMatches.map(m => `${STAGE_NAMES[m.stage]}: ${s.teams[m.a].name} vs ${s.teams[m.b].name}`).join(" / ") : "다음 일정으로 넘어갑니다"}
           </div>
         </div>
-        <button onClick={() => advance.mutate({})} disabled={advance.isPending} className="w-full py-3.5 rounded-2xl bg-primary text-primary-foreground font-black">
+        <button onClick={() => submit()} disabled={advance.isPending} className="w-full py-3.5 rounded-2xl bg-primary text-primary-foreground font-black">
           {advance.isPending ? "진행 중..." : "▶ 다음 주 진행 (관전)"}
         </button>
       </div>
     );
   }
 
+  if (showMaps) return <MapDrawScreen s={s} onNext={closeMaps} />;
+  if (editing) {
+    return (
+      <EntryScreen
+        s={s} match={pending} entry={entry} setEntry={setEntry}
+        submitting={advance.isPending}
+        onSubmit={() => submit(entry as number[])}
+        onShowMaps={() => setShowMaps(true)}
+        onBack={() => setEditing(false)}
+      />
+    );
+  }
+
   const oppId = pending.a === s.myTeam ? pending.b : pending.a;
   const opp = s.teams[oppId];
-  const oppRoster = rosterOf(s, oppId).sort((a, b) => totalOf(b.stats) - totalOf(a.stats));
-
+  const filled = entry.filter(x => x !== undefined).length;
+  const usedAp = rosterOf(s, s.myTeam).filter(p => p.action).length;
   return (
     <div className="space-y-3">
       <div className="rounded-2xl bg-card border border-border p-3.5">
-        <div className="text-xs text-muted-foreground">{STAGE_NAMES[pending.stage]}{pending.stage === "regular" ? ` ${pending.week}주차` : ""} · {pending.stage === "final" ? "7전 4선승" : "5전 3선승"}</div>
+        <div className="text-xs text-muted-foreground">{STAGE_NAMES[pending.stage]}{pending.stage === "regular" ? ` ${pending.week}주차` : ""} · {sets === FINAL_SETS ? "7전 4선승" : "5전 3선승"}</div>
         <div className="mt-1 flex items-center gap-2">
           <TeamBadge short={s.teams[s.myTeam].short} color={s.teams[s.myTeam].color} />
           <span className="font-black text-foreground">{s.teams[s.myTeam].name}</span>
@@ -126,51 +157,13 @@ function MatchTab({ s }: { s: CareerState }) {
           <TeamBadge short={opp.short} color={opp.color} />
           <span className="font-black text-rose-200 truncate">{opp.name}</span>
         </div>
-        <div className="mt-1 text-[11px] text-muted-foreground">
-          상대 전력 {teamPower(s, oppId).toLocaleString()} · 주요 선수 {oppRoster.slice(0, 3).map(p => p.name).join(", ")} · 상대 엔트리는 경기 시작과 함께 공개됩니다
-        </div>
+        <div className="mt-1 text-[11px] text-muted-foreground">엔트리 {filled}/{sets} · 상대 엔트리는 경기 시작과 함께 공개됩니다</div>
       </div>
-
-      <div className="flex items-center justify-between px-1">
-        <span className="text-sm font-bold text-foreground">📝 엔트리 편성</span>
-        <button onClick={() => setEntry(autoEntry(s, sets))} className="text-xs font-bold text-primary">🤖 자동 편성</button>
-      </div>
-      <div className="space-y-2">
-        {Array.from({ length: sets }, (_, i) => {
-          const ace = i === sets - 1;
-          const p = s.players[entry[i]];
-          return (
-            <div key={i} className={cn("rounded-2xl border p-3 space-y-1.5", ace ? "border-amber-400/50 bg-amber-500/10" : "border-border bg-card")}>
-              <div className="flex items-center justify-between">
-                <span className={cn("text-sm font-black", ace ? "text-amber-300" : "text-foreground")}>{ace ? "⭐ 에이스 결정전 (히든)" : `${i + 1}세트`}</span>
-                {p && <CondBadge cond={p.cond} />}
-              </div>
-              <MapLine mapId={pending.maps[i % pending.maps.length]} />
-              <select
-                value={entry[i] ?? ""}
-                onChange={e => setEntry(prev => { const n = [...prev]; n[i] = Number(e.target.value); return n; })}
-                className="w-full bg-muted border border-border rounded-xl px-2.5 py-2 text-sm text-foreground"
-              >
-                {roster.map(r => (
-                  <option key={r.id} value={r.id}>
-                    [{r.race[0].toUpperCase()}] {r.name} · {totalOf(r.stats).toLocaleString()} · 컨디션 {r.cond}
-                  </option>
-                ))}
-              </select>
-            </div>
-          );
-        })}
-      </div>
-      {dupFront && <p className="text-xs text-rose-300 px-1">1~{sets - 1}세트에는 서로 다른 선수를 배치해야 합니다 (에이스 결정전은 누구나 가능)</p>}
       {usedAp === 0 && <p className="text-xs text-amber-300 px-1">이번 주 선수 행동을 아직 정하지 않았습니다. <button onClick={() => navigate("/training")} className="underline font-bold">선수 행동 정하기</button></p>}
-
-      <button
-        onClick={() => advance.mutate({ entry })}
-        disabled={advance.isPending || dupFront || entry.length !== sets}
-        className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black disabled:opacity-40"
-      >
-        {advance.isPending ? "경기 진행 중..." : "⚔️ 경기 시작"}
+      <button onClick={openEntry} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black">
+        ⚔️ 엔트리 편성 · 경기 시작
       </button>
+      <button onClick={() => setShowMaps(true)} className="w-full py-2.5 rounded-2xl bg-card border border-border text-sm font-bold text-foreground">🗺️ 이번 시즌 맵 추첨 결과</button>
     </div>
   );
 }
