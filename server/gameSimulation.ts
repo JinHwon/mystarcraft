@@ -283,3 +283,50 @@ export async function simulateGame(
     player2Events: gameState.player2Events || [],
   };
 }
+
+/** 리그 세트 결과 */
+export interface SetResult {
+  winnerId: number;
+  /** 게임 시간(초) */
+  duration: number;
+  endReason?: string;
+  /** 문자중계 하이라이트 ([mm:ss] 포함) */
+  highlights: string[];
+}
+
+const HIGHLIGHT_RE = /빌드는|공격!|교전 승리|뒤집|역습!|수비 성공|무너|지켜냅|GG|판정|드랍|난입|급습|견제!/;
+
+/**
+ * 리그 한 세트 진행 (턴 데이터 없이 하이라이트 문자중계만 수집)
+ */
+export function simulateSet(
+  p1: { id: number; name: string; race: Race; stats: Record<StatKey, number>; fatigue: number },
+  p2: { id: number; name: string; race: Race; stats: Record<StatKey, number>; fatigue: number },
+  mapRaceAdvantage: Record<string, number>,
+  mapTraits: MapTraits,
+  withHighlights = true
+): SetResult {
+  const gs = initializeGameState(
+    p1.id, p1.name, p1.race, p2.id, p2.name, p2.race,
+    calcEffectiveStatsWithFatigue(p1.stats, p1.fatigue),
+    calcEffectiveStatsWithFatigue(p2.stats, p2.fatigue),
+    mapTraits, mapRaceAdvantage
+  );
+  const highlights: string[] = [];
+  let turns = 0;
+  while (!gs.gameEnded && turns < 125) {
+    progressTurn(gs);
+    turns++;
+    if (withHighlights) {
+      // 해설에는 이미 [mm:ss] 시간이 붙어 있음
+      for (const c of gs.turnCommentaries) if (HIGHLIGHT_RE.test(c)) highlights.push(c);
+    }
+  }
+  if (!gs.gameEnded) {
+    gs.gameEnded = true;
+    gs.winner = gs.player1Advantage >= 50 ? gs.player1.id : gs.player2.id;
+  }
+  // 너무 길면 앞부분(빌드)과 뒷부분(결정적 장면) 위주로 줄임
+  const trimmed = highlights.length > 18 ? [...highlights.slice(0, 4), ...highlights.slice(-14)] : highlights;
+  return { winnerId: gs.winner ?? p1.id, duration: gs.time, endReason: gs.endReason, highlights: trimmed };
+}

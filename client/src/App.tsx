@@ -17,6 +17,7 @@ import GameResults from "./pages/GameResults";
 import Ranking from "./pages/Ranking";
 import Team from "./pages/Team";
 import Training from "./pages/Training";
+import League from "./pages/League";
 import GameLayout from "./components/GameLayout";
 import { UpdateNotification } from "./components/UpdateNotification";
 
@@ -74,6 +75,11 @@ function Router() {
       <Route path="/training">
         <GameLayout>
           <Training />
+        </GameLayout>
+      </Route>
+      <Route path="/league">
+        <GameLayout>
+          <League />
         </GameLayout>
       </Route>
       <Route path="/404" component={NotFound} />
