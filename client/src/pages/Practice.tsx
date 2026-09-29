@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { RACE_COLORS, RACE_LABELS, DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, FATIGUE_MIN_TO_PLAY, GAME_MAX_RESOURCES, calcFatigueStatPenalty } from "@shared/gameConstants";
 import { Loader2, X, ArrowLeft, User } from "lucide-react";
 import { STAT_LABELS } from "@shared/gameConstants";
+import { ConditionBadge } from "@/components/team/PlayerBadges";
+import { toast } from "sonner";
 
 type GamePhase = "difficulty" | "map" | "opponent" | "playing" | "result";
 
@@ -18,6 +20,8 @@ interface GameState {
   opponentName?: string;
   opponentRace?: string;
   opponentGrade?: string;
+  playerCondition?: number;
+  opponentCondition?: number;
   opponentStats?: Record<string, number>;
   isAiOpponent?: boolean;
   winProbability?: number;
@@ -201,6 +205,8 @@ export default function PracticePage() {
         opponentName: result.opponent.name,
         opponentRace: result.opponent.race,
         opponentGrade: result.opponentGrade,
+        playerCondition: result.playerCondition,
+        opponentCondition: result.opponentCondition,
         opponentStats: result.opponentStats,
         isAiOpponent: result.isAiOpponent,
         winProbability: result.winProbability,
@@ -219,9 +225,10 @@ export default function PracticePage() {
         playerFatigue: result.newFatigue,
         playerFatiguePenalty: calcFatigueStatPenalty(result.newFatigue),
       }));
+      toast.success(`피로도 회복! (${result.newFatigue}/100)`);
     },
     onError: (error) => {
-      console.error("아이템 사용 실패:", error);
+      toast.error(error.message);
     },
   });
 
@@ -526,6 +533,7 @@ export default function PracticePage() {
                       <div className="flex items-center gap-2">
                         <User className="w-4 h-4 text-blue-400" />
                         <CardTitle className="text-sm md:text-base text-blue-300">내 능력치</CardTitle>
+                        {gameState.playerCondition !== undefined && <ConditionBadge condition={gameState.playerCondition} className="ml-auto" />}
                       </div>
                       {gameState.playerFatigue !== undefined && gameState.playerFatigue < 90 && (
                         <CardDescription className="text-red-400 text-xs">
@@ -553,6 +561,7 @@ export default function PracticePage() {
                         {gameState.isAiOpponent && (
                           <Badge className="bg-purple-600 text-purple-100 text-xs">AI</Badge>
                         )}
+                        {gameState.opponentCondition !== undefined && <ConditionBadge condition={gameState.opponentCondition} className="ml-auto" />}
                       </div>
                       {gameState.opponentRace && (
                         <CardDescription className="text-xs md:text-sm">{RACE_LABELS[gameState.opponentRace as keyof typeof RACE_LABELS]}</CardDescription>

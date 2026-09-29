@@ -263,7 +263,8 @@ export default function Shop() {
       utils.player.get.invalidate();
       utils.shop.getPlayerItems.invalidate();
       const item = playerItems.find(pi => pi.playerItemId === playerItemId)?.item;
-      toast.success(`${item?.name} 사용 완료!`);
+      toast.success(`${item?.name} 사용 완료! (피로도 ${result.newFatigue}/100)`);
+      utils.team.get.invalidate();
     },
     onError: (err) => toast.error(err.message),
     onSettled: () => setEquippingId(null),

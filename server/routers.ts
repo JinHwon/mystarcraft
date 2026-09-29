@@ -72,13 +72,18 @@ import { DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, FATIGUE_MIN_TO_PLAY, MAP
 import { simulateGame, calculateWinProbability, estimateWinRate } from "./gameSimulation";
 import { type MapCharacteristic } from "./buildSystem";
 import { calculateStatChanges, applyReverseSystem } from "./statDynamicSystem";
+import { teamRouter } from "./teamRouter";
+import { refreshPlayerDaily, getPlayerCondition, changeCondition } from "./team";
+import { applyCondition } from "@shared/teamConstants";
 
 // ── Player Router ────────────────────────────────────────────────
 
 const playerRouter = router({
   get: protectedProcedure.query(async ({ ctx }) => {
-    const player = await getPlayerByUserId(ctx.user.id);
-    if (!player) return null;
+    const found = await getPlayerByUserId(ctx.user.id);
+    if (!found) return null;
+    // 오늘 컨디션 갱신
+    const player = await refreshPlayerDaily(found);
     const stats = await getPlayerStats(player.id);
     const gameRecord = await getPlayerGameRecord(player.id);
     const grade = await getPlayerGrade(player.id);
@@ -334,9 +339,12 @@ const shopRouter = router({
       const playerData = await db.select().from(players).where(eq(players.id, player.id)).limit(1);
       if (!playerData.length) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
       
-      // 피로도 회복 (감소 아님)
+      // 피로도는 체력 개념 (100 = 최상). 회복 아이템은 피로도 수치를 올린다
       const fatigueRecover = Number(item[0].fatigueRecover) || 0;
-      const newFatigue = Math.min(100, Math.max(0, playerData[0].fatigue - fatigueRecover));
+      if (playerData[0].fatigue >= 100) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "피로도가 이미 가득 찼습니다" });
+      }
+      const newFatigue = Math.min(100, Math.max(0, playerData[0].fatigue + fatigueRecover));
       await db.update(players).set({ fatigue: newFatigue }).where(eq(players.id, player.id));
       
       // 아이템 사용 차감
@@ -696,7 +704,7 @@ function computeGameStatChanges(
   };
 }
 
-/** 시뮬레이션용 선수 능력치 (기본 능력치 + 착용 아이템 부스트, 피로도 미적용) */
+/** 시뮬레이션용 선수 능력치 (기본 능력치 + 착용 아이템 부스트 + 컨디션, 피로도 미적용) */
 async function getPlayerSimStats(playerId: number): Promise<Record<StatKey, number>> {
   const playerStatsRaw = await getPlayerStats(playerId);
   const statsForSim = Object.fromEntries(
@@ -715,7 +723,7 @@ async function getPlayerSimStats(playerId: number): Promise<Record<StatKey, numb
       }
     }
   }
-  return statsForSim;
+  return applyCondition(statsForSim, await getPlayerCondition(playerId));
 }
 
 /** AI 선수 최대 수 (너무 많아지지 않도록) */
@@ -761,9 +769,9 @@ const practiceRouter = router({
       const opponent = await getPlayerById(opponentPlayerId);
       if (!opponent) throw new TRPCError({ code: "NOT_FOUND", message: "상대 선수를 찾을 수 없습니다" });
       const raw = await getPlayerStats(opponent.id) || await ensurePlayerStats(opponent.id);
-      const opponentStats = Object.fromEntries(
+      const opponentStats = applyCondition(Object.fromEntries(
         STAT_KEYS.map(key => [key, (raw as any)?.[key] ?? 500])
-      ) as Record<StatKey, number>;
+      ) as Record<StatKey, number>, await getPlayerCondition(opponent.id));
       const opponentRace = opponent.race as "terran" | "zerg" | "protoss";
       const opponentFatigue = opponent.fatigue;
 
@@ -810,7 +818,9 @@ const practiceRouter = router({
       // - 대부분은 기존 선수/AI 중에서 매칭 (직전 상대는 가능하면 피함)
       // - 일정 확률로 새 AI 선수를 생성 (해당 난이도 AI 가 적을수록 확률이 높음)
       // - 상대가 없으면 반드시 새 AI 생성. 생성된 AI 는 이후 전적/랭킹/성장이 쌓임
-      const candidates = await findOpponentCandidates(input.difficulty, player.id);
+      // 같은 팀 동료는 상대에서 제외
+      const candidates = (await findOpponentCandidates(input.difficulty, player.id))
+        .filter(c => player.teamId === 0 || c.teamId !== player.teamId);
       const botsInRange = candidates.filter(c => c.isBot === 1).length;
       const newBotChance = Math.min(0.45, Math.max(0.08, 0.45 - 0.07 * botsInRange));
       const canAddBot = (await countBotPlayers()) < MAX_BOT_PLAYERS;
@@ -885,9 +895,16 @@ const practiceRouter = router({
       const opponentTotalStats = STAT_KEYS.reduce((sum, key) => sum + (opponentStatsRecord[key] || 0), 0);
       const actualOpponentGrade = calcGrade(opponentTotalStats);
       
+      const [playerCondition, opponentCondition] = await Promise.all([
+        getPlayerCondition(player.id),
+        getPlayerCondition(opponent.id),
+      ]);
+
       return { 
         gameId, 
         opponent,
+        playerCondition,
+        opponentCondition,
         opponentGrade: actualOpponentGrade, 
         winProbability,
         opponentStats: opponentStatsRecord,
@@ -936,6 +953,10 @@ const practiceRouter = router({
       // 게임 시뮬레이션 실행
       // AI 상대인 경우 능력치를 직접 전달
       const playerStatsForSim = await getPlayerSimStats(player.id);
+      const opponentRawStats = await getPlayerStats(opponentId) || await ensurePlayerStats(opponentId);
+      const opponentStatsForSim = applyCondition(Object.fromEntries(
+        STAT_KEYS.map(key => [key, (opponentRawStats as any)?.[key] ?? 500])
+      ) as Record<StatKey, number>, await getPlayerCondition(opponentId));
       
       const simulation = await simulateGame(
         player.id,
@@ -950,7 +971,7 @@ const practiceRouter = router({
         opponentFatigue,
         "balanced",
         playerStatsForSim,
-        undefined,
+        opponentStatsForSim,
         { rushDistance: map.rushDistance, resources: map.resources, complexity: map.complexity }
       );
 
@@ -1046,6 +1067,9 @@ const practiceRouter = router({
         }
       }
 
+      // 경기 결과에 따른 컨디션 변동 (승리 +2, 패배 -2)
+      await changeCondition(player.id, isWinner ? 2 : -2);
+
       // AI 상대도 전적/경험치/능력치가 쌓이며 함께 성장
       if (isAiGame) {
         const botWon = !isWinner;
@@ -1122,6 +1146,7 @@ export const appRouter = router({
   event: eventRouter,
   practice: practiceRouter,
   quest: questRouter,
+  team: teamRouter,
   ranking: router({
     list: publicProcedure.query(async () => {
       return await getRankingList();
