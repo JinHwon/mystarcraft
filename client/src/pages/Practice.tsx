@@ -750,6 +750,7 @@ export default function PracticePage() {
       1
     );
     const maxResources = GAME_MAX_RESOURCES;
+    const mapName = mapsQuery.data?.find((m: any) => m.id === gameState.mapId)?.name;
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 md:p-4">
@@ -763,7 +764,6 @@ export default function PracticePage() {
             >
               <ArrowLeft className="w-4 h-4 mr-1" /> 뒤로가기
             </Button>
-            <span className="text-sm md:text-base font-bold text-slate-200 tabular-nums">⏱ {formatGameTime(currentTurn?.time)}</span>
             <div className="flex gap-2">
               <Button
                 onClick={() => setGameSpeed(1)}
@@ -792,58 +792,85 @@ export default function PracticePage() {
             </div>
           </div>
 
-          {/* 해설 (맨 위) */}
-          <Card className="bg-slate-800 border-slate-700 mb-3">
+          {/* 방송 스코어보드: 맵·경기 시간·선수·빌드·유불리 */}
+          <div className="mb-3 rounded-xl overflow-hidden border border-slate-700 bg-gradient-to-r from-blue-950 via-slate-900 to-purple-950 shadow-lg">
+            <div className="flex items-center justify-between px-3 md:px-4 py-1.5 bg-black/40 text-[10px] md:text-xs">
+              <span className="flex items-center gap-1.5 font-bold text-red-400">
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" /> LIVE
+              </span>
+              <span className="text-slate-300 truncate px-2">🗺️ {mapName ?? "연습경기"} · {difficultyLabels[gameState.difficulty ?? ""] ?? ""}</span>
+              <span className="text-slate-400">문자중계</span>
+            </div>
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 md:px-5 py-3">
+              <div className="min-w-0">
+                <p className="text-base md:text-xl font-black text-blue-300 truncate">{player1Name}</p>
+                <p className="text-[10px] md:text-xs text-slate-400 truncate">
+                  {RACE_LABELS[(currentTurn?.p1?.race ?? gameState.playerRace) as keyof typeof RACE_LABELS] ?? ""}{currentTurn?.p1?.plan ? ` · ${currentTurn.p1.plan}` : ""}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-xl md:text-3xl font-black text-white tabular-nums tracking-wider">{formatGameTime(currentTurn?.time)}</p>
+                <p className="text-[10px] text-slate-500">VS</p>
+              </div>
+              <div className="min-w-0 text-right">
+                <p className="text-base md:text-xl font-black text-purple-300 truncate">{player2Name}</p>
+                <p className="text-[10px] md:text-xs text-slate-400 truncate">
+                  {RACE_LABELS[(currentTurn?.p2?.race ?? gameState.opponentRace) as keyof typeof RACE_LABELS] ?? ""}{currentTurn?.p2?.plan ? ` · ${currentTurn.p2.plan}` : ""}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 px-3 md:px-5 pb-3">
+              <span className="text-blue-300 font-bold text-xs md:text-sm w-10 text-right tabular-nums">{Math.round(p1Advantage)}%</span>
+              <div className="flex-1 h-3 md:h-4 bg-slate-800 rounded-full overflow-hidden relative">
+                <div className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-300" style={{ width: `${p1Advantage}%` }} />
+                <div className="absolute top-0 right-0 h-full bg-gradient-to-l from-purple-600 to-purple-400 transition-all duration-300" style={{ width: `${p2Advantage}%` }} />
+                <div className="absolute top-0 left-1/2 w-px h-full bg-white/40" />
+              </div>
+              <span className="text-purple-300 font-bold text-xs md:text-sm w-10 tabular-nums">{Math.round(p2Advantage)}%</span>
+            </div>
+          </div>
+
+          {/* 문자중계: 시간 · 해설, 교전·GG 등 주요 장면 강조 */}
+          <Card className="bg-slate-900/80 border-slate-700 mb-3">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm md:text-base text-white">해설</CardTitle>
+              <CardTitle className="text-sm md:text-base text-white flex items-center justify-between">
+                <span>📺 문자중계</span>
+                <span className="text-[10px] md:text-xs font-normal text-slate-500">{allCommentaries.length}개 중계</span>
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-1 max-h-64 overflow-y-auto" ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}>
+              <div className="space-y-0.5 max-h-72 md:max-h-96 overflow-y-auto pr-1" ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}>
                 {allCommentaries.length === 0 ? (
-                  <p className="text-xs text-slate-400">해설이 없습니다.</p>
+                  <p className="text-xs text-slate-400">경기 시작 전입니다.</p>
                 ) : (
                   allCommentaries.map((item, idx) => {
+                    const m = item.text.match(/^\[(\d{2}:\d{2})\] (.*)$/);
+                    const time = m ? m[1] : "";
+                    const body = m ? m[2] : item.text;
                     // 한 선수만 언급하면 그 선수 색, 두 선수 모두 또는 아무도 언급하지 않으면 중립(흰색)
-                    const mentions1 = item.text.includes(player1Name);
-                    const mentions2 = item.text.includes(player2Name);
+                    const mentions1 = body.includes(player1Name);
+                    const mentions2 = body.includes(player2Name);
                     let textColor = "text-white";
                     if (mentions1 && !mentions2) textColor = "text-blue-300";
                     else if (mentions2 && !mentions1) textColor = "text-purple-300";
-                    
+                    const isGG = /GG|판정승|무너졌습니다/.test(body);
+                    const isBattle = /공격!|교전 승리|무너집니다|타이밍/.test(body);
+                    const isStatus = body.startsWith("현황");
+                    const rowStyle = isGG
+                      ? "bg-red-950/60 border-l-4 border-red-500 font-bold"
+                      : isBattle
+                        ? "bg-amber-950/40 border-l-4 border-amber-500 font-semibold"
+                        : isStatus
+                          ? "bg-slate-800/80 border-l-4 border-slate-500 text-[11px]"
+                          : "border-l-4 border-transparent";
                     return (
-                      <p key={idx} className={`text-xs ${textColor}`}>
-                        {item.text}
-                      </p>
+                      <div key={idx} className={`flex gap-2 px-2 py-1 rounded-r ${rowStyle}`}>
+                        <span className="shrink-0 w-10 text-[10px] md:text-xs text-slate-500 font-mono pt-px">{time}</span>
+                        <p className={`text-xs md:text-sm leading-snug ${isGG ? "text-red-200" : textColor}`}>{body}</p>
+                      </div>
                     );
                   })
                 )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 유불리 그래프 (실시간) */}
-          <Card className="bg-slate-800 border-slate-700 mb-3">
-            <CardContent className="py-3 px-4">
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span className="text-blue-400 font-bold">{player1Name}</span>
-                <span className="text-slate-400 font-semibold">유불리</span>
-                <span className="text-purple-400 font-bold">{player2Name}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-blue-400 font-bold text-sm w-10 text-right">{Math.round(p1Advantage)}%</span>
-                <div className="flex-1 h-5 bg-slate-700 rounded-full overflow-hidden relative">
-                  <div
-                    className="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300 rounded-l-full"
-                    style={{ width: `${p1Advantage}%` }}
-                  />
-                  <div
-                    className="absolute top-0 right-0 h-full bg-gradient-to-l from-purple-500 to-purple-400 transition-all duration-300 rounded-r-full"
-                    style={{ width: `${p2Advantage}%` }}
-                  />
-                  {/* 중앙선 */}
-                  <div className="absolute top-0 left-1/2 w-px h-full bg-slate-300/30" />
-                </div>
-                <span className="text-purple-400 font-bold text-sm w-10">{Math.round(p2Advantage)}%</span>
               </div>
             </CardContent>
           </Card>
