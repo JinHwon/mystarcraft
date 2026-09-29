@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
@@ -6,14 +6,12 @@ import { FINAL_SETS, PRO_SETS, type CareerState, type CMatch } from "@shared/car
 import { STAGE_NAMES, myPendingMatch, rosterOf, standings } from "@shared/career/view";
 import { useCareer, useCareerUpdater } from "@/lib/career";
 import { TeamBadge } from "@/components/career/Bits";
-import { EntryScreen, MapDrawScreen, MatchViewer, type BroadcastSet } from "@/components/legacy/LegacyMatch";
+import { EntryScreen, LiveMatch, MapDrawScreen, SeriesViewer, type BroadcastSet, type MslReportView, type WeekDone } from "@/components/legacy/LegacyMatch";
 
 type Tab = "match" | "table" | "schedule";
 
-type MslReportView = { stage: string; label: string; a: number; b: number; sa: number; sb: number; winner: number };
-
-/** 이번 주 마이스타리그 우리 선수 경기 */
-function MslReports({ s, reports }: { s: CareerState; reports: MslReportView[] }) {
+/** 이번 주 마이스타리그 우리 선수 경기 (눌러서 중계 다시 보기) */
+export function MslReports({ s, reports, onWatch }: { s: CareerState; reports: MslReportView[]; onWatch: (r: MslReportView) => void }) {
   if (!reports.length) return null;
   return (
     <div className="rounded-2xl bg-card border border-border p-3 space-y-1.5">
@@ -22,13 +20,14 @@ function MslReports({ s, reports }: { s: CareerState; reports: MslReportView[] }
         const A = s.players[r.a], B = s.players[r.b];
         const mineWon = s.players[r.winner]?.team === s.myTeam;
         return (
-          <div key={i} className="flex items-center gap-1.5 text-xs">
-            <span className="text-muted-foreground w-24 truncate">{r.stage} {r.label !== r.stage ? r.label : ""}</span>
+          <button key={i} onClick={() => onWatch(r)} className="w-full flex items-center gap-1.5 text-xs rounded-lg px-1 py-1.5 hover:bg-muted/50">
+            <span className="text-muted-foreground w-24 truncate text-left">{r.label}</span>
             <span className={cn("flex-1 truncate text-right", r.winner === r.a ? "text-foreground font-bold" : "text-muted-foreground")}>{A?.name}</span>
             <span className="font-mono font-bold w-9 text-center">{r.sa}:{r.sb}</span>
-            <span className={cn("flex-1 truncate", r.winner === r.b ? "text-foreground font-bold" : "text-muted-foreground")}>{B?.name}</span>
+            <span className={cn("flex-1 truncate text-left", r.winner === r.b ? "text-foreground font-bold" : "text-muted-foreground")}>{B?.name}</span>
             <span>{mineWon ? "🎉" : "😢"}</span>
-          </div>
+            <span className="text-primary font-bold">▶</span>
+          </button>
         );
       })}
     </div>
@@ -36,14 +35,15 @@ function MslReports({ s, reports }: { s: CareerState; reports: MslReportView[] }
 }
 
 function MatchTab({ s }: { s: CareerState }) {
+  const pendingState = useRef<CareerState | null>(null);
   const updater = useCareerUpdater();
   const [, navigate] = useLocation();
   const pending = myPendingMatch(s);
   const sets = pending?.stage === "final" ? FINAL_SETS : PRO_SETS;
-  const [entry, setEntry] = useState<(number | undefined)[]>([]);
-  const [viewing, setViewing] = useState<{ before: CareerState; after: CareerState; matchId: number; broadcast: BroadcastSet[] } | null>(null);
-  const [weekDone, setWeekDone] = useState<{ reports: MslReportView[]; matchId?: number } | null>(null);
-  const beforeRef = useRef<CareerState | null>(null);
+  const [front, setFront] = useState<(number | undefined)[]>([]);
+  const [weekDone, setWeekDone] = useState<WeekDone | null>(null);
+  const [watch, setWatch] = useState<MslReportView | null>(null);
+  const [watching, setWatching] = useState(!!s.live);
   const drawKey = `mysc-mapdraw-${s.season}-${s.myTeam}`;
   const [showMaps, setShowMaps] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -56,32 +56,39 @@ function MatchTab({ s }: { s: CareerState }) {
     setEditing(true);
   };
 
-  useEffect(() => {
-    if (!pending) return;
-    setEntry(prev => (prev.length === sets && prev.every(id => id === undefined || s.players[id]?.team === s.myTeam) ? prev : Array(sets).fill(undefined)));
-  }, [pending?.id, sets]);
-
+  const begin = trpc.career.beginMatch.useMutation({
+    ...updater,
+    onSuccess: r => { updater.onSuccess(r); setEditing(false); setWatching(true); },
+  });
+  const playSetM = trpc.career.playSet.useMutation({ onError: updater.onError });
   const advance = trpc.career.advance.useMutation({
     ...updater,
-    onSuccess: r => {
-      updater.onSuccess(r);
-      const res = r.result as { playedMatchId?: number; broadcast?: BroadcastSet[]; mslReports?: MslReportView[] };
-      setWeekDone({ reports: res.mslReports ?? [], matchId: res.playedMatchId });
-      setEditing(false);
-      if (res.playedMatchId && beforeRef.current) {
-        setViewing({ before: beforeRef.current, after: r.state, matchId: res.playedMatchId, broadcast: res.broadcast ?? [] });
-      }
-      window.scrollTo(0, 0);
-    },
+    onSuccess: r => { updater.onSuccess(r); setWeekDone(r.result as WeekDone); window.scrollTo(0, 0); },
   });
-  const submit = (e?: number[]) => { beforeRef.current = s; advance.mutate(e ? { entry: e } : {}); };
 
-  if (viewing) {
-    return <MatchViewer {...viewing} onClose={() => setViewing(null)} />;
+  if (watch) return <SeriesViewer s={s} report={watch} onClose={() => setWatch(null)} />;
+
+  if (watching && s.live) {
+    return (
+      <LiveMatch
+        s={s}
+        pending={playSetM.isPending}
+        playSet={(ace, done) => playSetM.mutate({ ace }, {
+          onSuccess: r => {
+            const res = r.result as { set: BroadcastSet; week?: WeekDone; needAce: boolean };
+            done(res);
+            // 경기가 끝나 세이브가 다음 주로 넘어가도 관전 화면은 끝까지 유지 (결과 확인 후 반영)
+            if (res.week) pendingState.current = r.state; else updater.onSuccess(r);
+          },
+        })}
+        onFinished={w => { if (pendingState.current) updater.onSuccess({ state: pendingState.current }); pendingState.current = null; setWatching(false); setWeekDone(w); window.scrollTo(0, 0); }}
+        onClose={() => { if (pendingState.current) { updater.onSuccess({ state: pendingState.current }); pendingState.current = null; setWeekDone({}); } setWatching(false); }}
+      />
+    );
   }
 
   if (weekDone) {
-    const m = weekDone.matchId ? s.matches.find(x => x.id === weekDone.matchId) : undefined;
+    const m = weekDone.playedMatchId ? s.matches.find(x => x.id === weekDone.playedMatchId) : undefined;
     const won = m?.winner === s.myTeam;
     return (
       <div className="space-y-3">
@@ -94,10 +101,17 @@ function MatchTab({ s }: { s: CareerState }) {
             <div className="text-sm mt-1">{won ? "🎉 승리!" : "😢 패배"}</div>
           </div>
         )}
-        <MslReports s={s} reports={weekDone.reports} />
-        {!m && !weekDone.reports.length && <div className="rounded-2xl bg-card border border-border p-4 text-center text-sm text-muted-foreground">이번 주 일정이 끝났습니다.</div>}
+        <MslReports s={s} reports={weekDone.mslReports ?? []} onWatch={setWatch} />
+        {!m && !weekDone.mslReports?.length && <div className="rounded-2xl bg-card border border-border p-4 text-center text-sm text-muted-foreground">이번 주 일정이 끝났습니다.</div>}
+        <button onClick={() => navigate("/starleague")} className="w-full py-2.5 rounded-2xl bg-card border border-border text-sm font-bold text-foreground">🏆 마이스타리그 대진 보기</button>
         <button onClick={() => setWeekDone(null)} className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-black">확인 · 다음 주로</button>
       </div>
+    );
+  }
+
+  if (s.live) {
+    return (
+      <button onClick={() => setWatching(true)} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black">▶ 진행 중인 경기 이어서 보기</button>
     );
   }
 
@@ -122,7 +136,7 @@ function MatchTab({ s }: { s: CareerState }) {
             {weekMatches.length ? weekMatches.map(m => `${STAGE_NAMES[m.stage]}: ${s.teams[m.a].name} vs ${s.teams[m.b].name}`).join(" / ") : "다음 일정으로 넘어갑니다"}
           </div>
         </div>
-        <button onClick={() => submit()} disabled={advance.isPending} className="w-full py-3.5 rounded-2xl bg-primary text-primary-foreground font-black">
+        <button onClick={() => advance.mutate({})} disabled={advance.isPending} className="w-full py-3.5 rounded-2xl bg-primary text-primary-foreground font-black">
           {advance.isPending ? "진행 중..." : "▶ 다음 주 진행 (관전)"}
         </button>
       </div>
@@ -133,9 +147,9 @@ function MatchTab({ s }: { s: CareerState }) {
   if (editing) {
     return (
       <EntryScreen
-        s={s} match={pending} entry={entry} setEntry={setEntry}
-        submitting={advance.isPending}
-        onSubmit={() => submit(entry as number[])}
+        s={s} match={pending} front={front} setFront={setFront}
+        submitting={begin.isPending}
+        onSubmit={() => begin.mutate({ entry: front as number[] })}
         onShowMaps={() => setShowMaps(true)}
         onBack={() => setEditing(false)}
       />
@@ -144,7 +158,7 @@ function MatchTab({ s }: { s: CareerState }) {
 
   const oppId = pending.a === s.myTeam ? pending.b : pending.a;
   const opp = s.teams[oppId];
-  const filled = entry.filter(x => x !== undefined).length;
+  const filled = front.filter(x => x !== undefined && s.players[x]?.team === s.myTeam).length;
   const usedAp = rosterOf(s, s.myTeam).filter(p => p.action).length;
   return (
     <div className="space-y-3">
@@ -157,7 +171,7 @@ function MatchTab({ s }: { s: CareerState }) {
           <TeamBadge short={opp.short} color={opp.color} />
           <span className="font-black text-rose-200 truncate">{opp.name}</span>
         </div>
-        <div className="mt-1 text-[11px] text-muted-foreground">엔트리 {filled}/{sets} · 상대 엔트리는 경기 시작과 함께 공개됩니다</div>
+        <div className="mt-1 text-[11px] text-muted-foreground">엔트리 {filled}/{sets - 1} · ACE 결정전 선수는 2:2 가 되면 고릅니다</div>
       </div>
       {usedAp === 0 && <p className="text-xs text-amber-300 px-1">이번 주 선수 행동을 아직 정하지 않았습니다. <button onClick={() => navigate("/training")} className="underline font-bold">선수 행동 정하기</button></p>}
       <button onClick={openEntry} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black">

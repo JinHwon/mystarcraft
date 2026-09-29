@@ -9,6 +9,8 @@ import { ACTIONS } from "@shared/career/rules";
 import {
   CareerError,
   advanceWeek,
+  beginMatch,
+  playLiveSet,
   migrateCareer,
   newCareer,
   proposeTrade,
@@ -125,4 +127,14 @@ export const careerRouter = router({
       cash: z.number().int().min(0).max(1_000_000),
     }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => proposeTrade(s, input.teamId, input.give, input.take, input.cash))),
+
+  /** 우리 경기 시작 (1~(n-1)세트 엔트리) */
+  beginMatch: protectedProcedure
+    .input(z.object({ entry: z.array(z.number().int()).min(1).max(8) }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => beginMatch(s, input.entry))),
+
+  /** 다음 세트 진행 (ACE 결정전이면 ace 선수) */
+  playSet: protectedProcedure
+    .input(z.object({ ace: z.number().int().optional() }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => playLiveSet(s, input.ace))),
 });

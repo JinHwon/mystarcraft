@@ -14,6 +14,7 @@ import League from "./pages/League";
 import Lobby from "./pages/Lobby";
 import Transfer from "./pages/Transfer";
 import Records from "./pages/Records";
+import StarLeague from "./pages/StarLeague";
 import { Redirect } from "wouter";
 import GameLayout from "./components/GameLayout";
 import { UpdateNotification } from "./components/UpdateNotification";
@@ -35,6 +36,7 @@ function Router() {
       <Route path="/league" component={withLayout(League)} />
       <Route path="/transfer" component={withLayout(Transfer)} />
       <Route path="/records" component={withLayout(Records)} />
+      <Route path="/starleague" component={withLayout(StarLeague)} />
       <Route path="/admin" component={withLayout(Admin)} />
       <Route path="/admin/events" component={withLayout(AdminEvents)} />
       {/* 예전(내 선수 육성) 화면 주소는 감독실로 */}

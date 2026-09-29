@@ -10,6 +10,7 @@ import {
   STAT_MAX_CAREER,
   STAT_MIN,
   condMultiplier,
+  totalOf,
   type CareerState,
   type CPlayer,
   type Race,
@@ -84,6 +85,24 @@ export function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, w
     highlights: withHighlights ? r.highlights : undefined,
     timeline: r.timeline,
   };
+}
+
+/**
+ * 빠른 세트 (중계 없이 능력치·컨디션·맵 상성으로 승패만): PC방 예선처럼 경기 수가 많을 때
+ * 전적·컨디션·경험치 처리는 playSet 과 같다
+ */
+export function quickSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number): SetResult {
+  const pa = totalOf(a.stats) * condMultiplier(a.cond), pb = totalOf(b.stats) * condMultiplier(b.cond);
+  const adv = a.race === b.race ? 0 : (matchupValue(mapId, a.race, b.race) - 50) / 100;
+  const pWin = 1 / (1 + Math.exp(-((pa - pb) / 450 + adv * 2.2)));
+  const aWin = rand() < pWin;
+  const [w, l] = aWin ? [a, b] : [b, a];
+  w.wins++; w.sWins++; l.losses++; l.sLosses++;
+  w.vs = { ...w.vs, [l.race]: [(w.vs?.[l.race]?.[0] ?? 0) + 1, w.vs?.[l.race]?.[1] ?? 0] };
+  l.vs = { ...l.vs, [w.race]: [l.vs?.[w.race]?.[0] ?? 0, (l.vs?.[w.race]?.[1] ?? 0) + 1] };
+  w.cond = clampCond(w.cond + 1); l.cond = clampCond(l.cond - 1);
+  addExp(s, w, 30); addExp(s, l, 10);
+  return { mapId, a: a.id, b: b.id, winner: aWin ? "a" : "b", duration: 0 };
 }
 
 export function addExp(s: CareerState, p: CPlayer, exp: number) {

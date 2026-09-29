@@ -1,107 +1,209 @@
+/**
+ * 이적 (원작 화면 방식): Trade(트레이드) · Scout(무소속 영입) · Fire(방출)
+ */
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
 import { FREE_AGENT_TEAM } from "@shared/career/originalData";
-import { MAX_ROSTER, ageOf, askingPrice, totalOf } from "@shared/career/rules";
-import { rosterOf } from "@shared/career/view";
+import { MAX_ROSTER, askingPrice, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
+import { evaluateTrade, proTeams, rosterOf } from "@shared/career/view";
 import { useCareer, useCareerUpdater } from "@/lib/career";
-import { CondBadge, RaceBadge } from "@/components/career/Bits";
-import { PlayerSheet } from "./Team";
+import { LegacyFrame, LegacyImg, TeamLogo } from "@/components/legacy/Legacy";
+import { PlayerPanel, condStats } from "@/components/legacy/LegacyMatch";
 
-type Sort = "total" | "price" | "age" | "level";
+const R = { terran: "T", zerg: "Z", protoss: "P" } as const;
+type Mode = "trade" | "scout" | "fire";
+const MODES: Array<[Mode, string, string]> = [["trade", "트레이드", "Trade"], ["scout", "스카웃", "Scout"], ["fire", "방출", "Fire"]];
 
-/** 이적시장: 무소속 선수 영입 (요구 금액, 만원) */
-export default function Transfer() {
-  const { state: s, loading } = useCareer();
-  const [, navigate] = useLocation();
+const byTotal = (a: CPlayer, b: CPlayer) => totalOf(b.stats) - totalOf(a.stats);
+
+/** 선수 목록 (여러 명 선택 가능) */
+function PickList({ players, picked, onToggle, right, height = "max-h-[300px]" }: {
+  players: CPlayer[]; picked: number[]; onToggle: (p: CPlayer) => void; right?: (p: CPlayer) => string; height?: string;
+}) {
+  return (
+    <div className={cn("border-2 border-neutral-300 p-0.5 overflow-y-auto", height)}>
+      {players.map(p => (
+        <button key={p.id} onClick={() => onToggle(p)}
+          className={cn("w-full flex items-center gap-1 text-[12.5px] px-1 py-[5px] text-left border-b border-neutral-800 last:border-b-0",
+            picked.includes(p.id) ? "bg-[#3a3a5a] text-[#ffe45c]" : "text-white")}>
+          <span className="truncate flex-1">{p.name} ({R[p.race]})</span>
+          <span className="text-[10.5px] text-neutral-400">{right ? right(p) : totalOf(condStats(p)).toLocaleString()}</span>
+        </button>
+      ))}
+      {!players.length && <div className="text-[11px] text-neutral-500 p-2 text-center">선수가 없습니다</div>}
+    </div>
+  );
+}
+
+function Money({ s }: { s: CareerState }) {
+  return (
+    <div className="flex justify-between text-[12px] border border-neutral-600 px-2 py-1">
+      <span className="text-neutral-400">보유 금액 :</span><span className="text-[#ffe45c]">{s.teams[s.myTeam].money.toLocaleString()} 만원</span>
+    </div>
+  );
+}
+
+function TradeTab({ s }: { s: CareerState }) {
   const updater = useCareerUpdater();
-  const [q, setQ] = useState("");
-  const [race, setRace] = useState<"all" | "terran" | "zerg" | "protoss">("all");
-  const [sort, setSort] = useState<Sort>("total");
-  const [affordable, setAffordable] = useState(false);
-  const [open, setOpen] = useState<number | null>(null);
-  const scout = trpc.career.scout.useMutation({
+  const teams = proTeams(s).filter(t => t.id !== s.myTeam);
+  const [teamId, setTeamId] = useState(teams[0]?.id ?? 0);
+  const [give, setGive] = useState<number[]>([]);
+  const [take, setTake] = useState<number[]>([]);
+  const [cash, setCash] = useState(0);
+  const [view, setView] = useState<number | undefined>();
+  const mine = useMemo(() => rosterOf(s, s.myTeam).sort(byTotal), [s]);
+  const theirs = useMemo(() => rosterOf(s, teamId).sort(byTotal), [s, teamId]);
+  const ev = take.length ? evaluateTrade(s, teamId, give, take, cash) : null;
+  const trade = trpc.career.trade.useMutation({
     ...updater,
-    onSuccess: r => { updater.onSuccess(r); toast.success(`영입 완료! (${r.result.price.toLocaleString()}만원)`); setOpen(null); },
+    onSuccess: r => { updater.onSuccess(r); toast.success("트레이드 성사!"); setGive([]); setTake([]); setCash(0); },
   });
-
-  const list = useMemo(() => {
-    if (!s) return [];
-    const money = s.teams[s.myTeam].money;
-    return rosterOf(s, FREE_AGENT_TEAM)
-      .filter(p => (race === "all" || p.race === race) && (!q.trim() || p.name.includes(q.trim())) && (!affordable || askingPrice(p, s.season) <= money))
-      .sort((a, b) =>
-        sort === "total" ? totalOf(b.stats) - totalOf(a.stats)
-          : sort === "price" ? askingPrice(a, s.season) - askingPrice(b, s.season)
-          : sort === "age" ? ageOf(a, s.season) - ageOf(b, s.season)
-          : b.level - a.level);
-  }, [s, q, race, sort, affordable]);
-
-  if (loading) return <div className="p-6 text-muted-foreground">불러오는 중...</div>;
-  if (!s) { navigate("/lobby"); return null; }
-  const money = s.teams[s.myTeam].money;
-  const full = rosterOf(s, s.myTeam).length >= MAX_ROSTER;
-  const player = open !== null ? s.players[open] : null;
+  const toggle = (list: number[], set: (v: number[]) => void) => (p: CPlayer) => {
+    setView(p.id);
+    set(list.includes(p.id) ? list.filter(x => x !== p.id) : list.length >= 5 ? list : [...list, p.id]);
+  };
+  const ratio = ev ? Math.min(1.5, ev.get / Math.max(1, ev.need)) : 0;
 
   return (
-    <div className="p-4 space-y-3">
-      <div className="rounded-2xl bg-card border border-border p-3.5 flex items-center justify-between">
-        <div>
-          <div className="text-xs text-muted-foreground">보유 금액</div>
-          <div className="text-xl font-black text-yellow-300">{money.toLocaleString()}만원</div>
-        </div>
-        <div className="text-right text-xs text-muted-foreground">무소속 {rosterOf(s, FREE_AGENT_TEAM).length}명<br />선수단 {rosterOf(s, s.myTeam).length}/{MAX_ROSTER}</div>
+    <div className="space-y-2">
+      <div className="text-center text-[12px] text-neutral-300">교환할 양측 선수 선택</div>
+      <div className="grid grid-cols-6 gap-1">
+        {teams.map(t => (
+          <button key={t.id} onClick={() => { setTeamId(t.id); setTake([]); }} className={cn("p-0.5 border", teamId === t.id ? "border-[#ff6b6b] border-2" : "border-neutral-700")}>
+            <TeamLogo team={t} className="w-full h-[26px]" />
+          </button>
+        ))}
       </div>
+      <PlayerPanel p={view !== undefined ? s.players[view] : undefined} color={s.players[view ?? -1]?.team === s.myTeam ? "#8fd0ff" : "#ff9a9a"} empty="선수를 누르면 사진과 능력치가 보입니다" />
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <div className="text-[11px] text-[#8fd0ff] mb-0.5">우리 팀 (내줄 선수)</div>
+          <PickList players={mine} picked={give} onToggle={toggle(give, setGive)} />
+        </div>
+        <div>
+          <div className="text-[11px] text-[#ff9a9a] mb-0.5">{s.teams[teamId]?.name} (받을 선수)</div>
+          <PickList players={theirs} picked={take} onToggle={toggle(take, setTake)} />
+        </div>
+      </div>
+      <div className="border border-neutral-600 p-2 space-y-1.5 text-[12px]">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-neutral-400">현금 추가</span>
+          <div className="flex items-center gap-1">
+            {[-500, -100].map(d => <button key={d} onClick={() => setCash(c => Math.max(0, c + d))} className="border border-neutral-600 px-1.5 text-[11px]">{d}</button>)}
+            <span className="w-20 text-center text-[#ffe45c]">{cash.toLocaleString()}만</span>
+            {[100, 500].map(d => <button key={d} onClick={() => setCash(c => Math.min(s.teams[s.myTeam].money, c + d))} className="border border-neutral-600 px-1.5 text-[11px]">+{d}</button>)}
+          </div>
+        </div>
+        {ev ? (
+          <>
+            <div className="flex justify-between"><span className="text-neutral-400">제시 가치</span><span>{ev.get.toLocaleString()}</span></div>
+            <div className="flex justify-between"><span className="text-neutral-400">상대 요구{ev.acesInvolved ? " (에이스 포함)" : ""}</span><span>{ev.need.toLocaleString()}</span></div>
+            <div className="h-2 bg-neutral-800"><div className="h-full" style={{ width: `${Math.min(100, ratio * 66.6)}%`, background: ev.get >= ev.need ? "#8fe07a" : "#f4b060" }} /></div>
+            <div className={cn("text-center", ev.get >= ev.need ? "text-[#bff5c6]" : "text-[#ffb8c8]")}>{ev.get >= ev.need ? "상대가 수락할 만한 조건입니다" : `${(ev.need - ev.get).toLocaleString()} 만큼 더 필요합니다`}</div>
+          </>
+        ) : <div className="text-center text-neutral-500">받을 선수를 고르세요</div>}
+      </div>
+      <Money s={s} />
+      <button
+        disabled={!take.length || trade.isPending}
+        onClick={() => trade.mutate({ teamId, give, take, cash })}
+        className="w-full py-2 text-[14px] font-bold text-black border border-neutral-500 disabled:opacity-40"
+        style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}
+      >트레이드 제안</button>
+    </div>
+  );
+}
 
-      <Input value={q} onChange={e => setQ(e.target.value)} placeholder="선수 이름 검색" className="h-11 rounded-xl bg-card" />
-      <div className="flex flex-wrap gap-1.5">
+function ScoutTab({ s }: { s: CareerState }) {
+  const updater = useCareerUpdater();
+  const [sel, setSel] = useState<number | undefined>();
+  const [race, setRace] = useState<"all" | "terran" | "zerg" | "protoss">("all");
+  const list = useMemo(() => rosterOf(s, FREE_AGENT_TEAM).filter(p => race === "all" || p.race === race).sort(byTotal), [s, race]);
+  const scout = trpc.career.scout.useMutation({
+    ...updater,
+    onSuccess: r => { updater.onSuccess(r); toast.success(`영입 완료! (${r.result.price.toLocaleString()}만원)`); setSel(undefined); },
+  });
+  const p = sel !== undefined ? s.players[sel] : undefined;
+  const price = p ? askingPrice(p, s.season) : 0;
+  const full = rosterOf(s, s.myTeam).length >= MAX_ROSTER;
+  return (
+    <div className="space-y-2">
+      <div className="text-center text-[12px] text-neutral-300">무소속 선수 선택 <span className="text-neutral-500">({list.length}명)</span></div>
+      <div className="grid grid-cols-4 gap-1">
         {(["all", "terran", "zerg", "protoss"] as const).map(r => (
-          <button key={r} onClick={() => setRace(r)} className={cn("px-3 py-1.5 rounded-full text-xs font-semibold border", race === r ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-muted-foreground")}>
+          <button key={r} onClick={() => setRace(r)} className={cn("text-[11.5px] py-1 border", race === r ? "border-white text-white" : "border-neutral-700 text-neutral-400")}>
             {r === "all" ? "전체" : r === "terran" ? "테란" : r === "zerg" ? "저그" : "프로토스"}
           </button>
         ))}
-        <button onClick={() => setAffordable(v => !v)} className={cn("px-3 py-1.5 rounded-full text-xs font-semibold border", affordable ? "bg-yellow-500 text-black border-yellow-400" : "bg-card border-border text-muted-foreground")}>💰 영입 가능만</button>
       </div>
-      <div className="flex gap-1.5">
-        {([["total", "능력치순"], ["price", "금액순"], ["age", "나이순"], ["level", "레벨순"]] as const).map(([k, l]) => (
-          <button key={k} onClick={() => setSort(k)} className={cn("px-2.5 py-1 rounded-lg text-xs border", sort === k ? "bg-muted text-foreground border-primary/60" : "bg-card border-border text-muted-foreground")}>{l}</button>
-        ))}
+      <PlayerPanel p={p} color="#ffe45c" empty="영입할 선수를 고르세요" />
+      <PickList players={list} picked={sel !== undefined ? [sel] : []} onToggle={x => setSel(x.id)} right={x => `${askingPrice(x, s.season).toLocaleString()}만`} height="max-h-[280px]" />
+      <div className="flex justify-between text-[12px] border border-neutral-600 px-2 py-1">
+        <span className="text-neutral-400">요구 금액 :</span><span className="text-[#ffb8c8]">{p ? `${price.toLocaleString()} 만원` : "-"}</span>
       </div>
-
-      <div className="rounded-2xl bg-card border border-border divide-y divide-border overflow-hidden">
-        {list.map(p => {
-          const price = askingPrice(p, s.season);
-          return (
-            <button key={p.id} onClick={() => setOpen(p.id)} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left">
-              <RaceBadge race={p.race} />
-              <div className="flex-1 min-w-0">
-                <div className="font-bold text-foreground truncate">{p.name} <span className="text-[10px] text-muted-foreground font-normal">Lv.{p.level} · {ageOf(p, s.season)}세</span></div>
-                <div className="text-[11px] text-muted-foreground flex items-center gap-2"><span>능력치 {totalOf(p.stats).toLocaleString()}</span><CondBadge cond={p.cond} /></div>
-              </div>
-              <div className={cn("text-sm font-black", price <= money ? "text-yellow-300" : "text-muted-foreground")}>{price.toLocaleString()}만</div>
-            </button>
-          );
-        })}
-        {list.length === 0 && <div className="p-8 text-center text-sm text-muted-foreground">조건에 맞는 선수가 없습니다</div>}
-      </div>
-
-      <PlayerSheet
-        s={s}
-        player={player}
-        onClose={() => setOpen(null)}
-        actions={player && (
-          <button
-            onClick={() => scout.mutate({ playerId: player.id })}
-            disabled={scout.isPending || full || askingPrice(player, s.season) > money}
-            className="w-full py-3 rounded-xl text-sm font-black bg-emerald-500 text-white disabled:opacity-40"
-          >
-            {full ? "선수단이 가득 찼습니다" : askingPrice(player, s.season) > money ? "자금 부족" : `🤝 ${askingPrice(player, s.season).toLocaleString()}만원에 영입`}
-          </button>
-        )}
-      />
+      <Money s={s} />
+      <button
+        disabled={!p || full || scout.isPending || s.teams[s.myTeam].money < price}
+        onClick={() => p && scout.mutate({ playerId: p.id })}
+        className="w-full py-2 text-[14px] font-bold text-black border border-neutral-500 disabled:opacity-40"
+        style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}
+      >{full ? `선수단이 가득 찼습니다 (${MAX_ROSTER}명)` : "영입"}</button>
     </div>
+  );
+}
+
+function FireTab({ s }: { s: CareerState }) {
+  const updater = useCareerUpdater();
+  const [sel, setSel] = useState<number | undefined>();
+  const mine = useMemo(() => rosterOf(s, s.myTeam).sort(byTotal), [s]);
+  const release = trpc.career.release.useMutation({
+    ...updater,
+    onSuccess: r => { updater.onSuccess(r); toast.success(`방출 완료 (방출 이득 ${r.result.gain.toLocaleString()}만원)`); setSel(undefined); },
+  });
+  const p = sel !== undefined ? s.players[sel] : undefined;
+  const gain = p ? Math.round((askingPrice(p, s.season) * 0.2) / 10) * 10 : 0;
+  return (
+    <div className="space-y-2">
+      <div className="text-center text-[12px] text-neutral-300">방출할 선수 선택 <span className="text-neutral-500">({mine.length}/{MAX_ROSTER}명)</span></div>
+      <PlayerPanel p={p} color="#8fd0ff" empty="방출할 선수를 고르세요" />
+      <PickList players={mine} picked={sel !== undefined ? [sel] : []} onToggle={x => setSel(x.id)} height="max-h-[300px]" />
+      <div className="flex justify-between text-[12px] border border-neutral-600 px-2 py-1">
+        <span className="text-neutral-400">방출 이득 :</span><span className="text-[#bff5c6]">{p ? `${gain.toLocaleString()} 만원` : "-"}</span>
+      </div>
+      <button
+        disabled={!p || release.isPending}
+        onClick={() => p && confirm(`${p.name} 선수를 방출할까요?`) && release.mutate({ playerId: p.id })}
+        className="w-full py-2 text-[14px] font-bold text-black border border-neutral-500 disabled:opacity-40"
+        style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}
+      >방출</button>
+    </div>
+  );
+}
+
+export default function Transfer() {
+  const { state: s, loading } = useCareer();
+  const [, navigate] = useLocation();
+  const [mode, setMode] = useState<Mode>("trade");
+  if (loading) return <div className="p-6 text-muted-foreground">불러오는 중...</div>;
+  if (!s) { navigate("/lobby"); return null; }
+  return (
+    <LegacyFrame season={s.season} onBack={() => navigate("/lobby")} onNext={() => navigate("/lobby")} nextLabel="◁◁ 감독실">
+      <div className="px-3 pt-2 pb-4">
+        <div className="grid grid-cols-3 gap-2 mb-2">
+          {MODES.map(([k, label, en]) => (
+            <button key={k} onClick={() => setMode(k)} className={cn("flex flex-col items-center gap-0.5 py-1 border", mode === k ? "border-[#ff6b6b] border-2" : "border-neutral-700")}>
+              <LegacyImg dir="기타" name={label} className="h-9 object-contain" fallback={<span className="text-[16px] font-black italic text-neutral-200">{en}</span>} />
+              <span className={cn("text-[11px]", mode === k ? "text-white" : "text-neutral-400")}>{label}</span>
+            </button>
+          ))}
+        </div>
+        {mode === "trade" && <TradeTab s={s} />}
+        {mode === "scout" && <ScoutTab s={s} />}
+        {mode === "fire" && <FireTab s={s} />}
+      </div>
+    </LegacyFrame>
   );
 }
