@@ -9,21 +9,12 @@ import { Sword, Shield, Zap, Star } from "lucide-react";
 export default function Home() {
   const { isAuthenticated, loading } = useAuth();
   const [, navigate] = useLocation();
-  const { data: player, isLoading: playerLoading } = trpc.player.get.useQuery(undefined, {
-    enabled: isAuthenticated,
-  });
-
+  // 로그인되어 있으면 바로 감독실로
   useEffect(() => {
-    if (!loading && isAuthenticated && !playerLoading) {
-      if (player) {
-        navigate("/lobby");
-      } else if (player === null) {
-        navigate("/create-player");
-      }
-    }
-  }, [loading, isAuthenticated, playerLoading, player]);
+    if (!loading && isAuthenticated) navigate("/lobby");
+  }, [loading, isAuthenticated]);
 
-  if (loading || (isAuthenticated && playerLoading)) {
+  if (loading || isAuthenticated) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -61,15 +52,15 @@ export default function Home() {
           <div className="mb-6 md:mb-8 space-y-3 md:space-y-4">
             <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-full px-3 md:px-4 py-1 md:py-1.5 text-xs font-medium text-primary mb-3 md:mb-4">
               <Star className="w-3 h-3" />
-              <span className="text-xs md:text-sm">나만의 스타크래프트 선수를 육성하라</span>
+              <span className="text-xs md:text-sm">2010 프로리그 감독이 되어라</span>
             </div>
             <h1 className="text-3xl md:text-5xl lg:text-7xl font-black text-foreground leading-tight tracking-tight">
               마이
               <span className="text-primary"> 스타크래프트</span>
             </h1>
             <p className="text-sm md:text-lg text-muted-foreground max-w-xl mx-auto leading-relaxed">
-              테란, 저그, 프로토스 중 하나를 선택하고<br />
-              나만의 선수를 육성하여 최강의 프로게이머가 되어라
+              12개 프로게임단 중 하나를 맡아<br />
+              230명의 선수를 키우고 프로리그 우승에 도전하라
             </p>
           </div>
 
@@ -78,20 +69,20 @@ export default function Home() {
             {[
               {
                 icon: Sword,
-                title: "선수 육성",
-                desc: "8가지 능력치를 레벨업으로 강화",
+                title: "팀 운영",
+                desc: "12개 팀 · 선수 230명 · 영입과 방출",
                 color: "#4A9EFF",
               },
               {
                 icon: Shield,
-                title: "등급 시스템",
-                desc: "F부터 SSS까지 9단계 등급",
+                title: "마이프로리그",
+                desc: "엔트리 편성 · 에이스 결정전 · 포스트시즌",
                 color: "#F1C40F",
               },
               {
                 icon: Zap,
-                title: "아이템 상점",
-                desc: "아이템 구매로 능력치 강화",
+                title: "선수 행동",
+                desc: "행동력으로 훈련·휴식·이벤트",
                 color: "#B44FD8",
               },
             ].map(({ icon: Icon, title, desc, color }) => (

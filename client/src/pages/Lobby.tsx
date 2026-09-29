@@ -1,30 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { User, ChevronRight } from "lucide-react";
-import { RACE_COLORS, RACE_LABELS } from "@shared/gameConstants";
-import { ConditionBadge, RaceTag } from "@/components/team/PlayerBadges";
+import { toast } from "sonner";
+import { ORIG_TEAMS, FREE_AGENT_TEAM } from "@shared/career/originalData";
+import { ACTIONS, WEEKLY_AP, totalOf, type CareerState } from "@shared/career/rules";
+import { myPendingMatch, rosterOf, standings, teamPower, STAGE_NAMES } from "@shared/career/view";
+import { useCareer, useCareerUpdater } from "@/lib/career";
+import { RaceBadge, TeamBadge } from "@/components/career/Bits";
+import { previewWorld } from "@shared/career/init";
 
-function Tile({ emoji, title, desc, badge, onClick, className }: {
-  emoji: string; title: string; desc: string; badge?: string | number; onClick: () => void; className?: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn("relative text-left rounded-2xl border p-4 transition-all active:scale-[0.97] hover:brightness-110 shadow-lg shadow-black/10", className)}
-    >
-      <div className="text-3xl leading-none">{emoji}</div>
-      <div className="mt-2.5 font-black text-white text-base">{title}</div>
-      <div className="text-xs text-white/75 mt-0.5 leading-snug">{desc}</div>
-      {badge !== undefined && badge !== 0 && badge !== "" && (
-        <span className="absolute top-3 right-3 min-w-[22px] h-[22px] px-1.5 rounded-full bg-rose-500 text-white text-xs font-bold flex items-center justify-center">{badge}</span>
-      )}
-    </button>
-  );
-}
-
-/** 홈 화면에 앱 설치 (크롬·엣지·삼성 인터넷 등 지원 브라우저에서만 표시) */
+/** 홈 화면에 앱 설치 (지원 브라우저에서만) */
 function useInstallPrompt() {
   const [prompt, setPrompt] = useState<any>(null);
   useEffect(() => {
@@ -32,142 +18,189 @@ function useInstallPrompt() {
     window.addEventListener("beforeinstallprompt", onPrompt);
     return () => window.removeEventListener("beforeinstallprompt", onPrompt);
   }, []);
-  const install = async () => {
-    if (!prompt) return;
-    prompt.prompt();
-    await prompt.userChoice.catch(() => null);
-    setPrompt(null);
-  };
-  return { canInstall: !!prompt, install };
+  return { canInstall: !!prompt, install: async () => { prompt?.prompt(); await prompt?.userChoice?.catch(() => null); setPrompt(null); } };
 }
 
-export default function Lobby() {
-  const [, navigate] = useLocation();
-  const { canInstall, install } = useInstallPrompt();
-  const playerQ = trpc.player.get.useQuery();
-  const teamQ = trpc.team.get.useQuery();
-  const leagueQ = trpc.league.proleague.useQuery();
-  const { data: rewardable = 0 } = trpc.quest.getRewardableCount.useQuery();
+// ── 새 게임: 팀 선택 ──────────────────────────────────────────────
 
-  const p = playerQ.data;
-  if (!p) return <div className="p-6 text-muted-foreground">불러오는 중...</div>;
-  const team = teamQ.data;
-  const league = leagueQ.data;
-  const myTeamId = league?.teams.find(t => t.isMine)?.id;
-  const myRank = league ? league.standings.findIndex(s => s.teamId === myTeamId) + 1 : 0;
-  const raceColor = RACE_COLORS[p.race] ?? "#4A9EFF";
-  const expPct = p.expToNext > 0 ? Math.min(100, (p.exp / p.expToNext) * 100) : 100;
-  const record = p.gameRecord ?? { wins: 0, losses: 0, total: 0 };
-  const winRate = record.total ? Math.round((record.wins / record.total) * 100) : 0;
+function TeamSelect({ onCancel }: { onCancel?: () => void }) {
+  const updater = useCareerUpdater();
+  const [, navigate] = useLocation();
+  const preview = useMemo(() => previewWorld(), []);
+  const [picked, setPicked] = useState<number | null>(null);
+  const start = trpc.career.newGame.useMutation({
+    ...updater,
+    onSuccess: r => { updater.onSuccess(r); toast.success(`${ORIG_TEAMS[r.state.myTeam].name} 감독 부임!`); navigate("/lobby"); },
+  });
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-5">
-      {/* 내 선수 카드 */}
+    <div className="p-4 space-y-4">
+      <div className="text-center pt-2">
+        <div className="text-4xl">🎮</div>
+        <h1 className="text-2xl font-black text-foreground mt-1">감독을 맡을 팀을 고르세요</h1>
+        <p className="text-sm text-muted-foreground">2010 시즌 12개 프로게임단 · 선수 230명</p>
+      </div>
+      <div className="grid grid-cols-2 gap-2.5">
+        {ORIG_TEAMS.filter(t => t.id !== FREE_AGENT_TEAM).map(t => {
+          const roster = rosterOf(preview, t.id);
+          const ace = [...roster].sort((a, b) => totalOf(b.stats) - totalOf(a.stats))[0];
+          const races = { terran: 0, zerg: 0, protoss: 0 } as Record<string, number>;
+          roster.forEach(p => races[p.race]++);
+          return (
+            <button key={t.id} onClick={() => setPicked(t.id)}
+              className={cn("text-left rounded-2xl border-2 p-3 transition-all active:scale-[0.98]",
+                picked === t.id ? "border-amber-400 bg-amber-500/15" : "border-border bg-card")}>
+              <div className="flex items-center gap-1.5">
+                <TeamBadge short={t.short} color={t.color} />
+                <span className="font-bold text-sm text-foreground truncate">{t.name}</span>
+              </div>
+              <div className="mt-1.5 text-[11px] text-muted-foreground">전력 <b className="text-foreground">{teamPower(preview, t.id).toLocaleString()}</b> · {roster.length}명 · T{races.terran}/Z{races.zerg}/P{races.protoss}</div>
+              {ace && <div className="mt-1 flex items-center gap-1 text-xs text-foreground"><span className="text-amber-300">★</span><RaceBadge race={ace.race} />{ace.name}</div>}
+            </button>
+          );
+        })}
+      </div>
       <button
-        onClick={() => navigate("/profile")}
-        className="w-full text-left rounded-2xl p-4 md:p-5 border border-white/10 shadow-xl relative overflow-hidden"
-        style={{ background: `linear-gradient(135deg, ${raceColor}40, oklch(0.32 0.05 258) 55%, oklch(0.28 0.05 270))` }}
+        disabled={picked === null || start.isPending}
+        onClick={() => picked !== null && start.mutate({ teamId: picked })}
+        className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black text-base disabled:opacity-40 active:scale-[0.99]"
       >
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl overflow-hidden border-2 bg-slate-800 flex items-center justify-center shrink-0" style={{ borderColor: raceColor }}>
-            {p.photoUrl ? <img src={p.photoUrl} alt={p.name} className="w-full h-full object-cover" /> : <User className="w-8 h-8 text-slate-400" />}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-xl md:text-2xl font-black text-white truncate">{p.name}</span>
-              <span className="text-xs font-black px-2 py-0.5 rounded-md bg-white/15 text-white">{p.grade}</span>
-            </div>
-            <div className="text-sm font-semibold" style={{ color: raceColor }}>{RACE_LABELS[p.race]} · Lv.{p.level}</div>
-            <div className="mt-2 h-1.5 bg-black/30 rounded-full overflow-hidden">
-              <div className="h-full bg-sky-400 rounded-full" style={{ width: `${expPct}%` }} />
-            </div>
-            <div className="text-[11px] text-white/70 mt-1">EXP {p.exp}/{p.expToNext} · {record.wins}승 {record.losses}패 ({winRate}%)</div>
-          </div>
-          <ChevronRight className="w-5 h-5 text-white/50 shrink-0" />
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="text-xs rounded-full px-2.5 py-1 bg-black/25 text-yellow-300 font-bold">💰 {p.gold.toLocaleString()}G</span>
-          <span className="text-xs rounded-full px-2.5 py-1 bg-black/25 text-emerald-300 font-bold">🔋 피로도 {p.fatigue}</span>
-          <span className="text-xs rounded-full px-2.5 py-1 bg-black/25"><ConditionBadge condition={(p as any).condition ?? 100} /></span>
-          {p.statPoints > 0 && <span className="text-xs rounded-full px-2.5 py-1 bg-purple-500/30 text-purple-100 font-bold">📊 배분할 포인트 {p.statPoints}</span>}
-        </div>
+        {picked === null ? "팀을 선택하세요" : `${ORIG_TEAMS[picked].name} 감독으로 시작`}
       </button>
+      {onCancel && <button onClick={onCancel} className="w-full py-2 text-sm text-muted-foreground">취소</button>}
+    </div>
+  );
+}
+
+// ── 감독실 ──────────────────────────────────────────────────────
+
+function Tile({ emoji, title, desc, badge, onClick, className }: { emoji: string; title: string; desc: string; badge?: string; onClick: () => void; className: string }) {
+  return (
+    <button onClick={onClick} className={cn("relative text-left rounded-2xl border p-3.5 active:scale-[0.97] transition-transform", className)}>
+      <div className="text-2xl">{emoji}</div>
+      <div className="mt-1.5 font-black text-white">{title}</div>
+      <div className="text-[11px] text-white/80 leading-snug">{desc}</div>
+      {badge && <span className="absolute top-2.5 right-2.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white/25 text-white">{badge}</span>}
+    </button>
+  );
+}
+
+function Office({ s }: { s: CareerState }) {
+  const [, navigate] = useLocation();
+  const updater = useCareerUpdater();
+  const { canInstall, install } = useInstallPrompt();
+  const [restart, setRestart] = useState(false);
+  const nextSeason = trpc.career.nextSeason.useMutation({ ...updater, onSuccess: r => { updater.onSuccess(r); toast.success(`${r.state.season}시즌 개막!`); } });
+  const me = s.teams[s.myTeam];
+  const st = standings(s);
+  const rank = st.findIndex(t => t.id === s.myTeam) + 1;
+  const pending = myPendingMatch(s);
+  const roster = rosterOf(s, s.myTeam);
+  const usedAp = roster.reduce((sum, p) => sum + (p.action ? ACTIONS.find(a => a.key === p.action)!.ap : 0), 0);
+  const planned = roster.filter(p => p.action).length;
+  const phaseText = s.phase === "regular" ? `정규시즌 ${s.week}주차 / 11` : s.phase === "postseason" ? "포스트시즌" : "시즌 종료";
+  const last = s.history[0];
+
+  if (restart) return <TeamSelect onCancel={() => setRestart(false)} />;
+
+  return (
+    <div className="p-4 space-y-4">
+      {/* 팀 카드 */}
+      <div className="rounded-2xl p-4 border border-white/10 shadow-xl" style={{ background: `linear-gradient(135deg, ${me.color}55, oklch(0.32 0.05 258) 60%)` }}>
+        <div className="flex items-center gap-3">
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-lg font-black text-white shadow-lg" style={{ background: me.color }}>{me.short}</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs text-white/70">{s.season}시즌 · {phaseText}</div>
+            <div className="text-xl font-black text-white truncate">{me.name}</div>
+            <div className="text-xs text-white/80">{me.wins}승 {me.losses}패 · 세트 {me.setWins}:{me.setLosses} · <b>{rank}위</b></div>
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-xl bg-black/25 py-1.5"><div className="text-[10px] text-white/60">팀 자금</div><div className="text-sm font-black text-yellow-300">{me.money.toLocaleString()}만</div></div>
+          <div className="rounded-xl bg-black/25 py-1.5"><div className="text-[10px] text-white/60">행동력</div><div className="text-sm font-black text-emerald-300">{s.ap - usedAp}/{WEEKLY_AP}</div></div>
+          <div className="rounded-xl bg-black/25 py-1.5"><div className="text-[10px] text-white/60">선수단</div><div className="text-sm font-black text-white">{roster.length}명</div></div>
+        </div>
+      </div>
 
       {canInstall && (
         <button onClick={install} className="w-full flex items-center gap-3 rounded-2xl bg-sky-500/15 border border-sky-400/40 p-3 text-left">
           <span className="text-2xl">📲</span>
-          <span className="flex-1 text-sm text-foreground"><b>앱으로 설치하기</b><br /><span className="text-xs text-muted-foreground">홈 화면에 추가하면 주소창 없이 앱처럼 실행됩니다</span></span>
-          <span className="text-xs font-bold text-sky-300">설치</span>
+          <span className="flex-1 text-sm text-foreground"><b>앱으로 설치하기</b><br /><span className="text-xs text-muted-foreground">홈 화면에 추가하면 앱처럼 실행됩니다</span></span>
         </button>
       )}
 
-      {/* 바로가기 */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <Tile emoji="⚔️" title="연습게임" desc="상대를 찾아 바로 한 판" onClick={() => navigate("/practice")}
-          className="bg-gradient-to-br from-blue-600 to-indigo-700 border-blue-400/40" />
-        <Tile emoji="🏆" title="프로리그"
-          desc={league ? (league.season.status === "active" ? `시즌 ${league.season.seasonNo} · ${league.season.round}/${league.season.totalRounds}R · 현재 ${myRank}위` : `시즌 ${league.season.seasonNo} 종료 · 새 시즌 대기`) : "팀 리그"}
-          onClick={() => navigate("/league")} className="bg-gradient-to-br from-amber-500 to-orange-600 border-amber-300/40" />
-        <Tile emoji="🏋️" title="훈련장" desc="피로도로 능력치 올리기" onClick={() => navigate("/training")}
-          className="bg-gradient-to-br from-emerald-500 to-teal-700 border-emerald-300/40" />
-        <Tile emoji="🎁" title="퀘스트" desc={rewardable ? `받을 보상 ${rewardable}개!` : "매일 새로운 목표"} badge={rewardable}
-          onClick={() => navigate("/events")} className="bg-gradient-to-br from-rose-500 to-pink-700 border-rose-300/40" />
-        <Tile emoji="👥" title="팀 관리" desc={team ? `선수 ${team.roster.length}/${team.maxRoster}명 · 영입·방출` : "선수 영입"}
-          onClick={() => navigate("/team")} className="bg-gradient-to-br from-violet-500 to-purple-700 border-violet-300/40" />
-        <Tile emoji="🛒" title="상점" desc="장비·회복 아이템" onClick={() => navigate("/shop")}
-          className="bg-gradient-to-br from-cyan-500 to-sky-700 border-cyan-300/40" />
+      {/* 이번 주 / 시즌 종료 */}
+      {s.phase === "offseason" ? (
+        <div className="rounded-2xl bg-amber-500/15 border border-amber-400/40 p-4 text-center space-y-2">
+          <div className="text-3xl">{last?.myResult === "우승" ? "🏆" : "🏁"}</div>
+          <div className="font-black text-foreground">{s.season}시즌 종료 — {last?.myResult}</div>
+          <div className="text-xs text-muted-foreground">우승: {s.teams[last?.champion ?? 0].name} · 정규시즌 {last?.myRank}위</div>
+          <div className="text-xs text-muted-foreground">다음 시즌이 시작되면 선수들이 한 살 더 먹고, 어린 선수는 성장·노장은 하락합니다.</div>
+          <button onClick={() => nextSeason.mutate()} disabled={nextSeason.isPending} className="w-full py-3 rounded-xl bg-amber-500 text-white font-black">{s.season + 1}시즌 시작</button>
+        </div>
+      ) : (
+        <button onClick={() => navigate("/league")} className="w-full text-left rounded-2xl bg-card border border-border p-4 active:scale-[0.99] transition-transform">
+          <div className="text-xs text-muted-foreground mb-1">이번 주 일정</div>
+          {pending ? (() => {
+            const opp = s.teams[pending.a === s.myTeam ? pending.b : pending.a];
+            return (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary/20 text-primary">{STAGE_NAMES[pending.stage]}</span>
+                <span className="font-bold text-foreground flex-1 truncate">vs {opp.name}</span>
+                <span className="text-xs text-primary font-bold">엔트리 편성 ›</span>
+              </div>
+            );
+          })() : <div className="font-bold text-foreground">우리 팀 경기 없음 · 다음 주로 진행 ›</div>}
+          <div className="mt-2 text-[11px] text-muted-foreground">선수 행동 {planned}/{roster.length}명 지정됨 · 경기를 진행하면 한 주가 지나갑니다</div>
+        </button>
+      )}
+
+      {/* 메뉴 타일 */}
+      <div className="grid grid-cols-2 gap-2.5">
+        <Tile emoji="🏋️" title="선수 행동" desc="훈련·휴식·이벤트·베스트" badge={`행동력 ${s.ap - usedAp}`} onClick={() => navigate("/training")} className="bg-gradient-to-br from-emerald-500 to-teal-700 border-emerald-300/40" />
+        <Tile emoji="🏆" title="마이프로리그" desc={`${rank}위 · 순위표·일정`} onClick={() => navigate("/league")} className="bg-gradient-to-br from-amber-500 to-orange-600 border-amber-300/40" />
+        <Tile emoji="👥" title="선수단" desc={`${roster.length}명 · 능력치·컨디션`} onClick={() => navigate("/team")} className="bg-gradient-to-br from-violet-500 to-purple-700 border-violet-300/40" />
+        <Tile emoji="🤝" title="이적시장" desc={`무소속 ${rosterOf(s, FREE_AGENT_TEAM).length}명 영입·방출`} onClick={() => navigate("/transfer")} className="bg-gradient-to-br from-sky-500 to-blue-700 border-sky-300/40" />
       </div>
 
-      {/* 우리 팀 */}
-      {team && (
-        <div className="rounded-2xl bg-card border border-border p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="font-bold text-foreground">{team.team.emblem} {team.team.name}</div>
-            <button onClick={() => navigate("/team")} className="text-xs text-primary font-semibold">전체 보기 ›</button>
-          </div>
-          <div className="flex gap-2 overflow-x-auto scrollbar-none -mx-1 px-1 pb-1">
-            {team.roster.map(r => (
-              <button key={r.id} onClick={() => navigate(`/training?player=${r.id}`)}
-                className="shrink-0 w-32 rounded-xl bg-muted/70 border border-border p-2.5 text-left active:scale-[0.97] transition-transform">
-                <div className="font-bold text-sm text-foreground truncate">{r.name}{r.isMain ? " ⭐" : ""}</div>
-                <div className="flex items-center gap-1.5"><RaceTag race={r.race} /><span className="text-[11px] text-muted-foreground">{r.totalStats.toLocaleString()}</span></div>
-                <div className="mt-1"><ConditionBadge condition={r.condition} /></div>
-                <div className="mt-1.5 h-1 bg-black/30 rounded-full overflow-hidden">
-                  <div className={cn("h-full rounded-full", r.fatigue >= 60 ? "bg-emerald-400" : r.fatigue >= 30 ? "bg-yellow-400" : "bg-rose-400")} style={{ width: `${r.fatigue}%` }} />
-                </div>
-              </button>
-            ))}
-            {team.roster.length < team.maxRoster && (
-              <button onClick={() => navigate("/team")} className="shrink-0 w-32 rounded-xl border-2 border-dashed border-border text-muted-foreground text-sm font-semibold flex flex-col items-center justify-center gap-1">
-                <span className="text-2xl">＋</span>선수 영입
-              </button>
-            )}
-          </div>
+      {/* 순위 요약 */}
+      <button onClick={() => navigate("/league")} className="w-full text-left rounded-2xl bg-card border border-border p-3.5">
+        <div className="font-bold text-foreground text-sm mb-2">📊 순위</div>
+        <div className="space-y-0.5">
+          {st.slice(0, 4).map((t, i) => (
+            <div key={t.id} className={cn("flex items-center gap-2 text-sm rounded-lg px-1.5 py-0.5", t.id === s.myTeam && "bg-amber-500/15")}>
+              <span className="w-4 text-muted-foreground font-bold">{i + 1}</span>
+              <TeamBadge short={t.short} color={t.color} />
+              <span className={cn("flex-1 truncate", t.id === s.myTeam ? "text-amber-200 font-bold" : "text-foreground")}>{t.name}</span>
+              <span className="text-xs text-muted-foreground">{t.wins}승 {t.losses}패</span>
+            </div>
+          ))}
+          {rank > 4 && <div className="text-xs text-amber-300 px-1.5">… 우리 팀 {rank}위</div>}
         </div>
-      )}
+      </button>
 
-      {/* 리그 순위 요약 */}
-      {league && (
-        <button onClick={() => navigate("/league")} className="w-full text-left rounded-2xl bg-card border border-border p-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="font-bold text-foreground">🏆 프로리그 순위</div>
-            <span className="text-xs text-primary font-semibold">리그로 ›</span>
-          </div>
-          <div className="space-y-1">
-            {league.standings.slice(0, 4).map((s, i) => {
-              const t = league.teams.find(x => x.id === s.teamId);
-              return (
-                <div key={s.teamId} className={cn("flex items-center gap-2 text-sm rounded-lg px-2 py-1", t?.isMine && "bg-amber-500/15")}>
-                  <span className="w-5 font-bold text-muted-foreground">{i + 1}</span>
-                  <span className={cn("flex-1 truncate", t?.isMine ? "text-amber-300 font-bold" : "text-foreground")}>{t?.emblem} {t?.name}</span>
-                  <span className="text-muted-foreground text-xs">{s.wins}승 {s.losses}패</span>
-                </div>
-              );
-            })}
-            {myRank > 4 && <div className="text-xs text-amber-300 px-2">… 우리 팀 {myRank}위</div>}
-          </div>
-        </button>
-      )}
+      {/* 소식 */}
+      <div className="rounded-2xl bg-card border border-border p-3.5">
+        <div className="font-bold text-foreground text-sm mb-2">📰 소식</div>
+        <div className="space-y-1.5">
+          {s.news.slice(0, 8).map((n, i) => (
+            <div key={i} className="text-xs text-foreground/90 flex gap-2">
+              <span className="text-muted-foreground shrink-0">{n.season}시즌 {n.week}주</span>
+              <span>{n.text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <button onClick={() => { if (confirm("지금 커리어를 버리고 새 게임을 시작할까요? 진행 상황이 모두 사라집니다.")) setRestart(true); }}
+        className="w-full py-2.5 text-xs text-muted-foreground">🔄 새 게임 (팀 다시 고르기)</button>
     </div>
   );
+}
+
+export default function Lobby() {
+  const { state, loading } = useCareer();
+  if (loading) return <div className="p-6 text-muted-foreground">불러오는 중...</div>;
+  if (!state) return <TeamSelect />;
+  return <Office s={state} />;
 }

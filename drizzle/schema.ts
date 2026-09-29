@@ -1,4 +1,4 @@
-import { mysqlTable, mysqlSchema, AnyMySqlColumn, int, mysqlEnum, varchar, text, timestamp, json, index, uniqueIndex, tinyint } from "drizzle-orm/mysql-core"
+import { mysqlTable, mysqlSchema, AnyMySqlColumn, int, mysqlEnum, varchar, text, longtext, timestamp, json, index, uniqueIndex, tinyint } from "drizzle-orm/mysql-core"
 import { sql } from "drizzle-orm"
 
 export const events = mysqlTable("events", {
@@ -250,4 +250,16 @@ export const leagueMatches = mysqlTable("league_matches", {
 },
 (table) => [
 	index("league_matches_season_idx").on(table.seasonId, table.round),
+]);
+
+// 커리어 모드(원작 방식) 세이브. 유저당 1개, 세계 전체 상태를 JSON 으로 저장
+export const careers = mysqlTable("careers", {
+	id: int().autoincrement().notNull().primaryKey(),
+	userId: int().notNull(),
+	state: longtext().notNull(),
+	createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	uniqueIndex("careers_userId_unique").on(table.userId),
 ]);
