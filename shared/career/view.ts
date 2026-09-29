@@ -3,7 +3,7 @@
  */
 import { ORIG_MAPS, FREE_AGENT_TEAM } from "./originalData";
 import type { CareerState, CMatch, Race } from "./rules";
-import { totalOf } from "./rules";
+import { TRADE_ACE_PREMIUM, TRADE_PREMIUM, totalOf, tradeValue } from "./rules";
 
 export const rosterOf = (s: CareerState, team: number) => s.players.filter(p => p.team === team);
 export const proTeams = (s: CareerState) => s.teams.filter(t => t.id !== FREE_AGENT_TEAM);
@@ -46,4 +46,14 @@ export function matchupValue(mapId: number, race: Race, vs: Race): number {
     protoss_terran: m.pvt, terran_protoss: 200 - m.pvt,
   };
   return t[`${race}_${vs}`] ?? 100;
+}
+
+/** 트레이드 평가: AI 가 받는 가치 / 요구하는 가치 (1 이상이면 수락) */
+export function evaluateTrade(s: CareerState, teamId: number, myIds: number[], theirIds: number[], cash: number) {
+  const give = theirIds.reduce((sum, id) => sum + tradeValue(s.players[id], s.season), 0);
+  const get = myIds.reduce((sum, id) => sum + tradeValue(s.players[id], s.season), 0) + cash;
+  const ace = rosterOf(s, teamId).sort((a, b) => totalOf(b.stats) - totalOf(a.stats))[0];
+  const premium = ace && theirIds.includes(ace.id) ? TRADE_ACE_PREMIUM : TRADE_PREMIUM;
+  const need = Math.round(give * premium);
+  return { give, get, need, ratio: need > 0 ? get / need : 0, acesInvolved: premium === TRADE_ACE_PREMIUM };
 }

@@ -5,6 +5,7 @@ import { STAT_KEYS, StatKey } from "@shared/gameConstants";
 import { ORIG_MAPS, ORIG_PLAYERS, ORIG_TEAMS, FREE_AGENT_TEAM } from "@shared/career/originalData";
 import {
   ACTIONS,
+  AI_MIN_ROSTER,
   ActionKey,
   CareerState,
   CMatch,
@@ -32,33 +33,21 @@ import {
   condMultiplier,
   totalOf,
 } from "@shared/career/rules";
-import { simulateSet } from "../gameSimulation";
+import {
+  CareerError, addExp, clampCond, clampStat, gainStats, news, pickMaps, playSet, rand, randInt, shuffle,
+} from "./core";
+export { CareerError };
 import { initialPlayers, initialTeams } from "@shared/career/init";
+import { runMslWeek, type MslReport } from "./msl";
+export type { MslReport };
 
 const RACE: Record<string, Race> = { T: "terran", Z: "zerg", P: "protoss" };
 const REGULAR_WEEKS = 11;
-const rand = () => Math.random();
-const randInt = (a: number, b: number) => a + Math.floor(rand() * (b - a + 1));
-const clampStat = (v: number) => Math.max(STAT_MIN, Math.min(STAT_MAX_CAREER, Math.round(v)));
-const clampCond = (v: number) => Math.max(COND_MIN, Math.min(COND_MAX, Math.round(v)));
 
-export class CareerError extends Error {}
 
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
 
-function news(s: CareerState, text: string) {
-  s.news.unshift({ season: s.season, week: s.week, text });
-  if (s.news.length > 60) s.news.length = 60;
-}
 
-import { rosterOf, proTeams, standings, myPendingMatch } from "@shared/career/view";
+import { rosterOf, proTeams, standings, myPendingMatch, evaluateTrade } from "@shared/career/view";
 export { rosterOf, proTeams, standings, myPendingMatch };
 
 // ── 새 게임 ─────────────────────────────────────────────────────
@@ -86,9 +75,6 @@ export function newCareer(myTeam: number): CareerState {
 }
 
 /** 경기 세트별 맵 (서로 다른 맵) */
-function pickMaps(n: number): number[] {
-  return shuffle(ORIG_MAPS.map((_, i) => i)).slice(0, n);
-}
 
 function scheduleRegularSeason(s: CareerState) {
   const ids = shuffle(proTeams(s).map(t => t.id));
@@ -117,16 +103,6 @@ export function setAction(s: CareerState, pid: number, action: ActionKey | null)
   p.action = action;
 }
 
-function gainStats(p: CPlayer, picks: number, min: number, max: number): string[] {
-  const keys = shuffle([...STAT_KEYS]).slice(0, picks);
-  return keys.map(k => {
-    // 능력치가 높을수록 잘 안 오름
-    const room = Math.max(0.15, 1 - (p.stats[k] - 500) / 600);
-    const g = Math.max(1, Math.round(randInt(min, max) * room));
-    p.stats[k] = clampStat(p.stats[k] + g);
-    return k;
-  });
-}
 
 function applyActions(s: CareerState) {
   const me = s.teams[s.myTeam];
@@ -175,47 +151,8 @@ export function validateEntry(s: CareerState, entry: number[], sets: number) {
   if (new Set(front).size !== front.length) throw new CareerError(`1~${sets - 1}세트에는 서로 다른 선수를 배치해야 합니다 (에이스 결정전은 누구나 가능)`);
 }
 
-function mapAdvantage(mapId: number, ra: Race, rb: Race): Record<string, number> {
-  if (ra === rb) return {};
-  const [, , , , tvz, zvp, pvt] = ORIG_MAPS[mapId];
-  const table: Record<string, number> = {
-    terran_zerg: tvz, zerg_terran: 200 - tvz,
-    zerg_protoss: zvp, protoss_zerg: 200 - zvp,
-    protoss_terran: pvt, terran_protoss: 200 - pvt,
-  };
-  const d = ((table[`${ra}_${rb}`] ?? 100) - 100) / 100;
-  return { [ra]: 1 + d, [rb]: 1 - d };
-}
 
-function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, withHighlights: boolean): SetResult {
-  const [, rush, res, cx] = ORIG_MAPS[mapId];
-  const scale = (p: CPlayer) => Object.fromEntries(STAT_KEYS.map(k => [k, p.stats[k] * condMultiplier(p.cond)])) as Record<StatKey, number>;
-  const r = simulateSet(
-    { id: a.id + 1, name: a.name, race: a.race, stats: scale(a), fatigue: 100 },
-    { id: b.id + 1, name: b.name, race: b.race, stats: scale(b), fatigue: 100 },
-    mapAdvantage(mapId, a.race, b.race),
-    { rushDistance: rush, resources: res, complexity: cx },
-    withHighlights
-  );
-  const aWin = r.winnerId === a.id + 1;
-  const [w, l] = aWin ? [a, b] : [b, a];
-  w.wins++; w.sWins++; l.losses++; l.sLosses++;
-  w.cond = clampCond(w.cond + 1); l.cond = clampCond(l.cond - 1);
-  addExp(s, w, 30); addExp(s, l, 10);
-  return { mapId, a: a.id, b: b.id, winner: aWin ? "a" : "b", duration: r.duration, highlights: withHighlights ? r.highlights : undefined };
-}
 
-function addExp(s: CareerState, p: CPlayer, exp: number) {
-  p.exp += exp;
-  const need = () => 100 + p.level * 60;
-  while (p.exp >= need()) {
-    p.exp -= need();
-    p.level++;
-    const up = gainStats(p, 2, 4, 8);
-    if (p.team === s.myTeam) news(s, `⬆️ ${p.name} 선수 레벨 업! (Lv.${p.level}, 능력치 상승)`);
-    void up;
-  }
-}
 
 function playMatch(s: CareerState, m: CMatch, myEntry?: number[]) {
   const sets = m.stage === "final" ? FINAL_SETS : PRO_SETS;
@@ -262,7 +199,7 @@ function pruneHighlights(s: CareerState) {
 
 // ── 한 주 진행 ─────────────────────────────────────────────────
 
-export function advanceWeek(s: CareerState, myEntry?: number[]): { playedMatchId?: number } {
+export function advanceWeek(s: CareerState, myEntry?: number[]): { playedMatchId?: number; mslReports: MslReport[] } {
   if (s.phase === "offseason") throw new CareerError("시즌이 끝났습니다. 다음 시즌을 시작하세요");
   const mine = myPendingMatch(s);
   if (mine) {
@@ -276,6 +213,7 @@ export function advanceWeek(s: CareerState, myEntry?: number[]): { playedMatchId
   for (const m of s.matches.filter(x => !x.done && x.week === s.week)) {
     playMatch(s, m, m === mine ? myEntry : undefined);
   }
+  const mslReports = s.phase === "regular" ? runMslWeek(s) : [];
   for (const t of proTeams(s)) t.money += WEEKLY_SPONSOR;
   pruneHighlights(s);
 
@@ -283,7 +221,7 @@ export function advanceWeek(s: CareerState, myEntry?: number[]): { playedMatchId
   s.week++;
   s.ap = WEEKLY_AP;
   progressSchedule(s);
-  return { playedMatchId };
+  return { playedMatchId, mslReports };
 }
 
 /** 정규시즌 → 준PO(3·4위) → PO(2위 vs 준PO 승자) → 결승(1위 vs PO 승자) → 시즌 종료 */
@@ -325,7 +263,8 @@ function finishSeason(s: CareerState, final: CMatch) {
   const prize = POSTSEASON_PRIZE[result] ?? 0;
   s.teams[s.myTeam].money += prize;
   const myRank = standings(s).findIndex(t => t.id === s.myTeam) + 1;
-  s.history.unshift({ season: s.season, champion, myRank, myResult: result });
+  const msl = s.msl?.season === s.season ? s.msl : undefined;
+  s.history.unshift({ season: s.season, champion, myRank, myResult: result, mslChampion: msl?.champion, mslRunnerUp: msl?.runnerUp });
   for (const p of rosterOf(s, champion)) p.titles = [...(p.titles ?? []), `${s.season}시즌 프로리그 우승`];
   news(s, `🏆 ${s.season}시즌 마이프로리그 우승: ${s.teams[champion].name}! 우리 팀 최종 성적: ${result}${prize ? ` (상금 ${prize.toLocaleString()}만원)` : ""}`);
 }
@@ -392,4 +331,36 @@ export function releasePlayer(s: CareerState, pid: number) {
   p.action = null;
   news(s, `👋 ${p.name} 선수 방출 (방출 이득 ${gain.toLocaleString()}만원)`);
   return { gain };
+}
+
+// ── 트레이드 ───────────────────────────────────────────────────
+
+/** AI 팀과 선수(+현금) 교환. 우리가 내주는 가치가 상대 요구치 이상이면 성사 */
+export function proposeTrade(s: CareerState, teamId: number, myIds: number[], theirIds: number[], cash: number) {
+  if (teamId === s.myTeam || teamId === FREE_AGENT_TEAM || !s.teams[teamId]) throw new CareerError("트레이드할 팀을 선택해주세요");
+  cash = Math.max(0, Math.round(cash || 0));
+  myIds = [...new Set(myIds)];
+  theirIds = [...new Set(theirIds)];
+  if (!theirIds.length) throw new CareerError("받을 선수를 선택해주세요");
+  if (myIds.some(id => s.players[id]?.team !== s.myTeam)) throw new CareerError("우리 팀 선수가 아닙니다");
+  if (theirIds.some(id => s.players[id]?.team !== teamId)) throw new CareerError("상대 팀 선수가 아닙니다");
+  const me = s.teams[s.myTeam];
+  if (me.money < cash) throw new CareerError("자금이 부족합니다");
+  const myAfter = rosterOf(s, s.myTeam).length - myIds.length + theirIds.length;
+  const theirAfter = rosterOf(s, teamId).length - theirIds.length + myIds.length;
+  if (myAfter > MAX_ROSTER) throw new CareerError(`선수단은 최대 ${MAX_ROSTER}명입니다`);
+  if (myAfter < MIN_ROSTER) throw new CareerError(`선수가 최소 ${MIN_ROSTER}명 있어야 합니다`);
+  if (theirAfter > MAX_ROSTER) throw new CareerError(`${s.teams[teamId].name} 선수단이 가득 찹니다`);
+  if (theirAfter < AI_MIN_ROSTER) throw new CareerError(`${s.teams[teamId].name}은(는) 선수가 너무 적어져서 거절합니다`);
+  const ev = evaluateTrade(s, teamId, myIds, theirIds, cash);
+  if (ev.get < ev.need) {
+    throw new CareerError(`${s.teams[teamId].name}: "조건이 부족합니다" (제시 ${ev.get.toLocaleString()} / 요구 ${ev.need.toLocaleString()})`);
+  }
+  me.money -= cash;
+  s.teams[teamId].money += cash;
+  for (const id of myIds) { s.players[id].team = teamId; s.players[id].action = null; }
+  for (const id of theirIds) { s.players[id].team = s.myTeam; s.players[id].action = null; }
+  const names = (ids: number[]) => ids.map(id => s.players[id].name).join(", ");
+  news(s, `🔁 트레이드 성사: ${names(theirIds)} ⇄ ${myIds.length ? names(myIds) : ""}${cash ? `${myIds.length ? " + " : ""}${cash.toLocaleString()}만원` : ""} (${s.teams[teamId].name})`);
+  return ev;
 }

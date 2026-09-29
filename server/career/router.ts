@@ -10,6 +10,7 @@ import {
   CareerError,
   advanceWeek,
   newCareer,
+  proposeTrade,
   releasePlayer,
   rosterOf,
   scoutPlayer,
@@ -111,4 +112,13 @@ export const careerRouter = router({
   release: protectedProcedure
     .input(z.object({ playerId: z.number().int() }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => releasePlayer(s, input.playerId))),
+
+  trade: protectedProcedure
+    .input(z.object({
+      teamId: z.number().int(),
+      give: z.array(z.number().int()).max(5),
+      take: z.array(z.number().int()).min(1).max(5),
+      cash: z.number().int().min(0).max(1_000_000),
+    }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => proposeTrade(s, input.teamId, input.give, input.take, input.cash))),
 });
