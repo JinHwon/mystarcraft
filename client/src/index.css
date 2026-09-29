@@ -83,6 +83,18 @@
  * 화면 전체를 밝게: 페이지에서 쓰는 slate/gray 색을 밝은 네이비 톤으로 재정의
  * (어두운 배경용 950~700 은 밝게, 보조 텍스트용 500~400 은 대비가 충분하도록 더 밝게)
  */
+/*
+ * PC 에서도 모바일 앱과 똑같은 화면을 쓰기 위해 반응형 분기점을 사실상 끔.
+ * 앱 화면은 가운데 고정 폭(--app-width) 프레임 안에서만 그려진다.
+ */
+@theme {
+  --breakpoint-sm: 999rem;
+  --breakpoint-md: 999rem;
+  --breakpoint-lg: 999rem;
+  --breakpoint-xl: 999rem;
+  --breakpoint-2xl: 999rem;
+}
+
 @theme {
   --color-slate-950: oklch(0.225 0.04 258);
   --color-slate-900: oklch(0.285 0.042 258);
@@ -158,6 +170,39 @@
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: oklch(0.45 0.04 258); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: oklch(0.55 0.04 258); }
+
+/* 앱 프레임: 모바일은 화면 전체, PC 는 가운데 고정 폭 */
+:root { --app-width: 600px; }
+.app-frame {
+  width: 100%;
+  max-width: var(--app-width);
+  margin-left: auto;
+  margin-right: auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  position: relative;
+  background: var(--background);
+}
+@media (min-width: 601px) {
+  html { background: oklch(0.17 0.035 258); }
+  body {
+    background:
+      radial-gradient(ellipse at top, oklch(0.30 0.06 258 / 0.6), transparent 60%),
+      oklch(0.17 0.035 258);
+    background-attachment: fixed;
+  }
+  .app-frame {
+    box-shadow: 0 0 0 1px oklch(0.40 0.04 258 / 0.6), 0 20px 60px oklch(0 0 0 / 0.5);
+  }
+}
+/* 화면 아래 고정 요소(탭바·시트)를 앱 프레임 폭에 맞춤 */
+.app-fixed-x {
+  left: 0;
+  right: 0;
+  margin-left: auto;
+  margin-right: auto;
+  max-width: var(--app-width);
+}
 
 /* 모바일 하단 탭바·상단바 안전 영역 */
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }

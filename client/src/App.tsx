@@ -100,8 +100,10 @@ function App() {
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <UpdateNotification />
-          <Toaster />
-          <Router />
+          <Toaster position="top-center" />
+          <div className="app-frame">
+            <Router />
+          </div>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
