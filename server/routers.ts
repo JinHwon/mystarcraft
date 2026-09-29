@@ -318,10 +318,10 @@ const shopRouter = router({
     }),
 
   useItem: protectedProcedure
-    .input(z.object({ playerItemId: z.number().int() }))
+    // targetPlayerId: 회복시킬 선수 (없으면 본인 선수). 아이템은 본인 선수가 보유
+    .input(z.object({ playerItemId: z.number().int(), targetPlayerId: z.number().int().optional() }))
     .mutation(async ({ ctx, input }) => {
-      const player = await getPlayerByUserId(ctx.user.id);
-      if (!player) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
+      const { main: player, player: target } = await resolveTeamPlayer(ctx.user.id, input.targetPlayerId);
       
       // 아이템 사용 차감 (피로도 회복 아이템)
       const db = await getDb();
@@ -337,7 +337,7 @@ const shopRouter = router({
       if (!item.length || !item[0].fatigueRecover) throw new TRPCError({ code: "BAD_REQUEST", message: "피로도 회복 아이템이 아닙니다" });
       
       // 피로도 회복 적용
-      const playerData = await db.select().from(players).where(eq(players.id, player.id)).limit(1);
+      const playerData = await db.select().from(players).where(eq(players.id, target.id)).limit(1);
       if (!playerData.length) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
       
       // 피로도는 체력 개념 (100 = 최상). 회복 아이템은 피로도 수치를 올린다
@@ -346,7 +346,7 @@ const shopRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "피로도가 이미 가득 찼습니다" });
       }
       const newFatigue = Math.min(100, Math.max(0, playerData[0].fatigue + fatigueRecover));
-      await db.update(players).set({ fatigue: newFatigue }).where(eq(players.id, player.id));
+      await db.update(players).set({ fatigue: newFatigue }).where(eq(players.id, target.id));
       
       // 아이템 사용 차감
       const newCount = pi.usageCount - 1;
@@ -730,6 +730,31 @@ async function getPlayerSimStats(playerId: number): Promise<Record<StatKey, numb
 /** AI 선수 최대 수 (너무 많아지지 않도록) */
 const MAX_BOT_PLAYERS = 80;
 
+// ── 연습게임 출전 선수 (본인 선수 또는 같은 팀 선수) ─────────────────
+
+type PlayerRow = NonNullable<Awaited<ReturnType<typeof getPlayerByUserId>>>;
+
+/** 로그인한 유저가 움직일 수 있는 선수인지 확인하고 반환 (팀 선수는 오늘 컨디션·피로도 회복 반영) */
+async function resolveTeamPlayer(userId: number, playerId?: number): Promise<{ main: PlayerRow; player: PlayerRow }> {
+  const main = await getPlayerByUserId(userId);
+  if (!main) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
+  if (!playerId || playerId === main.id) return { main, player: main };
+  const p = await getPlayerById(playerId);
+  if (!p || main.teamId === 0 || p.teamId !== main.teamId) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "우리 팀 선수만 출전할 수 있습니다" });
+  }
+  return { main, player: await refreshPlayerDaily(p) };
+}
+
+/** 게임의 내 쪽 선수 (게임은 항상 player1 이 도전한 쪽) */
+async function resolveGamePlayer(userId: number, game: { player1Id: number; player2Id: number }) {
+  try {
+    return await resolveTeamPlayer(userId, game.player1Id);
+  } catch {
+    throw new TRPCError({ code: "FORBIDDEN", message: "이 게임에 참여할 수 없습니다" });
+  }
+}
+
 // ── 승률 추정 (캐시) ─────────────────────────────────────────────
 
 type WinRateResult = { winRate: number; runs: number };
@@ -808,8 +833,9 @@ const practiceRouter = router({
       }).optional(),
     }))
     .query(async ({ ctx, input }) => {
-      const player = await getPlayerByUserId(ctx.user.id);
-      if (!player) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
+      const game = await getGameById(input.gameId);
+      if (!game) throw new TRPCError({ code: "NOT_FOUND", message: "게임을 찾을 수 없습니다" });
+      const { player } = await resolveGamePlayer(ctx.user.id, game);
       return winRateForGame(input.gameId, player);
     }),
 
@@ -817,10 +843,11 @@ const practiceRouter = router({
     .input(z.object({
       difficulty: z.enum(["beginner", "intermediate", "advanced"]),
       mapId: z.number().int(),
+      // 출전 선수 (없으면 본인 선수). 영입한 팀 선수도 출전 가능
+      playerId: z.number().int().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const player = await getPlayerByUserId(ctx.user.id);
-      if (!player) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
+      const { player } = await resolveTeamPlayer(ctx.user.id, input.playerId);
       
       // 무제한 피로도 이벤트 중에는 피로도 체크 안 함
       const activeEvents = await getActiveEvents();
@@ -960,10 +987,9 @@ const practiceRouter = router({
       const game = await getGameById(input.gameId);
       if (!game) throw new TRPCError({ code: "NOT_FOUND", message: "게임을 찾을 수 없습니다" });
 
-      const player = await getPlayerByUserId(ctx.user.id);
-      if (!player || (player.id !== game.player1Id && player.id !== game.player2Id)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "이 게임에 참여할 수 없습니다" });
-      }
+      if (game.completedAt || game.winnerId) throw new TRPCError({ code: "BAD_REQUEST", message: "이미 끝난 게임입니다" });
+      // 출전 선수 (본인 선수 또는 팀 선수). 골드는 팀 운영 자금(본인 선수)으로 들어간다
+      const { main: wallet, player } = await resolveGamePlayer(ctx.user.id, game);
 
       // 상대 선수 정보 (AI 선수도 DB 에 저장된 선수. input.aiOpponent 는 예전 클라이언트 호환용으로 무시)
       const opponentId = player.id === game.player1Id ? game.player2Id : game.player1Id;
@@ -1062,7 +1088,7 @@ const practiceRouter = router({
 
       // 리워드 적용 - 경뗘치, 골드, 능력치, 피로도 업데이트
       await updatePlayerExp(player.id, expGained);
-      await updatePlayerGold(player.id, goldGained);
+      await updatePlayerGold(wallet.id, goldGained);
       
       // 능력치 업데이트 - 게임 결과에 의한 변동 (미배분 포인트 차감 없음)
       for (const [key, value] of Object.entries(statChanges)) {
