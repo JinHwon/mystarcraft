@@ -1,0 +1,17 @@
+{
+  "name": "마이스타크래프트",
+  "short_name": "마이스타",
+  "description": "스타크래프트 프로게임단 매니저 - 선수 육성, 팀 운영, 리그",
+  "lang": "ko",
+  "start_url": "/lobby",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a2440",
+  "theme_color": "#1a2440",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

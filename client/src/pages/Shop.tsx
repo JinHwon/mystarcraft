@@ -77,7 +77,7 @@ function ItemCard({
   return (
     <div
       className={cn(
-        "bg-card border rounded-xl p-4 flex flex-col gap-3 transition-all card-hover",
+        "bg-card border rounded-2xl p-3.5 flex flex-col gap-2.5 transition-all card-hover",
         equipped === 1
           ? "border-2"
           : "border-border"
@@ -115,7 +115,7 @@ function ItemCard({
 
       {/* 설명 */}
       {item.description && (
-        <p className="text-xs text-muted-foreground leading-relaxed">{item.description}</p>
+        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{item.description}</p>
       )}
 
       {/* 피로도 회복 */}
@@ -159,7 +159,7 @@ function ItemCard({
               <div className="flex gap-1">
                 <Button
                   size="sm"
-                  className="h-7 px-3 text-xs font-bold"
+                  className="h-9 px-3.5 text-xs font-bold"
                   style={{ backgroundColor: rarityColor, color: "white" }}
                   onClick={onUse}
                   disabled={isEquipping || (usageCount ?? 0) <= 0}
@@ -169,7 +169,7 @@ function ItemCard({
                 </Button>
                 <Button
                   size="sm"
-                  className="h-7 px-3 text-xs font-bold"
+                  className="h-9 px-3.5 text-xs font-bold"
                   disabled={!canAfford || isBuying}
                   onClick={onBuyMore ?? onBuy}
                   variant={canAfford ? "default" : "outline"}
@@ -186,7 +186,7 @@ function ItemCard({
               <Button
                 size="sm"
                 variant="outline"
-                className="h-7 px-3 text-xs"
+                className="h-9 px-3.5 text-xs"
                 onClick={onUnequip}
                 disabled={isEquipping}
               >
@@ -196,7 +196,7 @@ function ItemCard({
             ) : (
               <Button
                 size="sm"
-                className="h-7 px-3 text-xs font-bold"
+                className="h-9 px-3.5 text-xs font-bold"
                 style={{ backgroundColor: rarityColor, color: "white" }}
                 onClick={onEquip}
                 disabled={isEquipping}
@@ -209,7 +209,7 @@ function ItemCard({
         ) : (
           <Button
             size="sm"
-            className="h-7 px-3 text-xs font-bold"
+            className="h-9 px-3.5 text-xs font-bold"
             disabled={!canAfford || isBuying}
             onClick={onBuy}
             variant={canAfford ? "default" : "outline"}
@@ -231,6 +231,8 @@ export default function Shop() {
   const utils = trpc.useUtils();
   const [buyingId, setBuyingId] = useState<number | null>(null);
   const [equippingId, setEquippingId] = useState<number | null>(null);
+  const [category, setCategory] = useState<string>("all");
+  const [affordableOnly, setAffordableOnly] = useState(false);
 
   const { data: allItems = [], isLoading: itemsLoading } = trpc.shop.listItems.useQuery();
   const { data: playerItems = [], isLoading: playerItemsLoading } = trpc.shop.getPlayerItems.useQuery();
@@ -299,10 +301,10 @@ export default function Shop() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-4 md:space-y-6">
       {/* 헤더 */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="hidden md:flex items-center justify-between">
+        <div className="hidden md:block">
           <h1 className="text-2xl font-black text-foreground">아이템 상점</h1>
           <p className="text-sm text-muted-foreground mt-0.5">아이템을 구매하여 선수 능력치를 강화하세요</p>
         </div>
@@ -333,7 +335,7 @@ export default function Shop() {
       )}
 
       <Tabs defaultValue="all">
-        <TabsList className="bg-muted border border-border">
+        <TabsList className="bg-card border border-border w-full md:w-auto">
           <TabsTrigger value="all" className="text-xs">전체 아이템</TabsTrigger>
           <TabsTrigger value="owned" className="text-xs">
             보유 아이템
@@ -345,9 +347,30 @@ export default function Shop() {
         </TabsList>
 
         {/* 전체 아이템 */}
-        <TabsContent value="all" className="mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <TabsContent value="all" className="mt-4 space-y-3">
+          <div className="flex gap-1.5 overflow-x-auto scrollbar-none -mx-4 px-4 md:mx-0 md:px-0 md:flex-wrap">
+            {[["all", "전체"], ["fatigue", "🔋 회복"], ...Object.entries(STAT_LABELS)].map(([key, label]) => (
+              <button key={key} onClick={() => setCategory(key)}
+                className={cn("shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border",
+                  category === key ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-muted-foreground")}>
+                {label}
+              </button>
+            ))}
+            <button onClick={() => setAffordableOnly(v => !v)}
+              className={cn("shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border",
+                affordableOnly ? "bg-yellow-500 text-black border-yellow-400" : "bg-card border-border text-muted-foreground")}>
+              💰 살 수 있는 것만
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {[...allItems]
+              .filter(item => {
+                if (affordableOnly && item.price > playerGold) return false;
+                if (category === "all") return true;
+                if (category === "fatigue") return ((item as any).fatigueRecover ?? 0) > 0;
+                const boosts = (typeof item.statBoosts === "string" ? JSON.parse(item.statBoosts as string) : item.statBoosts ?? {}) as Record<string, number>;
+                return (boosts[category] ?? 0) > 0;
+              })
               .sort((a, b) => {
                 // 피로도 아이템을 먼저, 그 안에서 가격 오름차순
                 const aFatigue = (a as any).fatigueRecover && (a as any).fatigueRecover > 0 ? 1 : 0;

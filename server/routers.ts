@@ -559,6 +559,56 @@ function getTodayKst(): string {
 
 // ── Quest Router ────────────────────────────────────────────────
 
+/** 퀘스트 보상 지급 (완료 여부·중복 수령 확인 포함) */
+async function grantQuestReward(player: NonNullable<Awaited<ReturnType<typeof getPlayerByUserId>>>, questId: number) {
+  const allQuestsList = await getAllQuests();
+  const quest = allQuestsList.find(q => q.id === questId);
+  if (!quest) throw new TRPCError({ code: "NOT_FOUND", message: "퀘스트를 찾을 수 없습니다" });
+
+  const prog = await getOrCreateQuestProgress(player.id, quest.id, quest.type);
+
+  // 이미 보상 수령했는지 확인
+  if (prog.rewardClaimed === 1) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "이미 보상을 수령했습니다" });
+  }
+
+  // 완료 여부 확인
+  if (prog.completed !== 1 && prog.progress < quest.conditionValue) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "퀘스트를 아직 완료하지 않았습니다" });
+  }
+
+  // 먼저 수령 처리 (동시에 여러 번 눌러도 한 번만 지급)
+  if (!(await claimQuestReward(player.id, quest.id))) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "이미 보상을 수령했습니다" });
+  }
+
+  // 보상 지급
+  if (quest.rewardType === 'gold') {
+    await updatePlayerGold(player.id, quest.rewardValue);
+  } else if (quest.rewardType === 'exp') {
+    await updatePlayerExp(player.id, quest.rewardValue);
+  } else if (quest.rewardType === 'fatigue') {
+    const db = await getDb();
+    if (db) {
+      const p = await db.select().from(players).where(eq(players.id, player.id)).limit(1);
+      if (p.length > 0) {
+        const newFatigue = Math.min(100, p[0].fatigue + quest.rewardValue);
+        await db.update(players).set({ fatigue: newFatigue }).where(eq(players.id, player.id));
+      }
+    }
+  } else if (quest.rewardType === 'stat_points') {
+    const db = await getDb();
+    if (db) {
+      const p = await db.select().from(players).where(eq(players.id, player.id)).limit(1);
+      if (p.length > 0) {
+        await db.update(players).set({ statPoints: p[0].statPoints + quest.rewardValue }).where(eq(players.id, player.id));
+      }
+    }
+  }
+
+  return { rewardType: quest.rewardType, rewardValue: quest.rewardValue };
+}
+
 const questRouter = router({
   list: protectedProcedure.query(async () => {
     await seedQuestsIfEmpty();
@@ -583,56 +633,26 @@ const questRouter = router({
     .mutation(async ({ ctx, input }) => {
       const player = await getPlayerByUserId(ctx.user.id);
       if (!player) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
-
-      const allQuestsList = await getAllQuests();
-      const quest = allQuestsList.find(q => q.id === input.questId);
-      if (!quest) throw new TRPCError({ code: "NOT_FOUND", message: "퀘스트를 찾을 수 없습니다" });
-
-      const prog = await getOrCreateQuestProgress(player.id, quest.id, quest.type);
-
-      // 이미 보상 수령했는지 확인
-      if (prog.rewardClaimed === 1) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "이미 보상을 수령했습니다" });
-      }
-
-      // 완료 여부 확인
-      if (prog.completed !== 1 && prog.progress < quest.conditionValue) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "퀘스트를 아직 완료하지 않았습니다" });
-      }
-
-      // 보상 지급
-      if (quest.rewardType === 'gold') {
-        await updatePlayerGold(player.id, quest.rewardValue);
-      } else if (quest.rewardType === 'exp') {
-        await updatePlayerExp(player.id, quest.rewardValue);
-      } else if (quest.rewardType === 'fatigue') {
-        const db = await getDb();
-        if (db) {
-          const p = await db.select().from(players).where(eq(players.id, player.id)).limit(1);
-          if (p.length > 0) {
-            const newFatigue = Math.min(100, p[0].fatigue + quest.rewardValue);
-            await db.update(players).set({ fatigue: newFatigue }).where(eq(players.id, player.id));
-          }
-        }
-      } else if (quest.rewardType === 'stat_points') {
-        const db = await getDb();
-        if (db) {
-          const p = await db.select().from(players).where(eq(players.id, player.id)).limit(1);
-          if (p.length > 0) {
-            await db.update(players).set({ statPoints: p[0].statPoints + quest.rewardValue }).where(eq(players.id, player.id));
-          }
-        }
-      }
-
-      // 보상 수령 처리
-      await claimQuestReward(player.id, quest.id);
-
-      return {
-        success: true,
-        rewardType: quest.rewardType,
-        rewardValue: quest.rewardValue,
-      };
+      const reward = await grantQuestReward(player, input.questId);
+      return { success: true, ...reward };
     }),
+
+  // 받을 수 있는 보상 모두 받기
+  claimAll: protectedProcedure.mutation(async ({ ctx }) => {
+    const player = await getPlayerByUserId(ctx.user.id);
+    if (!player) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
+    const list = await computeQuestProgress(player);
+    const totals: Record<string, number> = {};
+    let count = 0;
+    for (const q of list.filter(x => x.completed && !x.rewardClaimed)) {
+      try {
+        const r = await grantQuestReward(player, q.questId);
+        totals[r.rewardType] = (totals[r.rewardType] ?? 0) + r.rewardValue;
+        count++;
+      } catch { /* 이미 받은 보상 등은 건너뜀 */ }
+    }
+    return { count, totals };
+  }),
 });
 
 /**

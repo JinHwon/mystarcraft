@@ -16,7 +16,7 @@ export default function Home() {
   useEffect(() => {
     if (!loading && isAuthenticated && !playerLoading) {
       if (player) {
-        navigate("/profile");
+        navigate("/lobby");
       } else if (player === null) {
         navigate("/create-player");
       }

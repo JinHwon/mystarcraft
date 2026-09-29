@@ -347,7 +347,7 @@ export default function PracticePage() {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 md:p-4">
         <div className="max-w-2xl mx-auto">
           <div className="text-center mb-6 md:mb-12">
-            <h1 className="text-2xl md:text-4xl font-bold text-white mb-1 md:mb-2">연습게임</h1>
+            <h1 className="hidden md:block text-2xl md:text-4xl font-bold text-white mb-1 md:mb-2">연습게임</h1>
             {roster.length > 1 && (
               <div className="my-3">
                 <p className="text-xs text-slate-400 mb-1.5">출전 선수</p>
@@ -383,30 +383,29 @@ export default function PracticePage() {
               const cost = FATIGUE_COST[key as keyof typeof FATIGUE_COST];
               const canPlay = !isFatigueTooLow && currentFatigue >= cost;
               return (
-                <Card
+                <button
                   key={key}
-                  className={`bg-slate-800 border-slate-700 transition-all ${canPlay ? 'hover:border-blue-500 cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                  disabled={!canPlay}
                   onClick={() => canPlay && handleSelectDifficulty(key as any)}
+                  className={`w-full text-left rounded-2xl border p-4 transition-all ${canPlay ? "bg-slate-800 border-slate-600 hover:border-blue-400 active:scale-[0.98]" : "bg-slate-800/60 border-slate-700 opacity-50 cursor-not-allowed"}`}
                 >
-                  <CardHeader>
-                    <CardTitle className="text-sm md:text-base text-white">{difficultyLabels[key]}</CardTitle>
-                    <CardDescription className="text-xs">{DIFFICULTY_MATCH[key as keyof typeof DIFFICULTY_MATCH].desc}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-1 md:space-y-2 text-xs md:text-sm text-slate-300">
-                      {(() => {
-                        const r = difficultyTotalRange(key as keyof typeof DIFFICULTY_MATCH, myTotal);
-                        return <p className="text-cyan-300">상대 능력치 합계 {r.min.toLocaleString()}~{r.max.toLocaleString()}</p>;
-                      })()}
-                      <p>승리 경험치: {rewards.expWin}</p>
-                      <p>패배 경험치: {rewards.expLose}</p>
-                      <p>승리 골드: {rewards.goldWin}</p>
-                      <p>패배 골드: {rewards.goldLose}</p>
-                      <p className="text-yellow-400">피로도 소모: {cost}</p>
-                      {!canPlay && <p className="text-red-400 text-xs">피로도 부족</p>}
+                  <div className="flex items-center gap-3">
+                    <span className="text-3xl">{({ beginner: "🌱", intermediate: "⚔️", advanced: "🔥" } as Record<string, string>)[key]}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-black text-white text-base">{difficultyLabels[key]}</div>
+                      <div className="text-xs text-slate-400">{DIFFICULTY_MATCH[key as keyof typeof DIFFICULTY_MATCH].desc}</div>
                     </div>
-                  </CardContent>
-                </Card>
+                    <span className="text-xs font-bold text-yellow-300 shrink-0">🔋 -{cost}</span>
+                  </div>
+                  {(() => {
+                    const r = difficultyTotalRange(key as keyof typeof DIFFICULTY_MATCH, myTotal);
+                    return <div className="mt-2.5 text-xs text-cyan-300">상대 능력치 {r.min.toLocaleString()}~{r.max.toLocaleString()}</div>;
+                  })()}
+                  <div className="mt-1 text-xs text-slate-300">
+                    승리 <b className="text-white">EXP {rewards.expWin} · {rewards.goldWin}G</b> <span className="text-slate-500">/</span> 패배 EXP {rewards.expLose} · {rewards.goldLose}G
+                  </div>
+                  {!canPlay && <div className="mt-1 text-red-400 text-xs">피로도 부족</div>}
+                </button>
               );
             })}
           </div>

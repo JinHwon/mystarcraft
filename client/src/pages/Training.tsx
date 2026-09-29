@@ -79,7 +79,7 @@ export default function Training() {
   return (
     <div className="p-4 md:p-8 space-y-5 max-w-6xl mx-auto">
       <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
+        <div className="hidden md:block">
           <h1 className="text-3xl font-bold text-amber-400">🏋️ 훈련장</h1>
           <p className="text-gray-400 text-sm">피로도를 써서 능력치를 올립니다. 컨디션이 좋을수록 효과가 크고 대성공 확률도 올라갑니다.</p>
         </div>

@@ -97,7 +97,7 @@ export default function Team() {
                 </div>
                 <p className="text-sm text-gray-400">프로게임단 · 감독 모드</p>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+              <div className="w-full md:w-auto grid grid-cols-4 gap-2 md:gap-3 text-center">
                 <Stat label="선수단" value={`${roster.length}/${maxRoster}`} />
                 <Stat label="평균 능력치" value={teamPower.toLocaleString()} />
                 <Stat label="팀 통산" value={`${teamWins}승 ${teamLosses}패`} />
@@ -224,9 +224,9 @@ export default function Team() {
 
 function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-700/60">
+    <div className="bg-slate-900/60 rounded-lg px-1.5 md:px-3 py-2 border border-slate-700/60">
       <div className="text-[11px] text-gray-400">{label}</div>
-      <div className={cn("font-bold text-sm", accent ? "text-yellow-400" : "text-white")}>{value}</div>
+      <div className={cn("font-bold text-xs md:text-sm", accent ? "text-yellow-400" : "text-white")}>{value}</div>
     </div>
   );
 }

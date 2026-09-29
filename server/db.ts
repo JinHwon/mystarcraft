@@ -1417,13 +1417,15 @@ export async function updateQuestProgress(playerId: number, questId: number, pro
   }).where(and(eq(playerQuestProgress.playerId, playerId), eq(playerQuestProgress.questId, questId)));
 }
 
-export async function claimQuestReward(playerId: number, questId: number) {
+/** 보상 수령 표시. 이번 호출로 처음 수령 처리됐으면 true (이미 받았으면 false) */
+export async function claimQuestReward(playerId: number, questId: number): Promise<boolean> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  await db.update(playerQuestProgress).set({
+  const res = await db.update(playerQuestProgress).set({
     rewardClaimed: 1,
-  }).where(and(eq(playerQuestProgress.playerId, playerId), eq(playerQuestProgress.questId, questId)));
+  }).where(and(eq(playerQuestProgress.playerId, playerId), eq(playerQuestProgress.questId, questId), eq(playerQuestProgress.rewardClaimed, 0)));
+  return Number((res as any)?.[0]?.affectedRows ?? 0) > 0;
 }
 
 export async function getDailyGameCount(playerId: number): Promise<number> {

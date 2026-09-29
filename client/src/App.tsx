@@ -18,6 +18,7 @@ import Ranking from "./pages/Ranking";
 import Team from "./pages/Team";
 import Training from "./pages/Training";
 import League from "./pages/League";
+import Lobby from "./pages/Lobby";
 import GameLayout from "./components/GameLayout";
 import { UpdateNotification } from "./components/UpdateNotification";
 
@@ -27,6 +28,11 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/login" component={Login} />
       <Route path="/create-player" component={CreatePlayer} />
+      <Route path="/lobby">
+        <GameLayout>
+          <Lobby />
+        </GameLayout>
+      </Route>
       <Route path="/profile">
         <GameLayout>
           <PlayerProfile />

@@ -69,7 +69,7 @@ export default function CreatePlayer() {
       }
       await utils.player.get.invalidate();
       toast.success("선수가 생성되었습니다!");
-      navigate("/profile");
+      navigate("/lobby");
     },
     onError: (err) => {
       toast.error(err.message ?? "선수 생성에 실패했습니다");
@@ -86,7 +86,7 @@ export default function CreatePlayer() {
 
   useEffect(() => {
     if (!loading && !playerLoading && existingPlayer) {
-      navigate("/profile");
+      navigate("/lobby");
     }
   }, [loading, playerLoading, existingPlayer]);
 
