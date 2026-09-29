@@ -163,7 +163,9 @@ def copy_images(game_dir, dest):
 
 def main():
     ap = argparse.ArgumentParser(description="원작 마이스타크래프트 해설·이미지 추출")
-    ap.add_argument("game_dir", nargs="?", default=r"D:\MYSC3\mysc", help=r"원작 게임 폴더 (기본: D:\MYSC3\mysc)")
+    here = os.path.dirname(os.path.abspath(__file__))
+    default_dir = here if os.path.isfile(os.path.join(here, "MyStarcraft.exe")) else r"D:\MYSC3\mysc"
+    ap.add_argument("game_dir", nargs="?", default=default_dir, help=r"원작 게임 폴더 (기본: 이 스크립트가 있는 폴더 또는 D:\MYSC3\mysc)")
     ap.add_argument("--repo", help="mystarcraft 저장소 폴더 (주면 결과를 저장소 안에 바로 넣음)")
     ap.add_argument("--out", help="결과 폴더 (기본: ./mysc_extract)")
     ap.add_argument("--no-images", action="store_true", help="이미지 복사 안 함")
@@ -180,7 +182,7 @@ def main():
         text_out = os.path.join(args.repo, "data", "legacy")
         img_out = os.path.join(args.repo, "client", "public", "legacy")
     else:
-        base = args.out or os.path.join(os.getcwd(), "mysc_extract")
+        base = args.out or os.path.join(args.game_dir, "mysc_extract")
         text_out = os.path.join(base, "data", "legacy")
         img_out = os.path.join(base, "client", "public", "legacy")
     os.makedirs(text_out, exist_ok=True)
@@ -246,7 +248,22 @@ def main():
     log("완료! 문자열: " + text_out)
     if n_img:
         log("      이미지: " + img_out)
+    if not args.repo:
+        # 한 파일로 묶어서 GitHub 웹에 올리기 쉽게
+        zip_path = shutil.make_archive(base, "zip", base)
+        log("")
+        log("묶음 파일: " + zip_path)
+        log("이 zip 파일 하나를 GitHub 에 올려주세요 (docs/legacy-extract.md 참고)")
 
 
 if __name__ == "__main__":
-    main()
+    double_clicked = len(sys.argv) == 1
+    try:
+        main()
+    except SystemExit as e:
+        if e.code not in (None, 0):
+            log("오류: %s" % e.code)
+    except Exception as e:  # 더블클릭 실행 시 창이 바로 닫히지 않도록
+        log("오류: %r" % e)
+    if double_clicked:
+        input("\n엔터를 누르면 창이 닫힙니다...")
