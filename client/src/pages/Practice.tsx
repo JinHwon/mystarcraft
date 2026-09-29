@@ -803,9 +803,12 @@ export default function PracticePage() {
                   <p className="text-xs text-slate-400">해설이 없습니다.</p>
                 ) : (
                   allCommentaries.map((item, idx) => {
-                    let textColor = "text-slate-300";
-                    if (item.text.includes(player1Name)) textColor = "text-blue-300";
-                    else if (item.text.includes(player2Name)) textColor = "text-purple-300";
+                    // 한 선수만 언급하면 그 선수 색, 두 선수 모두 또는 아무도 언급하지 않으면 중립(흰색)
+                    const mentions1 = item.text.includes(player1Name);
+                    const mentions2 = item.text.includes(player2Name);
+                    let textColor = "text-white";
+                    if (mentions1 && !mentions2) textColor = "text-blue-300";
+                    else if (mentions2 && !mentions1) textColor = "text-purple-300";
                     
                     return (
                       <p key={idx} className={`text-xs ${textColor}`}>
