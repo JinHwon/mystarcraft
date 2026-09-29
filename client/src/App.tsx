@@ -6,88 +6,41 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
-import CreatePlayer from "./pages/CreatePlayer";
-import PlayerProfile from "./pages/PlayerProfile";
-import Shop from "./pages/Shop";
 import Admin from "./pages/Admin";
 import AdminEvents from "./pages/AdminEvents";
-import Events from "./pages/Events";
-import Practice from "./pages/Practice";
-import GameResults from "./pages/GameResults";
-import Ranking from "./pages/Ranking";
 import Team from "./pages/Team";
 import Training from "./pages/Training";
 import League from "./pages/League";
 import Lobby from "./pages/Lobby";
+import Transfer from "./pages/Transfer";
+import Records from "./pages/Records";
+import { Redirect } from "wouter";
 import GameLayout from "./components/GameLayout";
 import { UpdateNotification } from "./components/UpdateNotification";
+
+const withLayout = (Page: React.ComponentType) => () => (
+  <GameLayout>
+    <Page />
+  </GameLayout>
+);
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/login" component={Login} />
-      <Route path="/create-player" component={CreatePlayer} />
-      <Route path="/lobby">
-        <GameLayout>
-          <Lobby />
-        </GameLayout>
-      </Route>
-      <Route path="/profile">
-        <GameLayout>
-          <PlayerProfile />
-        </GameLayout>
-      </Route>
-      <Route path="/shop">
-        <GameLayout>
-          <Shop />
-        </GameLayout>
-      </Route>
-      <Route path="/admin">
-        <GameLayout>
-          <Admin />
-        </GameLayout>
-      </Route>
-      <Route path="/admin/events">
-        <GameLayout>
-          <AdminEvents />
-        </GameLayout>
-      </Route>
-      <Route path="/events">
-        <GameLayout>
-          <Events />
-        </GameLayout>
-      </Route>
-      <Route path="/practice">
-        <GameLayout>
-          <Practice />
-        </GameLayout>
-      </Route>
-      <Route path="/game-results">
-        <GameLayout>
-          <GameResults />
-        </GameLayout>
-      </Route>
-      <Route path="/ranking">
-        <GameLayout>
-          <Ranking />
-        </GameLayout>
-      </Route>
-      <Route path="/team">
-        <GameLayout>
-          <Team />
-        </GameLayout>
-      </Route>
-      <Route path="/training">
-        <GameLayout>
-          <Training />
-        </GameLayout>
-      </Route>
-      <Route path="/league">
-        <GameLayout>
-          <League />
-        </GameLayout>
-      </Route>
+      <Route path="/lobby" component={withLayout(Lobby)} />
+      <Route path="/team" component={withLayout(Team)} />
+      <Route path="/training" component={withLayout(Training)} />
+      <Route path="/league" component={withLayout(League)} />
+      <Route path="/transfer" component={withLayout(Transfer)} />
+      <Route path="/records" component={withLayout(Records)} />
+      <Route path="/admin" component={withLayout(Admin)} />
+      <Route path="/admin/events" component={withLayout(AdminEvents)} />
+      {/* 예전(내 선수 육성) 화면 주소는 감독실로 */}
+      {["/create-player", "/profile", "/shop", "/practice", "/game-results", "/ranking", "/events"].map(p => (
+        <Route key={p} path={p}><Redirect to="/lobby" /></Route>
+      ))}
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

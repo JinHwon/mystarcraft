@@ -1,0 +1,150 @@
+/**
+ * 커리어 모드(원작 방식) 규칙과 상태 타입
+ * 한 유저 = 한 세이브. 세계(선수 230명·12팀·시즌 일정)가 통째로 세이브에 들어간다.
+ */
+import type { StatKey } from "../gameConstants";
+
+export type Race = "terran" | "zerg" | "protoss";
+
+/** 원작 능력치 저장 순서 (컨트롤, 공격력, 견제, 전략, 물량, 수비력, 정찰, 센스) */
+export const ORIG_STAT_ORDER: StatKey[] = ["control", "attack", "harass", "strategy", "supply", "defense", "scout", "sense"];
+
+export const STAT_MIN = 1;
+export const STAT_MAX_CAREER = 1000;
+
+// ── 시즌 ────────────────────────────────────────────────────────
+export const BASE_YEAR = 2010;
+/** 한 경기 세트 수 / 승리 세트 (5세트 = 에이스 결정전) */
+export const PRO_SETS = 5;
+export const PRO_WIN = 3;
+/** 결승은 7전 4선승 */
+export const FINAL_SETS = 7;
+export const FINAL_WIN = 4;
+/** 선수단 최대 인원 (원작 팀 레코드 칸 수) */
+export const MAX_ROSTER = 19;
+/** 엔트리를 짜려면 최소 인원 (1~4세트는 서로 다른 선수) */
+export const MIN_ROSTER = 4;
+
+// ── 돈 (만원) ────────────────────────────────────────────────────
+export const START_MONEY = 3000;
+export const WEEKLY_SPONSOR = 100;
+export const MATCH_MONEY = { win: 200, lose: 50 };
+export const POSTSEASON_PRIZE: Record<string, number> = { 우승: 3000, 준우승: 1500, 플레이오프: 800, 준플레이오프: 500 };
+
+// ── 컨디션 (원작: 작은 정수 단계, 의욕/짜증) ─────────────────────────
+export const COND_MIN = 1;
+export const COND_MAX = 10;
+export const COND_LABELS = ["", "최악", "짜증", "나쁨", "저조", "보통", "양호", "좋음", "의욕", "최상", "절정"];
+/** 컨디션에 따른 경기력 배율 (1 → 0.91, 5 → 0.99, 10 → 1.09) */
+export function condMultiplier(cond: number): number {
+  return 1 + (Math.max(COND_MIN, Math.min(COND_MAX, cond)) - 5.5) * 0.02;
+}
+
+// ── 선수 행동 (행동력) ──────────────────────────────────────────────
+export type ActionKey = "train" | "rest" | "event" | "best";
+export interface ActionDef { key: ActionKey; name: string; emoji: string; ap: number; money: number; desc: string }
+export const ACTIONS: ActionDef[] = [
+  { key: "train", name: "훈련", emoji: "🏋️", ap: 1, money: 0, desc: "연습을 열심히 합니다. 능력치를 향상시킵니다. (컨디션 -1)" },
+  { key: "rest", name: "휴식", emoji: "😴", ap: 0, money: 0, desc: "휴식을 취합니다. 쉬면서 컨디션을 회복합니다. (컨디션 +2)" },
+  { key: "event", name: "이벤트", emoji: "🎤", ap: 1, money: 0, desc: "팬미팅을 합니다. 팀 자금을 벌고 기분이 좋아집니다. (자금 +, 컨디션 +1)" },
+  { key: "best", name: "베스트", emoji: "🔥", ap: 3, money: 100, desc: "코치진과 집중 특별 훈련. 능력치가 크게 오르지만 지칩니다. (컨디션 -2)" },
+];
+/** 주당 행동력 */
+export const WEEKLY_AP = 8;
+
+// ── 세이브 상태 ─────────────────────────────────────────────────
+export interface CPlayer {
+  id: number;
+  name: string;
+  race: Race;
+  team: number;
+  stats: Record<StatKey, number>;
+  level: number;
+  exp: number;
+  cond: number;
+  birth: number;
+  gender: "M" | "F";
+  /** 통산 전적 */
+  wins: number;
+  losses: number;
+  /** 이번 시즌 전적 */
+  sWins: number;
+  sLosses: number;
+  /** 이번 주 행동 (내 팀 선수만) */
+  action?: ActionKey | null;
+  /** 우승 경력 */
+  titles?: string[];
+}
+
+export interface CTeam {
+  id: number;
+  name: string;
+  short: string;
+  color: string;
+  money: number;
+  /** 시즌 성적 */
+  wins: number;
+  losses: number;
+  setWins: number;
+  setLosses: number;
+}
+
+export interface SetResult {
+  mapId: number;
+  a: number;
+  b: number;
+  winner: "a" | "b";
+  duration: number;
+  highlights?: string[];
+}
+
+export interface CMatch {
+  id: number;
+  week: number;
+  /** regular | semi(준PO) | po | final */
+  stage: "regular" | "semi" | "po" | "final";
+  a: number;
+  b: number;
+  maps: number[];
+  done?: boolean;
+  scoreA?: number;
+  scoreB?: number;
+  winner?: number;
+  sets?: SetResult[];
+}
+
+export interface CareerState {
+  version: 1;
+  myTeam: number;
+  season: number;
+  week: number;
+  phase: "regular" | "postseason" | "offseason";
+  ap: number;
+  players: CPlayer[];
+  teams: CTeam[];
+  matches: CMatch[];
+  /** 다음 경기 번호 */
+  nextMatchId: number;
+  /** 소식 (최근 순) */
+  news: Array<{ season: number; week: number; text: string }>;
+  /** 지난 시즌 기록 */
+  history: Array<{ season: number; champion: number; myRank: number; myResult: string }>;
+}
+
+export function ageOf(p: Pick<CPlayer, "birth">, season: number): number {
+  // 한국식 나이
+  return BASE_YEAR + season - 1 - p.birth + 1;
+}
+
+export function totalOf(stats: Record<StatKey, number>): number {
+  return Object.values(stats).reduce((a, b) => a + b, 0);
+}
+
+/** 영입 요구 금액 (만원): 능력치·레벨·나이 반영 */
+export function askingPrice(p: CPlayer, season: number): number {
+  const total = totalOf(p.stats);
+  const age = ageOf(p, season);
+  const base = Math.max(0, total - 3800) * 0.6 + p.level * 60;
+  const ageMul = age <= 22 ? 1.2 : age >= 28 ? 0.6 : 1;
+  return Math.max(50, Math.round((base * ageMul) / 10) * 10);
+}

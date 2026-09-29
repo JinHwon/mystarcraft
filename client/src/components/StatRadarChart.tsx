@@ -7,6 +7,8 @@ interface StatRadarChartProps {
   gradeColor?: string;
   size?: number;
   fatigue?: number; // 피로도 (전달 시 패널티 능력치 오버레이 표시)
+  /** 능력치 최대값 (커리어 모드는 1000) */
+  maxValue?: number;
 }
 
 export function StatRadarChart({
@@ -15,6 +17,7 @@ export function StatRadarChart({
   gradeColor = "#4A9EFF",
   size = 240,
   fatigue,
+  maxValue = STAT_MAX,
 }: StatRadarChartProps) {
   const statColors: Record<StatKey, string> = {
     sense: "#4A9EFF",
@@ -45,7 +48,7 @@ export function StatRadarChart({
   // 능력치 값을 좌표로 변환
   const statPoints = STAT_KEYS.map((key, i) => {
     const value = stats[key];
-    const ratio = Math.min(value / STAT_MAX, 1);
+    const ratio = Math.min(value / maxValue, 1);
     const angle = angleSlice * i - Math.PI / 2;
     const r = radius * ratio;
     const x = center + r * Math.cos(angle);
@@ -58,7 +61,7 @@ export function StatRadarChart({
   const fatigueStatPoints = hasFatiguePenalty
     ? STAT_KEYS.map((key, i) => {
         const value = calcEffectiveStatWithFatigue(stats[key], fatigue);
-        const ratio = Math.min(value / STAT_MAX, 1);
+        const ratio = Math.min(value / maxValue, 1);
         const angle = angleSlice * i - Math.PI / 2;
         const r = radius * ratio;
         const x = center + r * Math.cos(angle);
@@ -217,7 +220,7 @@ export function StatRadarChart({
 
       {/* 범례 */}
       <div className="text-xs text-muted-foreground text-center space-y-1">
-        <p>최대 능력치: {STAT_MAX}</p>
+        <p>최대 능력치: {maxValue}</p>
         {hasFatiguePenalty && (
           <p className="text-red-400 flex items-center justify-center gap-1.5">
             <span className="inline-block w-4 h-0.5 border-t-2 border-dashed border-red-400" />

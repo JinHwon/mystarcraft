@@ -1,122 +1,69 @@
-import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { useEffect, useState } from "react";
 import {
   Home,
-  User,
   Users,
   Dumbbell,
-  Medal,
-  ShoppingBag,
-  Gamepad2,
-  BarChart3,
   Trophy,
-  Zap,
+  Handshake,
+  ScrollText,
   Settings,
   CalendarCog,
   LogOut,
   Coins,
-  Battery,
+  Zap,
   LayoutGrid,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { RACE_COLORS, RACE_LABELS } from "@shared/gameConstants";
+import { ACTIONS } from "@shared/career/rules";
+import { rosterOf } from "@shared/career/view";
+import { useCareer } from "@/lib/career";
 
-interface NavItem { path: string; label: string; icon: LucideIcon; group: string }
+interface NavItem { path: string; label: string; tab?: string; icon: LucideIcon }
 
 const NAV: NavItem[] = [
-  { path: "/lobby", label: "로비", icon: Home, group: "메인" },
-  { path: "/practice", label: "연습게임", icon: Gamepad2, group: "경기" },
-  { path: "/league", label: "리그", icon: Medal, group: "경기" },
-  { path: "/game-results", label: "경기결과", icon: BarChart3, group: "경기" },
-  { path: "/team", label: "팀 관리", icon: Users, group: "육성" },
-  { path: "/training", label: "훈련장", icon: Dumbbell, group: "육성" },
-  { path: "/profile", label: "선수 정보", icon: User, group: "육성" },
-  { path: "/shop", label: "상점", icon: ShoppingBag, group: "육성" },
-  { path: "/events", label: "퀘스트", icon: Zap, group: "기타" },
-  { path: "/ranking", label: "랭킹", icon: Trophy, group: "기타" },
+  { path: "/lobby", label: "감독실", tab: "감독실", icon: Home },
+  { path: "/team", label: "선수단", tab: "선수단", icon: Users },
+  { path: "/training", label: "선수 행동", tab: "행동", icon: Dumbbell },
+  { path: "/league", label: "마이프로리그", tab: "리그", icon: Trophy },
+  { path: "/transfer", label: "이적시장", icon: Handshake },
+  { path: "/records", label: "기록", icon: ScrollText },
 ];
 const ADMIN_NAV: NavItem[] = [
-  { path: "/admin", label: "관리자 패널", icon: Settings, group: "관리" },
-  { path: "/admin/events", label: "이벤트 관리", icon: CalendarCog, group: "관리" },
+  { path: "/admin", label: "관리자 패널", icon: Settings },
+  { path: "/admin/events", label: "이벤트 관리", icon: CalendarCog },
 ];
-
-/** 모바일 하단 탭 (나머지는 "메뉴"에서) */
-const TABS = ["/lobby", "/team", "/practice", "/league"];
-
-function titleOf(path: string, items: NavItem[]) {
-  return items.find(i => i.path === path)?.label ?? "마이스타크래프트";
-}
+const TABS = NAV.filter(n => n.tab);
 
 export default function GameLayout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const { user, isAuthenticated, loading, logout } = useAuth();
   const [location, navigate] = useLocation();
   const items = user?.role === "admin" ? [...NAV, ...ADMIN_NAV] : NAV;
-  const { data: player, isLoading: playerLoading } = trpc.player.get.useQuery(undefined, { enabled: isAuthenticated });
-  const { data: rewardableCount = 0 } = trpc.quest.getRewardableCount.useQuery(undefined, { enabled: isAuthenticated });
-
-  // 10분마다 피로도 5 회복
-  const fatigueRecoveryMutation = trpc.player.tickFatigueRecovery.useMutation();
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    const interval = setInterval(() => fatigueRecoveryMutation.mutate(), 10 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [isAuthenticated]);
+  const { state: s } = useCareer();
 
   useEffect(() => {
     if (!loading && !isAuthenticated) navigate("/");
   }, [loading, isAuthenticated]);
 
-  useEffect(() => {
-    if (!loading && !playerLoading && isAuthenticated && player === null) navigate("/create-player");
-  }, [loading, playerLoading, isAuthenticated, player]);
-
   // 페이지 이동 시 맨 위로
   useEffect(() => { window.scrollTo(0, 0); }, [location]);
 
-  if (loading || playerLoading) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="w-12 h-12 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-muted-foreground text-sm">로딩 중...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-12 h-12 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   const go = (path: string) => { navigate(path); setMenuOpen(false); };
-  const raceColor = player ? RACE_COLORS[player.race] ?? "#4A9EFF" : "#4A9EFF";
-  const fatigue = player?.fatigue ?? 0;
-  const QuestBadge = ({ className }: { className?: string }) => rewardableCount > 0
-    ? <span className={cn("min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center", className)}>{rewardableCount}</span>
-    : null;
-
-  const Avatar = ({ size = 40 }: { size?: number }) => (
-    <div className="rounded-full overflow-hidden border-2 shrink-0 bg-muted flex items-center justify-center"
-      style={{ width: size, height: size, borderColor: raceColor }}>
-      {player?.photoUrl
-        ? <img src={player.photoUrl} alt={player.name} className="w-full h-full object-cover" />
-        : <User className="w-1/2 h-1/2 text-muted-foreground" />}
-    </div>
-  );
-
-  const StatusChips = ({ compact }: { compact?: boolean }) => (
-    <div className="flex items-center gap-1.5">
-      <span className={cn("flex items-center gap-1 rounded-full bg-yellow-500/15 border border-yellow-500/30 text-yellow-300 font-bold", compact ? "px-2 py-0.5 text-[11px]" : "px-2.5 py-1 text-xs")}>
-        <Coins className="w-3.5 h-3.5" />{(player?.gold ?? 0).toLocaleString()}
-      </span>
-      <span className={cn("flex items-center gap-1 rounded-full border font-bold",
-        fatigue >= 60 ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300" : fatigue >= 30 ? "bg-yellow-500/15 border-yellow-500/30 text-yellow-300" : "bg-rose-500/15 border-rose-500/30 text-rose-300",
-        compact ? "px-2 py-0.5 text-[11px]" : "px-2.5 py-1 text-xs")}>
-        <Battery className="w-3.5 h-3.5" />{fatigue}
-      </span>
-    </div>
-  );
+  const team = s ? s.teams[s.myTeam] : null;
+  const apLeft = s ? s.ap - rosterOf(s, s.myTeam).reduce((sum, p) => sum + (p.action ? ACTIONS.find(a => a.key === p.action)!.ap : 0), 0) : 0;
+  const title = items.find(i => i.path === location)?.label ?? "마이스타크래프트";
 
   return (
     <div className="min-h-screen flex">
@@ -124,9 +71,25 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
         {/* ── 상단 앱바 ── */}
         <header className="sticky top-0 z-30 safe-top bg-sidebar/95 backdrop-blur border-b border-sidebar-border">
           <div className="h-14 px-3 flex items-center gap-2">
-            <button onClick={() => go("/profile")} className="shrink-0"><Avatar size={32} /></button>
-            <div className="flex-1 min-w-0 font-bold text-base text-foreground truncate">{titleOf(location, items)}</div>
-            <StatusChips compact />
+            {team ? (
+              <button onClick={() => go("/lobby")} className="w-9 h-9 rounded-xl flex items-center justify-center text-[11px] font-black text-white shrink-0" style={{ background: team.color }}>{team.short}</button>
+            ) : (
+              <div className="w-9 h-9 rounded-xl bg-primary/30 flex items-center justify-center text-sm shrink-0">🎮</div>
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="font-bold text-base text-foreground truncate leading-tight">{title}</div>
+              {s && <div className="text-[10px] text-muted-foreground leading-tight">{s.season}시즌 · {s.phase === "regular" ? `${s.week}주차` : s.phase === "postseason" ? "포스트시즌" : "시즌 종료"}</div>}
+            </div>
+            {team && (
+              <div className="flex items-center gap-1.5">
+                <span className="flex items-center gap-1 rounded-full bg-yellow-500/15 border border-yellow-500/30 text-yellow-300 font-bold px-2 py-0.5 text-[11px]">
+                  <Coins className="w-3.5 h-3.5" />{team.money.toLocaleString()}만
+                </span>
+                <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold px-2 py-0.5 text-[11px]">
+                  <Zap className="w-3.5 h-3.5" />{apLeft}
+                </span>
+              </div>
+            )}
           </div>
         </header>
 
@@ -139,52 +102,46 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
       {/* ── 하단 탭바 ── */}
       <nav className="fixed bottom-0 app-fixed-x w-full z-40 bg-sidebar/95 backdrop-blur border-t border-sidebar-border safe-bottom">
         <div className="grid grid-cols-5 h-16">
-          {TABS.map(path => {
-            const item = items.find(i => i.path === path)!;
-            const active = location === path;
+          {TABS.map(item => {
+            const active = location === item.path;
             const Icon = item.icon;
             return (
-              <button key={path} onClick={() => go(path)} className={cn("flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors", active ? "text-primary" : "text-muted-foreground")}>
+              <button key={item.path} onClick={() => go(item.path)} className={cn("flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors", active ? "text-primary" : "text-muted-foreground")}>
                 <span className={cn("w-12 h-7 rounded-full flex items-center justify-center transition-colors", active && "bg-primary/20")}>
                   <Icon className="w-5 h-5" />
                 </span>
-                {item.label === "연습게임" ? "경기" : item.label === "팀 관리" ? "팀" : item.label}
+                {item.tab}
               </button>
             );
           })}
-          <button onClick={() => setMenuOpen(true)} className={cn("relative flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold", !TABS.includes(location) ? "text-primary" : "text-muted-foreground")}>
-            <span className={cn("w-12 h-7 rounded-full flex items-center justify-center", !TABS.includes(location) && "bg-primary/20")}>
+          <button onClick={() => setMenuOpen(true)} className={cn("flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold", !TABS.some(t => t.path === location) ? "text-primary" : "text-muted-foreground")}>
+            <span className={cn("w-12 h-7 rounded-full flex items-center justify-center", !TABS.some(t => t.path === location) && "bg-primary/20")}>
               <LayoutGrid className="w-5 h-5" />
             </span>
             메뉴
-            <QuestBadge className="absolute top-1.5 right-[22%]" />
           </button>
         </div>
       </nav>
 
-      {/* ── 전체 메뉴 (아래에서 올라오는 시트) ── */}
+      {/* ── 전체 메뉴 ── */}
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
         <SheetContent side="bottom" className="app-fixed-x rounded-t-2xl bg-sidebar border-sidebar-border p-0 safe-bottom">
           <SheetHeader className="px-5 pt-5 pb-2">
             <SheetTitle className="text-left text-base">전체 메뉴</SheetTitle>
           </SheetHeader>
           <div className="grid grid-cols-4 gap-2 px-4 pb-3">
-            {items.map(({ path, label, icon: Icon }) => {
-              const active = location === path;
-              return (
-                <button key={path} onClick={() => go(path)}
-                  className={cn("relative flex flex-col items-center gap-1.5 rounded-xl py-3 text-xs font-semibold border transition-colors",
-                    active ? "bg-primary/20 border-primary/50 text-primary" : "bg-sidebar-accent/60 border-sidebar-border text-sidebar-foreground")}>
-                  <Icon className="w-5 h-5" />
-                  {label}
-                  {path === "/events" && <QuestBadge className="absolute top-1.5 right-1.5" />}
-                </button>
-              );
-            })}
+            {items.map(({ path, label, icon: Icon }) => (
+              <button key={path} onClick={() => go(path)}
+                className={cn("flex flex-col items-center gap-1.5 rounded-xl py-3 text-xs font-semibold border transition-colors",
+                  location === path ? "bg-primary/20 border-primary/50 text-primary" : "bg-sidebar-accent/60 border-sidebar-border text-sidebar-foreground")}>
+                <Icon className="w-5 h-5" />
+                {label}
+              </button>
+            ))}
           </div>
           <div className="px-4 pb-5">
             <button onClick={logout} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-rose-300 bg-rose-500/10 border border-rose-500/30">
-              <LogOut className="w-4 h-4" /> 로그아웃
+              <LogOut className="w-4 h-4" /> 로그아웃 ({user?.name ?? "사용자"})
             </button>
           </div>
         </SheetContent>
