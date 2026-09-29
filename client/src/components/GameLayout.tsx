@@ -15,7 +15,6 @@ import {
   Settings,
   CalendarCog,
   LogOut,
-  Sword,
   Coins,
   Battery,
   LayoutGrid,
@@ -93,7 +92,6 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
   const go = (path: string) => { navigate(path); setMenuOpen(false); };
   const raceColor = player ? RACE_COLORS[player.race] ?? "#4A9EFF" : "#4A9EFF";
   const fatigue = player?.fatigue ?? 0;
-  const groups = Array.from(new Set(items.map(i => i.group)));
   const QuestBadge = ({ className }: { className?: string }) => rewardableCount > 0
     ? <span className={cn("min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center", className)}>{rewardableCount}</span>
     : null;
@@ -121,71 +119,10 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
   );
 
   return (
-    <div className="min-h-screen bg-background flex">
-      {/* ── 데스크톱 사이드바 ── */}
-      <aside className="hidden md:flex w-60 bg-sidebar border-r border-sidebar-border flex-col shrink-0 sticky top-0 h-screen">
-        <button onClick={() => go("/lobby")} className="px-5 py-4 flex items-center gap-3 border-b border-sidebar-border hover:bg-sidebar-accent/50 transition-colors">
-          <div className="w-9 h-9 rounded-xl bg-primary/20 border border-primary/40 flex items-center justify-center">
-            <Sword className="w-5 h-5 text-primary" />
-          </div>
-          <div className="text-left">
-            <div className="font-black text-sm text-sidebar-foreground tracking-wide">마이스타크래프트</div>
-            <div className="text-[11px] text-muted-foreground">프로게임단 매니저</div>
-          </div>
-        </button>
-
-        {player && (
-          <button onClick={() => go("/profile")} className="mx-3 mt-3 p-3 rounded-xl bg-sidebar-accent/60 border border-sidebar-border text-left hover:bg-sidebar-accent transition-colors">
-            <div className="flex items-center gap-2.5">
-              <Avatar size={40} />
-              <div className="min-w-0">
-                <div className="font-bold text-sm text-sidebar-foreground truncate">{player.name}</div>
-                <div className="text-xs font-semibold" style={{ color: raceColor }}>{RACE_LABELS[player.race]} · Lv.{player.level} · {player.grade}</div>
-              </div>
-            </div>
-            <div className="mt-2.5"><StatusChips compact /></div>
-          </button>
-        )}
-
-        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
-          {groups.map(g => (
-            <div key={g}>
-              <div className="px-2 pb-1 text-[10px] font-bold tracking-wider text-muted-foreground/80">{g}</div>
-              <div className="space-y-0.5">
-                {items.filter(i => i.group === g).map(({ path, label, icon: Icon }) => {
-                  const active = location === path;
-                  return (
-                    <button
-                      key={path}
-                      onClick={() => go(path)}
-                      className={cn("w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                        active ? "bg-primary text-primary-foreground shadow-md shadow-primary/20" : "text-sidebar-foreground/90 hover:bg-sidebar-accent")}
-                    >
-                      <Icon className="w-4 h-4 shrink-0" />
-                      <span className="flex-1 text-left">{label}</span>
-                      {path === "/events" && <QuestBadge />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </nav>
-
-        <div className="p-3 border-t border-sidebar-border flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">
-            {user?.name?.charAt(0) ?? "U"}
-          </div>
-          <span className="flex-1 text-xs text-muted-foreground truncate">{user?.name ?? "사용자"}</span>
-          <button onClick={logout} className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10" title="로그아웃">
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
-      </aside>
-
+    <div className="min-h-screen flex">
       <div className="flex-1 min-w-0 flex flex-col">
-        {/* ── 모바일 상단 앱바 ── */}
-        <header className="md:hidden sticky top-0 z-30 safe-top bg-sidebar/95 backdrop-blur border-b border-sidebar-border">
+        {/* ── 상단 앱바 ── */}
+        <header className="sticky top-0 z-30 safe-top bg-sidebar/95 backdrop-blur border-b border-sidebar-border">
           <div className="h-14 px-3 flex items-center gap-2">
             <button onClick={() => go("/profile")} className="shrink-0"><Avatar size={32} /></button>
             <div className="flex-1 min-w-0 font-bold text-base text-foreground truncate">{titleOf(location, items)}</div>
@@ -194,13 +131,13 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
         </header>
 
         {/* ── 본문 ── */}
-        <main key={location} className="flex-1 w-full page-in pb-tabbar md:pb-0">
+        <main key={location} className="flex-1 w-full page-in pb-tabbar">
           {children}
         </main>
       </div>
 
-      {/* ── 모바일 하단 탭바 ── */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-sidebar/95 backdrop-blur border-t border-sidebar-border safe-bottom">
+      {/* ── 하단 탭바 ── */}
+      <nav className="fixed bottom-0 app-fixed-x w-full z-40 bg-sidebar/95 backdrop-blur border-t border-sidebar-border safe-bottom">
         <div className="grid grid-cols-5 h-16">
           {TABS.map(path => {
             const item = items.find(i => i.path === path)!;
@@ -225,9 +162,9 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
         </div>
       </nav>
 
-      {/* ── 모바일 메뉴 (아래에서 올라오는 시트) ── */}
+      {/* ── 전체 메뉴 (아래에서 올라오는 시트) ── */}
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-        <SheetContent side="bottom" className="md:hidden rounded-t-2xl bg-sidebar border-sidebar-border p-0 safe-bottom">
+        <SheetContent side="bottom" className="app-fixed-x rounded-t-2xl bg-sidebar border-sidebar-border p-0 safe-bottom">
           <SheetHeader className="px-5 pt-5 pb-2">
             <SheetTitle className="text-left text-base">전체 메뉴</SheetTitle>
           </SheetHeader>
