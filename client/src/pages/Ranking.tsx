@@ -137,7 +137,10 @@ export default function RankingPage() {
                     <div className="hidden lg:grid grid-cols-[60px_1fr_80px_60px_90px_repeat(8,64px)_100px] gap-2 items-center">
                       <RankBadge rank={rank} />
                       <div className="min-w-0">
-                        <p className="font-semibold text-white truncate text-sm">{player.name}</p>
+                        <p className="font-semibold text-white truncate text-sm">
+                          {player.name}
+                          {player.isBot && <Badge className="ml-1.5 bg-purple-600 text-purple-100 text-[10px] px-1 py-0">AI</Badge>}
+                        </p>
                         <p className="text-xs text-slate-500">Lv.{player.level}</p>
                       </div>
                       <Badge className={`text-xs border ${RACE_BADGE_COLORS[player.race] ?? "bg-slate-500/20 text-slate-300"}`}>
@@ -193,6 +196,7 @@ export default function RankingPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="font-semibold text-white truncate text-sm">{player.name}</p>
+                            {player.isBot && <Badge className="bg-purple-600 text-purple-100 text-[10px] px-1 py-0">AI</Badge>}
                             <Badge className={`text-xs border ${RACE_BADGE_COLORS[player.race] ?? ""}`}>
                               {RACE_LABELS[player.race] ?? player.race}
                             </Badge>

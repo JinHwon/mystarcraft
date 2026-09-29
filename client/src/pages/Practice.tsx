@@ -146,12 +146,7 @@ export default function PracticePage() {
 
   // 실제 승률 (게임 엔진 반복 시뮬레이션 기반)
   const winRateQuery = trpc.practice.estimateWinRate.useQuery(
-    {
-      gameId: gameState.gameId ?? 0,
-      aiOpponent: gameState.isAiOpponent && gameState.opponentStats
-        ? { race: (gameState.opponentRace || "terran") as "terran" | "zerg" | "protoss", stats: gameState.opponentStats }
-        : undefined,
-    },
+    { gameId: gameState.gameId ?? 0 },
     { enabled: phase === "opponent" && !!gameState.gameId, staleTime: Infinity, refetchOnWindowFocus: false }
   );
 
@@ -164,20 +159,10 @@ export default function PracticePage() {
     if (!gameState.gameId) return;
 
     try {
-      // AI 상대인 경우 AI 정보를 함께 전달
+      // AI 상대도 DB 에 저장된 선수이므로 gameId 만 전달
       const playGameInput: any = {
         gameId: gameState.gameId,
       };
-      
-      if (gameState.isAiOpponent && gameState.opponentStats) {
-        playGameInput.aiOpponent = {
-          name: gameState.opponentName || "AI 상대",
-          race: gameState.opponentRace || "terran",
-          stats: gameState.opponentStats,
-          level: 1,
-          grade: gameState.opponentGrade || "D",
-        };
-      }
       
       const result = await playGameMutation.mutateAsync(playGameInput);
       
