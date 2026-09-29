@@ -190,7 +190,7 @@ function Proleague() {
 
       <div className="grid lg:grid-cols-5 gap-5">
         {/* 순위표 */}
-        <Card className="lg:col-span-2 py-0 bg-slate-900 border-slate-700">
+        <Card className="order-2 lg:order-1 lg:col-span-2 py-0 bg-slate-900 border-slate-700">
           <CardHeader className="pt-4 pb-2"><CardTitle className="text-base text-amber-400">📊 순위표</CardTitle></CardHeader>
           <CardContent className="px-3 pb-4">
             <table className="w-full text-xs">
@@ -221,7 +221,7 @@ function Proleague() {
         </Card>
 
         {/* 다음 경기 / 시즌 종료 */}
-        <div className="lg:col-span-3 space-y-4">
+        <div className="order-1 lg:order-2 lg:col-span-3 space-y-4">
           {data.season.status === "finished" && !!data.season.result && (
             <Card className="py-0 bg-amber-950/30 border-amber-700">
               <CardContent className="p-4 space-y-2 text-center">
@@ -478,7 +478,7 @@ export default function League() {
   const [tab, setTab] = useState<Tab>("pro");
   return (
     <div className="p-4 md:p-8 space-y-5 max-w-6xl mx-auto">
-      <div>
+      <div className="hidden md:block">
         <h1 className="text-3xl font-bold text-amber-400">🏟️ 리그</h1>
         <p className="text-gray-400 text-sm">프로리그에서 팀 순위를 다투고, 개인리그에서 우승 트로피에 도전하세요. 경기 결과는 선수 경험치·컨디션·피로도에 반영됩니다.</p>
       </div>
