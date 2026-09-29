@@ -2,7 +2,7 @@ import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, items, playerItems, players, playerStats, users, events, maps, games, gameResults, quests, playerQuestProgress, localCredentials } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { StatKey, STAT_DEFAULT } from "@shared/gameConstants";
-import { desc, eq, and, ne, sql } from "drizzle-orm";
+import { desc, eq, and, ne, sql, inArray } from "drizzle-orm";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -71,7 +71,7 @@ export async function createLocalUser(openId: string, name: string, passwordHash
         openId,
         name,
         loginMethod: "local",
-        role: openId === ENV.ownerOpenId ? "admin" : "user",
+        role: openId === ENV.ownerOpenId || adminOpenIds().includes(openId) ? "admin" : "user",
         lastSignedIn: new Date(),
       });
     });
@@ -81,6 +81,21 @@ export async function createLocalUser(openId: string, name: string, passwordHash
     if (code === "ER_DUP_ENTRY") return false;
     throw error;
   }
+}
+
+/** ADMIN_USERNAMES 에 지정된 로컬 계정의 openId 목록 */
+function adminOpenIds(): string[] {
+  return ENV.adminUsernames.map(name => `local_${name}`);
+}
+
+/** ADMIN_USERNAMES 에 지정된 기존 계정을 관리자로 승격 (서버 시작 시 실행, 여러 번 실행해도 안전) */
+export async function promoteConfiguredAdmins(): Promise<number> {
+  const ids = adminOpenIds();
+  if (ids.length === 0) return 0;
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db.update(users).set({ role: "admin" }).where(and(inArray(users.openId, ids), ne(users.role, "admin")));
+  return Number((result as any)?.[0]?.affectedRows ?? 0);
 }
 
 export async function getLocalPasswordHash(openId: string): Promise<string | null> {

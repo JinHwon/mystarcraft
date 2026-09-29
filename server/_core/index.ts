@@ -6,7 +6,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerLocalAuthRoutes } from "./localAuth";
 import { LOCAL_UPLOAD_DIR } from "../storage";
-import { repairUninitializedPlayerStats } from "../db";
+import { repairUninitializedPlayerStats, promoteConfiguredAdmins } from "../db";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -87,6 +87,11 @@ async function startServer() {
   repairUninitializedPlayerStats()
     .then(count => { if (count > 0) console.log(`[Stats] 초기화 누락 선수 능력치 ${count}건 보정`); })
     .catch(error => console.error("[Stats] 능력치 보정 실패", error));
+
+  // ADMIN_USERNAMES 에 지정된 계정을 관리자로 승격
+  promoteConfiguredAdmins()
+    .then(count => { if (count > 0) console.log(`[Admin] 관리자 권한 부여 ${count}건`); })
+    .catch(error => console.error("[Admin] 관리자 권한 부여 실패", error));
 }
 
 startServer().catch(console.error);
