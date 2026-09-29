@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, items, playerItems, players, playerStats, users, events, maps, games, gameResults, quests, playerQuestProgress, localCredentials } from "../drizzle/schema";
 import { ENV } from "./_core/env";
-import { StatKey } from "@shared/gameConstants";
+import { StatKey, STAT_DEFAULT } from "@shared/gameConstants";
 import { desc, eq, and, ne, sql } from "drizzle-orm";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -841,6 +841,25 @@ export async function getPlayerGrade(playerId: number) {
   return player.length > 0 ? player[0].grade : "D";
 }
 
+/**
+ * 기본값(500) 대신 0으로 생성됐던 선수 능력치 보정 (서버 시작 시 1회 실행, 여러 번 실행해도 안전)
+ * 정상 선수의 합계는 최소 수천이므로 합계 1000 미만인 행만 초기화 누락으로 보고 각 능력치에 500을 더한다.
+ * 그동안 경기/배분으로 오르내린 값은 그대로 유지된다.
+ */
+export async function repairUninitializedPlayerStats(): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db.execute(sql`
+    UPDATE player_stats SET
+      sense = sense + ${STAT_DEFAULT}, control = control + ${STAT_DEFAULT},
+      attack = attack + ${STAT_DEFAULT}, harass = harass + ${STAT_DEFAULT},
+      strategy = strategy + ${STAT_DEFAULT}, supply = supply + ${STAT_DEFAULT},
+      defense = defense + ${STAT_DEFAULT}, scout = scout + ${STAT_DEFAULT}
+    WHERE sense + control + attack + harass + strategy + supply + defense + scout < 1000
+  `);
+  return Number((result as any)?.[0]?.affectedRows ?? 0);
+}
+
 export async function ensurePlayerStats(playerId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -848,16 +867,17 @@ export async function ensurePlayerStats(playerId: number) {
   const existing = await db.select().from(playerStats).where(eq(playerStats.playerId, playerId)).limit(1);
   if (existing.length > 0) return existing[0];
 
+  // 신규 선수 능력치는 모두 기본값(STAT_DEFAULT = 500)으로 시작
   await db.insert(playerStats).values({
     playerId,
-    sense: 0,
-    control: 0,
-    attack: 0,
-    harass: 0,
-    scout: 0,
-    strategy: 0,
-    defense: 0,
-    supply: 0,
+    sense: STAT_DEFAULT,
+    control: STAT_DEFAULT,
+    attack: STAT_DEFAULT,
+    harass: STAT_DEFAULT,
+    scout: STAT_DEFAULT,
+    strategy: STAT_DEFAULT,
+    defense: STAT_DEFAULT,
+    supply: STAT_DEFAULT,
   });
 
   const created = await db.select().from(playerStats).where(eq(playerStats.playerId, playerId)).limit(1);
