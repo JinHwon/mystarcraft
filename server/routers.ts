@@ -68,7 +68,6 @@ import { z } from "zod";
 import { DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, FATIGUE_MIN_TO_PLAY, MAPS, calcGradeIndex, calcTotalStats, STAT_KEYS, StatKey, calcFatigueStatPenalty } from "@shared/gameConstants";
 import { simulateGame, calculateWinProbability, estimateWinRate } from "./gameSimulation";
 import { type MapCharacteristic } from "./buildSystem";
-import { generatePlayerActions, generateGameCommentary } from "./buildActions";
 import { calculateStatChanges, applyReverseSystem } from "./statDynamicSystem";
 
 // ── Player Router ────────────────────────────────────────────────
