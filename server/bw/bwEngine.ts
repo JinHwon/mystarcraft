@@ -76,6 +76,8 @@ export interface BwPlayer {
   larvaTimer: number;
   pushDone: boolean;
   lastAttackTurn: number;
+  /** 상대 공격을 막아낸 직후 역습 가능 (턴 번호) */
+  counterTurn: number;
   harassCooldown: number;
   scouted: boolean;
   knowsEnemyPlan: boolean;
@@ -246,7 +248,7 @@ function makePlayer(side: 1 | 2, id: number, name: string, race: Race, vs: Race,
     units: race === "zerg" ? { overlord: 1 } : {},
     jobs: [], busy: {},
     larva: race === "zerg" ? 3 : 0, larvaTimer: 0,
-    pushDone: false, lastAttackTurn: -99, harassCooldown: 6,
+    pushDone: false, lastAttackTurn: -99, counterTurn: -99, harassCooldown: 6,
     scouted: false, knowsEnemyPlan: false, knownEnemy: {}, detectionUrgent: false,
     supplyBlockedTicks: 0, blockAnnounced: false,
     announced: new Set(), incomeWindow: [], workersLost: 0, spent: {},
@@ -642,7 +644,7 @@ function wantedStatics(gs: GameState, p: BwPlayer): Record<string, number> {
 }
 
 function macroEfficiency(p: BwPlayer): number {
-  return clamp(0.86 + 0.12 * p.sk.supply, 0.6, 0.99);
+  return clamp(0.86 + 0.18 * p.sk.supply, 0.6, 1.0);
 }
 
 function decide(gs: GameState, p: BwPlayer) {
@@ -966,9 +968,9 @@ function scouting(gs: GameState, p: BwPlayer) {
 
 /** 종족전 밸런스 보정 (같은 능력치에서 종족전 승률이 50%에 가깝도록 시뮬레이션으로 산출) */
 export const RACE_BALANCE: Record<string, number> = {
-  terran_protoss: 1.048, protoss_terran: 0.955,
-  terran_zerg: 1.007, zerg_terran: 0.994,
-  protoss_zerg: 0.942, zerg_protoss: 1.06,
+  terran_protoss: 1.053, protoss_terran: 0.951,
+  terran_zerg: 1.008, zerg_terran: 0.994,
+  protoss_zerg: 0.937, zerg_protoss: 1.065,
 };
 
 interface Fighter { key: string; count: number; hp: number; size: "small" | "medium" | "large"; air: boolean; gDps: number; aDps: number; dmg: "normal" | "explosive" | "concussive"; splash: number; cloaked: boolean; bio: boolean; isStatic?: boolean; isWorker?: boolean; race: Race; }
@@ -1102,8 +1104,10 @@ function sideStrength(me: BwPlayer, mine: Fighter[], enemy: BwPlayer, theirs: Fi
   if (arbiters > 0) dps *= 1 + Math.min(0.2, arbiters * 0.07);
 
   // 능력치/지형 보정
-  let mul = clamp(1 + 0.22 * me.sk.control, 0.75, 1.32);
-  if (meDefending) mul *= clamp(1 + 0.14 * me.sk.defense, 0.85, 1.2) * 1.12;
+  // 컨트롤(교전 운영) + 전략(교전 장소·타이밍 선택) + 정찰(상대 병력 파악) + 센스
+  let mul = clamp(1 + 0.13 * me.sk.control + 0.05 * me.sk.strategy + 0.04 * me.sk.scout + 0.03 * me.sk.sense, 0.75, 1.35);
+  // 자기 기지 수비: 방어 건물·증원 병력·지형 이점
+  if (meDefending) mul *= clamp(1 + 0.14 * me.sk.defense, 0.85, 1.2) * 1.2;
   else mul *= clamp(1 + 0.1 * me.sk.attack, 0.9, 1.15);
   if (meDefending && me.techs.has("siege_mode")) mul *= 1 + Math.min(0.25, (me.units.siege_tank ?? 0) * 0.03);
   if (meDefending && (me.units.lurker ?? 0) > 0) mul *= 1 + Math.min(0.2, (me.units.lurker ?? 0) * 0.03);
@@ -1156,7 +1160,8 @@ function mapAdvantage(gs: GameState, p: BwPlayer): number {
   const adv = gs.mapRaceAdvantage?.[p.race];
   if (typeof adv !== "number" || adv <= 0) return 1;
   // 맵 테이블 값(예: 0.9 ~ 1.1)을 완만하게 반영
-  return adv > 3 ? 1 + (adv - 50) / 500 : Math.sqrt(adv);
+  // 교전 결과는 배율에 민감하므로 아주 완만하게 반영 (유리 종족 약 60~65%)
+  return adv > 3 ? 1 + (adv - 50) / 2000 : 1 + (adv - 1) * 0.1;
 }
 
 /**
@@ -1183,16 +1188,32 @@ function battle(gs: GameState, attacker: BwPlayer, defender: BwPlayer, targetIdx
 
   const sa = sideStrength(attacker, aF, defender, dF, false, !field, mapAdvantage(gs, attacker));
   const sd = sideStrength(defender, dF, attacker, aF, !field, false, mapAdvantage(gs, defender));
+
+  // 역전의 한타: 병력이 밀리는 쪽이 위치 선정·컨트롤로 싸움을 뒤집는 경우 (센스·전략·컨트롤이 높을수록 자주)
+  const aUnder = sa.strength < sd.strength;
+  const under = aUnder ? attacker : defender;
+  const ratio = Math.min(sa.strength, sd.strength) / Math.max(1, Math.max(sa.strength, sd.strength));
+  let upset = false;
+  if (ratio > 0.3 && gs.time > 300) {
+    const chance = clamp(0.24 + 0.08 * (under.sk.sense + under.sk.strategy) + 0.05 * under.sk.control, 0.08, 0.36) * (ratio > 0.55 ? 1 : 0.7);
+    if (rand() < chance) {
+      upset = true;
+      const boost = 1.4 + rand() * 0.7;
+      if (aUnder) sa.strength *= boost; else sd.strength *= boost;
+    }
+  }
+
   const attackerWins = sa.strength >= sd.strength;
   const r = Math.min(sa.strength, sd.strength) / Math.max(1, Math.max(sa.strength, sd.strength));
-  const winnerLoss = clamp(1 - Math.sqrt(Math.max(0, 1 - r)), 0.04, 0.92);
+  // 이긴 쪽도 상당한 손실을 입는다 (한 번 이겼다고 바로 끝나지 않도록)
+  const winnerLoss = clamp(1 - Math.sqrt(Math.max(0, 1 - r)), 0.15, 0.92);
   const winner = attackerWins ? attacker : defender;
   const loser = attackerWins ? defender : attacker;
   const retreatSkill = clamp(0.5 + 0.35 * loser.sk.control + 0.25 * loser.sk.sense, 0, 1);
   // 수비하다 진 쪽은 기지를 지키느라 거의 전멸, 공격하다 진 쪽은 컨트롤·센스에 따라 후퇴로 일부 보존
   const loserLoss = attackerWins && !field
-    ? clamp(0.85 + 0.15 * (1 - r) - 0.15 * retreatSkill, 0.6, 1)
-    : clamp(0.9 - 0.3 * retreatSkill - 0.2 * r, 0.45, 0.95);
+    ? clamp(0.8 + 0.15 * (1 - r) - 0.2 * retreatSkill, 0.5, 0.95)
+    : clamp(0.85 - 0.3 * retreatSkill - 0.2 * r, 0.4, 0.9);
 
   const wF = attackerWins ? aF : dF;
   const lF = attackerWins ? dF : aF;
@@ -1208,22 +1229,32 @@ function battle(gs: GameState, attacker: BwPlayer, defender: BwPlayer, targetIdx
   const lostD = beforeD - armySupply(defender);
   const closeFight = r > 0.8;
   const winLine = closeFight ? "치열한 접전 끝에" : r < 0.35 ? "압도적으로" : "";
+  if (upset && winner === under) {
+    say(gs, `${winner.name} 선수 기막힌 위치 선정! 병력은 밀렸지만 절묘한 컨트롤로 싸움을 뒤집습니다!`);
+  }
   say(gs, `${winner.name} 선수 ${winLine ? winLine + " " : ""}교전 승리! ${loser.name} 선수 ${lossText(lRes.lost) || "병력"} 잃습니다${lRes.workers ? `, ${workerName(loser)} ${lRes.workers}기 포함` : ""}. (인구 -${attackerWins ? lostD : lostA} vs -${attackerWins ? lostA : lostD})`);
 
   attacker.lastAttackTurn = gs.turn;
+  // 수비 성공 → 상대 병력이 줄어든 틈을 타 역습 기회
+  if (!attackerWins && !field) {
+    defender.counterTurn = gs.turn;
+    say(gs, `${defender.name} 선수 수비 성공! 이제 역습의 기회를 노립니다.`);
+  }
 
   // 공격 성공 시 기지 피해
   if (attackerWins && target) {
     const remaining = armySupply(attacker);
     const workersHere = Math.min(defender.workers, targetIdx === 0 ? defender.workers * 0.45 : 16);
-    const killed = Math.round(workersHere * clamp(0.35 + 0.4 * (1 - r) + 0.1 * attacker.sk.attack, 0.15, 0.9));
+    const killed = Math.round(workersHere * clamp(0.22 + 0.35 * (1 - r) + 0.1 * attacker.sk.attack, 0.1, 0.8));
     if (killed > 0) {
       defender.workers = Math.max(0, defender.workers - killed);
       defender.workersLost += killed;
       eventsOf(gs, defender).push({ type: "resource_drain", time: gs.time });
     }
     const defenderLeft = armySupply(defender);
-    if (remaining >= Math.max(14, defenderLeft * 2.5)) {
+    // 기지 함락은 확실히 이겼을 때만, 그래도 수비 측이 버텨낼 수 있음 (역전의 여지)
+    const breakChance = clamp(0.35 + 0.5 * (1 - r) + 0.1 * attacker.sk.attack - 0.1 * defender.sk.defense, 0.2, 0.9);
+    if (remaining >= Math.max(16, defenderLeft * 3) && rand() < breakChance) {
       target.alive = false;
       if (target.hasGas) {
         const gk = RACE_ROLES[defender.race].gas;
@@ -1238,7 +1269,7 @@ function battle(gs: GameState, attacker: BwPlayer, defender: BwPlayer, targetIdx
       }
       say(gs, `${defender.name} 선수의 ${target.name}이(가) 무너집니다! ${nameOf(RACE_ROLES[defender.race].townhall)} 파괴${killed ? `, ${workerName(defender)} ${killed}기 사망` : ""}.`);
     } else if (killed > 0) {
-      say(gs, `${attacker.name} 선수, 병력을 물리친 뒤 ${workerName(defender)} ${killed}기까지 잡아냅니다.`);
+      say(gs, `${attacker.name} 선수, 병력을 물리친 뒤 ${workerName(defender)} ${killed}기까지 잡아냅니다. ${defender.name} 선수, ${target.name}은(는) 간신히 지켜냅니다!`);
     }
   }
 }
@@ -1254,6 +1285,12 @@ function wantsToAttack(gs: GameState, p: BwPlayer): boolean {
     return true;
   }
   if (push && !p.pushDone && gs.time >= push.at + 180) p.pushDone = true; // 타이밍을 놓침
+  // 역습: 방금 막아낸 쪽은 적 병력이 비었을 때 곧바로 치고 나간다
+  if (gs.turn - p.counterTurn <= 2 && myArmy >= 8 && armyValue(p) >= armyValue(e) * 1.3) {
+    p.counterTurn = -99;
+    say(gs, `${p.name} 선수 역습! 상대 병력이 빠진 틈을 파고듭니다!`);
+    return true;
+  }
   if (gs.turn - p.lastAttackTurn < 3) return false;
   if (myArmy < 24) return false;
   const noise = clamp(0.4 - 0.3 * p.sk.scout, 0.06, 0.6);
@@ -1286,13 +1323,13 @@ function harass(gs: GameState, p: BwPlayer) {
   const e = enemyOf(gs, p);
   const kinds = p.plan.harass.filter(k => harassAvailable(p, k, e) > 0);
   if (!kinds.length) return;
-  if (rand() > clamp(0.3 + 0.25 * p.sk.harass, 0.1, 0.7)) return;
+  if (rand() > clamp(0.3 + 0.35 * p.sk.harass, 0.1, 0.75)) return;
   const kind = kinds[Math.floor(rand() * kinds.length)];
   const squad = harassAvailable(p, kind, e);
   const bases = Math.max(1, townHalls(e));
   const staticAA = ((e.buildings.missile_turret ?? 0) + (e.buildings.photon_cannon ?? 0) + (e.buildings.spore_colony ?? 0)) / bases;
   const staticG = ((e.buildings.photon_cannon ?? 0) + (e.buildings.sunken_colony ?? 0) + (e.buildings.bunker ?? 0)) / bases;
-  const skillMul = 1 + 0.5 * p.sk.harass;
+  const skillMul = clamp(1 + 0.9 * p.sk.harass, 0.4, 2.2);
   const defense = clamp(0.2 + 0.18 * e.sk.defense + 0.1 * e.sk.sense, 0.02, 0.6);
   let killed = 0;
   let lostUnits = 0;
@@ -1471,15 +1508,18 @@ function unitArrivalLine(p: BwPlayer, key: string): string {
 // ══════════════════════════════════════════════════════════════
 
 function evaluate(p: BwPlayer): number {
-  return armyValue(p) + p.workers * 60 + townHalls(p) * 350 + (p.minerals + p.gas) * 0.15 + p.totalMined * 0.05;
+  // 현재 병력과 경제 중심 (누적 채취량은 제외해 교전 결과가 바로 드러나게)
+  return armyValue(p) * 1.4 + staticValue(p) * 0.3 + p.workers * 55 + townHalls(p) * 300 + (p.minerals + p.gas) * 0.2;
 }
 
 function checkGameOver(gs: GameState): void {
   const [a, b] = [gs.player1, gs.player2];
   for (const [p, e] of [[a, b], [b, a]] as const) {
     const noHall = townHalls(p) === 0 && !p.jobs.some(j => j.kind === "expand");
-    const crushed = gs.time > 240 && armySupply(p) <= Math.max(4, armySupply(e) * 0.2) && armySupply(e) >= 30
-      && (p.workers <= e.workers * 0.7 || townHalls(p) < townHalls(e));
+    // 병력이 전멸했더라도 일꾼·기지·자원이 남아 있으면 다시 병력을 모아 버틸 수 있다
+    const bank = p.minerals + p.gas;
+    const canRebuild = p.workers >= e.workers * 0.6 && townHalls(p) >= townHalls(e) - 1 && (p.workers >= 16 || bank >= 400);
+    const crushed = gs.time > 240 && armySupply(p) <= Math.max(4, armySupply(e) * 0.15) && armySupply(e) >= 36 && !canRebuild;
     const broke = p.workers <= 3 && p.minerals < 50 && armySupply(p) < 2 && gs.time > 150;
     const economyDead = gs.time > 540 && p.workers < e.workers * 0.35 && armyValue(p) < armyValue(e) * 0.4;
     if (noHall || crushed || broke || economyDead) {
@@ -1564,7 +1604,7 @@ export function progressGame(gs: GameState): void {
   const va = evaluate(gs.player1);
   const vb = evaluate(gs.player2);
   const raw = (va / Math.max(1, va + vb)) * 100;
-  gs.player1Advantage = Math.round(clamp(gs.player1Advantage * 0.35 + raw * 0.65, 1, 99));
+  gs.player1Advantage = Math.round(clamp(gs.player1Advantage * 0.25 + raw * 0.75, 1, 99));
   if (gs.gameEnded) gs.player1Advantage = gs.winner === gs.player1.id ? 100 : 0;
 
   for (const p of players) syncCompat(p);
