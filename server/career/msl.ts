@@ -43,7 +43,7 @@ export function createMsl(s: CareerState): MslState {
 function series(s: CareerState, a: number, b: number, bestOf: number, label: string, report: MslReport[], stage: string): MslSeries {
   const need = Math.ceil(bestOf / 2);
   const mine = isMine(s, a) || isMine(s, b);
-  const maps = pickMaps(bestOf);
+  const maps = pickMaps(bestOf, s.mapPool);
   let sa = 0, sb = 0;
   const sets = [];
   for (let i = 0; sa < need && sb < need; i++) {
@@ -91,7 +91,7 @@ function runPc(s: CareerState, m: MslState) {
     const games = Math.min(Math.floor(pool.length / 2), pool.length - 8);
     const next: number[] = pool.slice(games * 2);
     for (let i = 0; i < games * 2; i += 2) {
-      const r = playSet(s, s.players[pool[i]], s.players[pool[i + 1]], pickMaps(1)[0], false);
+      const r = playSet(s, s.players[pool[i]], s.players[pool[i + 1]], pickMaps(1, s.mapPool)[0], false);
       next.push(r.winner === "a" ? pool[i] : pool[i + 1]);
     }
     pool = shuffle(next);

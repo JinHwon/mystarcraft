@@ -6,6 +6,7 @@ import { ORIG_MAPS } from "@shared/career/originalData";
 import {
   COND_MAX,
   COND_MIN,
+  MAP_POOL_SIZE,
   STAT_MAX_CAREER,
   STAT_MIN,
   condMultiplier,
@@ -13,7 +14,9 @@ import {
   type CPlayer,
   type Race,
   type SetResult,
+  type SetTimeline,
 } from "@shared/career/rules";
+import { mapView, matchupValue } from "@shared/career/view";
 import { simulateSet } from "../gameSimulation";
 
 export const rand = () => Math.random();
@@ -50,32 +53,37 @@ export function gainStats(p: CPlayer, picks: number, min: number, max: number): 
 
 export function mapAdvantage(mapId: number, ra: Race, rb: Race): Record<string, number> {
   if (ra === rb) return {};
-  const [, , , , tvz, zvp, pvt] = ORIG_MAPS[mapId];
-  const table: Record<string, number> = {
-    terran_zerg: tvz, zerg_terran: 200 - tvz,
-    zerg_protoss: zvp, protoss_zerg: 200 - zvp,
-    protoss_terran: pvt, terran_protoss: 200 - pvt,
-  };
-  const d = ((table[`${ra}_${rb}`] ?? 100) - 100) / 100;
+  // 원작 종족전 값은 앞 종족 승률 % (50 = 균형) → 엔진 배율 (60:40 이면 1.1 : 0.9)
+  const d = (matchupValue(mapId, ra, rb) - 50) / 100;
   return { [ra]: 1 + d, [rb]: 1 - d };
 }
 
-export function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, withHighlights: boolean): SetResult {
-  const [, rush, res, cx] = ORIG_MAPS[mapId];
+export type PlayedSet = SetResult & { timeline?: SetTimeline };
+
+export function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, withHighlights: boolean, withTimeline = false): PlayedSet {
+  const m = mapView(mapId);
   const scale = (p: CPlayer) => Object.fromEntries(STAT_KEYS.map(k => [k, p.stats[k] * condMultiplier(p.cond)])) as Record<StatKey, number>;
   const r = simulateSet(
     { id: a.id + 1, name: a.name, race: a.race, stats: scale(a), fatigue: 100 },
     { id: b.id + 1, name: b.name, race: b.race, stats: scale(b), fatigue: 100 },
     mapAdvantage(mapId, a.race, b.race),
-    { rushDistance: rush, resources: res, complexity: cx },
-    withHighlights
+    // 원작 100 기준 → 엔진 50 기준
+    { rushDistance: m.rush / 2, resources: m.res / 2, complexity: m.complexity / 2 },
+    withHighlights,
+    withTimeline
   );
   const aWin = r.winnerId === a.id + 1;
   const [w, l] = aWin ? [a, b] : [b, a];
   w.wins++; w.sWins++; l.losses++; l.sLosses++;
+  w.vs = { ...w.vs, [l.race]: [(w.vs?.[l.race]?.[0] ?? 0) + 1, w.vs?.[l.race]?.[1] ?? 0] };
+  l.vs = { ...l.vs, [w.race]: [l.vs?.[w.race]?.[0] ?? 0, (l.vs?.[w.race]?.[1] ?? 0) + 1] };
   w.cond = clampCond(w.cond + 1); l.cond = clampCond(l.cond - 1);
   addExp(s, w, 30); addExp(s, l, 10);
-  return { mapId, a: a.id, b: b.id, winner: aWin ? "a" : "b", duration: r.duration, highlights: withHighlights ? r.highlights : undefined };
+  return {
+    mapId, a: a.id, b: b.id, winner: aWin ? "a" : "b", duration: r.duration,
+    highlights: withHighlights ? r.highlights : undefined,
+    timeline: r.timeline,
+  };
 }
 
 export function addExp(s: CareerState, p: CPlayer, exp: number) {
@@ -90,6 +98,14 @@ export function addExp(s: CareerState, p: CPlayer, exp: number) {
   }
 }
 
-export function pickMaps(n: number): number[] {
-  return shuffle(ORIG_MAPS.map((_, i) => i)).slice(0, n);
+/** 서로 다른 맵 n개. pool(시즌 맵 추첨 결과)이 있으면 그 안에서 고른다 */
+export function pickMaps(n: number, pool?: number[]): number[] {
+  const src = pool?.length ? pool : ORIG_MAPS.map((_, i) => i);
+  const out: number[] = [];
+  while (out.length < n) out.push(...shuffle(src));
+  return out.slice(0, n);
+}
+
+export function drawMapPool(): number[] {
+  return pickMaps(MAP_POOL_SIZE);
 }

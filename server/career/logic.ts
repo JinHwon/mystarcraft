@@ -34,7 +34,8 @@ import {
   totalOf,
 } from "@shared/career/rules";
 import {
-  CareerError, addExp, clampCond, clampStat, gainStats, news, pickMaps, playSet, rand, randInt, shuffle,
+  CareerError, addExp, clampCond, clampStat, drawMapPool, gainStats, news, pickMaps, playSet, rand, randInt, shuffle,
+  type PlayedSet,
 } from "./core";
 export { CareerError };
 import { initialPlayers, initialTeams } from "@shared/career/init";
@@ -68,13 +69,17 @@ export function newCareer(myTeam: number): CareerState {
     nextMatchId: 1,
     news: [],
     history: [],
+    mapPool: drawMapPool(),
   };
   scheduleRegularSeason(s);
   news(s, `${s.teams[myTeam].name} 감독으로 부임했습니다. ${s.season}시즌 마이프로리그가 곧 개막합니다!`);
   return s;
 }
 
-/** 경기 세트별 맵 (서로 다른 맵) */
+/** 예전 세이브 보정 */
+export function migrateCareer(s: CareerState) {
+  if (!s.mapPool?.length) s.mapPool = drawMapPool();
+}
 
 function scheduleRegularSeason(s: CareerState) {
   const ids = shuffle(proTeams(s).map(t => t.id));
@@ -83,7 +88,7 @@ function scheduleRegularSeason(s: CareerState) {
   for (let r = 0; r < n - 1; r++) {
     for (let i = 0; i < n / 2; i++) {
       const a = list[i], b = list[n - 1 - i];
-      s.matches.push({ id: s.nextMatchId++, week: r + 1, stage: "regular", a: r % 2 ? b : a, b: r % 2 ? a : b, maps: pickMaps(PRO_SETS) });
+      s.matches.push({ id: s.nextMatchId++, week: r + 1, stage: "regular", a: r % 2 ? b : a, b: r % 2 ? a : b, maps: pickMaps(PRO_SETS, s.mapPool) });
     }
     list.splice(1, 0, list.pop()!);
   }
@@ -154,25 +159,27 @@ export function validateEntry(s: CareerState, entry: number[], sets: number) {
 
 
 
-function playMatch(s: CareerState, m: CMatch, myEntry?: number[]) {
+function playMatch(s: CareerState, m: CMatch, myEntry?: number[]): PlayedSet[] {
   const sets = m.stage === "final" ? FINAL_SETS : PRO_SETS;
   const need = m.stage === "final" ? FINAL_WIN : PRO_WIN;
   const involvesMe = m.a === s.myTeam || m.b === s.myTeam;
   const entryA = m.a === s.myTeam && myEntry ? myEntry : aiEntry(s, m.a, sets);
   const entryB = m.b === s.myTeam && myEntry ? myEntry : aiEntry(s, m.b, sets);
   let sa = 0, sb = 0;
-  const results: SetResult[] = [];
+  const results: PlayedSet[] = [];
+  m.entryA = entryA; m.entryB = entryB;
   for (let i = 0; i < sets && sa < need && sb < need; i++) {
     const pa = s.players[entryA[i]], pb = s.players[entryB[i]];
     if (!pa || !pb) { if (!pa) sb++; else sa++; continue; }
-    const r = playSet(s, pa, pb, m.maps[i % m.maps.length], involvesMe);
+    const r = playSet(s, pa, pb, m.maps[i % m.maps.length], involvesMe, involvesMe);
     if (r.winner === "a") sa++; else sb++;
     results.push(r);
   }
   m.done = true;
   m.scoreA = sa; m.scoreB = sb;
   m.winner = sa > sb ? m.a : m.b;
-  m.sets = results;
+  // 세이브에는 중계 타임라인을 남기지 않음
+  m.sets = results.map(({ timeline, ...rest }) => rest);
   const ta = s.teams[m.a], tb = s.teams[m.b];
   if (m.stage === "regular") {
     ta.setWins += sa; ta.setLosses += sb; tb.setWins += sb; tb.setLosses += sa;
@@ -186,6 +193,7 @@ function playMatch(s: CareerState, m: CMatch, myEntry?: number[]) {
     const stageName = { regular: `${m.week}주차`, semi: "준플레이오프", po: "플레이오프", final: "결승" }[m.stage];
     news(s, `${won ? "🎉" : "😢"} ${stageName} vs ${opp.name} ${Math.max(sa, sb)}:${Math.min(sa, sb)} ${won ? "승리" : "패배"}`);
   }
+  return results;
 }
 
 /** 오래된 중계 하이라이트는 지워서 세이브 크기를 줄임 (내 팀 최근 4경기만 유지) */
@@ -199,7 +207,14 @@ function pruneHighlights(s: CareerState) {
 
 // ── 한 주 진행 ─────────────────────────────────────────────────
 
-export function advanceWeek(s: CareerState, myEntry?: number[]): { playedMatchId?: number; mslReports: MslReport[] } {
+export interface WeekResult {
+  playedMatchId?: number;
+  /** 우리 경기 세트별 중계 (원작식 중계 화면용) */
+  broadcast?: PlayedSet[];
+  mslReports: MslReport[];
+}
+
+export function advanceWeek(s: CareerState, myEntry?: number[]): WeekResult {
   if (s.phase === "offseason") throw new CareerError("시즌이 끝났습니다. 다음 시즌을 시작하세요");
   const mine = myPendingMatch(s);
   if (mine) {
@@ -210,8 +225,10 @@ export function advanceWeek(s: CareerState, myEntry?: number[]): { playedMatchId
   }
 
   applyActions(s);
+  let broadcast: PlayedSet[] | undefined;
   for (const m of s.matches.filter(x => !x.done && x.week === s.week)) {
-    playMatch(s, m, m === mine ? myEntry : undefined);
+    const sets = playMatch(s, m, m === mine ? myEntry : undefined);
+    if (m === mine) broadcast = sets;
   }
   const mslReports = s.phase === "regular" ? runMslWeek(s) : [];
   for (const t of proTeams(s)) t.money += WEEKLY_SPONSOR;
@@ -221,7 +238,7 @@ export function advanceWeek(s: CareerState, myEntry?: number[]): { playedMatchId
   s.week++;
   s.ap = WEEKLY_AP;
   progressSchedule(s);
-  return { playedMatchId, mslReports };
+  return { playedMatchId, broadcast, mslReports };
 }
 
 /** 정규시즌 → 준PO(3·4위) → PO(2위 vs 준PO 승자) → 결승(1위 vs PO 승자) → 시즌 종료 */
@@ -229,7 +246,7 @@ function progressSchedule(s: CareerState) {
   if (s.phase === "regular" && s.week > REGULAR_WEEKS) {
     s.phase = "postseason";
     const st = standings(s);
-    s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "semi", a: st[2].id, b: st[3].id, maps: pickMaps(PRO_SETS) });
+    s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "semi", a: st[2].id, b: st[3].id, maps: pickMaps(PRO_SETS, s.mapPool) });
     const myRank = st.findIndex(t => t.id === s.myTeam) + 1;
     news(s, `정규시즌 종료! 1위 ${st[0].name}. 우리 팀 ${myRank}위${myRank <= 4 ? " — 포스트시즌 진출!" : " — 포스트시즌 진출 실패"}`);
     return;
@@ -239,9 +256,9 @@ function progressSchedule(s: CareerState) {
   if (!last || s.matches.some(m => !m.done)) return;
   const st = standings(s);
   if (last.stage === "semi") {
-    s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "po", a: st[1].id, b: last.winner!, maps: pickMaps(PRO_SETS) });
+    s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "po", a: st[1].id, b: last.winner!, maps: pickMaps(PRO_SETS, s.mapPool) });
   } else if (last.stage === "po") {
-    s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "final", a: st[0].id, b: last.winner!, maps: pickMaps(FINAL_SETS) });
+    s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "final", a: st[0].id, b: last.winner!, maps: pickMaps(FINAL_SETS, s.mapPool) });
   } else if (last.stage === "final") {
     finishSeason(s, last);
   }
@@ -277,6 +294,7 @@ export function startNextSeason(s: CareerState) {
   s.week = 1;
   s.phase = "regular";
   s.ap = WEEKLY_AP;
+  s.mapPool = drawMapPool();
   // 나이에 따른 성장/노쇠
   for (const p of s.players) {
     const age = ageOf(p, s.season);

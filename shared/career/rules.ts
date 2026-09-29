@@ -74,6 +74,8 @@ export interface CPlayer {
   action?: ActionKey | null;
   /** 우승 경력 */
   titles?: string[];
+  /** 종족별 통산 전적 [승, 패] */
+  vs?: Partial<Record<Race, [number, number]>>;
 }
 
 export interface CTeam {
@@ -111,7 +113,19 @@ export interface CMatch {
   scoreB?: number;
   winner?: number;
   sets?: SetResult[];
+  /** 양 팀 엔트리 (경기 후 공개) */
+  entryA?: number[];
+  entryB?: number[];
 }
+
+/** 원작식 중계 화면 데이터 (세이브에는 저장하지 않고 경기 직후에만 내려줌) */
+export interface SetTimeline {
+  lines: Array<{ t: number; side: 0 | 1 | 2; text: string }>;
+  frames: Array<{ t: number; army: [number, number]; res: [number, number] }>;
+}
+
+/** 시즌 맵 추첨 개수 (원작 "맵 추첨 결과" 7개, 결승 7세트) */
+export const MAP_POOL_SIZE = 7;
 
 // ── 마이스타리그 (개인리그, MSL 방식) ───────────────────────────────
 /** 진행 단계와 치르는 주차: PC방 예선(1) → 듀얼 토너먼트(2) → 조 지명식·32강(3) → 16강(5) → 8강(7) → 4강(9) → 결승(11) */
@@ -176,11 +190,19 @@ export interface CareerState {
   history: Array<{ season: number; champion: number; myRank: number; myResult: string; mslChampion?: number; mslRunnerUp?: number }>;
   /** 이번 시즌 마이스타리그 */
   msl?: MslState;
+  /** 이번 시즌 맵 추첨 결과 */
+  mapPool?: number[];
 }
 
 export function ageOf(p: Pick<CPlayer, "birth">, season: number): number {
   // 한국식 나이
   return BASE_YEAR + season - 1 - p.birth + 1;
+}
+
+/** 원작식 등급 (F ~ SSS, +). 강현우 4650 → E, 허영무 5850 → B+ 에 맞춘 근사치 */
+const LEGACY_GRADES = ["F", "F+", "E", "E+", "D", "D+", "C", "C+", "B", "B+", "A", "A+", "S", "S+", "SS", "SSS"];
+export function legacyGrade(total: number): string {
+  return LEGACY_GRADES[Math.max(0, Math.min(LEGACY_GRADES.length - 1, Math.floor((total - 4200) / 175)))];
 }
 
 export function totalOf(stats: Record<StatKey, number>): number {

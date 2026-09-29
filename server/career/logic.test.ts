@@ -69,4 +69,22 @@ describe("커리어 모드", () => {
     expect(s.players[target.id].team).toBe(0);
     expect(rosterOf(s, 0).length).toBe(before + 1);
   });
+
+  it("우리 경기는 양 팀 엔트리와 세트별 중계 타임라인을 돌려준다", () => {
+    const s = newCareer(3);
+    expect(s.mapPool).toHaveLength(7);
+    const m = myPendingMatch(s)!;
+    expect(m.maps.every(id => s.mapPool!.includes(id))).toBe(true);
+    const r = advanceWeek(s, aiEntry(s, 3, PRO_SETS));
+    const done = s.matches.find(x => x.id === r.playedMatchId)!;
+    expect(done.entryA).toHaveLength(PRO_SETS);
+    expect(done.entryB).toHaveLength(PRO_SETS);
+    expect(r.broadcast?.length).toBe(done.sets?.length);
+    const tl = r.broadcast![0].timeline!;
+    expect(tl.lines.length).toBeGreaterThan(5);
+    expect(tl.frames.length).toBeGreaterThan(2);
+    expect(tl.lines.some(l => l.side === 1) && tl.lines.some(l => l.side === 2)).toBe(true);
+    // 세이브에는 타임라인이 남지 않는다
+    expect(JSON.stringify(s)).not.toContain("frames");
+  });
 });
