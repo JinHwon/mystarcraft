@@ -69,7 +69,7 @@ import { storagePut } from "./storage";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, FATIGUE_MIN_TO_PLAY, MAPS, calcGradeIndex, calcTotalStats, STAT_KEYS, StatKey, calcFatigueStatPenalty } from "@shared/gameConstants";
-import { simulateGame, calculateWinProbability, estimateWinRate } from "./gameSimulation";
+import { simulateGame, calculateWinProbability, estimateWinRateAsync, withPriority } from "./gameSimulation";
 import { type MapCharacteristic } from "./buildSystem";
 import { calculateStatChanges, applyReverseSystem } from "./statDynamicSystem";
 import { teamRouter } from "./teamRouter";
@@ -729,6 +729,66 @@ async function getPlayerSimStats(playerId: number): Promise<Record<StatKey, numb
 /** AI 선수 최대 수 (너무 많아지지 않도록) */
 const MAX_BOT_PLAYERS = 80;
 
+// ── 승률 추정 (캐시) ─────────────────────────────────────────────
+
+type WinRateResult = { winRate: number; runs: number };
+/** 입력 조건이 같으면 같은 결과를 재사용 (10분) */
+const winRateCache = new Map<string, { at: number; promise: Promise<WinRateResult> }>();
+const WIN_RATE_TTL_MS = 10 * 60 * 1000;
+
+/** playGame 과 같은 조건(아이템·컨디션·피로도·맵)으로 게임 엔진을 여러 번 돌려 실제 승률 추정 */
+async function winRateForGame(gameId: number, player: { id: number; race: string; fatigue: number }): Promise<WinRateResult> {
+  const game = await getGameById(gameId);
+  if (!game) throw new TRPCError({ code: "NOT_FOUND", message: "게임을 찾을 수 없습니다" });
+  if (player.id !== game.player1Id && player.id !== game.player2Id) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "이 게임에 참여할 수 없습니다" });
+  }
+
+  const maps = await getAllMaps();
+  const map = maps.find(m => m.id === game.mapId);
+  if (!map) throw new TRPCError({ code: "NOT_FOUND", message: "맵을 찾을 수 없습니다" });
+  const raceAdvantage = typeof map.raceAdvantage === 'string'
+    ? JSON.parse(map.raceAdvantage)
+    : map.raceAdvantage;
+
+  // 최신 피로도 반영 (아이템 사용 직후 등)
+  const fresh = await getPlayerById(player.id);
+  const playerFatigue = fresh?.fatigue ?? player.fatigue;
+  const playerStatsForSim = await getPlayerSimStats(player.id);
+
+  const opponentPlayerId = player.id === game.player1Id ? game.player2Id : game.player1Id;
+  const opponent = await getPlayerById(opponentPlayerId);
+  if (!opponent) throw new TRPCError({ code: "NOT_FOUND", message: "상대 선수를 찾을 수 없습니다" });
+  const raw = await getPlayerStats(opponent.id) || await ensurePlayerStats(opponent.id);
+  const opponentStats = applyCondition(Object.fromEntries(
+    STAT_KEYS.map(key => [key, (raw as any)?.[key] ?? 500])
+  ) as Record<StatKey, number>, await getPlayerCondition(opponent.id));
+  const opponentRace = opponent.race as "terran" | "zerg" | "protoss";
+  const mapTraits = { rushDistance: map.rushDistance, resources: map.resources, complexity: map.complexity };
+
+  const key = JSON.stringify([playerStatsForSim, opponentStats, player.race, opponentRace, raceAdvantage, playerFatigue, opponent.fatigue, mapTraits]);
+  const now = Date.now();
+  const cached = winRateCache.get(key);
+  if (cached && now - cached.at < WIN_RATE_TTL_MS) return cached.promise;
+
+  if (winRateCache.size > 500) {
+    winRateCache.forEach((v, k) => { if (now - v.at >= WIN_RATE_TTL_MS) winRateCache.delete(k); });
+  }
+  const promise = estimateWinRateAsync(
+    playerStatsForSim,
+    opponentStats,
+    player.race as "terran" | "zerg" | "protoss",
+    opponentRace,
+    raceAdvantage,
+    playerFatigue,
+    opponent.fatigue,
+    mapTraits
+  );
+  winRateCache.set(key, { at: now, promise });
+  promise.catch(() => winRateCache.delete(key));
+  return promise;
+}
+
 // ── Practice Game Router ────────────────────────────────────────
 
 const practiceRouter = router({
@@ -747,44 +807,9 @@ const practiceRouter = router({
       }).optional(),
     }))
     .query(async ({ ctx, input }) => {
-      const game = await getGameById(input.gameId);
-      if (!game) throw new TRPCError({ code: "NOT_FOUND", message: "게임을 찾을 수 없습니다" });
-
       const player = await getPlayerByUserId(ctx.user.id);
-      if (!player || (player.id !== game.player1Id && player.id !== game.player2Id)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "이 게임에 참여할 수 없습니다" });
-      }
-
-      const maps = await getAllMaps();
-      const map = maps.find(m => m.id === game.mapId);
-      if (!map) throw new TRPCError({ code: "NOT_FOUND", message: "맵을 찾을 수 없습니다" });
-      const raceAdvantage = typeof map.raceAdvantage === 'string'
-        ? JSON.parse(map.raceAdvantage)
-        : map.raceAdvantage;
-
-      const playerStatsForSim = await getPlayerSimStats(player.id);
-
-      // 상대 (AI 선수 포함) 는 항상 DB 에서 조회. input.aiOpponent 는 예전 클라이언트 호환용으로 무시
-      const opponentPlayerId = player.id === game.player1Id ? game.player2Id : game.player1Id;
-      const opponent = await getPlayerById(opponentPlayerId);
-      if (!opponent) throw new TRPCError({ code: "NOT_FOUND", message: "상대 선수를 찾을 수 없습니다" });
-      const raw = await getPlayerStats(opponent.id) || await ensurePlayerStats(opponent.id);
-      const opponentStats = applyCondition(Object.fromEntries(
-        STAT_KEYS.map(key => [key, (raw as any)?.[key] ?? 500])
-      ) as Record<StatKey, number>, await getPlayerCondition(opponent.id));
-      const opponentRace = opponent.race as "terran" | "zerg" | "protoss";
-      const opponentFatigue = opponent.fatigue;
-
-      return estimateWinRate(
-        playerStatsForSim,
-        opponentStats,
-        player.race as "terran" | "zerg" | "protoss",
-        opponentRace,
-        raceAdvantage,
-        player.fatigue,
-        opponentFatigue,
-        { rushDistance: map.rushDistance, resources: map.resources, complexity: map.complexity }
-      );
+      if (!player) throw new TRPCError({ code: "NOT_FOUND", message: "선수를 찾을 수 없습니다" });
+      return winRateForGame(input.gameId, player);
     }),
 
   findOpponent: protectedProcedure
@@ -900,6 +925,9 @@ const practiceRouter = router({
         getPlayerCondition(opponent.id),
       ]);
 
+      // 승률 계산을 미리 시작해 둔다 (결과는 캐시되어 estimateWinRate 에서 바로 사용)
+      winRateForGame(gameId, player).catch(() => {});
+
       return { 
         gameId, 
         opponent,
@@ -923,7 +951,7 @@ const practiceRouter = router({
         grade: z.string(),
       }).optional(),
     }))
-    .mutation(async ({ ctx, input }) => {
+    .mutation(({ ctx, input }) => withPriority(async () => {
       const game = await getGameById(input.gameId);
       if (!game) throw new TRPCError({ code: "NOT_FOUND", message: "게임을 찾을 수 없습니다" });
 
@@ -1121,7 +1149,7 @@ const practiceRouter = router({
         opponentRace,
         isAiOpponent: isAiGame,
       };
-    }),
+    })),
 
   getGameHistory: protectedProcedure.query(async ({ ctx }) => {
     const player = await getPlayerByUserId(ctx.user.id);

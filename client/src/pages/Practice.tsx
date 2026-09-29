@@ -664,7 +664,7 @@ export default function PracticePage() {
                         {winRateQuery.isFetching ? (
                           <span className="flex items-center text-slate-400"><Loader2 className="w-3 h-3 mr-1 animate-spin" />계산 중...</span>
                         ) : winRateQuery.data ? (
-                          <span className="font-bold text-blue-400">{winRateQuery.data.winRate.toFixed(1)}%</span>
+                          <span className="font-bold text-blue-400">약 {Math.round(winRateQuery.data.winRate)}%</span>
                         ) : (
                           <span className="text-slate-500">-</span>
                         )}
@@ -677,7 +677,7 @@ export default function PracticePage() {
                       </div>
                       {winRateQuery.data && (
                         <p className="text-[10px] md:text-xs text-slate-500 mt-1">
-                          현재 피로도·착용 아이템·맵·종족 조건으로 경기를 {winRateQuery.data.runs}회 시뮬레이션한 결과입니다
+                          현재 피로도·컨디션·착용 아이템·맵·종족 조건으로 경기를 {winRateQuery.data.runs}회 시뮬레이션한 결과입니다 (계산 중에도 바로 게임을 시작할 수 있습니다)
                         </p>
                       )}
                     </div>
