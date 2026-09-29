@@ -6,6 +6,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerLocalAuthRoutes } from "./localAuth";
 import { LOCAL_UPLOAD_DIR } from "../storage";
+import { repairUninitializedPlayerStats } from "../db";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -81,6 +82,11 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
   });
+
+  // 0으로 생성됐던 선수 능력치를 기본값 500 기준으로 보정
+  repairUninitializedPlayerStats()
+    .then(count => { if (count > 0) console.log(`[Stats] 초기화 누락 선수 능력치 ${count}건 보정`); })
+    .catch(error => console.error("[Stats] 능력치 보정 실패", error));
 }
 
 startServer().catch(console.error);
