@@ -68,7 +68,7 @@ import { players, playerItems, items } from "../drizzle/schema";
 import { storagePut } from "./storage";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, FATIGUE_MIN_TO_PLAY, MAPS, calcGradeIndex, calcTotalStats, STAT_KEYS, StatKey, calcFatigueStatPenalty } from "@shared/gameConstants";
+import { DIFFICULTY_RANGES, difficultyTotalRange, GAME_REWARDS, FATIGUE_COST, FATIGUE_MIN_TO_PLAY, MAPS, calcGradeIndex, calcTotalStats, STAT_KEYS, StatKey, calcFatigueStatPenalty } from "@shared/gameConstants";
 import { simulateGame, calculateWinProbability, estimateWinRateAsync, withPriority } from "./gameSimulation";
 import { type MapCharacteristic } from "./buildSystem";
 import { calculateStatChanges, applyReverseSystem } from "./statDynamicSystem";
@@ -844,14 +844,18 @@ const practiceRouter = router({
       // - 일정 확률로 새 AI 선수를 생성 (해당 난이도 AI 가 적을수록 확률이 높음)
       // - 상대가 없으면 반드시 새 AI 생성. 생성된 AI 는 이후 전적/랭킹/성장이 쌓임
       // 같은 팀 동료는 상대에서 제외
-      const candidates = (await findOpponentCandidates(input.difficulty, player.id))
+      // 내 능력치 합계 기준으로 상대 범위를 정한다
+      const myStatsRow = await getPlayerStats(player.id) || await ensurePlayerStats(player.id);
+      const myTotal = STAT_KEYS.reduce((sum, k) => sum + ((myStatsRow as any)?.[k] ?? 500), 0);
+      const totalRange = difficultyTotalRange(input.difficulty, myTotal);
+      const candidates = (await findOpponentCandidates(input.difficulty, player.id, myTotal))
         .filter(c => player.teamId === 0 || c.teamId !== player.teamId);
       const botsInRange = candidates.filter(c => c.isBot === 1).length;
       const newBotChance = Math.min(0.45, Math.max(0.08, 0.45 - 0.07 * botsInRange));
       const canAddBot = (await countBotPlayers()) < MAX_BOT_PLAYERS;
       let opponent: Awaited<ReturnType<typeof createBotPlayer>> | undefined;
       if (candidates.length === 0 || (canAddBot && Math.random() < newBotChance)) {
-        opponent = await createBotPlayer(input.difficulty);
+        opponent = await createBotPlayer(input.difficulty, totalRange);
       } else {
         const recent = await getRecentOpponentIds(player.id, 2);
         const fresh = candidates.filter(c => !recent.includes(c.id));
@@ -1011,14 +1015,7 @@ const practiceRouter = router({
       let expGained = isWinner ? rewards.expWin : rewards.expLose;
       
       // 난이도별 골드 보상: 초보(10/5), 중수(20/10), 고수(30/15)
-      let goldGained: number;
-      if (game.difficulty === 'beginner') {
-        goldGained = isWinner ? 10 : 5;
-      } else if (game.difficulty === 'intermediate') {
-        goldGained = isWinner ? 20 : 10;
-      } else {
-        goldGained = isWinner ? 30 : 15;
-      }
+      let goldGained = isWinner ? rewards.goldWin : rewards.goldLose;
       
       const fatigueUsed = FATIGUE_COST[game.difficulty];
 

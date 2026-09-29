@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { RACE_COLORS, RACE_LABELS, DIFFICULTY_RANGES, GAME_REWARDS, FATIGUE_COST, FATIGUE_MIN_TO_PLAY, GAME_MAX_RESOURCES, calcFatigueStatPenalty } from "@shared/gameConstants";
+import { RACE_COLORS, RACE_LABELS, DIFFICULTY_RANGES, DIFFICULTY_MATCH, difficultyTotalRange, GAME_REWARDS, FATIGUE_COST, FATIGUE_MIN_TO_PLAY, GAME_MAX_RESOURCES, calcFatigueStatPenalty } from "@shared/gameConstants";
 import { Loader2, X, ArrowLeft, User } from "lucide-react";
 import { STAT_LABELS } from "@shared/gameConstants";
 import { ConditionBadge } from "@/components/team/PlayerBadges";
@@ -309,6 +309,8 @@ export default function PracticePage() {
 
   if (phase === "difficulty") {
     const currentFatigue = playerQuery.data?.fatigue ?? 0;
+    const baseStats = (playerQuery.data?.stats ?? null) as Record<string, number> | null;
+    const myTotal = baseStats ? Object.keys(STAT_LABELS).reduce((s, k) => s + (baseStats[k] ?? 0), 0) : 4000;
     const isFatigueTooLow = currentFatigue <= FATIGUE_MIN_TO_PLAY;
 
     return (
@@ -316,7 +318,7 @@ export default function PracticePage() {
         <div className="max-w-2xl mx-auto">
           <div className="text-center mb-6 md:mb-12">
             <h1 className="text-2xl md:text-4xl font-bold text-white mb-1 md:mb-2">연습게임</h1>
-            <p className="text-xs md:text-base text-slate-400">난이도를 선택하세요</p>
+            <p className="text-xs md:text-base text-slate-400">난이도를 선택하세요 · 상대는 내 능력치 합계(<span className="text-white font-semibold">{myTotal.toLocaleString()}</span>) 기준으로 정해집니다</p>
             <p className="text-xs md:text-sm text-slate-400 mt-1">현재 피로도: <span className={isFatigueTooLow ? "text-red-400 font-bold" : "text-blue-400 font-bold"}>{currentFatigue}</span></p>
             {isFatigueTooLow && (
               <p className="text-xs md:text-sm text-red-400 mt-1">⚠️ 피로도가 {FATIGUE_MIN_TO_PLAY} 이하이면 게임을 할 수 없습니다.</p>
@@ -335,9 +337,14 @@ export default function PracticePage() {
                 >
                   <CardHeader>
                     <CardTitle className="text-sm md:text-base text-white">{difficultyLabels[key]}</CardTitle>
+                    <CardDescription className="text-xs">{DIFFICULTY_MATCH[key as keyof typeof DIFFICULTY_MATCH].desc}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-1 md:space-y-2 text-xs md:text-sm text-slate-300">
+                      {(() => {
+                        const r = difficultyTotalRange(key as keyof typeof DIFFICULTY_MATCH, myTotal);
+                        return <p className="text-cyan-300">상대 능력치 합계 {r.min.toLocaleString()}~{r.max.toLocaleString()}</p>;
+                      })()}
                       <p>승리 경험치: {rewards.expWin}</p>
                       <p>패배 경험치: {rewards.expLose}</p>
                       <p>승리 골드: {rewards.goldWin}</p>

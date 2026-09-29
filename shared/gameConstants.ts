@@ -262,11 +262,27 @@ export const DIFFICULTY_RANGES = {
   advanced: { minGrade: "B", maxGrade: "SSS", minIndex: 4, maxIndex: 8 },
 };
 
-// 게임 보상 (난이도별)
+/**
+ * 연습게임 상대 매칭 범위 (내 능력치 합계 기준 차이)
+ * 초보: 나보다 약하거나 비슷한 상대 / 중수: 비슷한 상대 / 고수: 나보다 강한 상대
+ */
+export const DIFFICULTY_MATCH = {
+  beginner: { min: -800, max: 100, desc: "나보다 약하거나 비슷한 상대" },
+  intermediate: { min: -300, max: 400, desc: "나와 비슷한 수준의 상대" },
+  advanced: { min: 200, max: 1200, desc: "나보다 강한 상대" },
+} as const;
+
+/** 매칭 가능한 상대 능력치 합계 범위 (최소 3000) */
+export function difficultyTotalRange(difficulty: keyof typeof DIFFICULTY_MATCH, myTotal: number): { min: number; max: number } {
+  const m = DIFFICULTY_MATCH[difficulty] ?? DIFFICULTY_MATCH.intermediate;
+  return { min: Math.max(3000, myTotal + m.min), max: Math.max(3200, myTotal + m.max) };
+}
+
+// 게임 보상 (난이도별) — 실제 지급값
 export const GAME_REWARDS = {
-  beginner: { expWin: 50, expLose: 20, goldWin: 100, goldLose: 30 },
-  intermediate: { expWin: 100, expLose: 50, goldWin: 200, goldLose: 80 },
-  advanced: { expWin: 200, expLose: 100, goldWin: 400, goldLose: 150 },
+  beginner: { expWin: 50, expLose: 20, goldWin: 10, goldLose: 5 },
+  intermediate: { expWin: 100, expLose: 50, goldWin: 20, goldLose: 10 },
+  advanced: { expWin: 200, expLose: 100, goldWin: 30, goldLose: 15 },
 };
 
 // 피로도 사용 (난이도별)
