@@ -753,8 +753,8 @@ export async function getPlayerGameHistory(playerId: number, limit: number = 10)
   );
 }
 
-export async function findOpponentByDifficulty(difficulty: string, currentPlayerId: number) {
-  const candidates = await findOpponentCandidates(difficulty, currentPlayerId);
+export async function findOpponentByDifficulty(difficulty: string, currentPlayerId: number, myTotal = 4000) {
+  const candidates = await findOpponentCandidates(difficulty, currentPlayerId, myTotal);
   if (candidates.length === 0) return null;
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
@@ -778,43 +778,21 @@ export async function countBotPlayers(): Promise<number> {
   return Number(rows[0]?.n ?? 0);
 }
 
-/** 난이도 등급 범위에 맞는 상대 후보 전체 */
-export async function findOpponentCandidates(difficulty: string, currentPlayerId: number) {
+/** 내 능력치 합계 기준으로 난이도 범위에 맞는 상대 후보 전체 */
+export async function findOpponentCandidates(difficulty: string, currentPlayerId: number, myTotal: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  const { DIFFICULTY_MATCH, difficultyTotalRange } = await import("@shared/gameConstants");
+  if (!(difficulty in DIFFICULTY_MATCH)) throw new Error("잘못된 난이도입니다");
+  const range = difficultyTotalRange(difficulty as keyof typeof DIFFICULTY_MATCH, myTotal);
 
-  // 난이도별 상대 등급 범위 (상대방 등급 기준)
-  // 초보: F~D (index 0~2), 중수: D~B (index 2~4), 고수: B~SSS (index 4~8)
-  const { DIFFICULTY_RANGES, calcTotalStats, calcGradeIndex, STAT_KEYS } = await import("@shared/gameConstants");
-  const range = DIFFICULTY_RANGES[difficulty as keyof typeof DIFFICULTY_RANGES];
-  if (!range) throw new Error("잘못된 난이도입니다");
-
-  // 자신을 제외한 모든 플레이어 조회
-  const opponents = await db.select().from(players)
-    .where(ne(players.id, currentPlayerId))
-    .limit(200);
-
-  if (opponents.length === 0) return [];
-
-  // 상대방의 등급을 계산하여 난이도 범위에 맞는 상대만 필터링
-  const validOpponents = [];
-  for (const opponent of opponents) {
-    const stats = await db.select().from(playerStats)
-      .where(eq(playerStats.playerId, opponent.id))
-      .limit(1);
-    
-    // 능력치 행이 아직 없는 선수는 초기 능력치(0)로 간주
-    const totalStats = stats.length === 0
-      ? 0
-      : STAT_KEYS.reduce((sum: number, key: string) => sum + ((stats[0] as any)[key] || 0), 0);
-    const gradeIndex = calcGradeIndex(totalStats);
-    
-    if (gradeIndex >= range.minIndex && gradeIndex <= range.maxIndex) {
-      validOpponents.push(opponent);
-    }
-  }
-
-  return validOpponents;
+  const total = sql<number>`(${playerStats.sense} + ${playerStats.control} + ${playerStats.attack} + ${playerStats.harass} + ${playerStats.strategy} + ${playerStats.supply} + ${playerStats.defense} + ${playerStats.scout})`;
+  const rows = await db.select({ player: players, total })
+    .from(players)
+    .innerJoin(playerStats, eq(playerStats.playerId, players.id))
+    .where(and(ne(players.id, currentPlayerId), sql`${total} BETWEEN ${range.min} AND ${range.max}`))
+    .limit(300);
+  return rows.map(r => r.player);
 }
 
 const BOT_NAMES = [
@@ -827,15 +805,17 @@ const BOT_NAMES = [
  * 매칭 상대가 없을 때 난이도에 맞는 AI 선수를 DB 에 생성한다.
  * 일반 선수와 같은 테이블에 저장되므로 이후 전적/랭킹/성장이 그대로 쌓이고, 다른 유저의 매칭 상대도 된다.
  */
-export async function createBotPlayer(difficulty: string) {
+export async function createBotPlayer(difficulty: string, totalRange?: { min: number; max: number }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const { DIFFICULTY_RANGES, GRADE_BASE, GRADE_STEP, STAT_KEYS } = await import("@shared/gameConstants");
+  const { DIFFICULTY_RANGES, GRADE_BASE, GRADE_STEP, STAT_KEYS, calcGradeIndex } = await import("@shared/gameConstants");
   const range = DIFFICULTY_RANGES[difficulty as keyof typeof DIFFICULTY_RANGES] ?? DIFFICULTY_RANGES.beginner;
 
-  // 난이도 등급 범위 안의 능력치 합계 목표
-  const gradeIndex = range.minIndex + Math.floor(Math.random() * (range.maxIndex - range.minIndex + 1));
-  const targetTotal = GRADE_BASE + gradeIndex * GRADE_STEP + Math.floor(Math.random() * GRADE_STEP);
+  // 능력치 합계 목표: 범위가 주어지면 그 안에서(연습게임 상대), 아니면 난이도 등급 범위 안에서
+  const targetTotal = totalRange
+    ? totalRange.min + Math.floor(Math.random() * (totalRange.max - totalRange.min + 1))
+    : GRADE_BASE + (range.minIndex + Math.floor(Math.random() * (range.maxIndex - range.minIndex + 1))) * GRADE_STEP + Math.floor(Math.random() * GRADE_STEP);
+  const gradeIndex = calcGradeIndex(targetTotal);
   const avg = Math.floor(targetTotal / STAT_KEYS.length);
   const stats: Record<string, number> = {};
   let remaining = targetTotal;
