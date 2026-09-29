@@ -14,8 +14,10 @@ import {
   initializeGameState,
   progressTurn,
   gameStateToTurnData,
+  collapseLoser,
   type GameState,
-} from "./dynamicGameEngine";
+  type PlayerSnapshot,
+} from "./bw/bwEngine";
 
 /**
  * 게임 턴 데이터 구조
@@ -32,6 +34,11 @@ export interface GameTurn {
   player2Health: number;
   player1Advantage: number;
   commentaries: string[];
+  /** 게임 시간(초) */
+  time?: number;
+  /** 선수별 상세 현황 (인구수·일꾼·기지·자원·병력 구성) */
+  p1?: PlayerSnapshot;
+  p2?: PlayerSnapshot;
 }
 
 /**
@@ -102,7 +109,8 @@ function runSimulation(
   );
 
   const turns: GameTurn[] = [];
-  const maxTurns = 120;
+  // 한 턴 = 게임 시간 20초, 최대 40분 (엔진이 자체적으로 종료 판정)
+  const maxTurns = 125;
 
   while (!gameState.gameEnded && turns.length < maxTurns) {
     progressTurn(gameState);
@@ -125,10 +133,8 @@ export const LOSER_REMAIN_RATIO_MAX = 0.2;
  * 경기 종료 후 패자의 병력과 자원을 대폭 감소시키고 마지막 턴 데이터에 반영
  */
 export function applyLoserPenalty(gameState: GameState, turns: GameTurn[]): void {
-  const loser = gameState.winner === gameState.player1.id ? gameState.player2 : gameState.player1;
   const ratio = LOSER_REMAIN_RATIO_MIN + Math.random() * (LOSER_REMAIN_RATIO_MAX - LOSER_REMAIN_RATIO_MIN);
-  loser.supply = Math.floor(loser.supply * ratio);
-  loser.resources = Math.floor(loser.resources * ratio);
+  const loser = collapseLoser(gameState, ratio);
 
   const last = turns[turns.length - 1];
   const penaltyCommentary = `패배한 ${loser.name} 선수의 병력과 자원이 크게 무너졌습니다!`;
@@ -151,7 +157,7 @@ export function estimateWinRate(
   player1Fatigue: number,
   player2Fatigue: number,
   mapTraits?: MapTraits,
-  runs: number = 300
+  runs: number = 150
 ): { winRate: number; runs: number } {
   let wins = 0;
   for (let i = 0; i < runs; i++) {

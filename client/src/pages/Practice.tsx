@@ -37,6 +37,87 @@ interface GameState {
   playerFatiguePenalty?: number;
 }
 
+type PlayerSnapshot = {
+  race: string;
+  plan: string;
+  population: number;
+  supplyCap: number;
+  workers: number;
+  armySupply: number;
+  minerals: number;
+  gas: number;
+  incomePerMin: number;
+  bases: number;
+  army: string;
+};
+
+function formatGameTime(sec?: number) {
+  const t = Math.max(0, Math.floor(sec ?? 0));
+  return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+}
+
+/** 경기 중 선수 현황 카드: 인구수·일꾼·기지·채취량·보유 자원·병력 구성 */
+function PlayerStatusCard({ name, tone, snap, armySupply, mined, maxResources }: {
+  name: string;
+  tone: "blue" | "purple";
+  snap?: PlayerSnapshot;
+  armySupply: number;
+  mined: number;
+  maxResources: number;
+}) {
+  const border = tone === "blue" ? "border-blue-700/50" : "border-purple-700/50";
+  const title = tone === "blue" ? "text-blue-300" : "text-purple-300";
+  const stat = (label: string, value: string | number) => (
+    <div className="flex justify-between gap-2">
+      <span className="text-slate-400">{label}</span>
+      <span className="text-slate-100 font-semibold tabular-nums">{value}</span>
+    </div>
+  );
+  return (
+    <Card className={`bg-slate-800 ${border}`}>
+      <CardHeader className="pb-2">
+        <CardTitle className={`text-sm md:text-base ${title}`}>{name}</CardTitle>
+        {snap && (
+          <CardDescription className="text-[10px] md:text-xs">
+            {RACE_LABELS[snap.race as keyof typeof RACE_LABELS] ?? snap.race} · {snap.plan}
+          </CardDescription>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-2 text-[11px] md:text-xs">
+        {snap && (
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+            {stat("👥 인구", `${snap.population}/${snap.supplyCap}`)}
+            {stat("⛏️ 일꾼", snap.workers)}
+            {stat("🏠 기지", snap.bases)}
+            {stat("📈 분당 채취", snap.incomePerMin.toLocaleString())}
+            {stat("💎 미네랄", snap.minerals.toLocaleString())}
+            {stat("🟢 가스", snap.gas.toLocaleString())}
+          </div>
+        )}
+        <div>
+          <div className="flex justify-between mb-0.5 text-slate-400">
+            <span>⚔️ 병력 (인구)</span>
+            <span className="text-cyan-400 font-bold">{armySupply}</span>
+          </div>
+          <div className="w-full bg-slate-700 rounded-full h-1.5">
+            <div className="bg-cyan-500 h-1.5 rounded-full transition-all" style={{ width: `${Math.min((armySupply / 200) * 100, 100)}%` }} />
+          </div>
+        </div>
+        <div>
+          <div className="flex justify-between mb-0.5 text-slate-400">
+            <span>💰 누적 채취 자원</span>
+            <span className="text-yellow-400 font-bold">{mined.toLocaleString()}</span>
+          </div>
+          <div className="w-full bg-slate-700 rounded-full h-1.5">
+            <div className="bg-yellow-500 h-1.5 rounded-full transition-all" style={{ width: `${Math.min((mined / maxResources) * 100, 100)}%` }} />
+          </div>
+        </div>
+        {snap && <p className="text-slate-300 leading-snug">{snap.army}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function PracticePage() {
   const [phase, setPhase] = useState<GamePhase>("difficulty");
   const [gameState, setGameState] = useState<GameState>({});
@@ -166,18 +247,9 @@ export default function PracticePage() {
       
       const result = await playGameMutation.mutateAsync(playGameInput);
       
-      const raceCommentaries: Record<string, string> = {
-        terran: "테란 선수가 선택되었습니다. 테란은 기계적 우월성과 다양한 전술로 유명합니다.",
-        zerg: "저그 선수가 선택되었습니다. 저그는 빠른 확장과 공격성으로 유명합니다.",
-        protoss: "프로토스 선수가 선택되었습니다. 프로토스는 고급 기술과 강력한 유닛으로 유명합니다.",
-      };
-      
+      // 해설(시간 표시 포함)은 서버 엔진이 생성
       const turns = result.turns || [];
-      if (turns.length > 0 && turns[0]?.commentaries) {
-        const initialCommentary = raceCommentaries[gameState.playerRace as string] || "게임이 시작되었습니다.";
-        turns[0].commentaries.unshift(initialCommentary);
-      }
-      
+
       setGameState(prev => ({
         ...prev,
         turns,
@@ -691,6 +763,7 @@ export default function PracticePage() {
             >
               <ArrowLeft className="w-4 h-4 mr-1" /> 뒤로가기
             </Button>
+            <span className="text-sm md:text-base font-bold text-slate-200 tabular-nums">⏱ {formatGameTime(currentTurn?.time)}</span>
             <div className="flex gap-2">
               <Button
                 onClick={() => setGameSpeed(1)}
@@ -775,62 +848,9 @@ export default function PracticePage() {
           {/* 플레이어 정보 (병력/자원 수치 + 바 그래프) */}
           <div className="grid grid-cols-2 gap-3 md:gap-4">
             {/* 플레이어 1 정보 */}
-            <Card className="bg-slate-800 border-blue-700/50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm md:text-base text-blue-300">{player1Name}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="text-xs text-slate-400 space-y-2">
-                  <div>
-                    <div className="flex justify-between mb-0.5">
-                      <span>⚔️ 병력</span>
-                      <span className="text-cyan-400 font-bold">{currentTurn?.player1Supply ?? 0}</span>
-                    </div>
-                    <div className="w-full bg-slate-700 rounded-full h-1.5">
-                      <div className="bg-cyan-500 h-1.5 rounded-full transition-all" style={{ width: `${Math.min(((currentTurn?.player1Supply ?? 0) / maxSupply) * 100, 100)}%` }} />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex justify-between mb-0.5">
-                      <span>💰 자원</span>
-                      <span className="text-yellow-400 font-bold">{currentTurn?.player1Resources ?? 0}</span>
-                    </div>
-                    <div className="w-full bg-slate-700 rounded-full h-1.5">
-                      <div className="bg-yellow-500 h-1.5 rounded-full transition-all" style={{ width: `${Math.min(((currentTurn?.player1Resources ?? 0) / maxResources) * 100, 100)}%` }} />
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
+            <PlayerStatusCard name={player1Name} tone="blue" snap={currentTurn?.p1} armySupply={currentTurn?.player1Supply ?? 0} mined={currentTurn?.player1Resources ?? 0} maxResources={maxResources} />
             {/* 플레이어 2 정보 */}
-            <Card className="bg-slate-800 border-purple-700/50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm md:text-base text-purple-300">{player2Name}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="text-xs text-slate-400 space-y-2">
-                  <div>
-                    <div className="flex justify-between mb-0.5">
-                      <span>⚔️ 병력</span>
-                      <span className="text-cyan-400 font-bold">{currentTurn?.player2Supply ?? 0}</span>
-                    </div>
-                    <div className="w-full bg-slate-700 rounded-full h-1.5">
-                      <div className="bg-cyan-500 h-1.5 rounded-full transition-all" style={{ width: `${Math.min(((currentTurn?.player2Supply ?? 0) / maxSupply) * 100, 100)}%` }} />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex justify-between mb-0.5">
-                      <span>💰 자원</span>
-                      <span className="text-yellow-400 font-bold">{currentTurn?.player2Resources ?? 0}</span>
-                    </div>
-                    <div className="w-full bg-slate-700 rounded-full h-1.5">
-                      <div className="bg-yellow-500 h-1.5 rounded-full transition-all" style={{ width: `${Math.min(((currentTurn?.player2Resources ?? 0) / maxResources) * 100, 100)}%` }} />
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <PlayerStatusCard name={player2Name} tone="purple" snap={currentTurn?.p2} armySupply={currentTurn?.player2Supply ?? 0} mined={currentTurn?.player2Resources ?? 0} maxResources={maxResources} />
           </div>
 
           {/* 병력 추이 그래프 */}
