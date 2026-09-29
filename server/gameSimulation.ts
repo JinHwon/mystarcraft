@@ -89,7 +89,8 @@ function runSimulation(
   player2Id: number, player2Name: string, player2Race: Race,
   player2StatsRaw: Record<StatKey, number>, player2Fatigue: number,
   mapRaceAdvantage: Record<string, number>,
-  mapTraits?: MapTraits
+  mapTraits?: MapTraits,
+  collectTurns: boolean = true
 ): { gameState: GameState; turns: GameTurn[] } {
   // 피로도 적용
   const player1EffectiveStats = calcEffectiveStatsWithFatigue(player1StatsRaw, player1Fatigue);
@@ -112,9 +113,12 @@ function runSimulation(
   // 한 턴 = 게임 시간 20초, 최대 40분 (엔진이 자체적으로 종료 판정)
   const maxTurns = 125;
 
-  while (!gameState.gameEnded && turns.length < maxTurns) {
+  // 승률 추정에서는 턴별 중계 데이터가 필요 없으므로 만들지 않는다
+  let turnCount = 0;
+  while (!gameState.gameEnded && turnCount < maxTurns) {
     progressTurn(gameState);
-    turns.push(gameStateToTurnData(gameState));
+    turnCount++;
+    if (collectTurns) turns.push(gameStateToTurnData(gameState));
   }
 
   if (!gameState.gameEnded) {
@@ -164,9 +168,52 @@ export function estimateWinRate(
     const { gameState } = runSimulation(
       1, "P1", player1Race, player1Stats, player1Fatigue,
       2, "P2", player2Race, player2Stats, player2Fatigue,
-      mapRaceAdvantage, mapTraits
+      mapRaceAdvantage, mapTraits, false
     );
     if (gameState.winner === 1) wins++;
+  }
+  return { winRate: Math.round((wins / runs) * 1000) / 10, runs };
+}
+
+/** 우선 처리할 작업(실제 경기 진행) 수. 이 값이 0보다 크면 승률 추정이 잠시 멈춘다 */
+let priorityWork = 0;
+export async function withPriority<T>(fn: () => Promise<T>): Promise<T> {
+  priorityWork++;
+  try {
+    return await fn();
+  } finally {
+    priorityWork--;
+  }
+}
+
+/**
+ * estimateWinRate 의 비동기 버전 (서버용)
+ * 몇 판마다 이벤트 루프에 양보해서, 계산 중에도 게임 시작 등 다른 요청이 바로 처리되게 한다.
+ */
+export async function estimateWinRateAsync(
+  player1Stats: Record<StatKey, number>,
+  player2Stats: Record<StatKey, number>,
+  player1Race: Race,
+  player2Race: Race,
+  mapRaceAdvantage: Record<string, number>,
+  player1Fatigue: number,
+  player2Fatigue: number,
+  mapTraits?: MapTraits,
+  runs: number = 80
+): Promise<{ winRate: number; runs: number }> {
+  let wins = 0;
+  for (let i = 0; i < runs; i++) {
+    const { gameState } = runSimulation(
+      1, "P1", player1Race, player1Stats, player1Fatigue,
+      2, "P2", player2Race, player2Stats, player2Fatigue,
+      mapRaceAdvantage, mapTraits, false
+    );
+    if (gameState.winner === 1) wins++;
+    if (i % 2 === 1) {
+      await new Promise(resolve => setImmediate(resolve));
+      // 경기 진행 요청이 처리 중이면 끝날 때까지 양보
+      while (priorityWork > 0) await new Promise(resolve => setTimeout(resolve, 15));
+    }
   }
   return { winRate: Math.round((wins / runs) * 1000) / 10, runs };
 }
