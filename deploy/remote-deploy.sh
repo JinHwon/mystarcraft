@@ -53,6 +53,8 @@ if [ ! -f .env ]; then
     .env
   chmod 600 .env
 fi
+# 관리자 계정 설정이 없으면 추가 (이미 있으면 서버의 값을 그대로 둠)
+grep -q '^ADMIN_USERNAMES=' .env || echo 'ADMIN_USERNAMES=wlsgnjs1' >> .env
 
 # 오라클 Ubuntu 이미지는 iptables 로 80/443 을 막아두는 경우가 있어 허용 규칙 추가 (이미 있으면 건너뜀)
 for port in 80 443; do
