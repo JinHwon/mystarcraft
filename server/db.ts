@@ -774,7 +774,8 @@ export async function getRecentOpponentIds(playerId: number, limit = 2): Promise
 export async function countBotPlayers(): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
-  const rows = await db.select({ n: sql<number>`count(*)` }).from(players).where(eq(players.isBot, 1));
+  // AI 프로팀 소속 선수는 제외 (자유계약 AI 선수 수)
+  const rows = await db.select({ n: sql<number>`count(*)` }).from(players).where(and(eq(players.isBot, 1), eq(players.teamId, 0)));
   return Number(rows[0]?.n ?? 0);
 }
 

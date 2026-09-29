@@ -18,6 +18,7 @@ import {
   Trophy,
   Users,
   Dumbbell,
+  Medal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -34,6 +35,7 @@ const getNavItems = (isAdmin: boolean) => {
     { path: "/profile", label: "선수 관리", icon: User },
     { path: "/team", label: "팀 관리", icon: Users },
     { path: "/training", label: "훈련장", icon: Dumbbell },
+    { path: "/league", label: "리그", icon: Medal },
     { path: "/shop", label: "아이템 상점", icon: ShoppingBag },
     { path: "/practice", label: "연습게임", icon: Gamepad2 },
     { path: "/game-results", label: "경기결과", icon: BarChart3 },

@@ -73,6 +73,7 @@ import { simulateGame, calculateWinProbability, estimateWinRateAsync, withPriori
 import { type MapCharacteristic } from "./buildSystem";
 import { calculateStatChanges, applyReverseSystem } from "./statDynamicSystem";
 import { teamRouter } from "./teamRouter";
+import { leagueRouter } from "./leagueRouter";
 import { refreshPlayerDaily, getPlayerCondition, changeCondition } from "./team";
 import { applyCondition } from "@shared/teamConstants";
 
@@ -1172,6 +1173,7 @@ export const appRouter = router({
   practice: practiceRouter,
   quest: questRouter,
   team: teamRouter,
+  league: leagueRouter,
   ranking: router({
     list: publicProcedure.query(async () => {
       return await getRankingList();

@@ -212,3 +212,42 @@ export const teams = mysqlTable("teams", {
 (table) => [
 	index("teams_userId_idx").on(table.userId),
 ]);
+
+// 리그 시즌 (유저 팀별). kind: proleague(팀 리그) / individual(개인리그 토너먼트)
+export const leagueSeasons = mysqlTable("league_seasons", {
+	id: int().autoincrement().notNull().primaryKey(),
+	teamId: int().notNull(),
+	kind: mysqlEnum(['proleague','individual']).notNull(),
+	seasonNo: int().default(1).notNull(),
+	status: mysqlEnum(['active','finished']).default('active').notNull(),
+	round: int().default(1).notNull(),
+	// proleague: { teamIds, mapPool } / individual: { entrants, mapPool }
+	data: json().notNull(),
+	// 시즌 종료 결과 (순위·상금·우승자 등)
+	result: json(),
+	createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	finishedAt: timestamp({ mode: 'string' }),
+},
+(table) => [
+	index("league_seasons_team_idx").on(table.teamId, table.kind),
+]);
+
+// 리그 경기. proleague 는 sideA/sideB 가 팀 id, individual 은 선수 id
+export const leagueMatches = mysqlTable("league_matches", {
+	id: int().autoincrement().notNull().primaryKey(),
+	seasonId: int().notNull(),
+	round: int().notNull(),
+	slot: int().default(0).notNull(),
+	sideA: int().notNull(),
+	sideB: int().notNull(),
+	scoreA: int().default(0).notNull(),
+	scoreB: int().default(0).notNull(),
+	status: mysqlEnum(['scheduled','done']).default('scheduled').notNull(),
+	winner: int(),
+	// 세트별 결과 [{ map, a, b, winner, highlights }]
+	sets: json(),
+	playedAt: timestamp({ mode: 'string' }),
+},
+(table) => [
+	index("league_matches_season_idx").on(table.seasonId, table.round),
+]);
