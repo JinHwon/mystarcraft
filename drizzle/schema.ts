@@ -64,6 +64,11 @@ export const maps = mysqlTable("maps", {
 	complexity: int().default(50).notNull(),
 	iconEmoji: varchar({ length: 10 }).default('🗺️').notNull(),
 	createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	nameEn: varchar({ length: 100 }).default('').notNull(),
+	players: int().default(2).notNull(),
+	era: varchar({ length: 30 }).default('').notNull(),
+	// 맵 선택 목록 노출 여부 (예전 가상 맵은 0 — 기존 경기 기록 조회용으로만 남김)
+	isActive: tinyint().default(1).notNull(),
 });
 
 export const playerItems = mysqlTable("player_items", {

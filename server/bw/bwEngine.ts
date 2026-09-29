@@ -55,6 +55,8 @@ export interface BwPlayer {
   name: string;
   race: Race;
   sk: Skills;
+  /** 맵 지형 (-1 ~ 1 로 정규화: 러쉬거리 짧음/김, 복잡도 단순/복잡, 자원 적음/풍부) */
+  terrain: Terrain;
   plan: Plan;
   openingIdx: number;
   /** 오프닝 이후 올릴 테크 순서 (끝내지 못한 오프닝 단계가 앞에 붙음) */
@@ -231,15 +233,15 @@ function workerName(p: BwPlayer) {
 // 초기화
 // ══════════════════════════════════════════════════════════════
 
-function makePlayer(side: 1 | 2, id: number, name: string, race: Race, vs: Race, stats: Record<string, number> | undefined, resFactor: number): BwPlayer {
+function makePlayer(side: 1 | 2, id: number, name: string, race: Race, vs: Race, stats: Record<string, number> | undefined, resFactor: number, terrain: Terrain): BwPlayer {
   const sk: Skills = {
     sense: skill(stats?.sense), control: skill(stats?.control), attack: skill(stats?.attack),
     harass: skill(stats?.harass), strategy: skill(stats?.strategy), supply: skill(stats?.supply),
     defense: skill(stats?.defense), scout: skill(stats?.scout),
   };
-  const plan = pickPlan(race, vs, sk.strategy, rand);
+  const plan = pickPlan(race, vs, sk.strategy, rand, terrain.rd);
   const p: BwPlayer = {
-    side, id, name, race, sk, plan, openingIdx: 0, techQueue: [...plan.tech], openingDoneSteps: new Set(),
+    side, id, name, race, sk, terrain, plan, openingIdx: 0, techQueue: [...plan.tech], openingDoneSteps: new Set(),
     minerals: 50, gas: 0, totalMined: 0,
     workers: 4,
     bases: [{ name: BASE_NAMES[0], minerals: ECONOMY.baseMinerals * resFactor, gas: ECONOMY.baseGas * resFactor, hasGas: false, gasPending: false, alive: true, ready: true }],
@@ -257,6 +259,13 @@ function makePlayer(side: 1 | 2, id: number, name: string, race: Race, vs: Race,
   return p;
 }
 
+export interface Terrain { rd: number; cx: number; rs: number }
+
+function toTerrain(t?: { rushDistance: number; resources: number; complexity: number }): Terrain {
+  const n = (v: number | undefined) => clamp(((v ?? 50) - 50) / 50, -1, 1);
+  return { rd: n(t?.rushDistance), cx: n(t?.complexity), rs: n(t?.resources) };
+}
+
 export function initializeGameState(
   p1Id: number, p1Name: string, p1Race: Race,
   p2Id: number, p2Name: string, p2Race: Race,
@@ -265,10 +274,11 @@ export function initializeGameState(
   mapRaceAdvantage?: Record<string, number>
 ): GameState {
   const resFactor = clamp((mapTraits?.resources ?? 50) / 50, 0.7, 1.4);
+  const terrain = toTerrain(mapTraits);
   const gs: GameState = {
     turn: 0, time: 0, gameEnded: false,
-    player1: makePlayer(1, p1Id, p1Name, p1Race, p2Race, p1Stats, resFactor),
-    player2: makePlayer(2, p2Id, p2Name, p2Race, p1Race, p2Stats, resFactor),
+    player1: makePlayer(1, p1Id, p1Name, p1Race, p2Race, p1Stats, resFactor, terrain),
+    player2: makePlayer(2, p2Id, p2Name, p2Race, p1Race, p2Stats, resFactor, terrain),
     player1Advantage: 50,
     player1Events: [], player2Events: [],
     turnCommentaries: [],
@@ -644,7 +654,8 @@ function wantedStatics(gs: GameState, p: BwPlayer): Record<string, number> {
 }
 
 function macroEfficiency(p: BwPlayer): number {
-  return clamp(0.86 + 0.18 * p.sk.supply, 0.6, 1.0);
+  // 자원이 풍부한 맵일수록 물량(운영) 능력치 차이가 크게 드러남
+  return clamp(0.86 + 0.18 * p.sk.supply * (1 + 0.5 * p.terrain.rs), 0.6, 1.0);
 }
 
 function decide(gs: GameState, p: BwPlayer) {
@@ -1065,9 +1076,10 @@ function sideStrength(me: BwPlayer, mine: Fighter[], enemy: BwPlayer, theirs: Fi
     }
     if (f.cloaked && !enemyDetects) unitDps *= 2.2;
     const melee = MELEE[f.key];
-    if (melee) unitDps *= 1 - (1 - melee) * enemyRangedShare;
-    // 시즈 탱크: 긴 사거리로 먼저 포격 (수비 시 시즈 라인은 특히 강력)
-    if (f.key === "siege_tank" && me.techs.has("siege_mode")) unitDps *= meDefending ? 1.7 : 1.3;
+    // 복잡한 지형(좁은 길목)에서는 근접 유닛이 더 불리, 넓은 맵에서는 덜 불리
+    if (melee) unitDps *= 1 - (1 - melee) * enemyRangedShare * (1 + 0.5 * me.terrain.cx);
+    // 시즈 탱크: 긴 사거리로 먼저 포격 (수비 시 시즈 라인은 특히 강력, 언덕·길목이 많을수록 더)
+    if (f.key === "siege_tank" && me.techs.has("siege_mode")) unitDps *= (meDefending ? 1.7 : 1.3) * (1 + 0.15 * me.terrain.cx);
     dps += unitDps * f.count;
   }
 
@@ -1080,7 +1092,7 @@ function sideStrength(me: BwPlayer, mine: Fighter[], enemy: BwPlayer, theirs: Fi
   // 사이오닉 스톰: 뭉친 소형·중형 유닛에 큰 피해
   if (me.techs.has("psionic_storm") && (me.units.high_templar ?? 0) > 0) {
     const bioShare = targets.filter(t => t.size !== "large" && !t.isStatic).reduce((s, t) => s + t.hp * t.count, 0) / Math.max(1, hpG + hpA);
-    dps += (me.units.high_templar ?? 0) * 40 * bioShare * Math.min(1, (countG + countA) / 12) * (1 + 0.3 * me.sk.control);
+    dps += (me.units.high_templar ?? 0) * 40 * (1 + 0.2 * me.terrain.cx) * bioShare * Math.min(1, (countG + countA) / 12) * (1 + 0.3 * me.sk.control);
   }
 
   let hp = mine.reduce((s, f) => s + f.hp * f.count, 0);
@@ -1105,10 +1117,12 @@ function sideStrength(me: BwPlayer, mine: Fighter[], enemy: BwPlayer, theirs: Fi
 
   // 능력치/지형 보정
   // 컨트롤(교전 운영) + 전략(교전 장소·타이밍 선택) + 정찰(상대 병력 파악) + 센스
-  let mul = clamp(1 + 0.13 * me.sk.control + 0.05 * me.sk.strategy + 0.04 * me.sk.scout + 0.03 * me.sk.sense, 0.75, 1.35);
-  // 자기 기지 수비: 방어 건물·증원 병력·지형 이점
-  if (meDefending) mul *= clamp(1 + 0.14 * me.sk.defense, 0.85, 1.2) * 1.2;
-  else mul *= clamp(1 + 0.1 * me.sk.attack, 0.9, 1.15);
+  // 복잡한 맵일수록 컨트롤, 넓은 맵일수록 병력 규모가 중요
+  const t = me.terrain;
+  let mul = clamp(1 + 0.13 * me.sk.control * (1 + 0.4 * t.cx) + 0.05 * me.sk.strategy + 0.04 * me.sk.scout + 0.03 * me.sk.sense, 0.75, 1.4);
+  // 자기 기지 수비: 방어 건물·증원 병력·지형 이점 (러쉬거리가 멀수록 수비 측 증원이 빠름)
+  if (meDefending) mul *= clamp(1 + 0.14 * me.sk.defense * (1 + 0.3 * t.rd), 0.85, 1.25) * (1.2 + 0.06 * t.rd);
+  else mul *= clamp(1 + 0.1 * me.sk.attack * (1 - 0.4 * t.rd), 0.88, 1.2);
   if (meDefending && me.techs.has("siege_mode")) mul *= 1 + Math.min(0.25, (me.units.siege_tank ?? 0) * 0.03);
   if (meDefending && (me.units.lurker ?? 0) > 0) mul *= 1 + Math.min(0.2, (me.units.lurker ?? 0) * 0.03);
   mul *= mapAdv * (me.plan.power ?? 1) * (RACE_BALANCE[`${me.race}_${enemy.race}`] ?? 1);
@@ -1293,7 +1307,8 @@ function wantsToAttack(gs: GameState, p: BwPlayer): boolean {
   }
   if (gs.turn - p.lastAttackTurn < 3) return false;
   if (myArmy < 24) return false;
-  const noise = clamp(0.4 - 0.3 * p.sk.scout, 0.06, 0.6);
+  // 복잡한 맵은 상대 병력을 파악하기 어려워 정찰 능력치가 더 중요
+  const noise = clamp((0.4 - 0.3 * p.sk.scout) * (1 + 0.4 * p.terrain.cx), 0.06, 0.7);
   const estimate = (armyValue(e) + staticValue(e) * 0.6) * (1 + (rand() * 2 - 1) * noise);
   let threshold = 1.5 - 0.12 * p.sk.attack - 0.08 * p.sk.sense;
   if (supplyUsed(p) >= 180) threshold = 0.9;
@@ -1329,7 +1344,8 @@ function harass(gs: GameState, p: BwPlayer) {
   const bases = Math.max(1, townHalls(e));
   const staticAA = ((e.buildings.missile_turret ?? 0) + (e.buildings.photon_cannon ?? 0) + (e.buildings.spore_colony ?? 0)) / bases;
   const staticG = ((e.buildings.photon_cannon ?? 0) + (e.buildings.sunken_colony ?? 0) + (e.buildings.bunker ?? 0)) / bases;
-  const skillMul = clamp(1 + 0.9 * p.sk.harass, 0.4, 2.2);
+  // 복잡한 맵은 드랍·우회 경로가 많아 견제가 잘 통함
+  const skillMul = clamp((1 + 0.9 * p.sk.harass) * (1 + 0.35 * p.terrain.cx), 0.4, 2.6);
   const defense = clamp(0.2 + 0.18 * e.sk.defense + 0.1 * e.sk.sense, 0.02, 0.6);
   let killed = 0;
   let lostUnits = 0;
