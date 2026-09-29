@@ -22,6 +22,7 @@ interface GameState {
   opponentRace?: string;
   opponentGrade?: string;
   playerCondition?: number;
+  playerId?: number;
   opponentCondition?: number;
   opponentStats?: Record<string, number>;
   isAiOpponent?: boolean;
@@ -137,21 +138,46 @@ export default function PracticePage() {
   const playGameMutation = trpc.practice.playGame.useMutation();
   const userQuery = trpc.auth.me.useQuery();
   const playerQuery = trpc.player.get.useQuery();
+  const teamQuery = trpc.team.get.useQuery();
 
-  const player1Name = playerQuery.data?.name || "플레이어 1";
+  // 출전 선수: 본인 선수(기본) 또는 영입한 팀 선수. 아이템은 본인 선수만 착용
+  const [actingId, setActingId] = useState<number | null>(null);
+  const roster = teamQuery.data?.roster ?? [];
+  const mainId = playerQuery.data?.id;
+  const isMainActing = !actingId || actingId === mainId;
+  const rosterEntry = roster.find(p => p.id === actingId);
+  const acting = isMainActing
+    ? (playerQuery.data ? {
+        id: playerQuery.data.id,
+        name: playerQuery.data.name,
+        race: (playerQuery.data as any).race as string,
+        stats: playerQuery.data.stats as unknown as Record<string, number> | null,
+        fatigue: playerQuery.data.fatigue ?? 0,
+        items: ((playerQuery.data as any).playerItems ?? []) as any[],
+      } : null)
+    : (rosterEntry ? {
+        id: rosterEntry.id,
+        name: rosterEntry.name,
+        race: rosterEntry.race as string,
+        stats: rosterEntry.stats as unknown as Record<string, number>,
+        fatigue: rosterEntry.fatigue,
+        items: [] as any[],
+      } : null);
+
+  const player1Name = gameState.playerName || acting?.name || "플레이어 1";
   const player2Name = gameState.opponentName || "플레이어 2";
 
   // 플레이어 능력치 계산 (아이템 부스트 + 피로 페널티 포함)
   const calculatePlayerEffectiveStats = () => {
-    if (!playerQuery.data?.stats) return null;
+    if (!acting?.stats) return null;
     
-    const baseStats = playerQuery.data.stats as unknown as Record<string, number>;
-    const fatigue = playerQuery.data.fatigue ?? 0;
+    const baseStats = acting.stats;
+    const fatigue = acting.fatigue ?? 0;
     
-    // 착용 아이템 보너스 계산
+    // 착용 아이템 보너스 계산 (본인 선수만)
     let itemBoosts: Record<string, number> = {};
-    if ((playerQuery.data as any)?.playerItems) {
-      (playerQuery.data as any).playerItems.forEach((pi: any) => {
+    if (acting.items.length) {
+      acting.items.forEach((pi: any) => {
         if (!pi.equipped) return;
         const boosts = (pi.item?.statBoosts ?? {}) as Record<string, number>;
         Object.entries(boosts).forEach(([k, v]) => {
@@ -189,6 +215,7 @@ export default function PracticePage() {
       const result = await findOpponentMutation.mutateAsync({
         difficulty: gameState.difficulty!,
         mapId,
+        playerId: acting?.id,
       });
       
       // 플레이어 능력치 계산
@@ -197,8 +224,9 @@ export default function PracticePage() {
       setGameState(prev => ({
         ...prev,
         gameId: result.gameId,
-        playerName: playerQuery.data?.name,
-        playerRace: (playerQuery.data as any)?.race,
+        playerId: acting?.id,
+        playerName: acting?.name,
+        playerRace: acting?.race,
         playerStats: playerStatsCalc?.baseStats,
         playerEffectiveStats: playerStatsCalc?.effectiveStats,
         playerFatigue: playerStatsCalc?.fatigue,
@@ -220,6 +248,7 @@ export default function PracticePage() {
   const useItemMutation = trpc.shop.useItem.useMutation({
     onSuccess: (result) => {
       utils.player.get.invalidate();
+      utils.team.get.invalidate();
       utils.practice.estimateWinRate.invalidate();
       setGameState(prev => ({
         ...prev,
@@ -241,7 +270,7 @@ export default function PracticePage() {
 
   const handleUseRecoveryItem = (playerItem: any) => {
     if (!playerItem || !playerItem.item?.fatigueRecover) return;
-    useItemMutation.mutate({ playerItemId: playerItem.playerItemId });
+    useItemMutation.mutate({ playerItemId: playerItem.playerItemId, targetPlayerId: gameState.playerId ?? acting?.id });
   };
 
   const handleStartGame = async () => {
@@ -271,6 +300,7 @@ export default function PracticePage() {
       
       // 게임 완료 후 플레이어 정보 및 아이템 목록 갱신 (사용횟수 0 아이템 제거 반영)
       utils.player.get.invalidate();
+      utils.team.get.invalidate();
       utils.shop.getPlayerItems.invalidate();
       
       setPhase("playing");
@@ -308,8 +338,8 @@ export default function PracticePage() {
   };
 
   if (phase === "difficulty") {
-    const currentFatigue = playerQuery.data?.fatigue ?? 0;
-    const baseStats = (playerQuery.data?.stats ?? null) as Record<string, number> | null;
+    const currentFatigue = acting?.fatigue ?? 0;
+    const baseStats = acting?.stats ?? null;
     const myTotal = baseStats ? Object.keys(STAT_LABELS).reduce((s, k) => s + (baseStats[k] ?? 0), 0) : 4000;
     const isFatigueTooLow = currentFatigue <= FATIGUE_MIN_TO_PLAY;
 
@@ -318,6 +348,29 @@ export default function PracticePage() {
         <div className="max-w-2xl mx-auto">
           <div className="text-center mb-6 md:mb-12">
             <h1 className="text-2xl md:text-4xl font-bold text-white mb-1 md:mb-2">연습게임</h1>
+            {roster.length > 1 && (
+              <div className="my-3">
+                <p className="text-xs text-slate-400 mb-1.5">출전 선수</p>
+                <div className="flex flex-wrap justify-center gap-1.5">
+                  {roster.map(p => {
+                    const selected = (actingId ?? mainId) === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => setActingId(p.id)}
+                        className={`px-2.5 py-1.5 rounded-lg border-2 text-left transition-all ${selected ? "border-blue-500 bg-blue-950/50" : "border-slate-700 bg-slate-800 hover:border-slate-500"}`}
+                      >
+                        <div className="text-xs font-bold text-white">{p.name}{p.isMain ? " ⭐" : ""}</div>
+                        <div className="text-[10px] text-slate-400">
+                          <span style={{ color: RACE_COLORS[p.race] }}>{RACE_LABELS[p.race as keyof typeof RACE_LABELS]}</span> · {p.totalStats.toLocaleString()} · 피로 {p.fatigue}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {!isMainActing && <p className="text-[11px] text-slate-500 mt-1">경험치·능력치 변화는 출전 선수에게, 골드는 팀 운영 자금으로 들어갑니다. 아이템 효과는 본인 선수만 받습니다.</p>}
+              </div>
+            )}
             <p className="text-xs md:text-base text-slate-400">난이도를 선택하세요 · 상대는 내 능력치 합계(<span className="text-white font-semibold">{myTotal.toLocaleString()}</span>) 기준으로 정해집니다</p>
             <p className="text-xs md:text-sm text-slate-400 mt-1">현재 피로도: <span className={isFatigueTooLow ? "text-red-400 font-bold" : "text-blue-400 font-bold"}>{currentFatigue}</span></p>
             {isFatigueTooLow && (
@@ -366,7 +419,7 @@ export default function PracticePage() {
     return (
       <MapPicker
         maps={(mapsQuery.data ?? []) as any}
-        playerRace={(playerQuery.data as any)?.race}
+        playerRace={acting?.race}
         onSelect={handleSelectMap}
         onBack={() => { setPhase("difficulty"); setGameState({}); }}
       />
