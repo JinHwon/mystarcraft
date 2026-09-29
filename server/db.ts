@@ -234,7 +234,14 @@ export async function toggleEquipItem(
 
 // ── Seed Items ───────────────────────────────────────────────────
 
-export async function seedItemsIfEmpty() {
+/** 동시 요청에서 중복 삽입되지 않도록 서버 실행당 한 번만 수행 */
+let seedItemsIfEmptyOnce: Promise<void> | null = null;
+export function seedItemsIfEmpty(): Promise<void> {
+  if (!seedItemsIfEmptyOnce) seedItemsIfEmptyOnce = seedItemsIfEmptyImpl().catch(err => { seedItemsIfEmptyOnce = null; throw err; });
+  return seedItemsIfEmptyOnce;
+}
+
+async function seedItemsIfEmptyImpl() {
   const db = await getDb();
   if (!db) return;
 
@@ -586,7 +593,14 @@ export async function getActiveEvents() {
   return result;
 }
 
-export async function seedMapsIfEmpty() {
+/** 동시 요청에서 중복 삽입되지 않도록 서버 실행당 한 번만 수행 */
+let seedMapsIfEmptyOnce: Promise<void> | null = null;
+export function seedMapsIfEmpty(): Promise<void> {
+  if (!seedMapsIfEmptyOnce) seedMapsIfEmptyOnce = seedMapsIfEmptyImpl().catch(err => { seedMapsIfEmptyOnce = null; throw err; });
+  return seedMapsIfEmptyOnce;
+}
+
+async function seedMapsIfEmptyImpl() {
   const db = await getDb();
   if (!db) return;
   const existing = await db.select().from(maps).limit(1);
@@ -1131,17 +1145,26 @@ export async function getHeadToHeadRecord(playerId: number, opponentPlayerId: nu
 
 // ── Quest System ─────────────────────────────────────────────────
 
-export async function seedQuestsIfEmpty() {
+/** 동시 요청에서 중복 삽입되지 않도록 서버 실행당 한 번만 수행 */
+let seedQuestsIfEmptyOnce: Promise<void> | null = null;
+export function seedQuestsIfEmpty(): Promise<void> {
+  if (!seedQuestsIfEmptyOnce) seedQuestsIfEmptyOnce = seedQuestsIfEmptyImpl().catch(err => { seedQuestsIfEmptyOnce = null; throw err; });
+  return seedQuestsIfEmptyOnce;
+}
+
+async function seedQuestsIfEmptyImpl() {
   const db = await getDb();
   if (!db) return;
 
-  // 중복 퀘스트 정리: 같은 title이 여러 개 있으면 가장 작은 id만 남기고 삭제
-  const allExisting = await db.select({ id: quests.id, title: quests.title }).from(quests);
+  // 중복 퀘스트 정리: 같은 종류(일일/누적)+제목이 여러 개 있으면 가장 작은 id만 남기고 삭제
+  // (일일 "5승 달성"과 누적 "5승 달성"처럼 제목이 같아도 종류가 다르면 다른 퀘스트)
+  const allExisting = await db.select({ id: quests.id, title: quests.title, type: quests.type }).from(quests);
   const titleMap = new Map<string, number[]>();
   for (const q of allExisting) {
-    const ids = titleMap.get(q.title) || [];
+    const key = `${q.type}:${q.title}`;
+    const ids = titleMap.get(key) || [];
     ids.push(q.id);
-    titleMap.set(q.title, ids);
+    titleMap.set(key, ids);
   }
   for (const [, ids] of Array.from(titleMap)) {
     if (ids.length > 1) {
@@ -1156,8 +1179,8 @@ export async function seedQuestsIfEmpty() {
   }
 
   // 기존 퀘스트 제목 목록 조회
-  const existingQuests = await db.select({ title: quests.title }).from(quests);
-  const existingTitles = new Set(existingQuests.map(q => q.title));
+  const existingQuests = await db.select({ title: quests.title, type: quests.type }).from(quests);
+  const existingTitles = new Set(existingQuests.map(q => `${q.type}:${q.title}`));
 
   const seedData = [
     // 일일퀘스트
@@ -1315,8 +1338,10 @@ export async function seedQuestsIfEmpty() {
   ];
 
   for (const quest of seedData) {
-    if (!existingTitles.has(quest.title)) {
+    const key = `${quest.type}:${quest.title}`;
+    if (!existingTitles.has(key)) {
       await db.insert(quests).values(quest);
+      existingTitles.add(key);
     }
   }
 }

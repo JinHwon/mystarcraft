@@ -20,7 +20,29 @@ export default function Events() {
 
   const questsQuery = trpc.quest.list.useQuery();
   const progressQuery = trpc.quest.getProgress.useQuery();
-  const claimMutation = trpc.quest.claimReward.useMutation();
+  const utils = trpc.useUtils();
+  // 보상 수령: 누르는 즉시 화면에 반영(낙관적 업데이트), 실패하면 되돌림
+  const claimMutation = trpc.quest.claimReward.useMutation({
+    onMutate: async ({ questId }) => {
+      await utils.quest.getProgress.cancel();
+      const previous = utils.quest.getProgress.getData();
+      utils.quest.getProgress.setData(undefined, old => (old ?? []).map(p => p.questId === questId ? { ...p, rewardClaimed: true } : p));
+      utils.quest.getRewardableCount.setData(undefined, old => Math.max(0, (old ?? 1) - 1));
+      return { previous };
+    },
+    onError: (error, _vars, context) => {
+      if (context?.previous) utils.quest.getProgress.setData(undefined, context.previous);
+      utils.quest.getRewardableCount.invalidate();
+      toast.error(error?.message ?? "보상 수령 실패");
+    },
+    onSuccess: (result) => {
+      const reward = REWARD_LABELS[result.rewardType];
+      toast.success(`${reward?.icon ?? "🎁"} ${reward?.label ?? "보상"} +${result.rewardValue} 획득!`);
+      // 골드·경험치 등은 백그라운드에서 갱신
+      utils.player.get.invalidate();
+      utils.quest.getRewardableCount.invalidate();
+    },
+  });
 
   const quests = questsQuery.data ?? [];
   const progressList = progressQuery.data ?? [];
@@ -39,23 +61,21 @@ export default function Events() {
 
   const displayedQuests = activeTab === "daily" ? dailyQuests : cumulativeQuests;
 
-  // 보상 수령한 퀘스트를 아래로 정렬
+  // 정렬: 보상 받을 수 있는 퀘스트 → 진행 중 → 보상 수령 완료
+  const questOrder = (questId: number) => {
+    const p = getProgress(questId);
+    if (p?.completed && !p.rewardClaimed) return 0;
+    if (p?.rewardClaimed) return 2;
+    return 1;
+  };
   const sortedQuests = [...displayedQuests].sort((a, b) => {
-    const aClaimed = getProgress(a.id)?.rewardClaimed ? 1 : 0;
-    const bClaimed = getProgress(b.id)?.rewardClaimed ? 1 : 0;
-    if (aClaimed !== bClaimed) return aClaimed - bClaimed;
+    const diff = questOrder(a.id) - questOrder(b.id);
+    if (diff !== 0) return diff;
     return a.sortOrder - b.sortOrder;
   });
 
-  const handleClaim = async (questId: number) => {
-    try {
-      const result = await claimMutation.mutateAsync({ questId });
-      const reward = REWARD_LABELS[result.rewardType];
-      toast.success(`${reward?.icon ?? "🎁"} ${reward?.label ?? "보상"} +${result.rewardValue} 획득!`);
-      await progressQuery.refetch();
-    } catch (error: any) {
-      toast.error(error?.message ?? "보상 수령 실패");
-    }
+  const handleClaim = (questId: number) => {
+    claimMutation.mutate({ questId });
   };
 
   const dailyCompleted = dailyQuests.filter((q) => {
@@ -259,7 +279,6 @@ export default function Events() {
                         <Button
                           size="sm"
                           onClick={() => handleClaim(quest.id)}
-                          disabled={claimMutation.isPending}
                           className={cn(
                             "text-xs font-bold animate-pulse",
                             activeTab === "daily"
@@ -267,7 +286,7 @@ export default function Events() {
                               : "bg-purple-600 hover:bg-purple-700"
                           )}
                         >
-                          {claimMutation.isPending ? "수령 중..." : "🎁 보상 수령"}
+                          🎁 보상 수령
                         </Button>
                       )}
                     </div>

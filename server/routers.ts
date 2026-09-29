@@ -492,6 +492,62 @@ const eventRouter = router({
 
 // appRouter는 아래에서 정의됨
 
+/**
+ * 퀘스트 진행도 일괄 계산 - 진행도 행과 통계를 한 번씩만 조회해서 빠르게 처리
+ */
+async function computeQuestProgress(player: NonNullable<Awaited<ReturnType<typeof getPlayerByUserId>>>) {
+  await seedQuestsIfEmpty();
+  const [allQuestsList, rows, dailyGames, dailyWins, dailyAdvanced, record, goldEarned, gradeIndex] = await Promise.all([
+    getAllQuests(),
+    getPlayerQuestProgress(player.id),
+    getDailyGameCount(player.id),
+    getDailyWinCount(player.id),
+    getDailyAdvancedGameCount(player.id),
+    getPlayerGameRecord(player.id),
+    getTotalGoldEarned(player.id),
+    getPlayerGradeIndex(player.id),
+  ]);
+  const metrics: Record<string, number> = {
+    practice_games: dailyGames,
+    practice_wins: dailyWins,
+    practice_advanced: dailyAdvanced,
+    total_wins: record?.wins ?? 0,
+    total_games: record?.total ?? 0,
+    total_gold_earned: goldEarned,
+    player_level: player.level,
+    player_grade: gradeIndex,
+  };
+  const today = getTodayKst();
+  const updates: Promise<unknown>[] = [];
+  const result = [];
+  for (const quest of allQuestsList) {
+    let prog: any = rows.find(r => r.questId === quest.id);
+    // 처음 보는 퀘스트이거나 날짜가 바뀐 일일 퀘스트만 생성/초기화
+    if (!prog || (quest.type === "daily" && prog.lastResetDate !== today)) {
+      prog = await getOrCreateQuestProgress(player.id, quest.id, quest.type);
+    }
+    // 자동 집계 항목은 통계값, 나머지(능력치 배분·아이템 구매 등)는 저장된 진행도
+    const currentProgress = quest.conditionType in metrics ? metrics[quest.conditionType] : prog.progress;
+    const completed = currentProgress >= quest.conditionValue;
+    if (Math.min(currentProgress, quest.conditionValue) !== prog.progress || (completed ? 1 : 0) !== prog.completed) {
+      updates.push(updateQuestProgress(player.id, quest.id, currentProgress, quest.conditionValue));
+    }
+    result.push({
+      questId: quest.id,
+      progress: Math.min(currentProgress, quest.conditionValue),
+      completed,
+      rewardClaimed: prog.rewardClaimed === 1,
+    });
+  }
+  await Promise.all(updates);
+  return result;
+}
+
+function getTodayKst(): string {
+  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  return `${kst.getUTCFullYear()}-${String(kst.getUTCMonth() + 1).padStart(2, "0")}-${String(kst.getUTCDate()).padStart(2, "0")}`;
+}
+
 // ── Quest Router ────────────────────────────────────────────────
 
 const questRouter = router({
@@ -503,76 +559,14 @@ const questRouter = router({
   getProgress: protectedProcedure.query(async ({ ctx }) => {
     const player = await getPlayerByUserId(ctx.user.id);
     if (!player) return [];
-
-    await seedQuestsIfEmpty();
-    const allQuestsList = await getAllQuests();
-    const progressList = [];
-
-    for (const quest of allQuestsList) {
-      const prog = await getOrCreateQuestProgress(player.id, quest.id, quest.type);
-
-      // 자동으로 진행도 계산
-      let currentProgress = prog.progress;
-
-      if (quest.type === 'daily') {
-        if (quest.conditionType === 'practice_games') {
-          currentProgress = await getDailyGameCount(player.id);
-        } else if (quest.conditionType === 'practice_wins') {
-          currentProgress = await getDailyWinCount(player.id);
-        } else if (quest.conditionType === 'practice_advanced') {
-          currentProgress = await getDailyAdvancedGameCount(player.id);
-        }
-        // stat_allocate, item_buy는 액션 시점에 증가시킴
-      } else if (quest.type === 'cumulative') {
-        const record = await getPlayerGameRecord(player.id);
-        if (quest.conditionType === 'total_wins') {
-          currentProgress = record?.wins ?? 0;
-        } else if (quest.conditionType === 'total_games') {
-          currentProgress = record?.total ?? 0;
-        } else if (quest.conditionType === 'total_gold_earned') {
-          currentProgress = await getTotalGoldEarned(player.id);
-        } else if (quest.conditionType === 'player_level') {
-          currentProgress = player.level;
-        } else if (quest.conditionType === 'player_grade') {
-          currentProgress = await getPlayerGradeIndex(player.id);
-        }
-      }
-
-      // 진행도 업데이트
-      if (currentProgress !== prog.progress) {
-        await updateQuestProgress(player.id, quest.id, currentProgress, quest.conditionValue);
-      }
-
-      const completed = currentProgress >= quest.conditionValue;
-      progressList.push({
-        questId: quest.id,
-        progress: Math.min(currentProgress, quest.conditionValue),
-        completed,
-        rewardClaimed: prog.rewardClaimed === 1,
-      });
-    }
-
-    return progressList;
+    return await computeQuestProgress(player);
   }),
 
   getRewardableCount: protectedProcedure.query(async ({ ctx }) => {
     const player = await getPlayerByUserId(ctx.user.id);
     if (!player) return 0;
-
-    await seedQuestsIfEmpty();
-    const allQuestsList = await getAllQuests();
-    let rewardableCount = 0;
-
-    for (const quest of allQuestsList) {
-      const prog = await getOrCreateQuestProgress(player.id, quest.id, quest.type);
-      
-      // 완료했지만 보상을 수령하지 않은 퀘스트
-      if (prog.completed === 1 && prog.rewardClaimed !== 1) {
-        rewardableCount++;
-      }
-    }
-
-    return rewardableCount;
+    const list = await computeQuestProgress(player);
+    return list.filter(q => q.completed && !q.rewardClaimed).length;
   }),
 
   claimReward: protectedProcedure
