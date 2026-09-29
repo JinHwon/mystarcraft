@@ -45,6 +45,9 @@ import {
   getPlayerById,
   createBotPlayer,
   autoAllocateBotStatPoints,
+  findOpponentCandidates,
+  getRecentOpponentIds,
+  countBotPlayers,
   applyGameStatChange,
   getRankingList,
   getHeadToHeadRecord,
@@ -721,6 +724,9 @@ async function getPlayerSimStats(playerId: number): Promise<Record<StatKey, numb
   return statsForSim;
 }
 
+/** AI 선수 최대 수 (너무 많아지지 않도록) */
+const MAX_BOT_PLAYERS = 80;
+
 // ── Practice Game Router ────────────────────────────────────────
 
 const practiceRouter = router({
@@ -806,10 +812,22 @@ const practiceRouter = router({
       const map = maps.find(m => m.id === input.mapId);
       if (!map) throw new TRPCError({ code: "NOT_FOUND", message: "맵을 찾을 수 없습니다" });
 
-      // 상대 찾기 - 난이도에 맞는 상대가 없으면 AI 선수를 DB 에 생성 (이후 전적/랭킹/성장이 쌓임)
-      let opponent = await findOpponentByDifficulty(input.difficulty, player.id);
-      if (!opponent) {
+      // 상대 찾기
+      // - 대부분은 기존 선수/AI 중에서 매칭 (직전 상대는 가능하면 피함)
+      // - 일정 확률로 새 AI 선수를 생성 (해당 난이도 AI 가 적을수록 확률이 높음)
+      // - 상대가 없으면 반드시 새 AI 생성. 생성된 AI 는 이후 전적/랭킹/성장이 쌓임
+      const candidates = await findOpponentCandidates(input.difficulty, player.id);
+      const botsInRange = candidates.filter(c => c.isBot === 1).length;
+      const newBotChance = Math.min(0.45, Math.max(0.08, 0.45 - 0.07 * botsInRange));
+      const canAddBot = (await countBotPlayers()) < MAX_BOT_PLAYERS;
+      let opponent: Awaited<ReturnType<typeof createBotPlayer>> | undefined;
+      if (candidates.length === 0 || (canAddBot && Math.random() < newBotChance)) {
         opponent = await createBotPlayer(input.difficulty);
+      } else {
+        const recent = await getRecentOpponentIds(player.id, 2);
+        const fresh = candidates.filter(c => !recent.includes(c.id));
+        const pool = fresh.length > 0 ? fresh : candidates;
+        opponent = pool[Math.floor(Math.random() * pool.length)];
       }
       if (!opponent) throw new TRPCError({ code: "NOT_FOUND", message: "상대를 찾을 수 없습니다" });
       const isAiOpponent = opponent.isBot === 1;

@@ -722,6 +722,32 @@ export async function getPlayerGameHistory(playerId: number, limit: number = 10)
 }
 
 export async function findOpponentByDifficulty(difficulty: string, currentPlayerId: number) {
+  const candidates = await findOpponentCandidates(difficulty, currentPlayerId);
+  if (candidates.length === 0) return null;
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+/** 최근 경기 상대 id (같은 상대가 연달아 잡히지 않도록) */
+export async function getRecentOpponentIds(playerId: number, limit = 2): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({ opponentId: gameResults.opponentId }).from(gameResults)
+    .where(eq(gameResults.playerId, playerId))
+    .orderBy(desc(gameResults.createdAt), desc(gameResults.id))
+    .limit(limit);
+  return rows.map(r => r.opponentId);
+}
+
+/** 전체 AI 선수 수 */
+export async function countBotPlayers(): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows = await db.select({ n: sql<number>`count(*)` }).from(players).where(eq(players.isBot, 1));
+  return Number(rows[0]?.n ?? 0);
+}
+
+/** 난이도 등급 범위에 맞는 상대 후보 전체 */
+export async function findOpponentCandidates(difficulty: string, currentPlayerId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -736,8 +762,8 @@ export async function findOpponentByDifficulty(difficulty: string, currentPlayer
     .where(ne(players.id, currentPlayerId))
     .limit(200);
 
-  if (opponents.length === 0) return null;
-  
+  if (opponents.length === 0) return [];
+
   // 상대방의 등급을 계산하여 난이도 범위에 맞는 상대만 필터링
   const validOpponents = [];
   for (const opponent of opponents) {
@@ -756,10 +782,7 @@ export async function findOpponentByDifficulty(difficulty: string, currentPlayer
     }
   }
 
-  if (validOpponents.length === 0) return null;
-  
-  // 랜덤 선택
-  return validOpponents[Math.floor(Math.random() * validOpponents.length)];
+  return validOpponents;
 }
 
 const BOT_NAMES = [
