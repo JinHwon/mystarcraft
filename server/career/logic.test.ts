@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FINAL_SETS, PRO_SETS } from "@shared/career/rules";
-import { CareerError, advanceWeek, aiEntry, myPendingMatch, newCareer, proposeTrade, releasePlayer, rosterOf, scoutPlayer, setAction, standings, startNextSeason } from "./logic";
+import { CareerError, advanceWeek, aiEntry, beginMatch, myPendingMatch, newCareer, playLiveSet, proposeTrade, releasePlayer, rosterOf, scoutPlayer, setAction, standings, startNextSeason } from "./logic";
 
 describe("커리어 모드", () => {
   it("원작 데이터로 새 게임을 만든다 (230명, 12팀 풀리그 11주 66경기)", () => {
@@ -106,4 +106,32 @@ describe("원작 해설 중계", () => {
     }
     expect(lines.at(-2)?.text).toMatch(/경기가 종료되었습니다|승리|댄스|돌진|윙크/);
   });
+});
+
+describe("세트별 경기 진행", () => {
+  it("엔트리 4세트로 시작해 한 세트씩 진행, 2:2 면 ACE 선수를 골라야 한다", () => {
+    let sawAce = false;
+    for (let k = 0; k < 40 && !sawAce; k++) {
+      const s = newCareer(k % 12);
+      const front = aiEntry(s, s.myTeam, PRO_SETS).slice(0, 4);
+      beginMatch(s, front);
+      expect(() => advanceWeek(s)).toThrow(CareerError);
+      const week = s.week;
+      let r = playLiveSet(s);
+      while (!r.week) {
+        if (r.needAce) {
+          sawAce = true;
+          expect(() => playLiveSet(s)).toThrow(CareerError);
+          r = playLiveSet(s, front[0]);
+        } else r = playLiveSet(s);
+      }
+      expect(r.set.timeline?.lines.length).toBeGreaterThan(5);
+      expect(s.live).toBeUndefined();
+      expect(s.week).toBe(week + 1);
+      const m = s.matches.find(x => x.id === r.week!.playedMatchId)!;
+      expect(m.done).toBe(true);
+      expect(Math.max(m.scoreA!, m.scoreB!)).toBe(3);
+    }
+    expect(sawAce).toBe(true);
+  }, 120_000);
 });

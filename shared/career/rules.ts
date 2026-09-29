@@ -124,6 +124,17 @@ export interface SetTimeline {
   frames: Array<{ t: number; army: [number, number]; res: [number, number] }>;
 }
 
+/** 진행 중인 우리 경기 */
+export interface LiveMatch {
+  matchId: number;
+  /** 우리 엔트리 (처음엔 1~(n-1)세트, ACE 결정전 때 마지막 선수가 붙음) */
+  mine: number[];
+  /** 상대(AI) 엔트리 전체 (마지막 = ACE, 화면에서는 그 세트 전까지 숨김) */
+  opp: number[];
+  /** 지금까지 치른 세트 (중계 포함, 경기가 끝나면 지움) */
+  sets: Array<SetResult & { timeline?: SetTimeline }>;
+}
+
 /** 시즌 맵 추첨 개수 (원작 "맵 추첨 결과" 7개, 결승 7세트) */
 export const MAP_POOL_SIZE = 7;
 
@@ -192,6 +203,8 @@ export interface CareerState {
   msl?: MslState;
   /** 이번 시즌 맵 추첨 결과 */
   mapPool?: number[];
+  /** 진행 중인 우리 경기 (세트마다 하나씩 진행, 2:2 면 ACE 결정전 선수를 그때 고름) */
+  live?: LiveMatch;
 }
 
 export function ageOf(p: Pick<CPlayer, "birth">, season: number): number {

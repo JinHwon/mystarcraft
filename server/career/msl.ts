@@ -13,7 +13,7 @@ import {
   type MslSeries,
   type MslState,
 } from "@shared/career/rules";
-import { news, pickMaps, playSet, rand, shuffle } from "./core";
+import { news, pickMaps, playSet, quickSet, rand, shuffle, type PlayedSet } from "./core";
 
 const GROUP_NAMES = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
@@ -22,7 +22,7 @@ const byStrength = (s: CareerState, ids: number[]) => [...ids].sort((a, b) => st
 const isMine = (s: CareerState, id: number) => s.players[id]?.team === s.myTeam;
 
 /** 이번 주에 치른, 우리 선수가 나온 경기 (하이라이트 포함, 화면 표시용) */
-export type MslReport = MslSeries & { stage: string };
+export type MslReport = Omit<MslSeries, "sets"> & { stage: string; sets: PlayedSet[] };
 
 // ── 시즌 시작 ──────────────────────────────────────────────────
 
@@ -45,16 +45,16 @@ function series(s: CareerState, a: number, b: number, bestOf: number, label: str
   const mine = isMine(s, a) || isMine(s, b);
   const maps = pickMaps(bestOf, s.mapPool);
   let sa = 0, sb = 0;
-  const sets = [];
+  const sets: PlayedSet[] = [];
   for (let i = 0; sa < need && sb < need; i++) {
-    const r = playSet(s, s.players[a], s.players[b], maps[i], mine);
+    const r: PlayedSet = playSet(s, s.players[a], s.players[b], maps[i], mine, mine);
     if (r.winner === "a") sa++; else sb++;
     sets.push(r);
   }
   const result: MslSeries = { a, b, bestOf, sa, sb, winner: sa > sb ? a : b, label, sets };
   if (mine) {
     report.push({ ...result, stage, sets: sets.map(x => ({ ...x })) });
-    for (const x of sets) delete x.highlights; // 세이브에는 중계를 남기지 않음
+    for (const x of sets) { delete x.highlights; delete x.timeline; } // 세이브에는 중계를 남기지 않음
   }
   return result;
 }
@@ -91,7 +91,7 @@ function runPc(s: CareerState, m: MslState) {
     const games = Math.min(Math.floor(pool.length / 2), pool.length - 8);
     const next: number[] = pool.slice(games * 2);
     for (let i = 0; i < games * 2; i += 2) {
-      const r = playSet(s, s.players[pool[i]], s.players[pool[i + 1]], pickMaps(1, s.mapPool)[0], false);
+      const r = quickSet(s, s.players[pool[i]], s.players[pool[i + 1]], pickMaps(1, s.mapPool)[0]);
       next.push(r.winner === "a" ? pool[i] : pool[i + 1]);
     }
     pool = shuffle(next);

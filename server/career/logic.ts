@@ -102,6 +102,7 @@ function scheduleRegularSeason(s: CareerState) {
 export function setAction(s: CareerState, pid: number, action: ActionKey | null) {
   const p = s.players[pid];
   if (!p || p.team !== s.myTeam) throw new CareerError("우리 팀 선수가 아닙니다");
+  if (s.live) throw new CareerError("경기 중에는 행동을 바꿀 수 없습니다");
   const cost = (a: ActionKey | null | undefined) => (a ? ACTIONS.find(x => x.key === a)!.ap : 0);
   const used = rosterOf(s, s.myTeam).reduce((sum, x) => sum + (x.id === pid ? 0 : cost(x.action)), 0);
   if (used + cost(action) > s.ap) throw new CareerError(`행동력이 부족합니다 (남은 행동력 ${s.ap - used})`);
@@ -159,22 +160,11 @@ export function validateEntry(s: CareerState, entry: number[], sets: number) {
 
 
 
-function playMatch(s: CareerState, m: CMatch, myEntry?: number[]): PlayedSet[] {
-  const sets = m.stage === "final" ? FINAL_SETS : PRO_SETS;
-  const need = m.stage === "final" ? FINAL_WIN : PRO_WIN;
-  const involvesMe = m.a === s.myTeam || m.b === s.myTeam;
-  const entryA = m.a === s.myTeam && myEntry ? myEntry : aiEntry(s, m.a, sets);
-  const entryB = m.b === s.myTeam && myEntry ? myEntry : aiEntry(s, m.b, sets);
+/** 경기 결과 기록 (순위·상금·소식) */
+function recordMatch(s: CareerState, m: CMatch, entryA: number[], entryB: number[], results: PlayedSet[]) {
   let sa = 0, sb = 0;
-  const results: PlayedSet[] = [];
+  for (const r of results) (r.winner === "a" ? sa++ : sb++);
   m.entryA = entryA; m.entryB = entryB;
-  for (let i = 0; i < sets && sa < need && sb < need; i++) {
-    const pa = s.players[entryA[i]], pb = s.players[entryB[i]];
-    if (!pa || !pb) { if (!pa) sb++; else sa++; continue; }
-    const r = playSet(s, pa, pb, m.maps[i % m.maps.length], involvesMe, involvesMe);
-    if (r.winner === "a") sa++; else sb++;
-    results.push(r);
-  }
   m.done = true;
   m.scoreA = sa; m.scoreB = sb;
   m.winner = sa > sb ? m.a : m.b;
@@ -187,12 +177,30 @@ function playMatch(s: CareerState, m: CMatch, myEntry?: number[]): PlayedSet[] {
   }
   s.teams[m.winner].money += MATCH_MONEY.win;
   s.teams[m.winner === m.a ? m.b : m.a].money += MATCH_MONEY.lose;
-  if (involvesMe) {
+  if (m.a === s.myTeam || m.b === s.myTeam) {
     const won = m.winner === s.myTeam;
     const opp = s.teams[m.a === s.myTeam ? m.b : m.a];
     const stageName = { regular: `${m.week}주차`, semi: "준플레이오프", po: "플레이오프", final: "결승" }[m.stage];
     news(s, `${won ? "🎉" : "😢"} ${stageName} vs ${opp.name} ${Math.max(sa, sb)}:${Math.min(sa, sb)} ${won ? "승리" : "패배"}`);
   }
+}
+
+function playMatch(s: CareerState, m: CMatch, myEntry?: number[]): PlayedSet[] {
+  const sets = m.stage === "final" ? FINAL_SETS : PRO_SETS;
+  const need = m.stage === "final" ? FINAL_WIN : PRO_WIN;
+  const involvesMe = m.a === s.myTeam || m.b === s.myTeam;
+  const entryA = m.a === s.myTeam && myEntry ? myEntry : aiEntry(s, m.a, sets);
+  const entryB = m.b === s.myTeam && myEntry ? myEntry : aiEntry(s, m.b, sets);
+  let sa = 0, sb = 0;
+  const results: PlayedSet[] = [];
+  for (let i = 0; i < sets && sa < need && sb < need; i++) {
+    const pa = s.players[entryA[i]], pb = s.players[entryB[i]];
+    if (!pa || !pb) continue;
+    const r = playSet(s, pa, pb, m.maps[i % m.maps.length], involvesMe, involvesMe);
+    if (r.winner === "a") sa++; else sb++;
+    results.push(r);
+  }
+  recordMatch(s, m, entryA, entryB, results);
   return results;
 }
 
@@ -216,6 +224,7 @@ export interface WeekResult {
 
 export function advanceWeek(s: CareerState, myEntry?: number[]): WeekResult {
   if (s.phase === "offseason") throw new CareerError("시즌이 끝났습니다. 다음 시즌을 시작하세요");
+  if (s.live) throw new CareerError("진행 중인 경기가 있습니다");
   const mine = myPendingMatch(s);
   if (mine) {
     const sets = mine.stage === "final" ? FINAL_SETS : PRO_SETS;
@@ -223,22 +232,75 @@ export function advanceWeek(s: CareerState, myEntry?: number[]): WeekResult {
     if (rosterOf(s, s.myTeam).length < MIN_ROSTER) throw new CareerError(`선수가 최소 ${MIN_ROSTER}명 있어야 경기를 치를 수 있습니다`);
     validateEntry(s, myEntry, sets);
   }
-
   applyActions(s);
   let broadcast: PlayedSet[] | undefined;
-  for (const m of s.matches.filter(x => !x.done && x.week === s.week)) {
-    const sets = playMatch(s, m, m === mine ? myEntry : undefined);
-    if (m === mine) broadcast = sets;
-  }
+  if (mine) broadcast = playMatch(s, mine, myEntry);
+  return { ...finishWeek(s), playedMatchId: mine?.id, broadcast };
+}
+
+/** 이번 주 나머지 일정 (다른 팀 경기·스타리그·스폰서) 진행 후 다음 주로 */
+function finishWeek(s: CareerState): WeekResult {
+  for (const m of s.matches.filter(x => !x.done && x.week === s.week)) playMatch(s, m);
   const mslReports = s.phase === "regular" ? runMslWeek(s) : [];
   for (const t of proTeams(s)) t.money += WEEKLY_SPONSOR;
   pruneHighlights(s);
-
-  const playedMatchId = mine?.id;
   s.week++;
   s.ap = WEEKLY_AP;
   progressSchedule(s);
-  return { playedMatchId, broadcast, mslReports };
+  return { mslReports };
+}
+
+// ── 우리 경기: 세트마다 진행 ──────────────────────────────────────
+
+const setsOf = (m: CMatch) => (m.stage === "final" ? FINAL_SETS : PRO_SETS);
+const needOf = (m: CMatch) => (m.stage === "final" ? FINAL_WIN : PRO_WIN);
+
+/** 엔트리(1~(n-1)세트)를 내고 경기 시작. 선수 행동은 이때 반영된다 */
+export function beginMatch(s: CareerState, front: number[]) {
+  if (s.live) throw new CareerError("이미 진행 중인 경기가 있습니다");
+  const m = myPendingMatch(s);
+  if (!m) throw new CareerError("이번 주 우리 팀 경기가 없습니다");
+  const sets = setsOf(m);
+  if (front.length !== sets - 1) throw new CareerError(`1~${sets - 1}세트 엔트리를 모두 정해주세요`);
+  for (const id of front) if (s.players[id]?.team !== s.myTeam) throw new CareerError("우리 팀 선수만 출전할 수 있습니다");
+  if (new Set(front).size !== front.length) throw new CareerError(`1~${sets - 1}세트에는 서로 다른 선수를 배치해야 합니다`);
+  applyActions(s);
+  const oppTeam = m.a === s.myTeam ? m.b : m.a;
+  s.live = { matchId: m.id, mine: [...front], opp: aiEntry(s, oppTeam, sets), sets: [] };
+  return { matchId: m.id };
+}
+
+export interface LiveSetResult {
+  set: PlayedSet;
+  /** 경기가 끝났으면 이번 주 나머지 결과 */
+  week?: WeekResult;
+  /** 다음 세트가 ACE 결정전 (선수를 골라야 함) */
+  needAce: boolean;
+}
+
+/** 다음 세트 진행. ACE 결정전이면 ace(우리 선수, 누구나)를 함께 보낸다 */
+export function playLiveSet(s: CareerState, ace?: number): LiveSetResult {
+  const live = s.live;
+  if (!live) throw new CareerError("진행 중인 경기가 없습니다");
+  const m = s.matches.find(x => x.id === live.matchId)!;
+  const sets = setsOf(m), need = needOf(m);
+  const i = live.sets.length;
+  if (i === sets - 1) {
+    if (ace === undefined || s.players[ace]?.team !== s.myTeam) throw new CareerError("ACE 결정전에 나갈 선수를 골라주세요");
+    live.mine[i] = ace;
+  }
+  const meA = m.a === s.myTeam;
+  const entryA = meA ? live.mine : live.opp, entryB = meA ? live.opp : live.mine;
+  const set = playSet(s, s.players[entryA[i]], s.players[entryB[i]], m.maps[i % m.maps.length], true, true);
+  live.sets.push(set);
+  const sa = live.sets.filter(x => x.winner === "a").length, sb = live.sets.length - sa;
+  if (sa >= need || sb >= need) {
+    recordMatch(s, m, entryA, entryB, live.sets);
+    delete s.live;
+    const week = { ...finishWeek(s), playedMatchId: m.id };
+    return { set, week, needAce: false };
+  }
+  return { set, needAce: live.sets.length === sets - 1 };
 }
 
 /** 정규시즌 → 준PO(3·4위) → PO(2위 vs 준PO 승자) → 결승(1위 vs PO 승자) → 시즌 종료 */
@@ -342,6 +404,7 @@ export function scoutPlayer(s: CareerState, pid: number) {
 export function releasePlayer(s: CareerState, pid: number) {
   const p = s.players[pid];
   if (!p || p.team !== s.myTeam) throw new CareerError("우리 팀 선수가 아닙니다");
+  if (s.live) throw new CareerError("경기 중에는 방출할 수 없습니다");
   if (myPendingMatch(s) && rosterOf(s, s.myTeam).length <= MIN_ROSTER) throw new CareerError(`경기를 치르려면 최소 ${MIN_ROSTER}명이 필요합니다`);
   const gain = Math.round(askingPrice(p, s.season) * 0.2 / 10) * 10;
   s.teams[s.myTeam].money += gain;
@@ -356,6 +419,7 @@ export function releasePlayer(s: CareerState, pid: number) {
 /** AI 팀과 선수(+현금) 교환. 우리가 내주는 가치가 상대 요구치 이상이면 성사 */
 export function proposeTrade(s: CareerState, teamId: number, myIds: number[], theirIds: number[], cash: number) {
   if (teamId === s.myTeam || teamId === FREE_AGENT_TEAM || !s.teams[teamId]) throw new CareerError("트레이드할 팀을 선택해주세요");
+  if (s.live) throw new CareerError("경기 중에는 트레이드할 수 없습니다");
   cash = Math.max(0, Math.round(cash || 0));
   myIds = [...new Set(myIds)];
   theirIds = [...new Set(theirIds)];
