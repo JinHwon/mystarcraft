@@ -10,6 +10,7 @@ import { Loader2, X, ArrowLeft, User } from "lucide-react";
 import { STAT_LABELS } from "@shared/gameConstants";
 import { ConditionBadge } from "@/components/team/PlayerBadges";
 import { toast } from "sonner";
+import MapPicker, { mapKeyPoints } from "@/components/MapPicker";
 
 type GamePhase = "difficulty" | "map" | "opponent" | "playing" | "result";
 
@@ -355,135 +356,13 @@ export default function PracticePage() {
   }
 
   if (phase === "map") {
-    const maps = mapsQuery.data || [];
-
-    const getRushDistanceLabel = (value: number) => {
-      if (value <= 30) return "가까움";
-      if (value <= 50) return "보통";
-      return "멀음";
-    };
-    const getResourcesLabel = (value: number) => {
-      if (value <= 40) return "적음";
-      if (value <= 55) return "보통";
-      return "풍부";
-    };
-    const getComplexityLabel = (value: number) => {
-      if (value <= 40) return "단순";
-      if (value <= 55) return "보통";
-      return "복잡";
-    };
-
-    const parseRaceAdvantage = (raw: any): Record<string, number> => {
-      if (!raw) return { terran: 50, zerg: 50, protoss: 50 };
-      if (typeof raw === "string") {
-        try { return JSON.parse(raw); } catch { return { terran: 50, zerg: 50, protoss: 50 }; }
-      }
-      return raw as Record<string, number>;
-    };
-
-    const getMatchupText = (adv: Record<string, number>, raceA: string, raceB: string) => {
-      const a = adv[raceA] ?? 50;
-      const b = adv[raceB] ?? 50;
-      const total = a + b;
-      const pctA = Math.round((a / total) * 100);
-      const pctB = 100 - pctA;
-      return `${pctA} : ${pctB}`;
-    };
-
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 md:p-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="mb-4">
-            <Button
-              onClick={() => { setPhase("difficulty"); setGameState({}); }}
-              variant="ghost"
-              className="text-slate-400 hover:text-white"
-              size="sm"
-            >
-              <ArrowLeft className="w-4 h-4 mr-1" /> 뒤로가기
-            </Button>
-          </div>
-          <div className="text-center mb-6 md:mb-12">
-            <h1 className="text-2xl md:text-4xl font-bold text-white mb-1 md:mb-2">맵 선택</h1>
-            <p className="text-xs md:text-base text-slate-400">플레이할 맵을 선택하세요</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-            {maps.map(map => {
-              const adv = parseRaceAdvantage(map.raceAdvantage);
-              return (
-                <Card
-                  key={map.id}
-                  className="bg-slate-800 border-slate-700 hover:border-blue-500 cursor-pointer transition-all"
-                  onClick={() => handleSelectMap(map.id)}
-                >
-                  <CardHeader>
-                    <CardTitle className="text-sm md:text-base text-white">{map.name}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {/* 종족 상성 */}
-                    <div className="space-y-1">
-                      <p className="text-xs font-semibold text-slate-400 mb-1">종족 상성</p>
-                      <div className="space-y-0.5 text-xs">
-                        <div className="flex justify-between items-center">
-                          <span className="text-slate-400">테란 vs 저그</span>
-                          <span className="text-slate-200">{getMatchupText(adv, 'terran', 'zerg')}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-slate-400">테란 vs 프로토스</span>
-                          <span className="text-slate-200">{getMatchupText(adv, 'terran', 'protoss')}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-slate-400">저그 vs 프로토스</span>
-                          <span className="text-slate-200">{getMatchupText(adv, 'zerg', 'protoss')}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 각 종족 유리도 */}
-                    <div className="space-y-1">
-                      <p className="text-xs font-semibold text-slate-400 mb-1">유리도</p>
-                      <div className="grid grid-cols-3 gap-1 text-xs">
-                        <div className="flex flex-col items-center p-1.5 rounded bg-slate-700/50">
-                          <span className="text-slate-400">테란</span>
-                          <span className="text-cyan-400 font-medium">{adv.terran ?? 50}</span>
-                        </div>
-                        <div className="flex flex-col items-center p-1.5 rounded bg-slate-700/50">
-                          <span className="text-slate-400">저그</span>
-                          <span className="text-purple-400 font-medium">{adv.zerg ?? 50}</span>
-                        </div>
-                        <div className="flex flex-col items-center p-1.5 rounded bg-slate-700/50">
-                          <span className="text-slate-400">프로토스</span>
-                          <span className="text-yellow-400 font-medium">{adv.protoss ?? 50}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 지형 특징 */}
-                    <div className="space-y-1">
-                      <p className="text-xs font-semibold text-slate-400 mb-1">지형 특징</p>
-                      <div className="grid grid-cols-3 gap-1 text-xs">
-                        <div className="flex flex-col items-center p-1.5 rounded bg-slate-700/50">
-                          <span className="text-slate-400">러쉬거리</span>
-                          <span className="text-white font-medium">{getRushDistanceLabel(map.rushDistance)}</span>
-                        </div>
-                        <div className="flex flex-col items-center p-1.5 rounded bg-slate-700/50">
-                          <span className="text-slate-400">자원</span>
-                          <span className="text-white font-medium">{getResourcesLabel(map.resources)}</span>
-                        </div>
-                        <div className="flex flex-col items-center p-1.5 rounded bg-slate-700/50">
-                          <span className="text-slate-400">복잡도</span>
-                          <span className="text-white font-medium">{getComplexityLabel(map.complexity)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      <MapPicker
+        maps={(mapsQuery.data ?? []) as any}
+        playerRace={(playerQuery.data as any)?.race}
+        onSelect={handleSelectMap}
+        onBack={() => { setPhase("difficulty"); setGameState({}); }}
+      />
     );
   }
 
@@ -657,6 +536,24 @@ export default function PracticePage() {
                     </div>
                   )}
                   
+                  {(() => {
+                    const m = mapsQuery.data?.find((x: any) => x.id === gameState.mapId) as any;
+                    if (!m) return null;
+                    return (
+                      <div className="p-2 md:p-3 bg-slate-900/60 border border-slate-700 rounded-lg text-xs">
+                        <div className="flex justify-between text-slate-300 mb-1">
+                          <span className="font-semibold">{m.iconEmoji} {m.name}</span>
+                          <span className="text-slate-500">러쉬거리 {m.rushDistance} · 복잡도 {m.complexity} · 자원 {m.resources}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {mapKeyPoints(m).map(t => (
+                            <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300">{t}</span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {gameState.gameId && (
                     <div>
                       <div className="flex justify-between text-xs md:text-sm text-slate-300 mb-1 md:mb-2">

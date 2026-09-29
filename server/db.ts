@@ -610,37 +610,40 @@ export async function getActiveEvents() {
 
 /** 동시 요청에서 중복 삽입되지 않도록 서버 실행당 한 번만 수행 */
 let seedMapsIfEmptyOnce: Promise<void> | null = null;
+/** 실제 프로 리그 맵 목록을 DB 에 동기화 (서버 프로세스당 1회, 이름 기준으로 추가/갱신) */
 export function seedMapsIfEmpty(): Promise<void> {
-  if (!seedMapsIfEmptyOnce) seedMapsIfEmptyOnce = seedMapsIfEmptyImpl().catch(err => { seedMapsIfEmptyOnce = null; throw err; });
+  if (!seedMapsIfEmptyOnce) seedMapsIfEmptyOnce = syncProMaps().catch(e => { seedMapsIfEmptyOnce = null; throw e; });
   return seedMapsIfEmptyOnce;
 }
 
-async function seedMapsIfEmptyImpl() {
+async function syncProMaps() {
   const db = await getDb();
   if (!db) return;
-  const existing = await db.select().from(maps).limit(1);
-  if (existing.length > 0) return;
-
-  const seedMaps = [
-    {
-      name: "아이스크라운 글레이시어",
-      description: "얼음으로 뒤덮인 광활한 평원",
-      raceAdvantage: JSON.stringify({ terran: 1.0, zerg: 0.9, protoss: 1.1 }),
-    },
-    {
-      name: "칼라의 계곡",
-      description: "프로토스의 신성한 땅",
-      raceAdvantage: JSON.stringify({ terran: 0.9, zerg: 0.8, protoss: 1.3 }),
-    },
-    {
-      name: "저그의 소굴",
-      description: "저그 종족의 본거지",
-      raceAdvantage: JSON.stringify({ terran: 0.8, zerg: 1.3, protoss: 0.9 }),
-    },
-  ];
-
-  for (const map of seedMaps) {
-    await db.insert(maps).values(map);
+  const { PRO_MAPS } = await import("@shared/mapData");
+  const existing = await db.select().from(maps);
+  const byName = new Map(existing.map(m => [m.name, m]));
+  for (const m of PRO_MAPS) {
+    const values = {
+      name: m.name,
+      nameEn: m.nameEn,
+      description: m.description,
+      raceAdvantage: JSON.stringify(m.race),
+      rushDistance: m.rushDistance,
+      resources: m.resources,
+      complexity: m.complexity,
+      iconEmoji: m.emoji,
+      players: m.players,
+      era: m.era,
+      isActive: 1,
+    };
+    const found = byName.get(m.name);
+    if (found) await db.update(maps).set(values).where(eq(maps.id, found.id));
+    else await db.insert(maps).values(values);
+  }
+  // 목록에 없는 예전 맵(가상 맵)은 선택 목록에서 숨김
+  const names = new Set(PRO_MAPS.map(m => m.name));
+  for (const m of existing) {
+    if (!names.has(m.name) && m.isActive !== 0) await db.update(maps).set({ isActive: 0 }).where(eq(maps.id, m.id));
   }
 }
 

@@ -6,7 +6,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerLocalAuthRoutes } from "./localAuth";
 import { LOCAL_UPLOAD_DIR } from "../storage";
-import { repairUninitializedPlayerStats, promoteConfiguredAdmins } from "../db";
+import { repairUninitializedPlayerStats, promoteConfiguredAdmins, seedMapsIfEmpty } from "../db";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -87,6 +87,9 @@ async function startServer() {
   repairUninitializedPlayerStats()
     .then(count => { if (count > 0) console.log(`[Stats] 초기화 누락 선수 능력치 ${count}건 보정`); })
     .catch(error => console.error("[Stats] 능력치 보정 실패", error));
+
+  // 실제 프로 리그 맵 목록 동기화 (추가/수치 갱신)
+  seedMapsIfEmpty().catch(error => console.error("[Maps] 맵 동기화 실패", error));
 
   // ADMIN_USERNAMES 에 지정된 계정을 관리자로 승격
   promoteConfiguredAdmins()

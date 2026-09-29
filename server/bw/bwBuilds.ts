@@ -445,12 +445,20 @@ export const PLANS: Plan[] = [
 ];
 
 /** 종족전에 맞는 빌드 선택 - 전략 능력치가 높을수록 치즈보다 정석 빌드를 선호 */
-export function pickPlan(race: Race, vs: Race, strategySkill: number, rand: () => number): Plan {
+/**
+ * 빌드 선택. rushDistance: -1(러쉬거리 짧음) ~ 1(김)
+ * 짧은 맵은 초반 러쉬·공격형, 긴 맵은 배짱(더블)·운영형 빌드가 자주 나오고, 전략 능력치가 높을수록 맵에 맞춰 고른다.
+ */
+export function pickPlan(race: Race, vs: Race, strategySkill: number, rand: () => number, rushDistance = 0): Plan {
   const candidates = PLANS.filter(p => p.race === race && p.vs === vs);
+  const adapt = 1 + Math.max(0, strategySkill) * 0.6;
   const weights = candidates.map(p => {
     let w = p.weight;
     if (p.style === "cheese") w *= Math.max(0.3, 1 - strategySkill * 0.5);
     if (p.style === "standard") w *= 1 + Math.max(0, strategySkill) * 0.3;
+    if (p.style === "cheese") w *= Math.max(0.15, 1 - 0.7 * rushDistance * adapt);
+    if (p.style === "aggressive") w *= Math.max(0.3, 1 - 0.35 * rushDistance * adapt);
+    if (p.style === "greedy") w *= Math.max(0.3, 1 + 0.6 * rushDistance * adapt);
     return w;
   });
   const total = weights.reduce((a, b) => a + b, 0);
