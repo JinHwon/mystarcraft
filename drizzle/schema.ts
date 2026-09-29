@@ -110,6 +110,13 @@ export const players = mysqlTable("players", {
 	lastFatigueRecovery: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 	// 매칭 상대가 없을 때 자동 생성되는 AI 선수 (userId 0). 전적/랭킹/성장은 일반 선수와 동일
 	isBot: tinyint().default(0).notNull(),
+	// 소속 팀 (0 = 무소속/자유계약 AI)
+	teamId: int().default(0).notNull(),
+	// 컨디션 80~120 (%). 매일(KST) 새로 정해지고 훈련/휴식/경기 결과로 변동
+	condition: int("playerCondition").default(100).notNull(),
+	conditionDate: varchar({ length: 10 }).default('').notNull(),
+	// 마지막 휴식 날짜 (KST, 하루 1회)
+	lastRestDate: varchar({ length: 10 }).default('').notNull(),
 },
 (table) => [
 	index("players_userId_unique").on(table.userId),
@@ -187,3 +194,16 @@ export const playerQuestProgress = mysqlTable("player_quest_progress", {
 
 export type Quest = typeof quests.$inferSelect;
 export type PlayerQuestProgress = typeof playerQuestProgress.$inferSelect;
+
+// 프로팀. 유저당 1개 (userId 0 = AI 팀)
+export const teams = mysqlTable("teams", {
+	id: int().autoincrement().notNull().primaryKey(),
+	userId: int().default(0).notNull(),
+	name: varchar({ length: 50 }).notNull(),
+	emblem: varchar({ length: 10 }).default('🛡️').notNull(),
+	isAi: tinyint().default(0).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+},
+(table) => [
+	index("teams_userId_idx").on(table.userId),
+]);

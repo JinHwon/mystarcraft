@@ -16,6 +16,8 @@ import {
   BarChart3,
   Menu,
   Trophy,
+  Users,
+  Dumbbell,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -30,6 +32,8 @@ import {
 const getNavItems = (isAdmin: boolean) => {
   const items = [
     { path: "/profile", label: "선수 관리", icon: User },
+    { path: "/team", label: "팀 관리", icon: Users },
+    { path: "/training", label: "훈련장", icon: Dumbbell },
     { path: "/shop", label: "아이템 상점", icon: ShoppingBag },
     { path: "/practice", label: "연습게임", icon: Gamepad2 },
     { path: "/game-results", label: "경기결과", icon: BarChart3 },

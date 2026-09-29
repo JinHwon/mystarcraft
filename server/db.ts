@@ -1358,7 +1358,7 @@ export async function getPlayerQuestProgress(playerId: number) {
   return await db.select().from(playerQuestProgress).where(eq(playerQuestProgress.playerId, playerId));
 }
 
-function getTodayDateString(): string {
+export function getTodayDateString(): string {
   // KST(UTC+9) 기준으로 오늘 날짜 반환 - 한국 시간 자정에 초기화되도록
   const now = new Date();
   const kstOffset = 9 * 60; // KST는 UTC+9
