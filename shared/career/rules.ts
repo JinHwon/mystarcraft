@@ -63,9 +63,8 @@ export const ACTIONS: ActionDef[] = [
   { key: "rest", name: "휴식", emoji: "😴", ap: 10, money: 0, desc: "휴식을 취합니다. 쉬면서 컨디션을 회복합니다. (컨디션 +5)" },
   { key: "event", name: "이벤트", emoji: "🎤", ap: 20, money: 0, desc: "팬미팅을 합니다. 구단 자금을 벌고, 인기가 많을수록 치어풀을 받을 확률이 높습니다. (컨디션 -3~5)" },
 ];
-/** 선수별 주당 행동력 (매주 받음, 최대 AP_CAP 까지 모임) */
+/** 선수별 주당 행동력 (선수마다 매주 받고, 쓰지 않으면 시즌 동안 계속 쌓임. 새 시즌에 다시 시작) */
 export const WEEKLY_AP = 20;
-export const AP_CAP = 40;
 export const actionOf = (key: string | null | undefined) => ACTIONS.find(a => a.key === key);
 
 // ── 세이브 상태 ─────────────────────────────────────────────────

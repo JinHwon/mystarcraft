@@ -313,7 +313,9 @@ export const careerRouter = router({
   })),
 
   /** 우리 선수 행동 바로 진행 (선수별 행동력 사용) */
-  runActions: protectedProcedure.mutation(({ ctx }) => mutate(ctx.user.id, s => runMyActions(s))),
+  runActions: protectedProcedure
+    .input(z.object({ playerId: z.number().int().optional() }).optional())
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => runMyActions(s, input?.playerId))),
 
   /** 우리 선수 행동 모두 해제 (행동은 바꾸거나 초기화할 때까지 매주 유지) */
   clearActions: protectedProcedure.mutation(({ ctx }) => mutateLite(ctx.user.id, s => {
