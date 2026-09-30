@@ -145,7 +145,11 @@ export function MapInfo({ mapId, size = 64, hint, responsive }: { mapId: number;
 const RADAR_ORDER: StatKey[] = ["sense", "control", "attack", "harass", "strategy", "supply", "defense", "scout"];
 
 /** base 가 있으면 원래 능력치(회색)와 컨디션·장비 반영 능력치(빨강)를 겹쳐 그리고, 숫자는 원래 값과 변화량 */
-export function LegacyRadar({ stats, level, size = 150, base }: { stats: Record<StatKey, number>; level: number; size?: number; base?: Record<StatKey, number> }) {
+/**
+ * 능력치 그래프. base = 원래 능력치(회색 점선), stats = 실전(컨디션 등 반영, 빨강)
+ * gear = 장비 포함 능력치: 등급과 가운데 합계는 이것으로 (컨디션·포텐셜은 실전에만)
+ */
+export function LegacyRadar({ stats, level, size = 150, base, gear }: { stats: Record<StatKey, number>; level: number; size?: number; base?: Record<StatKey, number>; gear?: Record<StatKey, number> }) {
   const pad = 34;
   const full = size + pad * 2;
   const c = full / 2;
@@ -157,8 +161,8 @@ export function LegacyRadar({ stats, level, size = 150, base }: { stats: Record<
   const outline = RADAR_ORDER.map((_, i) => pt(i, 1).join(",")).join(" ");
   const polyOf = (v: Record<StatKey, number>) => RADAR_ORDER.map((k, i) => pt(i, Math.max(0.05, Math.min(1.1, v[k] / 1000))).join(",")).join(" ");
   const poly = polyOf(stats);
-  // 등급은 원래 능력치 합으로 (컨디션·장비는 그 경기의 실전 능력치에만 반영)
-  const baseTotal = totalOf(base ?? stats), realTotal = totalOf(stats);
+  // 등급은 장비까지 포함한 능력치 합으로 (컨디션·포텐셜은 그 경기의 실전 능력치에만 반영)
+  const baseTotal = totalOf(gear ?? base ?? stats), realTotal = totalOf(stats);
   const grade = legacyGrade(baseTotal);
   const high = /^[SAB]/.test(grade);
   return (

@@ -122,12 +122,12 @@ export function PlayerPanel({ p, color, empty, s }: { p?: CPlayer; color: string
           <div className="text-[13px] font-bold" style={{ color }}>{p.name}</div>
           <div>{R[p.race]} · Lv.{p.level}</div>
           <div>Condition <b className={gearCond(p) >= 70 ? "text-[#bff5c6]" : gearCond(p) <= 30 ? "text-[#ff9a9a]" : "text-white"}>{gearCond(p)}%</b>{gearCond(p) !== p.cond && <span className="text-[9px] text-neutral-500"> (장비)</span>}</div>
-          <div className="text-neutral-400">원래 {totalOf(p.stats).toLocaleString()} → 실전 <b className="text-[#ffe45c]">{totalOf(cs).toLocaleString()}</b></div>
+          <div className="text-neutral-400">원래 {totalOf(p.stats).toLocaleString()}{totalOf(gearStats(p)) !== totalOf(p.stats) ? <span className="text-[#8fd0ff]"> +장비 {(totalOf(gearStats(p)) - totalOf(p.stats)).toLocaleString()}</span> : null} → 실전 <b className="text-[#ffe45c]">{totalOf(cs).toLocaleString()}</b></div>
           {burst && <div className="text-[#ffb84d] font-bold">🔥 포텐셜 폭발! {Math.round(burst * 100)}%</div>}
         </div>
       </div>
       <div className="mt-1"><EquipRow p={p} /></div>
-      <LegacyRadar stats={cs} base={p.stats} level={p.level} size={92} />
+      <LegacyRadar stats={cs} base={p.stats} gear={gearStats(p)} level={p.level} size={92} />
       <div className="text-[9px] text-neutral-500 -mt-1">회색 점선 = 원래 · 빨강 = 컨디션·장비{burst ? "·포텐셜" : ""} 반영</div>
     </div>
   );
@@ -648,7 +648,7 @@ export function ProSeriesFlow({ s, reports, onDone }: { s: CareerState; reports:
               {[{ p: lp, o: rp }, { p: rp, o: lp }].map(({ p, o }) => (
                 <div key={p.id} className="flex flex-col items-center">
                   <PlayerCard p={p} opp={o} />
-                  <LegacyRadar stats={condStats(p, s)} base={p.stats} level={p.level} size={112} />
+                  <LegacyRadar stats={condStats(p, s)} base={p.stats} gear={gearStats(p)} level={p.level} size={112} />
                 </div>
               ))}
             </div>
@@ -803,7 +803,7 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose }: {
                   <div key={p.id} className="flex flex-col items-center">
                     <PlayerCard p={p} opp={o} />
                     <div className="mt-0.5"><EquipRow p={p} size={20} /></div>
-                    <LegacyRadar stats={condStats(p, s)} base={p.stats} level={p.level} size={112} />
+                    <LegacyRadar stats={condStats(p, s)} base={p.stats} gear={gearStats(p)} level={p.level} size={112} />
                     <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p)} %{burstOf(s, p) ? <span className="text-[#ffb84d] font-bold"> 🔥{Math.round(burstOf(s, p)! * 100)}%</span> : null}</div>
                     {p.team === s.myTeam && info.items?.[i] && <div className="text-[11px] text-[#ffe45c]">아이템 : {ITEM_BY_KEY[info.items[i].key]?.name} (보유 {s.inventory?.[info.items[i].key] ?? 0}개)</div>}
                   </div>
@@ -1022,7 +1022,7 @@ export function MslFlow({ s, reports, plans = [], flat, onDone }: { s: CareerSta
             <div key={p.id} className="flex flex-col items-center">
               <PlayerCard p={p} opp={o} />
               <div className="text-[10px] text-neutral-500">{s.teams[p.team]?.name}</div>
-              <LegacyRadar stats={condStats(p, s)} base={p.stats} level={p.level} size={112} />
+              <LegacyRadar stats={condStats(p, s)} base={p.stats} gear={gearStats(p)} level={p.level} size={112} />
               <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p)} %{burstOf(s, p) ? <span className="text-[#ffb84d] font-bold"> 🔥{Math.round(burstOf(s, p)! * 100)}%</span> : null}</div>
             </div>
           ))}
