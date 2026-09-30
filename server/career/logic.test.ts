@@ -43,7 +43,9 @@ describe("커리어 모드", () => {
     const st = standings(s);
     expect(st.reduce((a, t) => a + t.wins, 0)).toBe(132);
     expect(s.matches.filter(m => m.stage !== "regular").map(m => m.stage)).toEqual(["semi", "po", "final"]);
-    startNextSeason(s);
+    rosterOf(s, s.myTeam)[0].contract!.years = 1;
+    expect(() => startNextSeason(s)).toThrow(CareerError);
+    startNextSeason(s, { releaseExpiring: true });
     expect(s.season).toBe(2);
     expect(s.matches).toHaveLength(132);
   }, 60_000);
@@ -226,5 +228,56 @@ describe("구단 운영", () => {
     acceptJob(t, 0);
     expect(t.myTeam).toBe(0);
     expect(t.teams[0].money).toBe(7777);
+  });
+});
+
+describe("세대 교체·2부·스폰서", () => {
+  it("2부 영입 → 성장 → 1부 승격 계약", async () => {
+    const { signReserve, negotiateContract } = await import("./club");
+    const { playerDemand } = await import("@shared/career/contract");
+    const { reserveOf } = await import("@shared/career/view");
+    const s = newCareer(0);
+    s.teams[0].money = 50_000;
+    const fa = s.players.filter(p => p.team === 12).sort((a, b) => a.birth - b.birth).at(-1)!;
+    signReserve(s, fa.id);
+    expect(reserveOf(s, 0).map(p => p.id)).toContain(fa.id);
+    expect(rosterOf(s, 0).some(p => p.id === fa.id)).toBe(false);
+    const before = Object.values(fa.stats).reduce((a, b) => a + b, 0);
+    for (let i = 0; i < 3; i++) { const m = myPendingMatch(s); advanceWeek(s, m ? aiEntry(s, 0, PRO_SETS) : undefined); }
+    expect(Object.values(fa.stats).reduce((a, b) => a + b, 0)).toBeGreaterThanOrEqual(before);
+    const r = negotiateContract(s, fa.id, playerDemand(s, fa, 0), { promote: true });
+    expect(r.result).toBe("signed");
+    expect(fa.reserve).toBe(false);
+    expect(rosterOf(s, 0).some(p => p.id === fa.id)).toBe(true);
+  });
+
+  it("스폰서 퀘스트 목표를 올리면 보상이 커지고, 달성하면 지급된다", async () => {
+    const { chooseSponsor } = await import("./club");
+    const { sponsorOffers, questReward } = await import("@shared/career/sponsor");
+    const s = newCareer(0);
+    const o = sponsorOffers(s)[0];
+    const q = o.quests[0];
+    expect(questReward(q, q.kind === "rank" ? q.target - 1 : q.target + 1)).toBeGreaterThan(questReward(q, q.target));
+    chooseSponsor(s, 0, o.quests.map(x => x.target));
+    expect(() => chooseSponsor(s, 1, [])).toThrow(CareerError);
+    s.sponsor!.quests[0] = { kind: "teamWins", base: 11, target: 1, baseReward: 100 };
+    const money = s.teams[0].money;
+    s.teams[0].wins = 1;
+    const m = myPendingMatch(s);
+    advanceWeek(s, m ? aiEntry(s, 0, PRO_SETS) : undefined);
+    expect(s.sponsor!.quests[0].done).toBe(true);
+    expect(s.ledger?.items["스폰서 보상"]).toBeGreaterThan(0);
+    void money;
+  });
+
+  it("시즌이 넘어가면 노장은 은퇴하고 신인이 등장한다", () => {
+    const s = newCareer(0);
+    for (const p of s.players.slice(0, 20)) p.birth = 1970; // 40세
+    s.phase = "offseason";
+    const count = s.players.length;
+    startNextSeason(s, { releaseExpiring: true });
+    expect(s.players.slice(0, 20).every(p => p.team === -1 && p.retired === 2)).toBe(true);
+    expect(s.players.length).toBeGreaterThan(count);
+    expect(s.players.slice(count).every(p => p.team === 12 && p.potential! > 0)).toBe(true);
   });
 });

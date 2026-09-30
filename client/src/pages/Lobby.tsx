@@ -125,7 +125,7 @@ function Office({ s }: { s: CareerState }) {
   if (s.offers?.length) alerts.push(["📨", `받은 영입 제안 ${s.offers.length}건`]);
   if (s.jobOffers?.length) alerts.push(["🤵", `감독 제의 ${s.jobOffers.length}건 (${s.jobOffers.map(id => s.teams[id].name).join(", ")})`]);
   if (wantOut.length) alerts.push(["😤", `이적 희망: ${wantOut.map(p => p.name).join(", ")}`]);
-  const expiring = roster.filter(p => (p.contract?.years ?? 9) <= 1);
+  const expiring = s.players.filter(p => p.team === s.myTeam && (p.contract?.years ?? 9) <= 1);
   if (s.phase === "offseason" && expiring.length) alerts.push(["📄", `계약 만료 예정 (재계약 안 하면 떠남): ${expiring.map(p => p.name).join(", ")}`]);
 
   return (
@@ -167,7 +167,19 @@ function Office({ s }: { s: CareerState }) {
           <div className="font-black text-foreground">{s.season}시즌 종료 — {last?.myResult}</div>
           <div className="text-xs text-muted-foreground">우승: {s.teams[last?.champion ?? 0].name} · 정규시즌 {last?.myRank}위</div>
           <div className="text-xs text-muted-foreground">다음 시즌이 시작되면 선수들이 한 살 더 먹고, 어린 선수는 성장·노장은 하락합니다.</div>
-          <button onClick={() => nextSeason.mutate()} disabled={nextSeason.isPending} className="w-full py-3 rounded-xl bg-amber-500 text-white font-black">{s.season + 1}시즌 시작</button>
+          {expiring.length > 0 ? (
+            <div className="rounded-xl bg-black/20 p-2.5 text-left space-y-1.5">
+              <div className="text-xs font-bold text-amber-200">📄 계약 만료 선수 {expiring.length}명 — 재계약·트레이드·이적·방출로 정리하세요</div>
+              <div className="text-xs text-foreground">{expiring.map(p => `${p.name}${p.reserve ? "(2부)" : ""}`).join(", ")}</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button onClick={() => navigate("/club")} className="py-2 rounded-lg bg-primary text-primary-foreground text-xs font-bold">재계약하러 가기</button>
+                <button onClick={() => navigate("/transfer")} className="py-2 rounded-lg bg-card border border-border text-xs font-bold">트레이드·방출</button>
+              </div>
+              <button onClick={() => confirm(`${expiring.map(p => p.name).join(", ")} 선수를 내보내고(자유계약) ${s.season + 1}시즌을 시작할까요?`) && nextSeason.mutate({ releaseExpiring: true })} disabled={nextSeason.isPending} className="w-full py-2.5 rounded-lg bg-amber-500 text-white text-sm font-black">만료 선수 내보내고 {s.season + 1}시즌 시작</button>
+            </div>
+          ) : (
+            <button onClick={() => nextSeason.mutate({})} disabled={nextSeason.isPending} className="w-full py-3 rounded-xl bg-amber-500 text-white font-black">{s.season + 1}시즌 시작</button>
+          )}
         </div>
       ) : (
         <button onClick={() => navigate("/league")} className="w-full text-left rounded-2xl bg-card border border-border p-4 active:scale-[0.99] transition-transform">

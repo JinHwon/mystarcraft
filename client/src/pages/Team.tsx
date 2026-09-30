@@ -5,9 +5,10 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ageOf, askingPrice, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
-import { rosterOf, teamPower } from "@shared/career/view";
+import { reserveOf, rosterOf, teamPower } from "@shared/career/view";
+import { ContractEditor } from "@/components/legacy/Club";
 import { PlayerPhoto } from "@/components/legacy/Legacy";
-import { popularity } from "@shared/career/contract";
+import { playerDemand, popularity, potentialStars } from "@shared/career/contract";
 import { BONUS_NAMES, type BonusKey } from "@shared/career/rules";
 import { useCareer, useCareerUpdater } from "@/lib/career";
 import { CondBadge, RaceBadge, RACE_NAME, StatBars, TeamBadge } from "@/components/career/Bits";
@@ -69,6 +70,14 @@ export default function Team() {
   const updater = useCareerUpdater();
   const [sort, setSort] = useState<Sort>("total");
   const [open, setOpen] = useState<number | null>(null);
+  const [squad, setSquad] = useState<"first" | "reserve">("first");
+  const [reply, setReply] = useState<string | null>(null);
+  const demote = trpc.career.demote.useMutation({ ...updater, onSuccess: r => { updater.onSuccess(r); toast.success("2부로 내려보냈습니다"); setOpen(null); } });
+  const promote = trpc.career.contract.useMutation({
+    ...updater,
+    onSuccess: r => { updater.onSuccess(r); const res = r.result as { result: string; message: string }; setReply(res.message); if (res.result === "signed") { toast.success(res.message); setOpen(null); } },
+    onError: e => setReply(e.message),
+  });
   const release = trpc.career.release.useMutation({
     ...updater,
     onSuccess: r => { updater.onSuccess(r); toast.success(`방출 완료 (방출 이득 ${r.result.gain.toLocaleString()}만원)`); setOpen(null); },
@@ -76,13 +85,13 @@ export default function Team() {
 
   const roster = useMemo(() => {
     if (!s) return [];
-    const list = rosterOf(s, s.myTeam);
+    const list = squad === "first" ? rosterOf(s, s.myTeam) : reserveOf(s, s.myTeam);
     return list.sort((a, b) =>
       sort === "total" ? totalOf(b.stats) - totalOf(a.stats)
         : sort === "cond" ? b.cond - a.cond
         : sort === "level" ? b.level - a.level
         : ageOf(a, s.season) - ageOf(b, s.season));
-  }, [s, sort]);
+  }, [s, sort, squad]);
 
   if (loading) return <div className="p-6 text-muted-foreground">불러오는 중...</div>;
   if (!s) { navigate("/lobby"); return null; }
@@ -101,6 +110,18 @@ export default function Team() {
         </div>
       </div>
 
+      <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-card border border-border">
+        {([["first", `1부 (${rosterOf(s, s.myTeam).length})`], ["reserve", `2부 육성 (${reserveOf(s, s.myTeam).length}/10)`]] as const).map(([k, l]) => (
+          <button key={k} onClick={() => setSquad(k)} className={cn("py-2 rounded-lg text-sm font-bold", squad === k ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{l}</button>
+        ))}
+      </div>
+      {squad === "reserve" && (
+        <div className="rounded-xl bg-emerald-500/10 border border-emerald-400/30 p-2.5 text-xs text-foreground">
+          🌱 2부 선수는 프로리그에 나가지 않고 매주 2부 경기·훈련으로 성장합니다 (어릴수록 빨리). 연봉이 싸고, 잘 크면 <b>계약을 맺어 1부로 승격</b>시키세요. 무소속 유망주는 이적시장 → 스카웃에서 "2부로 영입".
+          {reserveOf(s, s.myTeam).length === 0 && <button onClick={() => navigate("/transfer")} className="block mt-1 text-primary font-bold">이적시장에서 유망주 찾기 ›</button>}
+        </div>
+      )}
+
       <div className="flex gap-1.5">
         {([["total", "능력치순"], ["cond", "컨디션순"], ["level", "레벨순"], ["age", "나이순"]] as const).map(([k, l]) => (
           <button key={k} onClick={() => setSort(k)} className={cn("px-3 py-1.5 rounded-full text-xs font-semibold border", sort === k ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-muted-foreground")}>{l}</button>
@@ -109,13 +130,14 @@ export default function Team() {
 
       <div className="rounded-2xl bg-card border border-border divide-y divide-border overflow-hidden">
         {roster.map(p => (
-          <button key={p.id} onClick={() => setOpen(p.id)} className="w-full flex items-center gap-2.5 px-3 py-2 text-left active:bg-muted/40">
+          <button key={p.id} onClick={() => { setOpen(p.id); setReply(null); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-left active:bg-muted/40">
             <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} size={38} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
                 <RaceBadge race={p.race} />
                 <span className="font-bold text-foreground truncate">{p.name}</span>
                 <span className="text-[10px] text-muted-foreground">Lv.{p.level} · {ageOf(p, s.season)}세</span>
+                {squad === "reserve" && <span className="text-[10px] text-amber-300">잠재력 {potentialStars(p)}</span>}
                 {p.wantsOut && <span className="text-[10px] text-rose-300 font-bold">이적희망</span>}
               </div>
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
@@ -139,11 +161,26 @@ export default function Team() {
         player={player}
         onClose={() => setOpen(null)}
         actions={player && (
+          <div className="space-y-2">
+          {player.reserve ? (
+            <>
+              <div className="text-xs text-muted-foreground">1부 승격: 선수와 1부 계약을 맺어야 합니다</div>
+              {reply && <div className="text-xs text-amber-300">{reply}</div>}
+              <div className="rounded-xl bg-black p-1">
+                <ContractEditor player={player} demand={playerDemand(s, player, s.myTeam)} pending={promote.isPending} submitLabel="⬆️ 1부 승격 계약"
+                  onSubmit={c => promote.mutate({ playerId: player.id, salary: c.salary, years: c.years, minApps: c.minApps, bonus: c.bonus, promote: true })} />
+              </div>
+            </>
+          ) : (
+            <button onClick={() => { if (confirm(`${player.name} 선수를 2부로 내려보낼까요? (주전급은 사기가 크게 떨어집니다)`)) demote.mutate({ playerId: player.id }); }}
+              disabled={demote.isPending} className="w-full py-2.5 rounded-xl text-sm font-semibold text-sky-200 bg-sky-500/10 border border-sky-400/30">⬇️ 2부로 보내기</button>
+          )}
           <button
             onClick={() => { if (confirm(`${player.name} 선수를 방출할까요? 무소속 선수가 됩니다.`)) release.mutate({ playerId: player.id }); }}
             disabled={release.isPending}
             className="w-full py-2.5 rounded-xl text-sm font-semibold text-rose-300 bg-rose-500/10 border border-rose-500/30"
           >👋 방출 (방출 이득 약 {Math.round(askingPrice(player, s.season) * 0.2 / 10) * 10}만원)</button>
+          </div>
         )}
       />
     </div>

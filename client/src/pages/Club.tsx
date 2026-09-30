@@ -67,7 +67,7 @@ function MoneyTab({ s }: { s: CareerState }) {
 function ContractsTab({ s }: { s: CareerState }) {
   const { reply, setReply, done, fail } = useMut();
   const [sel, setSel] = useState<number | undefined>();
-  const roster = useMemo(() => rosterOf(s, s.myTeam).sort((a, b) => totalOf(b.stats) - totalOf(a.stats)), [s]);
+  const roster = useMemo(() => s.players.filter(p => p.team === s.myTeam).sort((a, b) => Number(!!a.reserve) - Number(!!b.reserve) || totalOf(b.stats) - totalOf(a.stats)), [s]);
   const played = s.matches.filter(m => m.done && m.stage === "regular" && (m.a === s.myTeam || m.b === s.myTeam)).length;
   const contract = trpc.career.contract.useMutation({ onSuccess: done, onError: fail });
   const p = sel !== undefined ? s.players[sel] : undefined;
@@ -78,7 +78,7 @@ function ContractsTab({ s }: { s: CareerState }) {
         {roster.map(x => (
           <button key={x.id} onClick={() => { setSel(x.id); setReply(null); }} className={cn("w-full text-left px-1 py-1 border-b border-neutral-800 last:border-b-0", sel === x.id && "bg-[#3a3a5a]")}>
             <div className="flex items-center gap-1 text-[12.5px]">
-              <span className="flex-1 truncate">{x.name} ({R[x.race]})</span>
+              <span className="flex-1 truncate">{x.name} ({R[x.race]}){x.reserve ? <span className="text-[10px] text-[#8fe07a]"> 2부</span> : null}</span>
               <span className="text-[10.5px] text-neutral-400">출전 {x.sApps ?? 0}{x.contract?.minApps ? `/${x.contract.minApps}` : ""}</span>
               <MoraleBar p={x} />
             </div>

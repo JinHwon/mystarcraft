@@ -435,8 +435,17 @@ function finishSeason(s: CareerState, final: CMatch) {
 
 // ── 다음 시즌 ─────────────────────────────────────────────────
 
-export function startNextSeason(s: CareerState) {
+/** 이번 시즌이 끝나면 계약이 끝나는 우리 선수 (1부·2부) */
+export function expiringPlayers(s: CareerState) {
+  return s.players.filter(p => p.team === s.myTeam && (p.contract?.years ?? 1) <= 1);
+}
+
+export function startNextSeason(s: CareerState, opts: { releaseExpiring?: boolean } = {}) {
   if (s.phase !== "offseason") throw new CareerError("아직 시즌이 진행 중입니다");
+  const expiring = expiringPlayers(s);
+  if (expiring.length && !opts.releaseExpiring) {
+    throw new CareerError(`계약이 끝나는 선수가 있습니다: ${expiring.map(p => p.name).join(", ")} — 재계약·트레이드·이적·방출로 정리하거나 "만료 선수 내보내고 시작"을 누르세요`);
+  }
   s.season++;
   s.week = 1;
   s.phase = "regular";
@@ -488,6 +497,7 @@ export function scoutPlayer(s: CareerState, pid: number) {
   if (me.money < price) throw new CareerError(`자금이 부족합니다 (요구 금액 ${price.toLocaleString()}만원)`);
   pay(s, "영입", -price);
   p.team = s.myTeam;
+  p.reserve = false;
   p.contract = defaultContract(p, s.season);
   p.morale = 70;
   p.action = null;
@@ -503,6 +513,7 @@ export function releasePlayer(s: CareerState, pid: number) {
   const gain = Math.round(askingPrice(p, s.season) * 0.2 / 10) * 10;
   pay(s, "방출", gain);
   delete p.contract;
+  p.reserve = false;
   p.team = FREE_AGENT_TEAM;
   p.action = null;
   news(s, `👋 ${p.name} 선수 방출 (방출 이득 ${gain.toLocaleString()}만원)`);
@@ -578,7 +589,7 @@ export function proposeTrade(s: CareerState, teamId: number, myIds: number[], th
   myIds = [...new Set(myIds)];
   theirIds = [...new Set(theirIds)];
   if (!theirIds.length) throw new CareerError("받을 선수를 선택해주세요");
-  if (myIds.some(id => s.players[id]?.team !== s.myTeam)) throw new CareerError("우리 팀 선수가 아닙니다");
+  if (myIds.some(id => s.players[id]?.team !== s.myTeam || s.players[id]?.reserve)) throw new CareerError("우리 1부 선수만 트레이드할 수 있습니다");
   if (theirIds.some(id => s.players[id]?.team !== teamId)) throw new CareerError("상대 팀 선수가 아닙니다");
   const me = s.teams[s.myTeam];
   if (me.money < cash) throw new CareerError("자금이 부족합니다");

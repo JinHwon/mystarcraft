@@ -6,7 +6,7 @@ import { getDb } from "../db";
 import { careers } from "../../drizzle/schema";
 import type { CareerState } from "@shared/career/rules";
 import { ACTIONS } from "@shared/career/rules";
-import { acceptJob, bidPlayer, chooseSponsor, negotiateContract, respondOffer } from "./club";
+import { acceptJob, bidPlayer, chooseSponsor, demotePlayer, negotiateContract, respondOffer, signReserve } from "./club";
 import {
   CareerError,
   advanceWeek,
@@ -112,7 +112,9 @@ export const careerRouter = router({
     .input(z.object({ entry: z.array(z.number().int()).optional() }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => advanceWeek(s, input.entry))),
 
-  nextSeason: protectedProcedure.mutation(({ ctx }) => mutate(ctx.user.id, s => startNextSeason(s))),
+  nextSeason: protectedProcedure
+    .input(z.object({ releaseExpiring: z.boolean().optional() }).optional())
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => startNextSeason(s, { releaseExpiring: input?.releaseExpiring }))),
 
   scout: protectedProcedure
     .input(z.object({ playerId: z.number().int() }))
@@ -165,7 +167,8 @@ export const careerRouter = router({
       playerId: z.number().int(),
       salary: z.number().int().min(1).max(100_000),
       years: z.number().int().min(1).max(20),
-      minApps: z.number().int().min(0).max(11).optional(),
+      minApps: z.number().int().min(0).max(22).optional(),
+      promote: z.boolean().optional(),
       bonus: z.object({
         proTitle: z.number().int().min(0).max(100_000).optional(),
         mslTitle: z.number().int().min(0).max(100_000).optional(),
@@ -176,7 +179,7 @@ export const careerRouter = router({
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => negotiateContract(s, input.playerId, {
       salary: input.salary, years: input.years, minApps: input.minApps || undefined,
       bonus: Object.fromEntries(Object.entries(input.bonus ?? {}).filter(([, v]) => (v ?? 0) > 0)),
-    }))),
+    }, { promote: input.promote }))),
 
   /** 다른 팀 감독 제의 수락 */
   acceptJob: protectedProcedure
@@ -187,4 +190,12 @@ export const careerRouter = router({
   chooseSponsor: protectedProcedure
     .input(z.object({ index: z.number().int().min(0).max(2), targets: z.array(z.number().int()).max(5) }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => chooseSponsor(s, input.index, input.targets))),
+
+  /** 2부: 무소속 선수 영입 / 1부 → 2부 (승격은 contract 로 계약) */
+  signReserve: protectedProcedure
+    .input(z.object({ playerId: z.number().int() }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => signReserve(s, input.playerId))),
+  demote: protectedProcedure
+    .input(z.object({ playerId: z.number().int() }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => demotePlayer(s, input.playerId))),
 });

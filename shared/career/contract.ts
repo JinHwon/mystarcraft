@@ -107,3 +107,9 @@ export function popularity(p: CPlayer): number {
 export function cheerChance(p: CPlayer): number {
   return 0.05 + (popularity(p) / 100) * 0.4;
 }
+
+/** 잠재력 별점 (스카우트 눈대중) */
+export function potentialStars(p: CPlayer): string {
+  const n = Math.max(1, Math.min(5, Math.round(((p.potential ?? totalOf(p.stats)) - 4600) / 450)));
+  return "★".repeat(n) + "☆".repeat(5 - n);
+}
