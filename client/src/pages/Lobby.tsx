@@ -7,7 +7,7 @@ import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ORIG_TEAMS, FREE_AGENT_TEAM } from "@shared/career/originalData";
-import { ACTIONS, WEEKLY_AP, totalOf, type CareerState } from "@shared/career/rules";
+import { WEEKLY_AP, actionOf, totalOf, type CareerState } from "@shared/career/rules";
 import { myPendingMatch, rosterOf, standings, teamPower, STAGE_NAMES } from "@shared/career/view";
 import { useCareer, useCareerUpdater } from "@/lib/career";
 import { RaceBadge, TeamBadge } from "@/components/career/Bits";
@@ -100,7 +100,7 @@ function Office({ s }: { s: CareerState }) {
   const rank = st.findIndex(t => t.id === s.myTeam) + 1;
   const pending = myPendingMatch(s);
   const roster = rosterOf(s, s.myTeam);
-  const usedAp = roster.reduce((sum, p) => sum + (p.action ? ACTIONS.find(a => a.key === p.action)!.ap : 0), 0);
+  const readyAp = roster.filter(p => { const a = actionOf(p.action); return a && (p.ap ?? WEEKLY_AP) >= a.ap; }).length;
   const planned = roster.filter(p => p.action).length;
   const phaseText = s.phase === "regular" ? `정규시즌 ${s.week}주차 / 11` : s.phase === "postseason" ? "포스트시즌" : "시즌 종료";
   const last = s.history[0];
@@ -161,7 +161,7 @@ function Office({ s }: { s: CareerState }) {
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2 text-center">
           <div className="rounded-xl bg-black/25 py-1.5"><div className="text-[10px] text-white/60">팀 자금</div><div className="text-sm font-black text-yellow-300">{me.money.toLocaleString()}만</div></div>
-          <div className="rounded-xl bg-black/25 py-1.5"><div className="text-[10px] text-white/60">행동력</div><div className="text-sm font-black text-emerald-300">{s.ap - usedAp}/{WEEKLY_AP}</div></div>
+          <div className="rounded-xl bg-black/25 py-1.5"><div className="text-[10px] text-white/60">행동 가능</div><div className="text-sm font-black text-emerald-300">{readyAp}명</div></div>
           <div className="rounded-xl bg-black/25 py-1.5"><div className="text-[10px] text-white/60">선수단</div><div className="text-sm font-black text-white">{roster.length}명</div></div>
         </div>
       </div>
@@ -207,13 +207,13 @@ function Office({ s }: { s: CareerState }) {
               </div>
             );
           })() : <div className="font-bold text-foreground">우리 팀 경기 없음 · 다음 주로 진행 ›</div>}
-          <div className="mt-2 text-[11px] text-muted-foreground">선수 행동 {planned}/{roster.length}명 지정됨 · 경기를 진행하면 한 주가 지나갑니다</div>
+          <div className="mt-2 text-[11px] text-muted-foreground">선수 행동 {planned}/{roster.length}명 지정 · 행동력이 남은 선수 {readyAp}명 · 경기를 진행하면 한 주가 지나갑니다</div>
         </button>
       )}
 
       {/* 메뉴 타일 */}
       <div className="grid grid-cols-2 gap-2.5">
-        <Tile emoji="🏋️" title="선수 행동" desc="훈련·휴식·이벤트·베스트" badge={`행동력 ${s.ap - usedAp}`} onClick={() => navigate("/training")} className="bg-gradient-to-br from-emerald-500 to-teal-700 border-emerald-300/40" />
+        <Tile emoji="🏋️" title="선수 행동" desc="훈련·휴식·이벤트" badge={`행동 가능 ${readyAp}명`} onClick={() => navigate("/training")} className="bg-gradient-to-br from-emerald-500 to-teal-700 border-emerald-300/40" />
         <Tile emoji="🏆" title="마이프로리그" desc={`${rank}위 · 순위표·일정`} onClick={() => navigate("/league")} className="bg-gradient-to-br from-amber-500 to-orange-600 border-amber-300/40" />
         <Tile emoji="👥" title="선수단" desc={`${roster.length}명 · 능력치·컨디션`} onClick={() => navigate("/team")} className="bg-gradient-to-br from-violet-500 to-purple-700 border-violet-300/40" />
         <Tile emoji="🤝" title="이적시장" desc={`무소속 ${rosterOf(s, FREE_AGENT_TEAM).length}명 영입·방출`} onClick={() => navigate("/transfer")} className="bg-gradient-to-br from-sky-500 to-blue-700 border-sky-300/40" />

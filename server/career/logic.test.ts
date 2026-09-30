@@ -16,12 +16,21 @@ describe("커리어 모드", () => {
     expect(() => advanceWeek(s, [id, id, id, id, id])).toThrow(CareerError);
   });
 
-  it("행동력을 넘게 행동을 지정할 수 없다", () => {
+  it("선수마다 행동력 20: 훈련 20·이벤트 20·휴식 10, 모자라면 진행되지 않는다", async () => {
+    const { runMyActions } = await import("./logic");
     const s = newCareer(0);
     const r = rosterOf(s, 0);
-    setAction(s, r[0].id, "best");
-    setAction(s, r[1].id, "best");
-    expect(() => setAction(s, r[2].id, "best")).toThrow(CareerError);
+    setAction(s, r[0].id, "train");
+    setAction(s, r[1].id, "rest");
+    const first = runMyActions(s);
+    expect(first.results.map(x => x.id).sort()).toEqual([r[0].id, r[1].id].sort());
+    expect(r[0].ap).toBe(0);
+    expect(r[1].ap).toBe(10);
+    // 휴식은 한 번 더 가능, 훈련은 행동력 부족
+    const second = runMyActions(s);
+    expect(second.results.map(x => x.id)).toEqual([r[1].id]);
+    expect(second.skipped).toContain(r[0].id);
+    expect(() => runMyActions(s)).toThrow(CareerError);
   });
 
   it("정규시즌 → 포스트시즌 → 시즌 종료 → 다음 시즌까지 진행된다", () => {
@@ -365,5 +374,32 @@ describe("경기 뒤 변화", () => {
     expect(w.cond[0] - w.cond[1]).toBeLessThanOrEqual(3);
     if (l.cond[0] > 12) { expect(l.cond[0] - l.cond[1]).toBeGreaterThanOrEqual(3); expect(l.cond[0] - l.cond[1]).toBeLessThanOrEqual(10); }
     expect(r.set.fx!.a.exp + r.set.fx!.b.exp).toBe(40);
+  });
+});
+
+describe("선수 행동 진행", () => {
+  it("휴식 +5, 이벤트는 자금, 주가 끝나면 컨디션 +10·행동력 +20", async () => {
+    const { runMyActions } = await import("./logic");
+    const s = newCareer(5);
+    const r = rosterOf(s, 5);
+    r[0].cond = 50; r[1].cond = 50;
+    setAction(s, r[0].id, "rest");
+    setAction(s, r[1].id, "event");
+    const money = s.teams[5].money;
+    runMyActions(s);
+    expect(r[0].cond).toBe(55);
+    expect(r[1].cond).toBeLessThan(50);
+    expect(s.teams[5].money).toBeGreaterThan(money);
+    // 주가 끝나면 경기(프로리그·개인리그)에 안 나간 선수는 컨디션 +10, 행동력 +20
+    for (const p of r) p.cond = 40;
+    const front = r.slice(0, 5).map(p => p.id);
+    const played = new Set<number>();
+    const before = r.map(p => p.wins + p.losses);
+    advanceWeek(s, front);
+    r.forEach((p, i) => { if (p.wins + p.losses !== before[i]) played.add(p.id); });
+    const rested = r.filter(p => !played.has(p.id));
+    expect(rested.length).toBeGreaterThan(0);
+    for (const p of rested) expect(p.cond).toBe(50);
+    expect(r[1].ap).toBe(20);
   });
 });

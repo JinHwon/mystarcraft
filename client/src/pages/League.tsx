@@ -208,7 +208,7 @@ function MatchTab({ s }: { s: CareerState }) {
   const oppId = pending.a === s.myTeam ? pending.b : pending.a;
   const opp = s.teams[oppId];
   const filled = front.filter(x => x !== undefined && s.players[x]?.team === s.myTeam).length;
-  const usedAp = rosterOf(s, s.myTeam).filter(p => p.action).length;
+  const actionsDone = s.myActionsWeek === `${s.season}-${s.week}` || !rosterOf(s, s.myTeam).some(p => (p.ap ?? 20) >= 10);
   return (
     <div className="space-y-3">
       <div className="rounded-2xl bg-card border border-border p-3.5">
@@ -222,7 +222,7 @@ function MatchTab({ s }: { s: CareerState }) {
         </div>
         <div className="mt-1 text-[11px] text-muted-foreground">엔트리 {filled}/{sets - 1} · ACE 결정전 선수는 2:2 가 되면 고릅니다</div>
       </div>
-      {usedAp === 0 && <p className="text-xs text-amber-300 px-1">이번 주 선수 행동을 아직 정하지 않았습니다. <button onClick={() => navigate("/training")} className="underline font-bold">선수 행동 정하기</button></p>}
+      {!actionsDone && <p className="text-xs text-amber-300 px-1">이번 주 선수 행동을 아직 진행하지 않았습니다. <button onClick={() => navigate("/training")} className="underline font-bold">선수 행동 진행하기</button></p>}
       <button onClick={openEntry} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black">
         ⚔️ 엔트리 편성 · 경기 시작
       </button>

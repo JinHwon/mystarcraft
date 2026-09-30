@@ -72,7 +72,6 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
 
   const go = (path: string) => { navigate(path); setMenuOpen(false); };
   const team = s ? s.teams[s.myTeam] : null;
-  const apLeft = s ? s.ap - rosterOf(s, s.myTeam).reduce((sum, p) => sum + (p.action ? ACTIONS.find(a => a.key === p.action)!.ap : 0), 0) : 0;
   const title = items.find(i => i.path === location)?.label ?? "마이스타크래프트";
 
   return (
@@ -94,9 +93,6 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
               <div className="flex items-center gap-1.5">
                 <span className="flex items-center gap-1 rounded-full bg-yellow-500/15 border border-yellow-500/30 text-yellow-300 font-bold px-2 py-0.5 text-[11px]">
                   <Coins className="w-3.5 h-3.5" />{team.money.toLocaleString()}만
-                </span>
-                <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold px-2 py-0.5 text-[11px]">
-                  <Zap className="w-3.5 h-3.5" />{apLeft}
                 </span>
               </div>
             )}

@@ -29,6 +29,7 @@ import {
   rosterOf,
   scoutPlayer,
   setAction,
+  runMyActions,
   startNextSeason,
 } from "./logic";
 
@@ -303,19 +304,16 @@ export const careerRouter = router({
     .input(z.object({ playerId: z.number().int(), action: z.enum(actionKeys).nullable() }))
     .mutation(({ ctx, input }) => mutateLite(ctx.user.id, s => { setAction(s, input.playerId, input.action as any); return { ok: true }; })),
 
-  /** 행동력 안에서 컨디션 낮은 선수는 휴식, 나머지는 훈련으로 자동 배정 */
+  /** 컨디션 낮은(60% 이하) 선수는 휴식, 나머지는 훈련으로 자동 배정 */
   autoActions: protectedProcedure.mutation(({ ctx }) => mutateLite(ctx.user.id, s => {
     if (s.live) throw new CareerError("경기 중에는 행동을 바꿀 수 없습니다");
     const roster = rosterOf(s, s.myTeam);
-    for (const p of roster) p.action = null;
-    let ap = s.ap;
-    for (const p of [...roster].sort((a, b) => a.cond - b.cond)) {
-      if (p.cond <= 40) p.action = "rest";
-      else if (ap >= 1) { p.action = "train"; ap -= 1; }
-      else p.action = "rest";
-    }
+    for (const p of roster) p.action = p.cond <= 60 ? "rest" : "train";
     return { actions: Object.fromEntries(roster.map(p => [p.id, p.action ?? null])) as Record<number, string | null> };
   })),
+
+  /** 우리 선수 행동 바로 진행 (선수별 행동력 사용) */
+  runActions: protectedProcedure.mutation(({ ctx }) => mutate(ctx.user.id, s => runMyActions(s))),
 
   /** 우리 선수 행동 모두 해제 (행동은 바꾸거나 초기화할 때까지 매주 유지) */
   clearActions: protectedProcedure.mutation(({ ctx }) => mutateLite(ctx.user.id, s => {
