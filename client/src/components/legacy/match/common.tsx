@@ -51,7 +51,8 @@ export function VitaButton({ s, pid }: { s: CareerState; pid: number }) {
     onSuccess: r => {
       patch(r.diff);
       const p = r.diff.items.players?.find(([i]) => i === pid)?.[1] as CPlayer | undefined;
-      setMsg(`${s.players[pid].name} 컨디션 ${p?.cond ?? s.players[pid].cond}%`);
+      const used = (r.result as { used?: number } | undefined)?.used ?? 1;
+      setMsg(`${s.players[pid].name}${used > 1 ? ` ${used}개` : ""} → 컨디션 ${p?.cond ?? s.players[pid].cond}%`);
     },
     onError: e => setMsg(e.message),
   });
@@ -59,14 +60,26 @@ export function VitaButton({ s, pid }: { s: CareerState; pid: number }) {
   const have = s.inventory?.vitavita ?? 0;
   const p = s.players[pid];
   const full = p.cond >= COND_MAX;
+  // 컨디션 전체 회복에 필요한 개수 (모자라면 가진 만큼)
+  const per = ITEM_BY_KEY.vitavita.cond ?? 3;
+  const need = Math.ceil((COND_MAX - p.cond) / per);
+  const n = Math.min(need, have);
   return (
-    <div className="flex items-center justify-between gap-2 mt-1.5 border border-neutral-600 px-2 py-1 text-[12px]">
+    <div className="flex items-center justify-between gap-1.5 mt-1.5 border border-neutral-600 px-2 py-1 text-[12px]">
       <span className="text-neutral-300 truncate">🥤 {msg ? `${msg} · 남은 ${have}개` : `비타비타 보유 ${have}개`}</span>
       {have > 0 ? (
-        <button disabled={use.isPending || full} onClick={() => use.mutate({ key: "vitavita", target: pid })}
-          className={cn("shrink-0 border px-2 py-0.5", full ? "border-neutral-700 text-neutral-500" : "border-[#8fe07a] text-[#bff5c6]")}>
-          {full ? "컨디션 최대" : use.isPending ? "먹이는 중..." : `${p.name}에게 먹이기`}
-        </button>
+        <span className="flex gap-1 shrink-0">
+          <button disabled={use.isPending || full} onClick={() => use.mutate({ key: "vitavita", target: pid })}
+            className={cn("border px-2 py-0.5", full ? "border-neutral-700 text-neutral-500" : "border-[#8fe07a] text-[#bff5c6]")}>
+            {full ? "컨디션 최대" : use.isPending ? "먹이는 중..." : "1개 먹이기"}
+          </button>
+          {!full && n > 1 && (
+            <button disabled={use.isPending} onClick={() => use.mutate({ key: "vitavita", target: pid, qty: n })}
+              className="border border-[#ffe45c] text-[#ffe45c] px-2 py-0.5">
+              컨디션 전체 회복 ({n}개{n < need ? `, ${Math.min(COND_MAX, p.cond + n * per)}%까지` : ""})
+            </button>
+          )}
+        </span>
       ) : (
         <button onClick={navigateShop} className="shrink-0 border border-neutral-600 px-2 py-0.5 text-neutral-300">상점에서 사기</button>
       )}

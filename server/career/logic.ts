@@ -710,17 +710,21 @@ export function buyItem(s: CareerState, key: string, target?: number, qty = 1): 
   return { message, delta };
 }
 
-/** 보관한 아이템을 선수에게 사용 (비타비타: 컨디션 +3) */
-export function useStockItem(s: CareerState, key: string, target: number): BuyResult {
+/** 보관한 아이템을 선수에게 사용 (비타비타: 컨디션 +3). qty 개까지, 컨디션이 가득 차거나 아이템이 떨어지면 멈춤 */
+export function useStockItem(s: CareerState, key: string, target: number, qty = 1): BuyResult & { used?: number } {
   const it = ITEM_BY_KEY[key];
   if (!it || it.kind !== "stock") throw new CareerError("사용할 수 없는 아이템입니다");
   if ((s.inventory?.[key] ?? 0) <= 0) throw new CareerError("아이템이 없습니다");
   const p = s.players[target];
   if (!p || p.team !== s.myTeam) throw new CareerError("대상을 선택해 주세요");
   if (p.cond >= COND_MAX) throw new CareerError("컨디션이 최대 입니다");
-  s.inventory![key]--;
-  p.cond = clampCond(p.cond + (it.cond ?? 0));
-  return { message: "아이템을 사용했습니다" };
+  let used = 0;
+  while (used < qty && p.cond < COND_MAX && (s.inventory![key] ?? 0) > 0) {
+    s.inventory![key]--;
+    p.cond = clampCond(p.cond + (it.cond ?? 0));
+    used++;
+  }
+  return { message: used > 1 ? `${used}개 사용했습니다` : "아이템을 사용했습니다", used };
 }
 
 // ── 트레이드 ───────────────────────────────────────────────────

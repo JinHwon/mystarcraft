@@ -47,6 +47,24 @@ describe("등급", () => {
   });
 });
 
+describe("비타비타 여러 개", () => {
+  it("컨디션이 가득 차거나 가진 수량이 떨어질 때까지 한 번에 먹인다", () => {
+    const s = newCareer(0);
+    const p = rosterOf(s, 0)[0];
+    p.cond = 80;
+    s.inventory = { vitavita: 10 };
+    const r = useStockItem(s, "vitavita", p.id, 7);
+    expect(p.cond).toBe(100);
+    expect(r.used).toBe(7);
+    expect(s.inventory.vitavita).toBe(3);
+    p.cond = 50;
+    const r2 = useStockItem(s, "vitavita", p.id, 17);
+    expect(r2.used).toBe(3);
+    expect(p.cond).toBe(59);
+    expect(s.inventory.vitavita).toBe(0);
+  });
+});
+
 describe("큰 무대 성장", () => {
   it("포스트시즌·개인리그 8강 이상은 오르는 능력치가 크게 늘어난다", async () => {
     const { withStageGrowth, quickSet } = await import("./core");
