@@ -25,7 +25,7 @@ const byStrength = (s: CareerState, ids: number[]) => [...ids].sort((a, b) => st
 const isMine = (s: CareerState, id: number) => s.players[id]?.team === s.myTeam;
 
 /** 이번 주에 치른, 우리 선수가 나온 경기 (하이라이트 포함, 화면 표시용) */
-export type MslReport = Omit<MslSeries, "sets"> & { stage: string; sets: PlayedSet[] };
+export type MslReport = Omit<MslSeries, "sets"> & { stage: string; sets: PlayedSet[]; maps: number[] };
 
 // ── 시즌 시작 ──────────────────────────────────────────────────
 
@@ -59,7 +59,7 @@ function series(s: CareerState, a: number, b: number, bestOf: number, label: str
   const result: MslSeries = { a, b, bestOf, sa, sb, winner: sa > sb ? a : b, label, sets };
   if (mine && isMine(s, result.winner)) addManagerExp(s, 5);
   if (mine) {
-    report.push({ ...result, stage, sets: sets.map(x => ({ ...x })) });
+    report.push({ ...result, stage, maps, sets: sets.map(x => ({ ...x })) });
     for (const x of sets) { delete x.highlights; delete x.timeline; } // 세이브에는 중계를 남기지 않음
   }
   return result;

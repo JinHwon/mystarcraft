@@ -4,8 +4,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
-import { STAT_KEYS, type StatKey } from "@shared/gameConstants";
-import { COND_MAX, FINAL_SETS, MATCH_MONEY, MSL_PLAN, PRO_SETS, condMultiplier, totalOf, type CareerState, type CMatch, type CPlayer, type MslGroup, type MslSeries, type SetResult, type SetTimeline } from "@shared/career/rules";
+import { STAT_KEYS, STAT_LABELS, type StatKey } from "@shared/gameConstants";
+import { COND_MAX, FINAL_SETS, MATCH_MONEY, MSL_PLAN, PRO_SETS, condMultiplier, totalOf, type CareerState, type CMatch, type CPlayer, type MslGroup, type MslSeries, type PlayerFx, type SetResult, type SetTimeline } from "@shared/career/rules";
 import { STAGE_NAMES, headToHead, mapView, rosterOf } from "@shared/career/view";
 import { ITEMS, ITEM_BY_KEY, SLOT_NAMES, gearCond, gearStats, itemImg, type EquipSlot } from "@shared/career/items";
 import { trpc } from "@/lib/trpc";
@@ -67,8 +67,9 @@ export function EquipRow({ p, size = 22 }: { p: CPlayer; size?: number }) {
         const it = e ? ITEM_BY_KEY[e.key] : undefined;
         return (
           <div key={slot} title={it ? `${it.name} (남은 ${e!.left}경기)` : `${SLOT_NAMES[slot]} 없음`}
-            className={cn("border flex items-center justify-center overflow-hidden", it ? "bg-white border-neutral-300" : "border-neutral-700 border-dashed")} style={{ width: size, height: size }}>
+            className={cn("relative border flex items-center justify-center overflow-hidden", it ? "bg-white border-neutral-300" : "border-neutral-700 border-dashed")} style={{ width: size, height: size }}>
             {it && <LegacyImg dir={itemImg(it).dir} name={itemImg(it).name} className="max-w-full max-h-full object-contain" fallback={<span className="text-[7px] text-black">{it.name.slice(0, 2)}</span>} />}
+            {it && <span className="absolute bottom-0 right-0 bg-black/80 text-[#ffe45c] text-[8px] leading-none px-[2px] py-[1px]">{e!.left}</span>}
           </div>
         );
       })}
@@ -461,6 +462,7 @@ export function Broadcast({ s, stageName, lp, rp, mapId, set, leftIsA, score, le
               <div key={i} style={{ color: l.side === 0 ? "#f2f2f2" : l.side === leftSide ? LEFT_COLOR : RIGHT_COLOR }}>{l.text}</div>
             ))}
             {!tl && <div className="text-neutral-400">중계 기록이 없습니다.</div>}
+            {done && <SetFxBox s={s} set={set} lp={lp} rp={rp} leftIsA={leftIsA} />}
           </div>
           <div className="flex flex-col items-center justify-between">
             <div className="flex flex-col items-center">
@@ -473,6 +475,27 @@ export function Broadcast({ s, stageName, lp, rp, mapId, set, leftIsA, score, le
         </div>
       </div>
     </LegacyFrame>
+  );
+}
+
+/** 세트가 끝난 뒤 두 선수의 컨디션·경험치·능력치 변화와 세레모니 보너스 */
+function SetFxBox({ s, set, lp, rp, leftIsA }: { s: CareerState; set: BroadcastSet; lp: CPlayer; rp: CPlayer; leftIsA: boolean }) {
+  if (!set.fx && !set.ceremony) return null;
+  const row = (p: CPlayer, fx: PlayerFx | undefined, color: string) => fx && (
+    <div key={p.id} style={{ color }}>
+      ▶ {p.name}: 컨디션 {fx.cond[0] * 10}% → {fx.cond[1] * 10}% · 경험치 +{fx.exp}
+      {fx.level ? ` · 레벨 업! Lv.${fx.level}` : ""}
+      {fx.stats && ` · ${Object.entries(fx.stats).map(([k, d]) => `${STAT_LABELS[k as StatKey]} ${d! > 0 ? "+" : ""}${d}`).join(", ")}`}
+    </div>
+  );
+  const [fl, fr] = leftIsA ? [set.fx?.a, set.fx?.b] : [set.fx?.b, set.fx?.a];
+  return (
+    <div className="mt-2 pt-1.5 border-t border-neutral-600 space-y-0.5 text-[11px]">
+      <div className="text-neutral-400">— 경기 결과 —</div>
+      {row(lp, fl, LEFT_COLOR)}
+      {row(rp, fr, RIGHT_COLOR)}
+      {set.ceremony && <div className="text-[#ffe45c]">🎉 세레모니! 소지금 +{set.ceremony}만원 · 우리 선수 전원 컨디션 +1 (현재 {s.teams[s.myTeam].money.toLocaleString()}만원)</div>}
+    </div>
   );
 }
 
@@ -559,7 +582,7 @@ function SetList({ s, left, right, maps, total, idx, results, leftIsA, showAce, 
 
 // ── 경기 진행 (세트마다 서버에서 진행) ─────────────────────────────────
 export interface WeekDone { playedMatchId?: number; mslReports?: MslReportView[]; mslPlans?: number[] }
-export type MslReportView = { stage: string; label: string; a: number; b: number; sa: number; sb: number; winner: number; bestOf: number; sets: BroadcastSet[] };
+export type MslReportView = { stage: string; label: string; a: number; b: number; sa: number; sb: number; winner: number; bestOf: number; sets: BroadcastSet[]; maps?: number[] };
 
 export function LiveMatch({ s, playSet, pending, onFinished, onClose }: {
   /** 최신 세이브 (s.live 가 있는 동안) */
@@ -698,9 +721,10 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose }: {
                 {[{ p: lp, o: rp }, { p: rp, o: lp }].map(({ p, o }) => (
                   <div key={p.id} className="flex flex-col items-center">
                     <PlayerCard p={p} opp={o} />
+                    <div className="mt-0.5"><EquipRow p={p} size={20} /></div>
                     <LegacyRadar stats={condStats(p)} base={p.stats} level={p.level} size={112} />
                     <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p) * 10} %</div>
-                    {p.team === s.myTeam && info.items?.[i] && <div className="text-[11px] text-[#ffe45c]">아이템 : {ITEM_BY_KEY[info.items[i].key]?.name}</div>}
+                    {p.team === s.myTeam && info.items?.[i] && <div className="text-[11px] text-[#ffe45c]">아이템 : {ITEM_BY_KEY[info.items[i].key]?.name} (보유 {s.inventory?.[info.items[i].key] ?? 0}개)</div>}
                   </div>
                 ))}
               </div>
@@ -719,21 +743,78 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose }: {
 /** 스타리그 경기 다시 보기 (우리 선수 다전제) */
 export function SeriesViewer({ s, report, onClose }: { s: CareerState; report: MslReportView; onClose: () => void }) {
   const [idx, setIdx] = useState(0);
+  /** 세트가 끝나면 라운드별 승자 화면 → Next 로 다음 세트 */
+  const [between, setBetween] = useState(false);
   const [speed, setSpeed] = useSpeed();
   const mineLeft = s.players[report.a]?.team === s.myTeam || s.players[report.b]?.team !== s.myTeam;
   const leftIsA = mineLeft;
   const set = report.sets[idx];
-  if (!set) { onClose(); return null; }
+  useEffect(() => { if (!set) onClose(); }, [set]);
+  if (!set) return null;
   const score: [number, number] = [0, 0];
   for (const x of report.sets.slice(0, idx)) ((x.winner === "a") === leftIsA ? score[0]++ : score[1]++);
   const lp = s.players[leftIsA ? set.a : set.b], rp = s.players[leftIsA ? set.b : set.a];
   const logo = (p: CPlayer) => <TeamLogo team={s.teams[p.team]} className="w-[70px] h-[40px]" />;
+  if (between) {
+    const last = idx + 1 >= report.sets.length;
+    return <SeriesBoard s={s} report={report} played={idx + 1} leftIsA={leftIsA} onClose={onClose}
+      nextLabel={last ? "확인 ▷▷" : `${idx + 2}세트 ▷▷`} onNext={() => { setBetween(false); if (last) onClose(); else setIdx(idx + 1); }} />;
+  }
   return (
     <Broadcast
       key={idx} s={s} stageName="마이스타리그" lp={lp} rp={rp} mapId={set.mapId} set={set} leftIsA={leftIsA} score={score}
       leftLogo={logo(lp)} rightLogo={logo(rp)} speed={speed} setSpeed={setSpeed} onClose={onClose}
-      onDone={() => (idx + 1 < report.sets.length ? setIdx(idx + 1) : onClose())}
+      onDone={() => setBetween(true)}
     />
+  );
+}
+
+/** 다전제 라운드별 결과 (정해진 판수만큼 모두 표시, 치르지 않은 판은 "-") */
+function SeriesBoard({ s, report, played, leftIsA, onNext, onClose, nextLabel }: {
+  s: CareerState; report: MslReportView; played: number; leftIsA: boolean; onNext: () => void; onClose: () => void; nextLabel: string;
+}) {
+  const lp = s.players[leftIsA ? report.a : report.b], rp = s.players[leftIsA ? report.b : report.a];
+  let sl = 0, sr = 0;
+  for (const x of report.sets.slice(0, played)) ((x.winner === "a") === leftIsA ? sl++ : sr++);
+  const over = played >= report.sets.length;
+  const need = Math.ceil(report.bestOf / 2);
+  return (
+    <LegacyFrame season={s.season} onBack={onClose} onNext={onNext} nextLabel={nextLabel}>
+      <div className="px-3 pt-3 pb-4">
+        <div className="text-center">
+          <div className="text-[15px] tracking-[0.2em]">마이스타리그 {report.stage}</div>
+          <div className="text-[13px] text-[#ffe45c]">&lt; {report.label} &gt;</div>
+          <div className="text-[11px] text-neutral-400">{report.bestOf === 1 ? "단판 승부" : `${report.bestOf}전 ${need}선승`}</div>
+        </div>
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mt-3">
+          {[lp, rp].map((p, k) => (
+            <div key={p.id} className={cn("flex flex-col items-center", k === 1 && "order-3")}>
+              <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} size={64} />
+              <div className={cn("text-[12.5px] mt-0.5", p.team === s.myTeam && "text-[#8fd0ff]")}>{nameRace(p)}</div>
+              <div className="text-[10px] text-neutral-500">{s.teams[p.team]?.name ?? "무소속"}</div>
+              {over && (report.winner === p.id) && <div className="text-[13px] font-black text-[#ffe45c]">WINNER</div>}
+            </div>
+          ))}
+          <div className="order-2 text-[26px] text-neutral-100 px-2">{sl} : {sr}</div>
+        </div>
+        <div className="mt-4 space-y-1.5">
+          {Array.from({ length: report.bestOf }, (_, k) => {
+            const x = k < played ? report.sets[k] : undefined;
+            const mapId = report.sets[k]?.mapId ?? report.maps?.[k];
+            const leftWon = x ? (x.winner === "a") === leftIsA : undefined;
+            const skipped = !report.sets[k] && over;
+            return (
+              <div key={k} className={cn("grid grid-cols-[1fr_104px_1fr] items-center gap-1.5 text-[12px] px-1 py-[3px]", k === played - 1 && "border border-neutral-300")}>
+                <span className={cn("text-center", leftWon === true ? "text-[#ffe45c]" : "text-neutral-500")}>{x ? (leftWon ? "WIN" : "LOSE") : skipped ? "-" : "?"}</span>
+                <GrayBox>{k + 1}R · {mapId !== undefined ? mapView(mapId).name : "미정"}</GrayBox>
+                <span className={cn("text-center", leftWon === false ? "text-[#ffe45c]" : "text-neutral-500")}>{x ? (leftWon ? "LOSE" : "WIN") : skipped ? "-" : "?"}</span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="text-center text-[11px] text-neutral-500 mt-3">{over ? `${s.players[report.winner]?.name} 승리${report.bestOf > report.sets.length ? ` (${report.sets.length}세트에서 결정, 남은 라운드는 치르지 않음)` : ""}` : `${sl > sr ? lp.name : sr > sl ? rp.name : "동점"}${sl !== sr ? " 앞섬" : ""} · Next 로 다음 세트`}</div>
+      </div>
+    </LegacyFrame>
   );
 }
 
@@ -866,13 +947,16 @@ export function MslFlow({ s, reports, plans = [], flat, onDone }: { s: CareerSta
           ))}
         </div>
         <div className="mt-3 space-y-1">
-          {r.sets.map((x, k) => (
-            <div key={k} className="grid grid-cols-[1fr_96px_1fr] items-center gap-1.5 text-[12px]">
-              <span className="text-center">{k + 1}세트</span>
-              <GrayBox>{mapView(x.mapId).name}</GrayBox>
-              <span className="text-center text-neutral-500">?</span>
-            </div>
-          ))}
+          {Array.from({ length: r.bestOf }, (_, k) => {
+            const mapId = r.sets[k]?.mapId ?? r.maps?.[k];
+            return (
+              <div key={k} className="grid grid-cols-[1fr_96px_1fr] items-center gap-1.5 text-[12px]">
+                <span className="text-center">{k + 1}세트</span>
+                <GrayBox>{mapId !== undefined ? mapView(mapId).name : "미정"}</GrayBox>
+                <span className="text-center text-neutral-500">?</span>
+              </div>
+            );
+          })}
         </div>
         <div className="text-center text-[11px] text-neutral-500 mt-3">Next 로 관전 · ✕ 로 이번 주 개인리그 건너뛰기</div>
       </div>

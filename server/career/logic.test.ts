@@ -339,3 +339,17 @@ describe("메인 스폰서·감독 레벨", () => {
     expect(sellMinimum(s, p)).toBeLessThan(f1);
   });
 });
+
+describe("경기 뒤 변화", () => {
+  it("선수 행동은 주가 지나도 유지되고, 세트마다 두 선수 컨디션·경험치 변화가 기록된다", () => {
+    const s = newCareer(3);
+    const roster = rosterOf(s, 3);
+    setAction(s, roster[6].id, "rest");
+    const front = roster.slice(0, 4).map(p => p.id);
+    beginMatch(s, front);
+    expect(s.players[roster[6].id].action).toBe("rest");
+    const r = playLiveSet(s);
+    expect(r.set.fx?.a.cond[1]).toBeLessThan(r.set.fx!.a.cond[0] + 1);
+    expect(r.set.fx!.a.exp + r.set.fx!.b.exp).toBe(40);
+  });
+});

@@ -1,3 +1,4 @@
+import { ITEM_BY_KEY, POTION_LIMIT, SLOT_NAMES, gearStats, type EquipSlot } from "@shared/career/items";
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -54,6 +55,22 @@ export function PlayerSheet({ s, player, onClose, actions }: { s: CareerState; p
               {player.contract?.minApps ? <div>출전 보장: 시즌 {player.contract.minApps}경기 (이번 시즌 {player.sApps ?? 0}경기 출전)</div> : null}
               {player.contract?.bonus && Object.keys(player.contract.bonus).length > 0 && <div>보너스: {Object.entries(player.contract.bonus).map(([k, v]) => `${BONUS_NAMES[k as BonusKey]} ${v}만`).join(" · ")}</div>}
               <div>인기 {popularity(player)} · 사기 {player.morale ?? 70}{player.wantsOut ? " · 😤 이적 희망" : ""}</div>
+            </div>
+            <div className="rounded-xl bg-muted/50 p-2.5 text-xs">
+              <div className="font-bold mb-1">🛠️ 장착 장비 · 포션 {player.potions ?? 0}/{POTION_LIMIT}</div>
+              <div className="grid grid-cols-2 gap-1">
+                {(Object.keys(SLOT_NAMES) as EquipSlot[]).map(slot => {
+                  const e = player.equip?.[slot];
+                  const it = e ? ITEM_BY_KEY[e.key] : undefined;
+                  return (
+                    <div key={slot} className="flex items-center justify-between rounded-lg bg-background/40 px-2 py-1">
+                      <span className="text-muted-foreground">{SLOT_NAMES[slot]}</span>
+                      <span className={it ? "text-foreground font-bold" : "text-muted-foreground/60"}>{it ? `${it.name} · 남은 ${e!.left}경기` : "없음"}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              {player.equip && Object.keys(player.equip).length > 0 && <div className="mt-1 text-[10.5px] text-muted-foreground">장비 효과: 능력치 {totalOf(gearStats(player)) - totalOf(player.stats) >= 0 ? "+" : ""}{(totalOf(gearStats(player)) - totalOf(player.stats)).toLocaleString()} (경기마다 1회씩 닳음)</div>}
             </div>
             <div className="text-[11px] text-muted-foreground">영입 시세 약 {askingPrice(player, s.season).toLocaleString()}만원</div>
             {actions}
