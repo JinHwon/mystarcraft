@@ -44,9 +44,11 @@ export function createMsl(s: CareerState): MslState {
 // ── 경기 ───────────────────────────────────────────────────────
 
 /** quiet: 중계·감독 경험치 없이 빠른 판정만 (PC방 예선) */
-function series(s: CareerState, a: number, b: number, bestOf: number, label: string, report: MslReport[], stage: string, quiet = false): MslSeries {
+/** featured: 우리 선수가 없어도 중계 (4강·결승) */
+function series(s: CareerState, a: number, b: number, bestOf: number, label: string, report: MslReport[], stage: string, quiet = false, featured = false): MslSeries {
   const need = Math.ceil(bestOf / 2);
-  const mine = !quiet && (isMine(s, a) || isMine(s, b));
+  const involved = !quiet && (isMine(s, a) || isMine(s, b));
+  const mine = involved || (!quiet && featured);
   const maps = pickMaps(bestOf, s.mapPool);
   let sa = 0, sb = 0;
   const sets: PlayedSet[] = [];
@@ -57,7 +59,7 @@ function series(s: CareerState, a: number, b: number, bestOf: number, label: str
     sets.push(r);
   }
   const result: MslSeries = { a, b, bestOf, sa, sb, winner: sa > sb ? a : b, label, sets };
-  if (mine && isMine(s, result.winner)) addManagerExp(s, 5);
+  if (involved && isMine(s, result.winner)) addManagerExp(s, 5);
   if (mine) {
     report.push({ ...result, stage, maps, sets: sets.map(x => ({ ...x })) });
     for (const x of sets) { delete x.highlights; delete x.timeline; } // 세이브에는 중계를 남기지 않음
@@ -174,7 +176,7 @@ function runKnockout(s: CareerState, m: MslState, round: "ro16" | "ro8" | "ro4" 
   if (!stage) return;
   for (let i = from; i < Math.min(to, stage.series.length); i++) {
     const x = stage.series[i];
-    const r = series(s, x.a, x.b, BEST_OF[round], `${ROUND_LABEL[round]} ${i + 1}경기`, report, ROUND_LABEL[round]);
+    const r = series(s, x.a, x.b, BEST_OF[round], `${ROUND_LABEL[round]} ${i + 1}경기`, report, ROUND_LABEL[round], false, round === "ro4" || round === "final");
     const loser = r.winner === x.a ? x.b : x.a;
     m.placements[loser] = round === "final" ? "준우승" : ROUND_LABEL[round];
     stage.series[i] = r;
