@@ -12,10 +12,12 @@ import { evaluateTrade, proTeams, rosterOf } from "@shared/career/view";
 import { useCareer, useCareerUpdater } from "@/lib/career";
 import { LegacyFrame, LegacyImg, TeamLogo } from "@/components/legacy/Legacy";
 import { PlayerPanel, condStats } from "@/components/legacy/LegacyMatch";
+import { ContractEditor, ContractText, FeeStepper, Reply } from "@/components/legacy/Club";
+import { playerDemand } from "@shared/career/contract";
 
 const R = { terran: "T", zerg: "Z", protoss: "P" } as const;
-type Mode = "trade" | "scout" | "fire";
-const MODES: Array<[Mode, string, string]> = [["trade", "트레이드", "Trade"], ["scout", "스카웃", "Scout"], ["fire", "방출", "Fire"]];
+type Mode = "bid" | "trade" | "scout" | "fire";
+const MODES: Array<[Mode, string, string]> = [["bid", "영입 요청", "Bid"], ["trade", "트레이드", "Trade"], ["scout", "스카웃", "Scout"], ["fire", "방출", "Fire"]];
 
 const byTotal = (a: CPlayer, b: CPlayer) => totalOf(b.stats) - totalOf(a.stats);
 
@@ -42,6 +44,67 @@ function Money({ s }: { s: CareerState }) {
   return (
     <div className="flex justify-between text-[12px] border border-neutral-600 px-2 py-1">
       <span className="text-neutral-400">보유 금액 :</span><span className="text-[#ffe45c]">{s.teams[s.myTeam].money.toLocaleString()} 만원</span>
+    </div>
+  );
+}
+
+/** 다른 팀 선수 영입 요청: 이적료 협상(합의·보류·거절) → 선수 계약 협상 */
+function BidTab({ s }: { s: CareerState }) {
+  const utils = trpc.useUtils();
+  const teams = proTeams(s).filter(t => t.id !== s.myTeam);
+  const [teamId, setTeamId] = useState(teams[0]?.id ?? 0);
+  const [sel, setSel] = useState<number | undefined>();
+  const [fee, setFee] = useState(0);
+  const [reply, setReply] = useState<{ text: string; ok: boolean } | null>(null);
+  const theirs = useMemo(() => rosterOf(s, teamId).sort(byTotal), [s, teamId]);
+  const p = sel !== undefined ? s.players[sel] : undefined;
+  const deal = p ? s.agreements?.[p.id] : undefined;
+  const agreed = !!deal && deal.season === s.season && deal.week === s.week && deal.team === p!.team;
+  const onDone = (r: { state: CareerState; result: unknown }) => {
+    utils.career.get.setData(undefined, { state: r.state });
+    const res = r.result as { result: string; message: string; fee?: number };
+    setReply({ text: res.message, ok: res.result === "agreed" || res.result === "signed" });
+    if (res.result === "countered" && res.fee) setFee(res.fee);
+    if (res.result === "signed") setSel(undefined);
+  };
+  const onFail = (e: { message: string }) => setReply({ text: e.message, ok: false });
+  const bid = trpc.career.bid.useMutation({ onSuccess: onDone, onError: onFail });
+  const contract = trpc.career.contract.useMutation({ onSuccess: onDone, onError: onFail });
+  const pick = (x: CPlayer) => { setSel(x.id); setFee(askingPrice(x, s.season)); setReply(null); };
+  return (
+    <div className="space-y-2">
+      <div className="text-center text-[12px] text-neutral-300">영입할 선수를 고르고 이적료를 제시하세요</div>
+      <div className="grid grid-cols-6 gap-1">
+        {teams.map(t => (
+          <button key={t.id} onClick={() => { setTeamId(t.id); setSel(undefined); setReply(null); }} className={cn("p-0.5 border", teamId === t.id ? "border-[#ff6b6b] border-2" : "border-neutral-700")}>
+            <TeamLogo team={t} className="w-full h-[26px]" />
+          </button>
+        ))}
+      </div>
+      <PickList players={theirs} picked={sel !== undefined ? [sel] : []} onToggle={pick} height="max-h-[200px]"
+        right={x => `${x.wantsOut ? "이적희망 · " : ""}${askingPrice(x, s.season).toLocaleString()}만`} />
+      {p && (
+        <>
+          <PlayerPanel p={p} color="#ff9a9a" empty="" />
+          <div className="text-[11px] text-neutral-400 text-center">현재 계약: <ContractText c={p.contract} />{p.wantsOut ? " · 이적을 희망하는 선수 (싸게 데려올 수 있음)" : ""}</div>
+          {reply && <Reply {...reply} />}
+          {!agreed ? (
+            <div className="border border-neutral-600 p-2 space-y-1.5 text-[12px]">
+              <div className="flex items-center justify-between"><span className="text-neutral-400">이적료 제시</span><FeeStepper value={fee} onChange={setFee} max={s.teams[s.myTeam].money} /></div>
+              <Money s={s} />
+              <button disabled={bid.isPending} onClick={() => bid.mutate({ playerId: p.id, fee })} className="w-full py-1.5 text-[13px] font-bold text-black border border-neutral-500 disabled:opacity-40" style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}>
+                {bid.isPending ? "협상 중..." : "영입 요청"}
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="text-center text-[11.5px] text-[#bff5c6]">이적료 {deal!.fee.toLocaleString()}만원 합의 · 이번 주 안에 선수와 계약하세요</div>
+              <ContractEditor player={p} demand={playerDemand(s, p, s.myTeam)} pending={contract.isPending}
+                onSubmit={c => contract.mutate({ playerId: p.id, salary: c.salary, years: c.years, minApps: c.minApps, bonus: c.bonus })} />
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -186,13 +249,13 @@ function FireTab({ s }: { s: CareerState }) {
 export default function Transfer() {
   const { state: s, loading } = useCareer();
   const [, navigate] = useLocation();
-  const [mode, setMode] = useState<Mode>("trade");
+  const [mode, setMode] = useState<Mode>("bid");
   if (loading) return <div className="p-6 text-muted-foreground">불러오는 중...</div>;
   if (!s) { navigate("/lobby"); return null; }
   return (
     <LegacyFrame season={s.season} onBack={() => navigate("/lobby")} onNext={() => navigate("/lobby")} nextLabel="◁◁ 감독실">
       <div className="px-3 pt-2 pb-4">
-        <div className="grid grid-cols-3 gap-2 mb-2">
+        <div className="grid grid-cols-4 gap-1.5 mb-2">
           {MODES.map(([k, label, en]) => (
             <button key={k} onClick={() => setMode(k)} className={cn("flex flex-col items-center gap-0.5 py-1 border", mode === k ? "border-[#ff6b6b] border-2" : "border-neutral-700")}>
               <LegacyImg dir="기타" name={label} className="h-9 object-contain" fallback={<span className="text-[16px] font-black italic text-neutral-200">{en}</span>} />
@@ -200,6 +263,7 @@ export default function Transfer() {
             </button>
           ))}
         </div>
+        {mode === "bid" && <BidTab s={s} />}
         {mode === "trade" && <TradeTab s={s} />}
         {mode === "scout" && <ScoutTab s={s} />}
         {mode === "fire" && <FireTab s={s} />}

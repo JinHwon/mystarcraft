@@ -26,6 +26,12 @@ export const MAX_ROSTER = 19;
 export const MIN_ROSTER = 4;
 
 // ── 돈 (만원) ────────────────────────────────────────────────────
+/** 주당 구단 운영비 */
+export const OPERATING_COST = 60;
+/** 연봉을 나눠 내는 주 수 (정규시즌) */
+export const WAGE_WEEKS = 11;
+/** 적자가 이만큼 연속되면 구단 해체 */
+export const DEBT_LIMIT_WEEKS = 3;
 export const START_MONEY = 3000;
 export const WEEKLY_SPONSOR = 100;
 export const MATCH_MONEY = { win: 200, lose: 50 };
@@ -80,6 +86,45 @@ export interface CPlayer {
   equip?: Partial<Record<"mouse" | "keyboard" | "monitor" | "etc", { key: string; left: number }>>;
   /** 이번 시즌 마신 포션 수 */
   potions?: number;
+  /** 계약 */
+  contract?: Contract;
+  /** 사기 0~100 (출전이 적으면 떨어짐) */
+  morale?: number;
+  /** 이적 희망 */
+  wantsOut?: boolean;
+  /** 이번 시즌 프로리그 출전 경기 수 */
+  sApps?: number;
+}
+
+/** 보너스 조건: 프로리그 우승 · 개인리그 우승 · 다승왕 · 시즌 다승 10위 안 */
+export type BonusKey = "proTitle" | "mslTitle" | "mostWins" | "topRank";
+export const BONUS_NAMES: Record<BonusKey, string> = { proTitle: "프로리그 우승", mslTitle: "개인리그 우승", mostWins: "다승왕", topRank: "다승 랭킹 10위 이내" };
+
+/** 선수 계약 (금액: 만원) */
+export interface Contract {
+  /** 시즌 연봉 (정규시즌 주마다 나눠 지급) */
+  salary: number;
+  /** 남은 시즌 수 (이번 시즌 포함) */
+  years: number;
+  /** 출전 보장: 시즌 프로리그 최소 출전 경기 수 */
+  minApps?: number;
+  /** 성과 보너스 */
+  bonus?: Partial<Record<BonusKey, number>>;
+}
+
+/** 다른 팀이 우리 선수에게 낸 영입 제안 */
+export interface TransferOffer {
+  id: number;
+  player: number;
+  team: number;
+  fee: number;
+  season: number;
+  week: number;
+  /** 제안한 팀이 낼 수 있는 최대 금액 (협상용, 화면에는 안 보임) */
+  max: number;
+  /** 협상 횟수 */
+  tries: number;
+  status: "pending" | "countered";
 }
 
 export interface CTeam {
@@ -213,6 +258,24 @@ export interface CareerState {
   msl?: MslState;
   /** 이번 시즌 맵 추첨 결과 */
   mapPool?: number[];
+  /** 받은 영입 제안 */
+  offers?: TransferOffer[];
+  nextOfferId?: number;
+  /** 이적료 합의된 영입 대상 (선수 → 합의 내용, 이번 주만 유효) */
+  agreements?: Record<number, { team: number; fee: number; season: number; week: number }>;
+  /** 이번 주 협상 횟수 (키: 선수-종류) */
+  tries?: Record<string, number>;
+  triesWeek?: string;
+  /** 감독 */
+  manager?: { reputation: number; moves?: number };
+  /** 다른 팀의 감독 제의 */
+  jobOffers?: number[];
+  /** 적자 주 수 (3주 연속이면 구단 해체) */
+  debtWeeks?: number;
+  /** 게임 종료 */
+  gameOver?: { season: number; week: number; reason: string };
+  /** 이번 시즌 수입·지출 (항목별, 지출은 음수) */
+  ledger?: { season: number; items: Record<string, number> };
   /** 보유 경기 아이템 (츄잉껌·세레모니·스나이핑·치어풀) */
   inventory?: Record<string, number>;
   /** 진행 중인 우리 경기 (세트마다 하나씩 진행, 2:2 면 ACE 결정전 선수를 그때 고름) */

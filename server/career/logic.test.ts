@@ -173,3 +173,53 @@ describe("아이템 상점", () => {
     expect(s.inventory!.sniping).toBe(0);
   });
 });
+
+describe("구단 운영", () => {
+  it("다른 팀 선수: 이적료 합의 → 선수 계약 협상 → 영입", async () => {
+    const { bidPlayer, negotiateContract } = await import("./club");
+    const { playerDemand, sellMinimum } = await import("@shared/career/contract");
+    const s = newCareer(0);
+    s.teams[0].money = 100_000;
+    const p = rosterOf(s, 1).sort((a, b) => a.stats.control - b.stats.control)[0];
+    const min = sellMinimum(s, p);
+    expect(bidPlayer(s, p.id, Math.round(min * 0.5)).result).toBe("rejected");
+    expect(() => negotiateContract(s, p.id, { salary: 999, years: 2 })).toThrow("먼저 구단과");
+    const r = bidPlayer(s, p.id, min);
+    expect(r.result).toBe("agreed");
+    const d = playerDemand(s, p, 0);
+    expect(negotiateContract(s, p.id, { ...d, salary: Math.round(d.salary * 0.5) }).result).not.toBe("signed");
+    expect(negotiateContract(s, p.id, d).result).toBe("signed");
+    expect(p.team).toBe(0);
+    expect(p.contract?.salary).toBe(d.salary);
+    expect(s.teams[0].money).toBe(100_000 - min);
+  });
+
+  it("받은 제안: 역제안이 최대 금액 안이면 성사", async () => {
+    const { respondOffer } = await import("./club");
+    const s = newCareer(0);
+    const p = rosterOf(s, 0)[5];
+    s.offers = [{ id: 1, player: p.id, team: 3, fee: 500, max: 800, season: 1, week: 1, tries: 0, status: "pending" }];
+    const before = s.teams[0].money;
+    const r = respondOffer(s, 1, "counter", 700);
+    expect(r.result).toBe("sold");
+    expect(p.team).toBe(3);
+    expect(s.teams[0].money).toBe(before + 700);
+  });
+
+  it("3주 연속 적자면 구단 해체, 감독 제의를 받으면 자금과 함께 이동", async () => {
+    const { acceptJob } = await import("./club");
+    const s = newCareer(4);
+    s.teams[4].money = -5000;
+    for (let i = 0; i < 3 && !s.gameOver; i++) {
+      const m = myPendingMatch(s);
+      advanceWeek(s, m ? aiEntry(s, 4, PRO_SETS) : undefined);
+    }
+    expect(s.gameOver?.reason).toContain("해체");
+    const t = newCareer(4);
+    t.teams[4].money = 7777;
+    t.jobOffers = [0];
+    acceptJob(t, 0);
+    expect(t.myTeam).toBe(0);
+    expect(t.teams[0].money).toBe(7777);
+  });
+});
