@@ -28,7 +28,7 @@ function VitaButton({ s, pid }: { s: CareerState; pid: number }) {
     onSuccess: r => {
       patch(r.diff);
       const p = r.diff.items.players?.find(([i]) => i === pid)?.[1] as CPlayer | undefined;
-      setMsg(`${s.players[pid].name} 컨디션 ${(p?.cond ?? s.players[pid].cond) * 10}%`);
+      setMsg(`${s.players[pid].name} 컨디션 ${p?.cond ?? s.players[pid].cond}%`);
     },
     onError: e => setMsg(e.message),
   });
@@ -120,7 +120,7 @@ export function PlayerPanel({ p, color, empty }: { p?: CPlayer; color: string; e
         <div className="text-[11px] leading-[1.45] text-neutral-200 pt-0.5">
           <div className="text-[13px] font-bold" style={{ color }}>{p.name}</div>
           <div>{R[p.race]} · Lv.{p.level}</div>
-          <div>Condition <b className={gearCond(p) >= 7 ? "text-[#bff5c6]" : gearCond(p) <= 3 ? "text-[#ff9a9a]" : "text-white"}>{gearCond(p) * 10}%</b>{gearCond(p) !== p.cond && <span className="text-[9px] text-neutral-500"> (장비)</span>}</div>
+          <div>Condition <b className={gearCond(p) >= 70 ? "text-[#bff5c6]" : gearCond(p) <= 30 ? "text-[#ff9a9a]" : "text-white"}>{gearCond(p)}%</b>{gearCond(p) !== p.cond && <span className="text-[9px] text-neutral-500"> (장비)</span>}</div>
           <div className="text-neutral-400">{totalOf(p.stats).toLocaleString()} → <b className="text-[#ffe45c]">{totalOf(cs).toLocaleString()}</b></div>
         </div>
       </div>
@@ -483,7 +483,7 @@ function SetFxBox({ s, set, lp, rp, leftIsA }: { s: CareerState; set: BroadcastS
   if (!set.fx && !set.ceremony) return null;
   const row = (p: CPlayer, fx: PlayerFx | undefined, color: string) => fx && (
     <div key={p.id} style={{ color }}>
-      ▶ {p.name}: 컨디션 {fx.cond[0] * 10}% → {fx.cond[1] * 10}% · 경험치 +{fx.exp}
+      ▶ {p.name}: 컨디션 {fx.cond[0]}% → {fx.cond[1]}% ({fx.cond[1] - fx.cond[0] >= 0 ? "+" : ""}{fx.cond[1] - fx.cond[0]}) · 경험치 +{fx.exp}
       {fx.level ? ` · 레벨 업! Lv.${fx.level}` : ""}
       {fx.stats && ` · ${Object.entries(fx.stats).map(([k, d]) => `${STAT_LABELS[k as StatKey]} ${d! > 0 ? "+" : ""}${d}`).join(", ")}`}
     </div>
@@ -794,7 +794,7 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose }: {
                     <PlayerCard p={p} opp={o} />
                     <div className="mt-0.5"><EquipRow p={p} size={20} /></div>
                     <LegacyRadar stats={condStats(p)} base={p.stats} level={p.level} size={112} />
-                    <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p) * 10} %</div>
+                    <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p)} %</div>
                     {p.team === s.myTeam && info.items?.[i] && <div className="text-[11px] text-[#ffe45c]">아이템 : {ITEM_BY_KEY[info.items[i].key]?.name} (보유 {s.inventory?.[info.items[i].key] ?? 0}개)</div>}
                   </div>
                 ))}
@@ -932,7 +932,7 @@ function DualGroupScreen({ s, stage, group, reports, onDone, onClose }: {
                 <div className="min-w-0 text-[12px] leading-tight">
                   <div className={cn("truncate", p.team === s.myTeam ? "text-[#8fd0ff]" : "text-white")}>{nameRace(p)}</div>
                   <div className="text-[10px] text-neutral-400 truncate">{s.teams[p.team]?.name ?? "무소속"}</div>
-                  <div className="text-[10px] text-neutral-400">{`Lv.${p.level} · 컨디션 ${gearCond(p) * 10}%`}</div>
+                  <div className="text-[10px] text-neutral-400">{`Lv.${p.level} · 컨디션 ${gearCond(p)}%`}</div>
                   {st.text && <div className={cn("text-[11px]", st.c)}>{st.text}</div>}
                 </div>
               </div>
@@ -1013,7 +1013,7 @@ export function MslFlow({ s, reports, plans = [], flat, onDone }: { s: CareerSta
               <PlayerCard p={p} opp={o} />
               <div className="text-[10px] text-neutral-500">{s.teams[p.team]?.name}</div>
               <LegacyRadar stats={condStats(p)} base={p.stats} level={p.level} size={112} />
-              <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p) * 10} %</div>
+              <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p)} %</div>
             </div>
           ))}
         </div>

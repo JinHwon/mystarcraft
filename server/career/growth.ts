@@ -4,7 +4,7 @@
  * 원작은 선수마다 "최근 능력치 변동" 값을 따로 들고 경기마다 능력치가 오르내린다 (docs/original-mysc-analysis.md 3.1).
  * 원작 공식은 확인하지 못해, 경기 엔진 이벤트로 능력치마다 잘한 점·못한 점을 매겨 변동 폭을 정한다.
  * - 이기면 대부분 오르고, 지면 대부분 떨어진다. 잘한 능력치는 더 오르고(졌어도 오를 수 있음), 못한 능력치는 더 떨어진다
- * - 강한 상대를 이기면 크게 오르고, 약한 상대에게 지면 크게 떨어진다 (이변 배율)
+ * - 강한 상대를 이기면 크게 오르고, 약한 상대에게 지면 크게 떨어진다 (이변 배율 0.35~3배)
  * - 오를 때는 높은 능력치일수록·잠재력에 가까울수록 덜 오른다. 츄잉껌을 쓰면 떨어지는 폭이 66% 줄어든다
  */
 import { STAT_KEYS, type StatKey } from "@shared/gameConstants";
@@ -43,7 +43,8 @@ function room(p: CPlayer, k: StatKey) {
 export function setDeltas(p: CPlayer, opp: CPlayer, won: boolean, content: SetContent | undefined, duration: number, gum = false): Partial<Record<StatKey, number>> {
   const gap = totalOf(opp.stats) - totalOf(p.stats);
   // 이변 배율: 강한 상대를 이기면 크게, 약한 상대에게 지면 크게
-  const upset = won ? Math.max(0.6, Math.min(2.2, 1 + gap / 1200)) : Math.max(0.6, Math.min(2.2, 1 - gap / 1200));
+  // 능력치 합 700 차이마다 ±1배 (0.35~3배): 강자가 약자를 이기면 조금만, 약자가 강자를 이기면 크게 오름
+  const upset = won ? Math.max(0.35, Math.min(3, 1 + gap / 700)) : Math.max(0.35, Math.min(3, 1 - gap / 700));
   const score = content ? contentScores(content, won, duration) : undefined;
   const out: Partial<Record<StatKey, number>> = {};
   for (const k of STAT_KEYS) {

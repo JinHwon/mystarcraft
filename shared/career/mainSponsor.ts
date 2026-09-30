@@ -68,3 +68,13 @@ export function defaultOffer(s: CareerState, team = s.myTeam): MainSponsorTerms 
   const k = sponsorBudget(s, team) / termsValue(DEFAULT_TERMS);
   return Object.fromEntries(Object.entries(DEFAULT_TERMS).map(([key, v]) => [key, Math.round((v * k) / 10) * 10])) as unknown as MainSponsorTerms;
 }
+
+/**
+ * 감독 영입 계약금: 다른 구단이 감독을 데려갈 때 내는 돈 (새 구단 운영 자금에 더해짐)
+ * 감독 레벨·명성이 높을수록, 모기업이 클수록 많이 준다
+ */
+export function jobSigningFee(s: CareerState, team: number): number {
+  const size = MAIN_SPONSORS[team]?.size ?? 1;
+  const rep = s.manager?.reputation ?? 50;
+  return Math.round(((400 + managerLevel(s) * 150 + rep * 10) * size) / 10) * 10;
+}

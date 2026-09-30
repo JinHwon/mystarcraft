@@ -2,6 +2,7 @@
  * 구단 운영: 연봉·운영비·장부, 선수 사기와 이적 희망, 영입 제안(받기·보내기)과 협상, 계약, 감독 평판과 이동, 파산
  */
 import { eventOn } from "./events";
+import { jobSigningFee } from "@shared/career/mainSponsor";
 import { FREE_AGENT_TEAM } from "@shared/career/originalData";
 import {
   AI_MIN_ROSTER,
@@ -23,7 +24,7 @@ import {
 import { contractScore, defaultContract, expectedShare, jobThreshold, playerDemand, sellMinimum, squadRank, weeklyWage } from "@shared/career/contract";
 import { activePlayers, proTeams, reserveOf, rosterOf, teamPower } from "@shared/career/view";
 import { CareerError, addExp, clampCond, gainStats, news, rand, randInt } from "./core";
-import { questLabel, questProgress, questRange, questReward, sponsorOffers } from "@shared/career/sponsor";
+import { MAX_SPONSORS, activeSponsors, questLabel, questProgress, questRange, questReward, sponsorOffers } from "@shared/career/sponsor";
 import { MAIN_SPONSORS, defaultOffer, managerExpNeed, sponsorBudget, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
 
 const round10 = (v: number) => Math.round(v / 10) * 10;
@@ -129,24 +130,25 @@ export function mainSponsorPay(s: CareerState, key: keyof MainSponsorTerms, labe
 
 // ── 스폰서 ───────────────────────────────────────────────────────
 export function chooseSponsor(s: CareerState, index: number, targets: number[]) {
-  if (s.sponsor?.season === s.season) throw new CareerError("이번 시즌 스폰서는 이미 정했습니다");
+  const mine = activeSponsors(s);
+  if (mine.length >= MAX_SPONSORS) throw new CareerError(`이번 시즌 스폰서는 ${MAX_SPONSORS}곳까지 계약할 수 있습니다`);
   const offer = sponsorOffers(s)[index];
   if (!offer) throw new CareerError("스폰서를 선택하세요");
+  if (mine.some(x => x.name === offer.name)) throw new CareerError("이미 계약한 스폰서입니다");
   const quests = offer.quests.map((q, i) => {
     const [lo, hi] = questRange(q);
     const target = Math.max(lo, Math.min(hi, Math.round(targets[i] ?? q.target)));
     return { ...q, target };
   });
-  s.sponsor = { ...offer, quests, season: s.season };
-  news(s, `🤝 ${offer.name}와(과) 스폰서 계약! 주 ${offer.weekly}만원 + 퀘스트 보상`);
+  s.sponsors = [...mine, { ...offer, quests, season: s.season }];
+  delete s.sponsor;
+  news(s, `🤝 ${offer.name}와(과) 스폰서 계약! 주 ${offer.weekly}만원 + 퀘스트 보상 (${s.sponsors.length}/${MAX_SPONSORS})`);
   return { name: offer.name };
 }
 
 /** 스폰서 퀘스트 달성 확인 → 보상 지급 */
 export function checkSponsor(s: CareerState) {
-  const sp = s.sponsor;
-  if (!sp || sp.season !== s.season) return;
-  for (const q of sp.quests) {
+  for (const sp of activeSponsors(s)) for (const q of sp.quests) {
     if (q.done || !questProgress(s, q).done) continue;
     q.done = true;
     const reward = questReward(q);
@@ -167,7 +169,7 @@ export function weeklyClub(s: CareerState) {
   pay(s, "운영비", -OPERATING_COST - (reserveOf(s, s.myTeam).length ? 20 : 0));
   weeklyReserve(s);
   // 스폰서 후원금·퀘스트
-  if (s.sponsor?.season === s.season) pay(s, "스폰서", s.sponsor.weekly);
+  for (const sp of activeSponsors(s)) pay(s, "스폰서", sp.weekly);
   checkSponsor(s);
 
   // 출전 기회에 따른 사기
@@ -187,7 +189,7 @@ export function weeklyClub(s: CareerState) {
         p.wantsOut = false;
         news(s, `😊 ${p.name} 선수가 마음을 돌렸습니다 (이적 희망 철회)`);
       }
-      if (p.wantsOut && rand() < 0.5) p.cond = clampCond(p.cond - 1);
+      if (p.wantsOut && rand() < 0.5) p.cond = clampCond(p.cond - randInt(3, 6));
     }
   }
 
@@ -462,7 +464,7 @@ export function weeklyReserve(s: CareerState) {
     const age = ageOf(p, s.season);
     gainStats(p, 2, age <= 20 ? 3 : 2, age <= 20 ? 8 : 5);
     addExp(s, p, 15);
-    p.cond = clampCond(p.cond + (rand() < 0.5 ? 1 : 0));
+    p.cond = clampCond(p.cond + randInt(2, 6));
   }
 }
 
@@ -470,11 +472,11 @@ export function weeklyReserve(s: CareerState) {
 export function acceptJob(s: CareerState, teamId: number) {
   if (!s.jobOffers?.includes(teamId)) throw new CareerError("받은 제의가 아닙니다");
   if (s.live) throw new CareerError("경기 중에는 옮길 수 없습니다");
-  const old = s.teams[s.myTeam], next = s.teams[teamId];
-  // 감독이 모은 자금은 새 구단으로 함께 이동
-  const money = old.money;
-  old.money = START_MONEY;
-  next.money = money;
+  const next = s.teams[teamId];
+  // 모은 자금은 원래 구단에 두고 가고, 새 구단이 감독 영입 계약금을 내서 운영 자금에 보탠다
+  const fee = jobSigningFee(s, teamId);
+  next.money += fee;
+  const money = next.money;
   for (const p of rosterOf(s, s.myTeam)) p.action = null;
   s.myTeam = teamId;
   s.mainSponsor = undefined;
@@ -483,8 +485,10 @@ export function acceptJob(s: CareerState, teamId: number) {
   s.offers = [];
   s.agreements = {};
   s.debtWeeks = 0;
-  s.manager = { reputation: s.manager?.reputation ?? 50, moves: (s.manager?.moves ?? 0) + 1 };
-  news(s, `🤵 ${next.name} 감독으로 부임했습니다! (운영 자금 ${money.toLocaleString()}만원과 함께)`);
+  // 감독 레벨·경험치는 그대로
+  s.manager = { ...s.manager, reputation: s.manager?.reputation ?? 50, moves: (s.manager?.moves ?? 0) + 1 };
+  book(s, "감독 영입 계약금", fee);
+  news(s, `🤵 ${next.name} 감독으로 부임했습니다! 영입 계약금 ${fee.toLocaleString()}만원 → 운영 자금 ${money.toLocaleString()}만원`);
   return { team: teamId };
 }
 

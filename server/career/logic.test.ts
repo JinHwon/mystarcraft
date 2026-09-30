@@ -165,7 +165,7 @@ describe("아이템 상점", () => {
     const s = newCareer(1);
     s.teams[1].money = 100_000;
     const p = rosterOf(s, 1)[0];
-    p.cond = 10;
+    p.cond = 100;
     for (let i = 0; i < 3; i++) buyItem(s, "p_att", p.id);
     expect(() => buyItem(s, "p_att", p.id)).toThrow("이 선수는 더 사용 할 수 없습니다");
     const front = rosterOf(s, 1).slice(0, 4).map(x => x.id);
@@ -190,11 +190,11 @@ describe("아이템 상점", () => {
     expect(s.inventory!.vitavita).toBe(5);
     expect(s.teams[2].money).toBe(1000 - 40 * 5);
     const p = rosterOf(s, 2)[0];
-    p.cond = 4;
+    p.cond = 40;
     useStockItem(s, "vitavita", p.id);
-    expect(p.cond).toBe(7);
+    expect(p.cond).toBe(43);
     expect(s.inventory!.vitavita).toBe(4);
-    p.cond = 10;
+    p.cond = 100;
     expect(() => useStockItem(s, "vitavita", p.id)).toThrow("컨디션이 최대 입니다");
     expect(() => buyItem(s, "vitavita", undefined, 1000)).toThrow(CareerError);
   });
@@ -232,7 +232,7 @@ describe("구단 운영", () => {
     expect(s.teams[0].money).toBe(before + 700);
   });
 
-  it("3주 연속 적자면 구단 해체, 감독 제의를 받으면 자금과 함께 이동", async () => {
+  it("3주 연속 적자면 구단 해체, 감독 제의를 받으면 새 구단이 영입 계약금을 내고 감독 레벨은 유지", async () => {
     const { acceptJob } = await import("./club");
     const s = newCareer(4);
     s.teams[4].money = -5000;
@@ -241,12 +241,17 @@ describe("구단 운영", () => {
       advanceWeek(s, m ? aiEntry(s, 4, PRO_SETS) : undefined);
     }
     expect(s.gameOver?.reason).toContain("해체");
+    const { jobSigningFee } = await import("@shared/career/mainSponsor");
     const t = newCareer(4);
     t.teams[4].money = 7777;
+    t.manager = { reputation: 70, level: 3, exp: 40 };
+    const before = t.teams[0].money, fee = jobSigningFee(t, 0);
     t.jobOffers = [0];
     acceptJob(t, 0);
     expect(t.myTeam).toBe(0);
-    expect(t.teams[0].money).toBe(7777);
+    expect(t.teams[0].money).toBe(before + fee);
+    expect(t.teams[4].money).toBe(7777);
+    expect(t.manager?.level).toBe(3);
   });
 });
 
@@ -278,13 +283,18 @@ describe("세대 교체·2부·스폰서", () => {
     const q = o.quests[0];
     expect(questReward(q, q.kind === "rank" ? q.target - 1 : q.target + 1)).toBeGreaterThan(questReward(q, q.target));
     chooseSponsor(s, 0, o.quests.map(x => x.target));
-    expect(() => chooseSponsor(s, 1, [])).toThrow(CareerError);
-    s.sponsor!.quests[0] = { kind: "teamWins", base: 11, target: 1, baseReward: 100 };
+    // 같은 스폰서는 두 번 계약 못 하고, 최대 3곳까지
+    expect(() => chooseSponsor(s, 0, [])).toThrow(CareerError);
+    s.manager = { reputation: 100, level: 10, exp: 0 };
+    expect(sponsorOffers(s).length).toBeGreaterThanOrEqual(4);
+    chooseSponsor(s, 1, []); chooseSponsor(s, 2, []);
+    expect(() => chooseSponsor(s, 3, [])).toThrow(CareerError);
+    s.sponsors![0].quests[0] = { kind: "teamWins", base: 11, target: 1, baseReward: 100 };
     const money = s.teams[0].money;
     s.teams[0].wins = 1;
     const m = myPendingMatch(s);
     advanceWeek(s, m ? aiEntry(s, 0, PRO_SETS) : undefined);
-    expect(s.sponsor!.quests[0].done).toBe(true);
+    expect(s.sponsors![0].quests[0].done).toBe(true);
     expect(s.ledger?.items["스폰서 보상"]).toBeGreaterThan(0);
     void money;
   });
@@ -349,7 +359,11 @@ describe("경기 뒤 변화", () => {
     beginMatch(s, front);
     expect(s.players[roster[6].id].action).toBe("rest");
     const r = playLiveSet(s);
-    expect(r.set.fx?.a.cond[1]).toBeLessThan(r.set.fx!.a.cond[0] + 1);
+    // 컨디션은 1 단위: 승자 0~3, 패자 3~10 하락
+    const [w, l] = r.set.winner === "a" ? [r.set.fx!.a, r.set.fx!.b] : [r.set.fx!.b, r.set.fx!.a];
+    expect(w.cond[0] - w.cond[1]).toBeGreaterThanOrEqual(0);
+    expect(w.cond[0] - w.cond[1]).toBeLessThanOrEqual(3);
+    if (l.cond[0] > 12) { expect(l.cond[0] - l.cond[1]).toBeGreaterThanOrEqual(3); expect(l.cond[0] - l.cond[1]).toBeLessThanOrEqual(10); }
     expect(r.set.fx!.a.exp + r.set.fx!.b.exp).toBe(40);
   });
 });

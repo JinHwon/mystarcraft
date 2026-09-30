@@ -38,12 +38,14 @@ export const MATCH_MONEY = { win: 120, lose: 30 };
 export const POSTSEASON_PRIZE: Record<string, number> = { 우승: 1500, 준우승: 800, 플레이오프: 400, 준플레이오프: 250 };
 
 // ── 컨디션 (원작: 작은 정수 단계, 의욕/짜증) ─────────────────────────
+/** 컨디션은 원작처럼 % (1 단위로 움직임) */
 export const COND_MIN = 1;
-export const COND_MAX = 10;
+export const COND_MAX = 100;
 export const COND_LABELS = ["", "최악", "짜증", "나쁨", "저조", "보통", "양호", "좋음", "의욕", "최상", "절정"];
+export const condLabel = (cond: number) => COND_LABELS[Math.max(1, Math.min(10, Math.ceil(cond / 10)))];
 /** 컨디션에 따른 경기력 배율 (1 → 0.91, 5 → 0.99, 10 → 1.09) */
 export function condMultiplier(cond: number): number {
-  return 1 + (Math.max(COND_MIN, Math.min(COND_MAX, cond)) - 5.5) * 0.02;
+  return 1 + (Math.max(COND_MIN, Math.min(COND_MAX, cond)) - 55) * 0.002;
 }
 
 // ── 선수 행동 (행동력) ──────────────────────────────────────────────
@@ -332,7 +334,12 @@ export interface CareerState {
   /** 이번 시즌 수입·지출 (항목별, 지출은 음수) */
   ledger?: { season: number; items: Record<string, number> };
   /** 이번 시즌 스폰서 */
+  /** (예전 세이브) 서브 스폰서 한 곳 */
   sponsor?: import("./sponsor").Sponsor & { season: number };
+  /** 이번 시즌 계약한 서브 스폰서 (최대 3곳) */
+  sponsors?: Array<import("./sponsor").Sponsor & { season: number }>;
+  /** 컨디션 단위 (100 = % 단위. 없으면 예전 1~10 단위 세이브) */
+  condScale?: 100;
   /** 선수 행동을 반영한 주 (한 주 한 번) */
   actionsWeek?: string;
   /** 보유 경기 아이템 (츄잉껌·세레모니·스나이핑·치어풀) */

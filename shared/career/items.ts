@@ -118,5 +118,5 @@ export function gearStats(p: CPlayer, extraAll = 0): Record<StatKey, number> {
 }
 /** 경기에 쓰이는 컨디션 (1~10) */
 export function gearCond(p: CPlayer): number {
-  return Math.max(1, Math.min(10, p.cond + equipCond(p)));
+  return Math.max(1, Math.min(100, p.cond + equipCond(p)));
 }

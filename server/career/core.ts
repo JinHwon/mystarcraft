@@ -84,6 +84,21 @@ function effStats(p: CPlayer, mod?: SetMods): Record<StatKey, number> {
   return Object.fromEntries(STAT_KEYS.map(s => [s, g[s] * k])) as Record<StatKey, number>;
 }
 
+/**
+ * 경기 뒤 컨디션 하락 (원작: 1 단위)
+ * - 패배: 3~10 (경기가 길수록, 기지를 잃거나 완패할수록 더)
+ * - 승리: 0~3 (컨디션이 좋으면 안 떨어지기도, 긴 경기면 더)
+ */
+function condLoss(p: CPlayer, won: boolean, c: SetContent | undefined, duration: number): number {
+  const long = Math.min(3, Math.max(0, (duration - 600) / 300));
+  if (won) {
+    const base = p.cond >= 80 ? randInt(0, 2) : randInt(1, 3);
+    return Math.max(0, Math.min(3, Math.round(base + long * 0.4)));
+  }
+  const pain = c ? c.crushed * 1 + c.basesLost * 0.7 + c.holdFails * 0.4 : 0;
+  return Math.max(3, Math.min(10, Math.round(randInt(3, 5) + long + pain)));
+}
+
 /** 세트 전 상태 → 변화 기록 */
 function fxOf(p: CPlayer, before: { cond: number; stats: Record<StatKey, number>; level: number }, exp: number): PlayerFx {
   const stats = Object.fromEntries(STAT_KEYS.map(k => [k, p.stats[k] - before.stats[k]]).filter(([, d]) => d !== 0));
@@ -108,7 +123,8 @@ function afterSet(s: CareerState, a: CPlayer, b: CPlayer, aWin: boolean, mods?: 
   if (l.team === s.myTeam) l.h2h = { ...l.h2h, [w.id]: [l.h2h?.[w.id]?.[0] ?? 0, (l.h2h?.[w.id]?.[1] ?? 0) + 1] };
   // 컨디션 유지 이벤트: 우리 선수는 지치지 않음
   const tire = (p: CPlayer, d: number) => { if (!(p.team === s.myTeam && eventOn("fatigue_unlimited"))) p.cond = clampCond(p.cond - d); };
-  tire(w, 1); tire(l, 2);
+  tire(w, condLoss(w, true, content?.[w === a ? 0 : 1], duration));
+  tire(l, condLoss(l, false, content?.[l === a ? 0 : 1], duration));
   addExp(s, w, 30); addExp(s, l, 10);
   for (const [p, d] of [[a, da], [b, db]] as const) for (const [k, v] of Object.entries(d)) p.stats[k as StatKey] = clampStat(p.stats[k as StatKey] + v!);
   for (const p of [a, b]) wearEquip(s, p);

@@ -72,14 +72,42 @@ export function questProgress(s: CareerState, q: SponsorQuest): { now: number; d
   }
 }
 
-/** 이번 시즌 스폰서 제안 3개 (팀 전력에 맞춰 목표를 정함) */
+/** 한 시즌에 계약할 수 있는 서브 스폰서 수 */
+export const MAX_SPONSORS = 3;
+
+/**
+ * 이번 시즌 스폰서 제의 수 (1~10): 지난 시즌 순위가 좋을수록, 감독 명성·레벨이 높을수록 많이 온다
+ * 첫 시즌은 팀 전력 순위로 판단
+ */
+export function sponsorOfferCount(s: CareerState): { count: number; basis: string } {
+  const last = s.history[0];
+  const teams = standings(s).length || 12;
+  let rank: number, basis: string;
+  if (last) { rank = last.myRank; basis = `지난 시즌 ${last.myRank}위`; }
+  else {
+    const byPower = [...standings(s)].map(t => t.id).sort((a, b) => teamPowerOf(s, b) - teamPowerOf(s, a));
+    rank = byPower.indexOf(s.myTeam) + 1 || Math.ceil(teams / 2);
+    basis = `팀 전력 ${rank}위`;
+  }
+  const rep = s.manager?.reputation ?? 50;
+  const lv = managerLevel(s);
+  const raw = 10 - (rank - 1) * (8 / Math.max(1, teams - 1)) + (rep - 50) / 20 + (lv - 1) * 0.3;
+  return { count: Math.max(1, Math.min(10, Math.round(raw))), basis };
+}
+
+const teamPowerOf = (s: CareerState, team: number) => rosterOf(s, team).map(p => totalOf(p.stats)).sort((a, b) => b - a).slice(0, 6).reduce((a, b) => a + b, 0);
+
+/** 이번 시즌 스폰서 제의 (팀 전력에 맞춰 목표를 정함). 최대 3곳과 계약 */
 export function sponsorOffers(s: CareerState): Sponsor[] {
   const roster = rosterOf(s, s.myTeam).sort((a, b) => totalOf(b.stats) - totalOf(a.stats));
   const rank = standings(s).findIndex(t => t.id === s.myTeam) + 1 || 6;
+  const { count } = sponsorOfferCount(s);
+  // 이름이 겹치지 않도록 시즌마다 섞은 순서
+  const names = NAMES.map((n, i) => ({ n, o: seeded(s.season, s.myTeam, 99, i) })).sort((a, b) => a.o - b.o).map(x => x.n);
   const out: Sponsor[] = [];
-  for (let k = 0; k < 3; k++) {
+  for (let k = 0; k < count; k++) {
     const r = (i: number) => seeded(s.season, s.myTeam, k, i);
-    const name = NAMES[Math.floor(r(0) * NAMES.length + k * 3) % NAMES.length];
+    const name = names[k % names.length];
     const star = roster[Math.floor(r(1) * Math.min(3, roster.length))];
     const young = roster[Math.min(roster.length - 1, 4 + Math.floor(r(2) * Math.max(1, roster.length - 4)))];
     const pool: SponsorQuest[] = [
@@ -90,12 +118,21 @@ export function sponsorOffers(s: CareerState): Sponsor[] {
       { kind: "rank", base: Math.max(2, Math.min(6, rank || 6)), target: Math.max(2, Math.min(6, rank || 6)), baseReward: 350 },
       { kind: "mslRo16", base: 1, target: 1, baseReward: 300 },
     ];
-    // 제안마다 퀘스트 3개, 후원금이 많으면 퀘스트 보상은 적게
-    const quests = pool.map((q, i) => ({ q, o: r(10 + i) })).sort((a, b) => a.o - b.o).slice(0, 3).map(x => x.q);
+    // 제의마다 퀘스트 2~3개, 후원금이 많으면 퀘스트 보상은 적게 (3곳까지 계약하므로 한 곳 금액은 예전 한 곳보다 작게)
+    const nq = r(20) < 0.5 ? 2 : 3;
+    const quests = pool.map((q, i) => ({ q, o: r(10 + i) })).sort((a, b) => a.o - b.o).slice(0, nq).map(x => x.q);
     const perk = levelPerks(managerLevel(s)).sponsor;
-    const weekly = Math.round([70, 50, 35][k] * perk);
-    const mul = [0.8, 1.1, 1.5][k] * perk;
+    const style = Math.floor(r(0) * 3); // 0 후원금형 · 1 균형형 · 2 퀘스트형
+    const weekly = Math.round([42, 30, 20][style] * (0.85 + r(21) * 0.3) * perk);
+    const mul = [0.45, 0.65, 0.9][style] * perk;
     out.push({ name, weekly, quests: quests.map(q => ({ ...q, baseReward: Math.round((q.baseReward * mul) / 10) * 10 })) });
   }
   return out;
+}
+
+/** 이번 시즌 계약한 서브 스폰서들 (예전 세이브의 한 곳짜리 포함) */
+export function activeSponsors(s: CareerState): Array<Sponsor & { season: number }> {
+  const list = (s.sponsors ?? []).filter(x => x.season === s.season);
+  if (!list.length && s.sponsor?.season === s.season) return [s.sponsor];
+  return list;
 }
