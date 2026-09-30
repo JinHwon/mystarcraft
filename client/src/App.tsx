@@ -37,6 +37,7 @@ const Training = page(() => import("./pages/Training"));
 const League = page(() => import("./pages/League"));
 const Lobby = page(() => import("./pages/Lobby"));
 const Transfer = page(() => import("./pages/Transfer"));
+const Teams = page(() => import("./pages/Teams"));
 const Records = page(() => import("./pages/Records"));
 const Ranking = page(() => import("./pages/Ranking"));
 const StarLeague = page(() => import("./pages/StarLeague"));
@@ -73,6 +74,7 @@ const GAME_PAGES: Array<[string, () => React.JSX.Element]> = [
   ["/training", withLayout(Training)],
   ["/league", withLayout(League)],
   ["/transfer", withLayout(Transfer)],
+  ["/teams", withLayout(Teams)],
   ["/records", withLayout(Records)],
   ["/ranking", withLayout(Ranking)],
   ["/starleague", withLayout(StarLeague)],

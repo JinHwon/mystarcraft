@@ -311,6 +311,7 @@ function MatchTab({ s }: { s: CareerState }) {
 
 function TableTab({ s }: { s: CareerState }) {
   const st = standings(s);
+  const [, navigate] = useLocation();
   return (
     <div className="rounded-2xl bg-card border border-border overflow-hidden">
       <table className="w-full text-sm">
@@ -319,9 +320,9 @@ function TableTab({ s }: { s: CareerState }) {
         </thead>
         <tbody>
           {st.map((t, i) => (
-            <tr key={t.id} className={cn("border-b border-border/60", t.id === s.myTeam && "bg-amber-500/15", i === 3 && "border-b-2 border-b-amber-400/40")}>
+            <tr key={t.id} onClick={() => navigate(`/teams?id=${t.id}`)} className={cn("border-b border-border/60 cursor-pointer active:bg-muted/40", t.id === s.myTeam && "bg-amber-500/15", i === 3 && "border-b-2 border-b-amber-400/40")}>
               <td className="py-2 pl-3 font-bold text-muted-foreground">{i + 1}</td>
-              <td className="py-2"><span className="flex items-center gap-1.5"><TeamBadge short={t.short} color={t.color} /><span className={cn("truncate", t.id === s.myTeam ? "text-amber-200 font-bold" : "text-foreground")}>{t.name}</span></span></td>
+              <td className="py-2"><span className="flex items-center gap-1.5"><TeamBadge short={t.short} color={t.color} /><span className={cn("truncate", t.id === s.myTeam ? "text-amber-200 font-bold" : "text-foreground")}>{t.name}</span><span className="text-muted-foreground text-xs">›</span></span></td>
               <td className="text-center font-bold text-foreground">{t.wins}</td>
               <td className="text-center text-muted-foreground">{t.losses}</td>
               <td className={cn("text-center pr-3 font-mono text-xs", t.setWins - t.setLosses >= 0 ? "text-emerald-300" : "text-rose-300")}>{t.setWins - t.setLosses > 0 ? "+" : ""}{t.setWins - t.setLosses}</td>
@@ -329,7 +330,7 @@ function TableTab({ s }: { s: CareerState }) {
           ))}
         </tbody>
       </table>
-      <p className="text-[10px] text-muted-foreground px-3 py-2">4위까지 포스트시즌 진출 · 준플레이오프(3위 vs 4위) → 플레이오프(2위) → 결승(1위, 7전 4선승)</p>
+      <p className="text-[10px] text-muted-foreground px-3 py-2">구단을 누르면 구단 정보와 선수단을 볼 수 있습니다 · 4위까지 포스트시즌 진출 · 준플레이오프(3위 vs 4위) → 플레이오프(2위) → 결승(1위, 7전 4선승)</p>
     </div>
   );
 }
