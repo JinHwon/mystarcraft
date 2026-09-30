@@ -7,7 +7,7 @@ import { FINAL_SETS, burstOf, MATCH_MONEY, PRO_SETS, type CareerState, type CMat
 import { STAGE_NAMES } from "@shared/career/view";
 import { ITEM_BY_KEY, gearCond, gearStats } from "@shared/career/items";
 import { LegacyFrame, LegacyImg, LegacyRadar, MapInfo, TeamLogo } from "../Legacy";
-import { EquipRow, condStats, useSpeed } from "./common";
+import { EquipRow, condStats, setItemAll, useSpeed } from "./common";
 import { AceScreen } from "./entry";
 import { Broadcast, PlayerCard, SetList, type BroadcastSet } from "./broadcast";
 
@@ -220,15 +220,20 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose }: {
               <div className="text-center text-[12px] text-[#ffe45c] my-6">{sl}:{sr} — ACE 결정전! 다음 화면에서 출전 선수를 고릅니다</div>
             ) : lp && rp && (
               <div className="grid grid-cols-2 gap-2 mt-2">
-                {[{ p: lp, o: rp }, { p: rp, o: lp }].map(({ p, o }) => (
-                  <div key={p.id} className="flex flex-col items-center">
-                    <PlayerCard p={p} opp={o} />
-                    <div className="mt-0.5"><EquipRow p={p} size={20} /></div>
-                    <LegacyRadar stats={condStats(p, s)} base={p.stats} gear={gearStats(p)} level={p.level} size={112} />
-                    <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p)} %{burstOf(s, p) ? <span className="text-[#ffb84d] font-bold"> 🔥{Math.round(burstOf(s, p)! * 100)}%</span> : null}</div>
-                    {p.team === s.myTeam && info.items?.[i] && <div className="text-[11px] text-[#ffe45c]">아이템 : {ITEM_BY_KEY[info.items[i].key]?.name} (보유 {s.inventory?.[info.items[i].key] ?? 0}개)</div>}
-                  </div>
-                ))}
+                {[{ p: lp, o: rp }, { p: rp, o: lp }].map(({ p, o }) => {
+                  // 이 세트 우리 선수의 경기 아이템 (치어풀이면 모든 능력치 +75 가 실제 경기에 들어감)
+                  const itemKey = p.team === s.myTeam ? results[i]?.item ?? info.items?.[i]?.key : undefined;
+                  const extra = setItemAll(itemKey);
+                  return (
+                    <div key={p.id} className="flex flex-col items-center">
+                      <PlayerCard p={p} opp={o} />
+                      <div className="mt-0.5"><EquipRow p={p} size={20} /></div>
+                      <LegacyRadar stats={condStats(p, s, extra)} base={p.stats} gear={gearStats(p, extra)} level={p.level} size={112} />
+                      <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p)} %{burstOf(s, p) ? <span className="text-[#ffb84d] font-bold"> 🔥{Math.round(burstOf(s, p)! * 100)}%</span> : null}</div>
+                      {itemKey && <div className="text-[11px] text-[#ffe45c]">아이템 : {ITEM_BY_KEY[itemKey]?.name}{extra ? ` (모든 능력치 +${extra} 반영)` : ""} · 보유 {s.inventory?.[itemKey] ?? 0}개</div>}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </>

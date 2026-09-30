@@ -127,7 +127,7 @@ function Office({ s }: { s: CareerState }) {
   if (activeSponsors(s).length < MAX_SPONSORS && s.phase !== "offseason") alerts.push(["🤝", activeSponsors(s).length ? `서브 스폰서를 ${MAX_SPONSORS - activeSponsors(s).length}곳 더 계약할 수 있습니다` : "이번 시즌 서브 스폰서를 아직 정하지 않았습니다 (후원금 없음)"]);
   if (s.phase !== "offseason" && s.week === 1 && !s.matches.some(m => m.done && (m.a === s.myTeam || m.b === s.myTeam))) alerts.push(["🏢", "첫 경기 전: 메인 스폰서와 승리·패배·우승 수당을 재협상할 수 있습니다"]);
   if (s.offers?.length) alerts.push(["📨", `받은 영입 제안 ${s.offers.length}건`]);
-  if (s.jobOffers?.length) alerts.push(["🤵", `감독 제의 ${s.jobOffers.length}건 (${s.jobOffers.map(id => s.teams[id].name).join(", ")})`]);
+  if (s.jobOffers?.length) alerts.push(["🤵", `감독 제의 ${s.jobOffers.length}건 (${s.jobOffers.map(o => s.teams[o.team].name).join(", ")})`]);
   if (wantOut.length) alerts.push(["😤", `이적 희망: ${wantOut.map(p => p.name).join(", ")}`]);
   const expiring = s.players.filter(p => p.team === s.myTeam && (p.contract?.years ?? 9) <= 1);
   if (s.phase === "offseason" && expiring.length) alerts.push(["📄", `계약 만료 예정 (재계약 안 하면 떠남): ${expiring.map(p => p.name).join(", ")}`]);
@@ -220,6 +220,7 @@ function Office({ s }: { s: CareerState }) {
         <Tile emoji="🏢" title="구단 운영" desc={`연봉·계약·제안${s.offers?.length ? ` · 제안 ${s.offers.length}` : ""}`} onClick={() => navigate("/club")} className="bg-gradient-to-br from-teal-500 to-cyan-800 border-teal-300/40" />
         <Tile emoji="🛒" title="아이템 상점" desc="장비·포션·경기 아이템" onClick={() => navigate("/shop")} className="bg-gradient-to-br from-rose-500 to-pink-700 border-rose-300/40" />
         <Tile emoji="👑" title="마이스타리그" desc={s.msl ? MSL_STAGE_NAMES[s.msl.stage] : "1주차 개막"} onClick={() => navigate("/starleague")} className="bg-gradient-to-br from-indigo-500 to-slate-700 border-indigo-300/40" />
+        <Tile emoji="💰" title="재정 관리" desc={`보유 ${me.money.toLocaleString()}만 · 가계부`} onClick={() => navigate("/finance")} className="bg-gradient-to-br from-yellow-500 to-amber-700 border-yellow-300/40" />
       </div>
 
       {/* 순위 요약 */}

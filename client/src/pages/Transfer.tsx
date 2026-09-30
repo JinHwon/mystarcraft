@@ -280,7 +280,41 @@ export default function Transfer() {
         {mode === "trade" && <TradeTab s={s} />}
         {mode === "scout" && <ScoutTab s={s} />}
         {mode === "fire" && <FireTab s={s} />}
+        <MarketNews s={s} />
       </div>
     </LegacyFrame>
+  );
+}
+
+const MOVE_LABEL = { transfer: "이적", trade: "트레이드", release: "방출", sign: "영입" } as const;
+
+/** 다른 구단끼리의 이적·트레이드·방출·무소속 영입 소식 */
+function MarketNews({ s }: { s: CareerState }) {
+  const [open, setOpen] = useState(false);
+  const log = s.marketLog ?? [];
+  const shown = open ? log : log.slice(0, 6);
+  const name = (id: number) => `${s.players[id]?.name ?? "?"}(${R[s.players[id]?.race ?? "terran"]})`;
+  const team = (id: number) => s.teams[id]?.short ?? "?";
+  return (
+    <div className="mt-3 border border-neutral-600 p-2 text-[11.5px] space-y-0.5">
+      <div className="flex justify-between items-baseline">
+        <span className="text-[#ffe45c] text-[12.5px]">📰 다른 구단 이적 소식</span>
+        <span className="text-[10px] text-neutral-500">{log.length}건</span>
+      </div>
+      {!log.length && <div className="text-neutral-500">아직 소식이 없습니다 (매주, 비시즌에는 더 활발하게 움직입니다)</div>}
+      {shown.map((m, i) => (
+        <div key={i} className="grid grid-cols-[44px_48px_1fr] gap-1 items-baseline">
+          <span className="text-[10px] text-neutral-500">{m.season}시즌{m.week}주</span>
+          <span className={cn("text-[10.5px]", m.kind === "release" ? "text-neutral-400" : "text-[#8fd0ff]")}>{MOVE_LABEL[m.kind]}</span>
+          <span className="truncate">
+            {m.kind === "transfer" && <>{name(m.players[0])} {team(m.teams[0])} → {team(m.teams[1])}{m.fee ? <span className="text-neutral-400"> · {m.fee.toLocaleString()}만</span> : null}</>}
+            {m.kind === "trade" && <>{team(m.teams[0])} {name(m.players[0])} ⇄ {team(m.teams[1])} {name(m.players[1])}</>}
+            {m.kind === "release" && <>{team(m.teams[0])}, {name(m.players[0])} 방출 → 무소속</>}
+            {m.kind === "sign" && <>{team(m.teams[0])}, 무소속 {name(m.players[0])} 영입{m.fee ? <span className="text-neutral-400"> · {m.fee.toLocaleString()}만</span> : null}</>}
+          </span>
+        </div>
+      ))}
+      {log.length > 6 && <button onClick={() => setOpen(!open)} className="w-full text-center text-[11px] text-neutral-300 pt-1">{open ? "접기 ▲" : `더 보기 (${log.length - 6}건) ▼`}</button>}
+    </div>
   );
 }

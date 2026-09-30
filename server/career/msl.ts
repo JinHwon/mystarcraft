@@ -266,7 +266,7 @@ function finishMsl(s: CareerState, m: MslState) {
   for (const [id, place] of Object.entries(m.placements)) {
     const prize = MSL_PRIZE[place];
     const p = s.players[Number(id)];
-    if (prize && p && p.team !== FREE_AGENT_TEAM) { s.teams[p.team].money += prize; if (p.team === s.myTeam) book(s, "개인리그 상금", prize); }
+    if (prize && p && p.team !== FREE_AGENT_TEAM) { s.teams[p.team].money += prize; if (p.team === s.myTeam) book(s, "개인리그 상금", prize, `${p.name} ${place}`); }
   }
   // 메인 스폰서 개인리그 수당 · 감독 경험치
   if (s.players[m.champion!]?.team === s.myTeam) { mainSponsorPay(s, "mslTitle", "메인 스폰서 개인리그 우승 수당"); addManagerExp(s, 120); }

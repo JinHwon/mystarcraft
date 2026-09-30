@@ -77,7 +77,8 @@ export interface SetMods {
   gum?: boolean;
 }
 
-function effStats(p: CPlayer, mod?: SetMods): Record<StatKey, number> {
+/** 세트에 실제로 들어가는 능력치 (장비·컨디션·세트 아이템). 화면의 condStats 와 같은 계산 */
+export function effStats(p: CPlayer, mod?: SetMods): Record<StatKey, number> {
   const g = gearStats(p, mod?.all ?? 0);
   const k = condMultiplier(gearCond(p)) * (mod?.mul ?? 1);
   return Object.fromEntries(STAT_KEYS.map(s => [s, g[s] * k])) as Record<StatKey, number>;

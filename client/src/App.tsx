@@ -42,6 +42,7 @@ const Ranking = page(() => import("./pages/Ranking"));
 const StarLeague = page(() => import("./pages/StarLeague"));
 const Shop = page(() => import("./pages/Shop"));
 const Club = page(() => import("./pages/Club"));
+const Finance = page(() => import("./pages/Finance"));
 
 const PageLoading = () => (
   <div className="flex items-center justify-center py-20" role="status" aria-label="불러오는 중">
@@ -77,6 +78,7 @@ const GAME_PAGES: Array<[string, () => React.JSX.Element]> = [
   ["/starleague", withLayout(StarLeague)],
   ["/shop", withLayout(Shop)],
   ["/club", withLayout(Club)],
+  ["/finance", withLayout(Finance)],
   ["/admin", withLayout(adminOnly(Admin))],
   ["/admin/events", withLayout(adminOnly(AdminEvents))],
 ];

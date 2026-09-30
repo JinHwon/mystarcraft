@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { FINAL_SETS, PRO_SETS } from "@shared/career/rules";
-import { CareerError, advanceWeek, aiEntry, beginMatch, buyItem, useStockItem, myPendingMatch, newCareer, playLiveSet, proposeTrade, releasePlayer, rosterOf, scoutPlayer, setAction, standings, startNextSeason } from "./logic";
+import { FINAL_SETS, PRO_SETS, totalOf } from "@shared/career/rules";
+import { CareerError, advanceWeek, aiEntry, beginMatch, buyItem, migrateCareer, useStockItem, myPendingMatch, newCareer, playLiveSet, proposeTrade, releasePlayer, rosterOf, scoutPlayer, setAction, standings, startNextSeason } from "./logic";
 
 describe("커리어 모드", () => {
   it("원작 데이터로 새 게임을 만든다 (230명, 12팀 2라운드 풀리그 11주 132경기)", () => {
@@ -263,12 +263,47 @@ describe("구단 운영", () => {
     t.teams[4].money = 7777;
     t.manager = { reputation: 70, level: 3, exp: 40 };
     const before = t.teams[0].money, fee = jobSigningFee(t, 0);
-    t.jobOffers = [0];
+    t.phase = "offseason";
+    t.jobOffers = [{ team: 0, fee, max: fee * 2, tries: 0, status: "pending" }];
     acceptJob(t, 0);
     expect(t.myTeam).toBe(0);
     expect(t.teams[0].money).toBe(before + fee);
     expect(t.teams[4].money).toBe(7777);
-    expect(t.manager?.level).toBe(3);
+    expect(t.manager).toMatchObject({ level: 3, exp: 40, reputation: 70, teams: [4, 0] });
+  });
+
+  it("감독 제의 계약금 역제안: 한도 안이면 합의, 너무 높으면 철회 · 옮겨도 감독 레벨 유지", async () => {
+    const { respondJob, acceptJob } = await import("./club");
+    const s = newCareer(4);
+    s.phase = "offseason";
+    s.manager = { reputation: 80, level: 5, exp: 120, teams: [4] };
+    s.jobOffers = [{ team: 0, fee: 1000, max: 1500, tries: 0, status: "pending" }, { team: 1, fee: 1000, max: 1200, tries: 0, status: "pending" }];
+    // 한도 넘게 → 중간값 역제안
+    const r1 = respondJob(s, 0, "counter", 1700);
+    expect(r1.result).toBe("countered");
+    expect(s.jobOffers.find(o => o.team === 0)!.fee).toBe(1250);
+    // 한도 안 → 합의 (아직 옮기지 않음)
+    const r2 = respondJob(s, 0, "counter", 1400);
+    expect(r2.result).toBe("agreed");
+    expect(s.myTeam).toBe(4);
+    // 너무 높으면 철회
+    expect(respondJob(s, 1, "counter", 5000).result).toBe("withdrawn");
+    expect(s.jobOffers.map(o => o.team)).toEqual([0]);
+    const money = s.teams[0].money;
+    acceptJob(s, 0);
+    expect(s.teams[0].money).toBe(money + 1400);
+    expect(s.manager).toMatchObject({ level: 5, exp: 120, reputation: 80 });
+    // 다음 시즌을 시작해도 그대로
+    startNextSeason(s, { releaseExpiring: true });
+    expect(s.manager).toMatchObject({ level: 5, exp: 120 });
+  });
+
+  it("예전 세이브의 감독 제의(팀 번호)는 계약금 제의로 바뀐다", () => {
+    const s = newCareer(4);
+    (s as any).jobOffers = [0, 1];
+    migrateCareer(s);
+    expect(s.jobOffers!.map(o => o.team)).toEqual([0, 1]);
+    expect(s.jobOffers!.every(o => o.max >= o.fee && o.fee > 0)).toBe(true);
   });
 });
 
@@ -301,13 +336,17 @@ describe("세대 교체·2부·스폰서", () => {
     const o = sponsorOffers(s)[0];
     const q = o.quests[0];
     expect(questReward(q, q.kind === "rank" ? q.target - 1 : q.target + 1)).toBeGreaterThan(questReward(q, q.target));
-    chooseSponsor(s, 0, o.quests.map(x => x.target));
+    chooseSponsor(s, o.name, o.quests.map(x => x.target));
     // 같은 스폰서는 두 번 계약 못 하고, 최대 3곳까지
-    expect(() => chooseSponsor(s, 0, [])).toThrow(CareerError);
+    expect(() => chooseSponsor(s, o.name, [])).toThrow(CareerError);
     s.manager = { reputation: 100, level: 10, exp: 0 };
-    expect(sponsorOffers(s).length).toBeGreaterThanOrEqual(4);
-    chooseSponsor(s, 1, []); chooseSponsor(s, 2, []);
-    expect(() => chooseSponsor(s, 3, [])).toThrow(CareerError);
+    const list = sponsorOffers(s);
+    expect(list.length).toBeGreaterThanOrEqual(4);
+    // 4번째 이후 제의도 고를 수 있다 (예전에는 번호 0~2 만 받아 오류)
+    const rest = list.filter(x => x.name !== o.name);
+    chooseSponsor(s, rest[3].name, []); chooseSponsor(s, rest[0].name, []);
+    expect(() => chooseSponsor(s, rest[1].name, [])).toThrow(CareerError);
+    expect(() => chooseSponsor(newCareer(0), "없는스폰서", [])).toThrow(CareerError);
     s.sponsors![0].quests[0] = { kind: "teamWins", base: 11, target: 1, baseReward: 100 };
     const money = s.teams[0].money;
     s.teams[0].wins = 1;
@@ -357,11 +396,12 @@ describe("메인 스폰서·감독 레벨", () => {
     const { addManagerExp } = await import("./club");
     const { playerDemand, sellMinimum } = await import("@shared/career/contract");
     const s = newCareer(0);
-    const p = rosterOf(s, 1)[0];
-    const d1 = playerDemand(s, p, 0).salary, f1 = sellMinimum(s, p);
     const m = myPendingMatch(s);
     advanceWeek(s, m ? aiEntry(s, 0, PRO_SETS) : undefined);
     expect((s.manager?.exp ?? 0) + (s.manager!.level! - 1) * 100).toBeGreaterThan(0);
+    // 한 주 동안 다른 구단끼리 선수가 움직일 수 있으므로, 비교할 선수는 주가 지난 뒤 고른다
+    const p = rosterOf(s, 1).sort((a, b) => totalOf(b.stats) - totalOf(a.stats))[0];
+    const d1 = playerDemand(s, p, 0).salary, f1 = sellMinimum(s, p);
     addManagerExp(s, 5000);
     expect(s.manager!.level!).toBeGreaterThan(5);
     expect(playerDemand(s, p, 0).salary).toBeLessThan(d1);
@@ -434,5 +474,93 @@ describe("조 지명식", () => {
     expect(s.msl!.groups).toHaveLength(8);
     expect(s.msl!.groups.every(g => g.players.length === 4)).toBe(true);
     expect(s.msl!.draft).toBeUndefined();
+  });
+});
+
+describe("이적시장 등록·여러 제안·제안 기록", () => {
+  it("희망가에 내놓으면 여러 구단이 제안하고, 한 건을 받으면 나머지는 기록으로 남는다", async () => {
+    const { listPlayer, respondOffer, weeklyClub } = await import("./club");
+    const { askingPrice } = await import("@shared/career/rules");
+    const s = newCareer(0);
+    for (const t of s.teams) t.money = 100_000;
+    const p = rosterOf(s, 0).sort((a, b) => b.level - a.level)[0];
+    // 시세의 절반이면 거의 모든 구단이 관심
+    listPlayer(s, p.id, Math.round(askingPrice(p, s.season) * 0.5));
+    for (let i = 0; i < 3 && (s.offers ?? []).filter(o => o.player === p.id).length < 2; i++) weeklyClub(s);
+    const mine = s.offers!.filter(o => o.player === p.id);
+    expect(mine.length).toBeGreaterThanOrEqual(2);
+    expect(mine.every(o => o.listed)).toBe(true);
+    expect(new Set(mine.map(o => o.team)).size).toBe(mine.length);
+    const r = respondOffer(s, mine[0].id, "accept");
+    expect(r.result).toBe("sold");
+    expect(p.team).toBe(mine[0].team);
+    expect((s.offers ?? []).some(o => o.player === p.id)).toBe(false);
+    expect(s.listings ?? []).toHaveLength(0);
+    expect(s.offerLog![0]).toMatchObject({ player: p.id, result: "closed" });
+    expect(s.offerLog!.some(e => e.result === "sold" && e.player === p.id && e.team === mine[0].team)).toBe(true);
+  });
+
+  it("역제안이 받아들여지면 완료 기록이 남는다", async () => {
+    const { respondOffer } = await import("./club");
+    const s = newCareer(0);
+    const p = rosterOf(s, 0)[0];
+    s.teams[3].money = 50_000;
+    s.offers = [{ id: 99, player: p.id, team: 3, fee: 500, max: 900, season: 1, week: 1, tries: 0, status: "pending" }];
+    const r = respondOffer(s, 99, "counter", 800);
+    expect(r.result).toBe("sold");
+    expect(s.offerLog![0]).toMatchObject({ result: "sold", fee: 800, team: 3, player: p.id, dir: "out" });
+  });
+
+  it("개인리그 시드는 시즌 시작부터 정해져 일정표에서 미리 볼 수 있다", () => {
+    const s = newCareer(0);
+    expect(s.msl?.season).toBe(1);
+    expect(s.msl?.seeds).toHaveLength(16);
+    expect(s.msl?.stage).toBe("pc");
+  });
+});
+
+describe("가계부·다른 구단 이적·치어풀", () => {
+  it("돈이 움직일 때마다 항목·내용·잔액이 가계부에 남는다", () => {
+    const s = newCareer(0);
+    const start = s.teams[0].money;
+    buyItem(s, "gum", undefined, 2);
+    const last = s.cashbook!.at(-1)!;
+    expect(last).toMatchObject({ cat: "아이템", balance: s.teams[0].money, week: 1 });
+    expect(last.amount).toBeLessThan(0);
+    expect(last.note).toContain("×2");
+    expect(last.balance).toBe(start + last.amount);
+    const m = myPendingMatch(s);
+    advanceWeek(s, m ? aiEntry(s, 0, PRO_SETS) : undefined);
+    // 주간 연봉·운영비·경기 수당이 기록되고, 마지막 잔액 = 지금 자금
+    const cats = new Set(s.cashbook!.map(e => e.cat));
+    expect(cats.has("연봉")).toBe(true);
+    expect(cats.has("운영비")).toBe(true);
+    expect([...cats].some(c => c.startsWith("스폰서 승리 수당") || c.startsWith("스폰서 패배 수당"))).toBe(true);
+    expect(s.cashbook!.find(e => e.cat.startsWith("스폰서") && e.note?.includes("vs"))).toBeTruthy();
+    expect(s.cashbook!.at(-1)!.balance).toBe(s.teams[0].money);
+  });
+
+  it("다른 구단끼리 이적·트레이드·방출·영입이 일어나고, 팀 인원은 최소 기준을 지킨다", async () => {
+    const { aiMarket } = await import("./club");
+    const s = newCareer(0);
+    for (const t of s.teams) t.money = 100_000;
+    const mine = rosterOf(s, 0).map(p => p.id).sort();
+    aiMarket(s, 60);
+    const kinds = new Set((s.marketLog ?? []).map(m => m.kind));
+    expect(kinds.has("transfer")).toBe(true);
+    expect(kinds.size).toBeGreaterThanOrEqual(3);
+    // 우리 팀은 건드리지 않음
+    expect(rosterOf(s, 0).map(p => p.id).sort()).toEqual(mine);
+    for (const t of s.teams.slice(0, 12)) if (t.id !== 0) expect(rosterOf(s, t.id).length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("치어풀은 그 세트 실제 능력치에 모든 능력치 +75 로 들어간다", async () => {
+    const { effStats } = await import("./core");
+    const s = newCareer(0);
+    const p = rosterOf(s, 0)[0];
+    const base = effStats(p), cheer = effStats(p, { all: 75 });
+    const sum = (x: Record<string, number>) => Object.values(x).reduce((a, b) => a + b, 0);
+    for (const k of Object.keys(base) as Array<keyof typeof base>) expect(cheer[k]).toBeGreaterThanOrEqual(base[k]);
+    expect(sum(cheer)).toBeGreaterThan(sum(base) + 300);
   });
 });

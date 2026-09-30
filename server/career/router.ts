@@ -15,7 +15,7 @@ import { diffOf, jsonOf, snapshot, type Snapshot } from "./diff";
 import { nominate } from "./msl";
 import { ACTIONS, type ActionKey } from "@shared/career/rules";
 import { negotiateMainSponsor } from "./club";
-import { acceptJob, bidPlayer, chooseSponsor, demotePlayer, negotiateContract, respondOffer, signReserve } from "./club";
+import { acceptJob, bidPlayer, chooseSponsor, demotePlayer, listPlayer, negotiateContract, respondJob, respondOffer, signReserve, unlistPlayer } from "./club";
 import {
   CareerError,
   advanceWeek,
@@ -206,7 +206,8 @@ function summaryOf(s: CareerState) {
     power: teamPower(s, s.myTeam),
     players: players.length,
     record: { wins: me.wins, losses: me.losses },
-    proTitles: s.history.filter(h => h.champion === s.myTeam).length,
+    // 감독 통산 우승 (팀을 옮겨도 그 시즌 맡았던 팀 기준으로 셈)
+    proTitles: s.history.filter(h => h.champion === (h.team ?? s.myTeam)).length,
     mslTitles: s.players.reduce((n, p) => n + (p.team === s.myTeam ? (p.titles ?? []).filter(x => x.includes("스타리그") || x.includes("MSL")).length : 0), 0),
     gameOver: s.gameOver?.reason,
   };
@@ -435,10 +436,23 @@ export const careerRouter = router({
     .input(z.object({ teamId: z.number().int() }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => acceptJob(s, input.teamId))),
 
-  /** 스폰서 선택 (퀘스트 목표 조정) */
+  /** 스폰서 선택 (퀘스트 목표 조정). 제의 이름으로 고른다 */
   chooseSponsor: protectedProcedure
-    .input(z.object({ index: z.number().int().min(0).max(2), targets: z.array(z.number().int()).max(5) }))
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => chooseSponsor(s, input.index, input.targets))),
+    .input(z.object({ name: z.string().min(1).max(40), targets: z.array(z.number().int()).max(5) }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => chooseSponsor(s, input.name, input.targets))),
+
+  /** 감독 제의 거절·계약금 역제안 */
+  respondJob: protectedProcedure
+    .input(z.object({ teamId: z.number().int(), action: z.enum(["reject", "counter"]), fee: z.number().int().min(0).max(1_000_000).optional() }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => respondJob(s, input.teamId, input.action, input.fee))),
+
+  /** 우리 선수를 희망 이적료에 이적시장에 내놓기 / 내리기 */
+  listPlayer: protectedProcedure
+    .input(z.object({ playerId: z.number().int(), price: z.number().int().min(10).max(1_000_000) }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => listPlayer(s, input.playerId, input.price))),
+  unlistPlayer: protectedProcedure
+    .input(z.object({ playerId: z.number().int() }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => unlistPlayer(s, input.playerId))),
 
   /** 2부: 무소속 선수 영입 / 1부 → 2부 (승격은 contract 로 계약) */
   signReserve: protectedProcedure

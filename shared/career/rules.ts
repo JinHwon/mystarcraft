@@ -157,6 +157,71 @@ export interface TransferOffer {
   /** 협상 횟수 */
   tries: number;
   status: "pending" | "countered";
+  /** 이적시장에 내놓은 선수에게 온 제안 */
+  listed?: boolean;
+}
+
+/** 가계부 한 줄 */
+export interface CashEntry {
+  season: number;
+  week: number;
+  /** 항목 (연봉·운영비·스폰서 승리 수당·아이템 …) */
+  cat: string;
+  /** 수입 +, 지출 - (만원) */
+  amount: number;
+  /** 이 거래 뒤 잔액 */
+  balance: number;
+  /** 자세한 내용 (상대 팀·선수·아이템 이름) */
+  note?: string;
+}
+/** 가계부에 남기는 최대 건수 */
+export const CASHBOOK_MAX = 400;
+
+/** 다른 구단끼리의 이적·트레이드·방출·무소속 영입 소식 */
+export interface MarketMove {
+  season: number;
+  week: number;
+  kind: "transfer" | "trade" | "release" | "sign";
+  /** 움직인 선수 (트레이드는 두 명) */
+  players: number[];
+  /** transfer: [판 팀, 산 팀] · trade: [팀A, 팀B] · release: [팀] · sign: [팀] */
+  teams: number[];
+  fee?: number;
+}
+export const MARKET_LOG_MAX = 60;
+
+/** 이적시장에 내놓은 우리 선수 (희망 이적료) */
+export interface TransferListing {
+  player: number;
+  price: number;
+  season: number;
+  week: number;
+}
+
+/** 끝난 영입 제안 기록 (받은 제안의 합의·거절·결렬·만료, 우리가 한 영입) */
+export interface OfferLog {
+  id: number;
+  season: number;
+  week: number;
+  player: number;
+  /** 상대 구단 */
+  team: number;
+  fee: number;
+  /** out: 우리 선수를 보냄(받은 제안) · in: 다른 팀 선수를 데려옴 */
+  dir: "out" | "in";
+  result: "sold" | "rejected" | "withdrawn" | "expired" | "closed" | "signed";
+  note?: string;
+}
+
+/** 다른 구단의 감독 제의 (영입 계약금 협상) */
+export interface JobOffer {
+  team: number;
+  /** 지금 제시한 영입 계약금 (만원) */
+  fee: number;
+  /** 그 구단이 낼 수 있는 최대 계약금 (화면에는 안 보임) */
+  max: number;
+  tries: number;
+  status: "pending" | "countered";
 }
 
 export interface CTeam {
@@ -328,7 +393,7 @@ export interface CareerState {
   /** 소식 (최근 순) */
   news: Array<{ season: number; week: number; text: string }>;
   /** 지난 시즌 기록 */
-  history: Array<{ season: number; champion: number; myRank: number; myResult: string; mslChampion?: number; mslRunnerUp?: number }>;
+  history: Array<{ season: number; champion: number; myRank: number; myResult: string; mslChampion?: number; mslRunnerUp?: number; /** 그 시즌 우리(감독) 팀 */ team?: number }>;
   /** 이번 시즌 마이스타리그 */
   msl?: MslState;
   /** 이번 시즌 맵 추첨 결과 */
@@ -336,23 +401,31 @@ export interface CareerState {
   /** 받은 영입 제안 */
   offers?: TransferOffer[];
   nextOfferId?: number;
+  /** 이적시장에 내놓은 우리 선수 */
+  listings?: TransferListing[];
+  /** 끝난 영입 제안 기록 (최근 순, 최대 40건) */
+  offerLog?: OfferLog[];
   /** 이적료 합의된 영입 대상 (선수 → 합의 내용, 이번 주만 유효) */
   agreements?: Record<number, { team: number; fee: number; season: number; week: number }>;
   /** 이번 주 협상 횟수 (키: 선수-종류) */
   tries?: Record<string, number>;
   triesWeek?: string;
   /** 감독 */
-  manager?: { reputation: number; moves?: number; level?: number; exp?: number };
+  manager?: { reputation: number; moves?: number; level?: number; exp?: number; /** 맡았던 팀 (부임 순) */ teams?: number[] };
   /** 메인 스폰서 (모기업) 계약 */
   mainSponsor?: import("./mainSponsor").MainSponsorContract;
-  /** 다른 팀의 감독 제의 */
-  jobOffers?: number[];
+  /** 다른 팀의 감독 제의 (예전 세이브는 팀 번호 배열 → ensureClub 에서 변환) */
+  jobOffers?: JobOffer[];
   /** 적자 주 수 (3주 연속이면 구단 해체) */
   debtWeeks?: number;
   /** 게임 종료 */
   gameOver?: { season: number; week: number; reason: string };
   /** 이번 시즌 수입·지출 (항목별, 지출은 음수) */
   ledger?: { season: number; items: Record<string, number> };
+  /** 가계부: 우리 구단 돈이 움직인 기록 (오래된 순, 최근 CASHBOOK_MAX 건) */
+  cashbook?: CashEntry[];
+  /** 다른 구단끼리 선수 이동 기록 (최근 순) */
+  marketLog?: MarketMove[];
   /** 이번 시즌 스폰서 */
   /** (예전 세이브) 서브 스폰서 한 곳 */
   sponsor?: import("./sponsor").Sponsor & { season: number };

@@ -51,7 +51,7 @@ export default function Records() {
           <div key={h.season} className="flex items-center gap-2 text-sm py-1">
             <span className="text-muted-foreground w-14">{h.season}시즌</span>
             <span className="flex-1 text-foreground">우승 <b>{s.teams[h.champion].name}</b></span>
-            <span className="text-xs text-amber-300">우리 팀 {h.myResult} ({h.myRank}위)</span>
+            <span className="text-xs text-amber-300">{h.team !== undefined && h.team !== s.myTeam ? s.teams[h.team].short : "우리 팀"} {h.myResult} ({h.myRank}위)</span>
           </div>
         ))}
       </div>

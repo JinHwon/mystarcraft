@@ -43,7 +43,7 @@ import {
 export { CareerError };
 import { initialPlayers, initialTeams } from "@shared/career/init";
 import { eventOn } from "./events";
-import { runMslWeek, type MslReport } from "./msl";
+import { createMsl, runMslWeek, type MslReport } from "./msl";
 import { ITEM_BY_KEY, POTION_LIMIT, slotOf } from "@shared/career/items";
 import { ensurePotential, retirements, rookies } from "./generation";
 import { addManagerExp, mainSponsorPay, book, ensureClub, newSeasonClub, pay, seasonEndClub, weeklyClub } from "./club";
@@ -83,6 +83,8 @@ export function newCareer(myTeam: number): CareerState {
   ensureClub(s);
   ensurePotential(s);
   scheduleRegularSeason(s);
+  // 개인리그 시드를 미리 정해 두어 일정표에서 볼 수 있게
+  s.msl = createMsl(s);
   rollWeekBursts(s);
   news(s, `${s.teams[myTeam].name} 감독으로 부임했습니다. ${s.season}시즌 마이프로리그가 곧 개막합니다!`);
   return s;
@@ -162,7 +164,7 @@ function actOne(s: CareerState, p: CPlayer, action: ActionKey | null | undefined
     case "event": {
       const earn = 30 + p.level * 12 + randInt(0, 40);
       if (mine) {
-        pay(s, "이벤트", earn);
+        pay(s, "이벤트", earn, `${p.name} 팬미팅`);
         // 팬미팅: 인기가 많을수록 치어풀을 받을 확률이 높음
         if (rand() < cheerChance(p)) {
           s.inventory = { ...s.inventory, cheer: (s.inventory?.cheer ?? 0) + 1 };
@@ -273,7 +275,10 @@ function recordMatch(s: CareerState, m: CMatch, entryA: number[], entryB: number
   if (loserTeam !== s.myTeam) s.teams[loserTeam].money += MATCH_MONEY.lose;
   if (m.a === s.myTeam || m.b === s.myTeam) {
     const won = m.winner === s.myTeam;
-    mainSponsorPay(s, won ? "win" : "loss", won ? "스폰서 승리 수당" : "스폰서 패배 수당");
+    const oppTeam = s.teams[m.a === s.myTeam ? m.b : m.a];
+    const [my, their] = m.a === s.myTeam ? [sa, sb] : [sb, sa];
+    const stageName = m.stage === "regular" ? `${m.week}주차 ${m.leg ?? 1}경기` : ({ semi: "준플레이오프", po: "플레이오프", final: "결승" } as const)[m.stage];
+    mainSponsorPay(s, won ? "win" : "loss", won ? "스폰서 승리 수당" : "스폰서 패배 수당", `${stageName} vs ${oppTeam.name} ${my}:${their}`);
     addManagerExp(s, won ? 30 : 10);
   }
   // 출전 기록 (사기·출전 보장 조건)
@@ -458,7 +463,7 @@ export function playLiveSet(s: CareerState, ace?: number): LiveSetResult {
     if (extra && set.timeline) set.timeline.lines.unshift({ t: 0, side, text: extra });
     const myWin = (set.winner === "a") === meA;
     if (plan.key === "ceremony" && myWin) {
-      pay(s, "세레모니", 150);
+      pay(s, "세레모니", 150, `${me.name} 승리 세레모니`);
       set.ceremony = 150;
       for (const p of rosterOf(s, s.myTeam)) p.cond = clampCond(p.cond + 1);
     }
@@ -513,10 +518,10 @@ function finishSeason(s: CareerState, final: CMatch) {
   const champion = final.winner!;
   const result = myPostseasonResult(s);
   const prize = POSTSEASON_PRIZE[result] ?? 0;
-  pay(s, "상금", prize);
+  pay(s, "상금", prize, `프로리그 ${result}`);
   const myRank = standings(s).findIndex(t => t.id === s.myTeam) + 1;
   const msl = s.msl?.season === s.season ? s.msl : undefined;
-  s.history.unshift({ season: s.season, champion, myRank, myResult: result, mslChampion: msl?.champion, mslRunnerUp: msl?.runnerUp });
+  s.history.unshift({ season: s.season, champion, myRank, myResult: result, mslChampion: msl?.champion, mslRunnerUp: msl?.runnerUp, team: s.myTeam });
   for (const p of rosterOf(s, champion)) p.titles = [...(p.titles ?? []), `${s.season}시즌 프로리그 우승`];
   news(s, `🏆 ${s.season}시즌 마이프로리그 우승: ${s.teams[champion].name}! 우리 팀 최종 성적: ${result}${prize ? ` (상금 ${prize.toLocaleString()}만원)` : ""}`);
   seasonEndClub(s, result, champion);
@@ -571,6 +576,8 @@ export function startNextSeason(s: CareerState, opts: { releaseExpiring?: boolea
   // 지난 시즌 경기 기록은 요약만 남기고 정리
   s.matches = [];
   scheduleRegularSeason(s);
+  // 개인리그 시드를 미리 정해 두어 일정표에서 볼 수 있게 (지난 대회 성적은 createMsl 이 참고)
+  s.msl = createMsl(s);
   rollWeekBursts(s);
   news(s, `${s.season}시즌 마이프로리그 개막!`);
 }
@@ -584,7 +591,7 @@ export function scoutPlayer(s: CareerState, pid: number) {
   const price = scoutPrice(s, p);
   const me = s.teams[s.myTeam];
   if (me.money < price) throw new CareerError(`자금이 부족합니다 (요구 금액 ${price.toLocaleString()}만원)`);
-  pay(s, "영입", -price);
+  pay(s, "영입", -price, `무소속 ${p.name}`);
   p.team = s.myTeam;
   p.reserve = false;
   p.contract = defaultContract(p, s.season);
@@ -600,7 +607,7 @@ export function releasePlayer(s: CareerState, pid: number) {
   if (s.live) throw new CareerError("경기 중에는 방출할 수 없습니다");
   if (myPendingMatch(s) && rosterOf(s, s.myTeam).length <= MIN_ROSTER) throw new CareerError(`경기를 치르려면 최소 ${MIN_ROSTER}명이 필요합니다`);
   const gain = Math.round(askingPrice(p, s.season) * 0.2 / 10) * 10;
-  pay(s, "방출", gain);
+  pay(s, "방출", gain, p.name);
   delete p.contract;
   p.reserve = false;
   p.team = FREE_AGENT_TEAM;
@@ -621,7 +628,7 @@ export function buyItem(s: CareerState, key: string, target?: number, qty = 1): 
   if (it.kind === "match" || it.kind === "stock") {
     const n = Math.max(1, Math.min(99, Math.floor(qty)));
     if (me.money < it.price * n) throw new CareerError("소지금이 부족합니다");
-    pay(s, "아이템", -it.price * n);
+    pay(s, "아이템", -it.price * n, `${it.name}${n > 1 ? ` ×${n}` : ""}`);
     s.inventory = { ...s.inventory, [key]: (s.inventory?.[key] ?? 0) + n };
     return { message: n > 1 ? `${n}개 구입하였습니다` : "구입하였습니다" };
   }
@@ -631,14 +638,14 @@ export function buyItem(s: CareerState, key: string, target?: number, qty = 1): 
   if (it.kind === "equip") {
     const slot = slotOf(it)!;
     if (p.equip?.[slot]?.key === key) throw new CareerError("이미 장착 중입니다");
-    pay(s, "아이템", -it.price);
+    pay(s, "아이템", -it.price, `${it.name} (${p.name} 장착)`);
     p.equip = { ...p.equip, [slot]: { key, left: it.uses ?? 20 } };
     news(s, `🛒 ${p.name} 선수 ${it.name} 장착`);
     return { message: "구입하였습니다" };
   }
   if (it.kind === "instant") {
     if (p.cond >= COND_MAX) throw new CareerError("컨디션이 최대입니다");
-    pay(s, "아이템", -it.price);
+    pay(s, "아이템", -it.price, `${it.name} (${p.name})`);
     p.cond = clampCond(p.cond + (it.cond ?? 0));
     return { message: "맛있게 마셨다" };
   }
@@ -648,7 +655,7 @@ export function buyItem(s: CareerState, key: string, target?: number, qty = 1): 
   if (p.cond - po.condCost < COND_MIN) throw new CareerError("컨디션이 너무 낮습니다");
   const keys = po.stat ? [po.stat] : [...STAT_KEYS];
   if (po.min >= 0 && keys.every(k => p.stats[k] >= STAT_MAX_CAREER)) throw new CareerError("이미 최대 수치입니다");
-  pay(s, "아이템", -it.price);
+  pay(s, "아이템", -it.price, `${it.name} (${p.name})`);
   p.potions = (p.potions ?? 0) + 1;
   const delta: Record<string, number> = {};
   if (key === "p_vit") {
@@ -707,7 +714,7 @@ export function proposeTrade(s: CareerState, teamId: number, myIds: number[], th
   if (ev.get < ev.need) {
     throw new CareerError(`${s.teams[teamId].name}: "조건이 부족합니다" (제시 ${ev.get.toLocaleString()} / 요구 ${ev.need.toLocaleString()})`);
   }
-  pay(s, "트레이드", -cash);
+  pay(s, "트레이드", -cash, `${s.teams[teamId].name}와(과) 트레이드`);
   s.teams[teamId].money += cash;
   for (const id of myIds) { s.players[id].team = teamId; s.players[id].action = null; }
   for (const id of theirIds) { s.players[id].team = s.myTeam; s.players[id].action = null; }

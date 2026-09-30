@@ -2,6 +2,7 @@
  * 경기 화면 공용 조각: 선수 정보 칸, 장비 줄, 컨디션 반영 능력치, 배속, 비타비타
  */
 import { useEffect, useState } from "react";
+import { navigate } from "wouter/use-browser-location";
 import { cn } from "@/lib/utils";
 import { STAT_KEYS, type StatKey } from "@shared/gameConstants";
 import { COND_MAX, burstOf, condMultiplier, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
@@ -14,8 +15,32 @@ export const R = { terran: "T", zerg: "Z", protoss: "P" } as const;
 export const nameRace = (p?: CPlayer) => (p ? `${p.name} (${R[p.race]})` : "");
 export const LEFT_COLOR = "#bff5c6";
 export const MATCH_ITEMS = ITEMS.filter(i => i.kind === "match");
-/** 엔트리에서 상점으로 (편성 내용은 유지되지 않음) */
-export const navigateShop = () => { window.location.href = "/shop"; };
+// ── 엔트리 편성 ↔ 상점 ─────────────────────────────────────────────
+/** 상점에서 돌아오면 엔트리 편성 화면을 다시 연다는 표시 */
+const ENTRY_RETURN = "mysc-entry-return";
+/** 편성 중이던 엔트리·아이템 (상점에 다녀와도 유지) */
+const ENTRY_DRAFT = "mysc-entry-draft";
+export type EntryDraft = { matchId: number; front: Array<number | null>; items: Record<number, { key: string; predict?: number }> };
+
+export function saveEntryDraft(d: EntryDraft) {
+  try { sessionStorage.setItem(ENTRY_DRAFT, JSON.stringify(d)); } catch { /* 저장 불가여도 진행 */ }
+}
+/** 상점에서 돌아온 경우에만 그 경기의 편성 내용을 돌려준다 (한 번 쓰면 표시는 지움) */
+export function takeEntryReturn(matchId: number | undefined): EntryDraft | null {
+  try {
+    const at = Number(sessionStorage.getItem(ENTRY_RETURN) ?? 0);
+    sessionStorage.removeItem(ENTRY_RETURN);
+    // 상점에 간 지 오래됐으면 (다른 화면을 돌다 온 경우) 엔트리를 다시 열지 않음
+    if (!at || Date.now() - at > 30 * 60_000) return null;
+    const d = JSON.parse(sessionStorage.getItem(ENTRY_DRAFT) ?? "null") as EntryDraft | null;
+    return d && d.matchId === matchId ? d : { matchId: matchId ?? -1, front: [], items: {} };
+  } catch { return null; }
+}
+/** 엔트리에서 상점으로 (돌아오면 편성하던 엔트리 화면으로) */
+export const navigateShop = () => {
+  try { sessionStorage.setItem(ENTRY_RETURN, String(Date.now())); } catch { /* 무시 */ }
+  navigate("/shop?from=entry");
+};
 export const RIGHT_COLOR = "#ffb8c8";
 
 /** 경기 전 비타비타 먹이기 (사 둔 것을 사용, 컨디션 +3) */
@@ -49,11 +74,19 @@ export function VitaButton({ s, pid }: { s: CareerState; pid: number }) {
   );
 }
 
-/** 컨디션(+장비, 이번 주 포텐셜 폭발)이 반영된 능력치 */
-export function condStats(p: CPlayer, s?: { season: number; week: number }): Record<StatKey, number> {
-  const g = gearStats(p);
+/**
+ * 컨디션(+장비, 이번 주 포텐셜 폭발)이 반영된 능력치
+ * extraAll: 그 세트에만 붙는 모든 능력치 추가 (치어풀) — 서버 core.ts effStats 와 같은 계산
+ */
+export function condStats(p: CPlayer, s?: { season: number; week: number }, extraAll = 0): Record<StatKey, number> {
+  const g = gearStats(p, extraAll);
   const k = condMultiplier(gearCond(p)) * ((s && burstOf(s, p)) || 1);
   return Object.fromEntries(STAT_KEYS.map(s => [s, Math.round(g[s] * k)])) as Record<StatKey, number>;
+}
+
+/** 그 세트에 쓴(쓸) 경기 아이템의 모든 능력치 추가량 (치어풀 +75) */
+export function setItemAll(key: string | undefined): number {
+  return key ? ITEM_BY_KEY[key]?.all ?? 0 : 0;
 }
 
 /** 장착 장비 4칸 (마우스·키보드·모니터·기타) */

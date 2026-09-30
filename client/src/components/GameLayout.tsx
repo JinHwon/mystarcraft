@@ -17,6 +17,7 @@ import {
   ShoppingBag,
   Building2,
   Medal,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -36,6 +37,7 @@ const NAV: NavItem[] = [
   { path: "/training", label: "선수 행동", icon: Dumbbell },
   { path: "/starleague", label: "마이스타리그", icon: Crown },
   { path: "/club", label: "구단 운영", icon: Building2 },
+  { path: "/finance", label: "재정 관리", icon: Wallet },
   { path: "/transfer", label: "이적시장", icon: Handshake },
   { path: "/records", label: "기록", icon: ScrollText },
   { path: "/ranking", label: "감독 랭킹", icon: Medal },

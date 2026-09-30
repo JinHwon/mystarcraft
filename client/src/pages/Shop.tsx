@@ -70,6 +70,9 @@ function TargetList({ s, item, sel, onSel }: { s: CareerState; item: ItemDef; se
 
 function ShopScreen({ s }: { s: CareerState }) {
   const [, navigate] = useLocation();
+  // 엔트리 편성 화면에서 왔으면 닫을 때 엔트리로 돌아간다
+  const [fromEntry] = useState(() => new URLSearchParams(window.location.search).get("from") === "entry");
+  const close = () => navigate(fromEntry ? "/league" : "/lobby");
   const utils = trpc.useUtils();
   const [cat, setCat] = useState<ItemCat>("소모품");
   const list = ITEMS.filter(i => i.cat === cat && !i.notForSale);
@@ -106,8 +109,11 @@ function ShopScreen({ s }: { s: CareerState }) {
   const deltaText = msg?.delta ? Object.entries(msg.delta).filter(([, v]) => v).map(([k, v]) => `${STAT_LABELS[k as StatKey]} ${v! > 0 ? "+" : ""}${v}`).join(", ") : "";
 
   return (
-    <LegacyFrame season={s.season} onBack={() => navigate("/lobby")} onNext={doBuy} nextDisabled={!canBuy} nextLabel={buy.isPending ? "구입 중..." : "구입 (B)"}>
+    <LegacyFrame season={s.season} onBack={close} onNext={doBuy} nextDisabled={!canBuy} nextLabel={buy.isPending ? "구입 중..." : "구입 (B)"}>
       <div className="px-3 pt-2 pb-4 space-y-2">
+        {fromEntry && (
+          <button onClick={close} className="w-full border border-[#8fd0ff] text-[#8fd0ff] py-1.5 text-[13px]">◁ 엔트리 편성으로 돌아가기</button>
+        )}
         <div className="text-center text-[16px] tracking-[0.3em] text-neutral-100">아이템 상점</div>
         <div className="grid grid-cols-3 gap-1">
           {ITEM_CATS.map((c, i) => (

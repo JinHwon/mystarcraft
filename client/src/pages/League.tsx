@@ -1,5 +1,6 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import { saveEntryDraft, takeEntryReturn } from "@/components/legacy/match/common";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { FINAL_SETS, MSL_WEEK, PRO_SETS, type CareerState, type CMatch } from "@shared/career/rules";
@@ -61,7 +62,18 @@ function MatchTab({ s }: { s: CareerState }) {
   const [watching, setWatching] = useState(!!s.live);
   const drawKey = `mysc-mapdraw-${s.season}-${s.myTeam}`;
   const [showMaps, setShowMaps] = useState(false);
-  const [editing, setEditing] = useState(false);
+  // 엔트리 편성 중 상점에 다녀왔으면 편성하던 화면으로 바로 돌아온다
+  const [returned] = useState(() => takeEntryReturn(pending?.id));
+  const [editing, setEditing] = useState(!!returned && !!pending);
+  useEffect(() => {
+    if (!returned) return;
+    if (returned.front.length) setFront(returned.front.map(x => x ?? undefined));
+    if (Object.keys(returned.items).length) setItems(returned.items);
+  }, []);
+  // 편성 내용 기억 (상점에 다녀와도 유지)
+  useEffect(() => {
+    if (editing && pending) saveEntryDraft({ matchId: pending.id, front: front.map(x => x ?? null), items });
+  }, [editing, pending?.id, front, items]);
   const closeMaps = () => { try { localStorage.setItem(drawKey, "1"); } catch { /* 저장 불가여도 진행 */ } setShowMaps(false); };
   const openEntry = () => {
     // 시즌 첫 경기 전에는 원작처럼 맵 추첨 결과부터
