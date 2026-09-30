@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getActiveEvents, getDb } from "../db";
 import { careers, users } from "../../drizzle/schema";
@@ -66,7 +66,13 @@ function remember(userId: number, state: CareerState, json: string, snap?: Snaps
   cache.set(userId, { state, json, snap });
   if (cache.size > CACHE_MAX) {
     // 아직 DB 에 안 쓴 세이브는 캐시에서 빼지 않음
-    for (const k of cache.keys()) { if (!pendingWrites.has(k)) { cache.delete(k); break; } }
+    for (const k of cache.keys()) {
+      if (pendingWrites.has(k)) continue;
+      // 캐시에서 빠지는 세이브는 랭킹용 요약만 남김
+      try { summaries.set(k, summaryOf(cache.get(k)!.state)); } catch { /* 무시 */ }
+      cache.delete(k);
+      break;
+    }
   }
 }
 
@@ -207,26 +213,37 @@ function summaryOf(s: CareerState) {
 }
 export type CareerSummary = ReturnType<typeof summaryOf>;
 
-/** 모든 커리어 요약 (메모리 캐시 우선, 1분 캐시) */
-let summaryCache: { at: number; rows: Array<{ userId: number; name: string; role: string; lastSignedIn: Date | null; summary: CareerSummary | null }> } | null = null;
+/**
+ * 모든 커리어 요약 (랭킹·관리자)
+ * - 메모리 캐시에 있는 세이브는 바로 요약, 없는 세이브는 요약만 기억 (summaries)
+ * - DB 에서 세이브 전체를 읽는 건 요약이 없는 사용자만, 처음 한 번
+ */
+const summaries = new Map<number, CareerSummary>();
+/** 커리어가 없는 사용자 (매번 DB 에 묻지 않도록) — 커리어를 만들면 메모리 캐시에 먼저 들어가므로 안전 */
+const noCareer = new Set<number>();
+let usersCache: { at: number; rows: Array<{ id: number; name: string | null; role: string; lastSignedIn: Date | null }> } | null = null;
 async function allSummaries(force = false) {
-  if (!force && summaryCache && Date.now() - summaryCache.at < 60_000) return summaryCache.rows;
   const db = await requireDb();
-  const us = await db.select({ id: users.id, name: users.name, role: users.role, lastSignedIn: users.lastSignedIn }).from(users);
-  const rows = await db.select({ userId: careers.userId, state: careers.state }).from(careers);
-  const byUser = new Map(rows.map(r => [r.userId, r.state]));
-  const out = us.map(u => {
+  if (force || !usersCache || Date.now() - usersCache.at > 60_000) {
+    usersCache = { at: Date.now(), rows: await db.select({ id: users.id, name: users.name, role: users.role, lastSignedIn: users.lastSignedIn }).from(users) };
+  }
+  const us = usersCache.rows;
+  const missing = us.map(u => u.id).filter(id => !cache.has(id) && !summaries.has(id) && !noCareer.has(id));
+  if (missing.length) {
+    const rows = await db.select({ userId: careers.userId, state: careers.state }).from(careers).where(inArray(careers.userId, missing));
+    for (const r of rows) { try { summaries.set(r.userId, summaryOf(JSON.parse(r.state) as CareerState)); } catch { /* 깨진 세이브는 건너뜀 */ } }
+    for (const id of missing) if (!rows.some(r => r.userId === id)) noCareer.add(id);
+  }
+  return us.map(u => {
+    const hit = cache.get(u.id)?.state;
     let summary: CareerSummary | null = null;
-    try {
-      const hit = cache.get(u.id)?.state;
-      const s = hit ?? (byUser.has(u.id) ? (JSON.parse(byUser.get(u.id)!) as CareerState) : null);
-      if (s) summary = summaryOf(s);
-    } catch { summary = null; }
+    try { summary = hit ? summaryOf(hit) : summaries.get(u.id) ?? null; } catch { summary = null; }
     return { userId: u.id, name: u.name || `감독${u.id}`, role: u.role, lastSignedIn: u.lastSignedIn, summary };
   });
-  summaryCache = { at: Date.now(), rows: out };
-  return out;
 }
+
+// 서버가 뜬 뒤 랭킹 요약을 미리 만들어 둠 (첫 랭킹 요청도 빠르게)
+if (process.env.NODE_ENV !== "test") setTimeout(() => { void allSummaries().catch(() => {}); }, 5000).unref();
 
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "관리자 권한이 필요합니다" });
@@ -269,7 +286,6 @@ export const careerRouter = router({
       for (const [k, n] of Object.entries(input.items ?? {})) if (ITEM_BY_KEY[k]) s.inventory = { ...s.inventory, [k]: n };
       if (input.healAll) for (const p of rosterOfView(s, s.myTeam)) p.cond = 100;
       if (input.clearGameOver) { delete s.gameOver; s.debtWeeks = 0; }
-      summaryCache = null;
       return summaryOf(s);
     })),
 
@@ -282,7 +298,7 @@ export const careerRouter = router({
       await flushing.get(input.userId);
       await db.delete(careers).where(eq(careers.userId, input.userId));
       cache.delete(input.userId);
-      summaryCache = null;
+      summaries.delete(input.userId);
       return { ok: true };
     })),
 
