@@ -156,6 +156,9 @@ describe("아이템 상점", () => {
     beginMatch(s, front);
     playLiveSet(s);
     expect(p.equip!.mouse!.left).toBe(left - 1);
+    // 상대 선수별 전적 (우리 선수 쪽에 기록)
+    const oppId = s.live!.opp[0];
+    expect(p.h2h?.[oppId]?.reduce((a, b) => a + b, 0)).toBe(1);
   });
 
   it("포션은 시즌에 3번까지, 경기 아이템은 보유해야 쓸 수 있고 세트를 치를 때 소모된다", () => {

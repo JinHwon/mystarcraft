@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { STAT_KEYS, type StatKey } from "@shared/gameConstants";
 import { COND_MAX, FINAL_SETS, MATCH_MONEY, MSL_PLAN, PRO_SETS, condMultiplier, totalOf, type CareerState, type CMatch, type CPlayer, type SetResult, type SetTimeline } from "@shared/career/rules";
-import { STAGE_NAMES, mapView, rosterOf } from "@shared/career/view";
+import { STAGE_NAMES, headToHead, mapView, rosterOf } from "@shared/career/view";
 import { ITEMS, ITEM_BY_KEY, SLOT_NAMES, gearCond, gearStats, itemImg, type EquipSlot } from "@shared/career/items";
 import { trpc } from "@/lib/trpc";
 import { useCareerPatch } from "@/lib/career";
@@ -470,23 +470,62 @@ export function Broadcast({ s, stageName, lp, rp, mapId, set, leftIsA, score, le
 }
 
 // ── 경기 전 화면 조각 ──────────────────────────────────────────────
-function PlayerCard({ p, vsRace }: { p: CPlayer; vsRace: CPlayer["race"] }) {
-  const rec = p.vs?.[vsRace];
+function PlayerCard({ p, opp }: { p: CPlayer; opp: CPlayer }) {
+  const [open, setOpen] = useState(false);
+  const rec = p.vs?.[opp.race];
+  const h2h = headToHead(p, opp);
+  const races = ["terran", "zerg", "protoss"] as const;
   return (
     <div className="flex flex-col items-center">
       <div className="flex items-start gap-1.5">
-        <div className="text-[9px] text-neutral-300 text-center leading-tight pt-1 w-12">
-          {rec ? "전적" : "전적없음"}<br />vs {R[vsRace]}<br /><br />{rec?.[0] ?? 0} 승<br />{rec?.[1] ?? 0} 패
-        </div>
+        <button onClick={() => setOpen(true)} className="text-[9px] text-neutral-300 text-center leading-tight pt-1 w-12 underline decoration-dotted underline-offset-2">
+          {rec ? "전적" : "전적없음"}<br />vs {R[opp.race]}<br /><br />{rec?.[0] ?? 0} 승<br />{rec?.[1] ?? 0} 패
+        </button>
         <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} size={58} />
       </div>
       <div className="text-[12px] text-white mt-0.5">{nameRace(p)}</div>
+      {open && createPortal(
+        <div className="fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-6" onClick={() => setOpen(false)} style={LEGACY_FONT}>
+          <div className="bg-black border-2 border-neutral-300 w-full max-w-[300px] p-3 text-white text-[13px]" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2">
+              <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} size={46} />
+              <div>
+                <div className="text-[15px] text-[#ffe45c]">{nameRace(p)}</div>
+                <div className="text-[11px] text-neutral-400">통산 {p.wins}승 {p.losses}패 · 이번 시즌 {p.sWins}승 {p.sLosses}패</div>
+              </div>
+            </div>
+            <div className="mt-2.5 text-[12px] text-neutral-400">종족별 전적</div>
+            <div className="grid grid-cols-3 gap-1 mt-1">
+              {races.map(r => {
+                const x = p.vs?.[r] ?? [0, 0];
+                const n = x[0] + x[1];
+                return (
+                  <div key={r} className={cn("border px-1 py-1 text-center", r === opp.race ? "border-[#ffe45c]" : "border-neutral-600")}>
+                    <div className="text-[11px] text-neutral-300">vs {R[r]}</div>
+                    <div>{x[0]}승 {x[1]}패</div>
+                    <div className="text-[10px] text-neutral-500">{n ? `${Math.round((x[0] / n) * 100)}%` : "-"}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-2.5 text-[12px] text-neutral-400">상대 전적 vs {nameRace(opp)}</div>
+            <div className="border border-[#8fd0ff] mt-1 py-1.5 text-center text-[15px]">
+              {h2h[0] + h2h[1] ? <>{h2h[0]}승 {h2h[1]}패</> : <span className="text-neutral-400 text-[12px]">맞대결 기록 없음</span>}
+            </div>
+            <button onClick={() => setOpen(false)} className="mt-3 w-full border border-neutral-300 py-1 text-[12px]">닫기</button>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }
 
-function SetList({ s, left, right, maps, total, idx, results, leftIsA, showAce }: {
+function SetList({ s, left, right, maps, total, idx, results, leftIsA, showAce, onView, view }: {
   s: CareerState; left: number[]; right: number[]; maps: number[]; total: number; idx: number; results: BroadcastSet[]; leftIsA: boolean; showAce: boolean;
+  /** 이미 치른 세트(또는 지금 세트)의 맵을 누르면 그 세트 선수를 보여줌 */
+  onView?: (i: number) => void;
+  view?: number;
 }) {
   return (
     <div className="space-y-1.5">
@@ -502,7 +541,7 @@ function SetList({ s, left, right, maps, total, idx, results, leftIsA, showAce }
         return (
           <div key={i} className={cn("grid grid-cols-[1fr_96px_1fr] items-center gap-1.5 text-[12px] px-1 py-[3px]", i === idx && "border border-neutral-300")}>
             <div className="text-center truncate">{cell(lp, leftWon, hideL)}</div>
-            <GrayBox>{mapView(maps[i % maps.length]).name}</GrayBox>
+            <GrayBox onClick={onView && (r || i === idx) ? () => onView(i) : undefined} active={view === i}>{mapView(maps[i % maps.length]).name}</GrayBox>
             <div className="text-center truncate">{cell(rp, leftWon === undefined ? undefined : !leftWon, hideR)}</div>
           </div>
         );
@@ -518,7 +557,7 @@ export type MslReportView = { stage: string; label: string; a: number; b: number
 export function LiveMatch({ s, playSet, pending, onFinished, onClose }: {
   /** 최신 세이브 (s.live 가 있는 동안) */
   s: CareerState;
-  playSet: (ace: number | undefined, done: (r: { set: BroadcastSet; matchOver: boolean; week?: WeekDone; needAce: boolean }) => void) => void;
+  playSet: (ace: number | undefined, done: (r: { set: BroadcastSet; matchOver: boolean; week?: WeekDone; needAce: boolean }) => void, fail: () => void) => void;
   pending: boolean;
   /** 경기 끝: week 가 있으면 이번 주 일정도 끝남 */
   onFinished: (week: WeekDone | null) => void;
@@ -534,7 +573,22 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose }: {
   const [mine, setMine] = useState(info.mine);
   const [results, setResults] = useState<BroadcastSet[]>(() => [...(s.live?.sets ?? [])]);
   const total = m.stage === "final" ? FINAL_SETS : PRO_SETS;
-  const [idx, setIdx] = useState(() => results.length);
+  // 본 세트 수 (미리 치러 둔 세트는 아직 안 본 것) — 나갔다 들어와도 이어서 보도록 기억
+  const watchedKey = `mysc-watched-${m.id}`;
+  const [idx, setIdxRaw] = useState(() => {
+    let seen = results.length;
+    try { const v = sessionStorage.getItem(watchedKey); if (v !== null) seen = Math.min(Number(v), results.length); } catch { /* 무시 */ }
+    return seen;
+  });
+  // 경기 전 화면의 선수 상태는 세트를 미리 치르기 전 모습으로 (컨디션 변화로 결과가 드러나지 않게)
+  const sRef = useRef(s);
+  sRef.current = s;
+  const [snap, setSnap] = useState(() => s.players);
+  const setIdx = (n: number) => { setIdxRaw(n); setView(null); setSnap(sRef.current.players); try { sessionStorage.setItem(watchedKey, String(n)); } catch { /* 무시 */ } };
+  /** 세트 목록에서 누른 (이미 치른) 세트 */
+  const [view, setView] = useState<number | null>(null);
+  /** 다음 세트를 미리 받아 둠 → Next 를 누르면 바로 중계 */
+  const [goLive, setGoLive] = useState(false);
   const [mode, setMode] = useState<"preview" | "ace" | "live" | "result">("preview");
   const [week, setWeek] = useState<WeekDone | null>(null);
   const [over, setOver] = useState(false);
@@ -548,13 +602,26 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose }: {
   };
   const logo = (team: number) => <TeamLogo team={s.teams[team]} className="w-[70px] h-[40px]" />;
 
-  const play = (ace?: number) => playSet(ace, r => {
-    setResults(prev => [...prev, r.set]);
-    if (ace !== undefined) setMine(prev => { const n = [...prev]; n[total - 1] = ace; return n; });
-    if (r.week) setWeek(r.week);
-    if (r.matchOver) setOver(true);
-    setMode("live");
-  });
+  const fetching = useRef(false);
+  const fetchSet = (ace: number | undefined, then?: () => void) => {
+    if (fetching.current) return;
+    fetching.current = true;
+    playSet(ace, r => {
+      fetching.current = false;
+      setResults(prev => [...prev, r.set]);
+      if (ace !== undefined) setMine(prev => { const n = [...prev]; n[total - 1] = ace; return n; });
+      if (r.week) setWeek(r.week);
+      if (r.matchOver) setOver(true);
+      then?.();
+    }, () => { fetching.current = false; setGoLive(false); });
+  };
+  const play = (ace?: number) => fetchSet(ace, () => setMode("live"));
+
+  // 경기 전 화면이 뜨면 이번 세트를 미리 진행해 둔다 (ACE 결정전은 선수를 골라야 하므로 제외)
+  const prefetchable = mode === "preview" && !over && idx === results.length && idx < total - 1;
+  useEffect(() => { if (prefetchable) fetchSet(undefined); }, [prefetchable, idx]);
+  // 미리 받기 전에 Next 를 눌렀으면 도착하는 대로 중계
+  useEffect(() => { if (goLive && idx < results.length) { setGoLive(false); setMode("live"); } }, [goLive, results.length, idx]);
 
   if (mode === "ace") {
     return <AceScreen s={s} teamLeft={leftTeam} teamRight={rightTeam} mapId={m.maps[(total - 1) % m.maps.length]} score={score(idx)} submitting={pending} onPick={id => play(id)} />;
@@ -574,30 +641,34 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose }: {
   }
 
   const final = mode === "result";
-  const i = final ? results.length - 1 : idx;
+  const i = view ?? (final ? results.length - 1 : idx);
+  /** 이미 본 세트를 다시 보는 중 */
+  const past = view !== null && (final || view < idx);
   const [sl, sr] = score(final ? results.length : idx);
   const isAce = i === total - 1;
   const lpId = results[i] ? (leftIsA ? results[i].a : results[i].b) : mine[i];
   const rpId = results[i] ? (leftIsA ? results[i].b : results[i].a) : opp[i];
-  const lp = lpId !== undefined ? s.players[lpId] : undefined, rp = s.players[rpId];
+  const lp = lpId !== undefined ? snap[lpId] : undefined, rp = snap[rpId];
   const mapId = m.maps[i % m.maps.length];
   const won = sl > sr;
   const next = () => {
     if (final) { onFinished(week); return; }
-    if (idx < results.length) { setMode("live"); return; } // 이미 치른 세트 (이어보기)
-    if (isAce) { setMode("ace"); return; }
-    play();
+    if (idx < results.length) { setMode("live"); return; } // 미리 치러 둔 세트
+    if (idx === total - 1) { setMode("ace"); return; }
+    setGoLive(true);
+    fetchSet(undefined);
   };
+  const waiting = goLive || pending && !prefetchable;
 
   return (
-    <LegacyFrame season={s.season} onBack={onClose} onNext={pending ? undefined : next} nextDisabled={pending} nextLabel={final ? "확인 ▷▷" : pending ? "경기 준비 중..." : undefined}>
+    <LegacyFrame season={s.season} onBack={onClose} onNext={waiting ? undefined : next} nextDisabled={waiting} nextLabel={final ? "확인 ▷▷" : waiting ? "경기 준비 중..." : undefined}>
       <div className="px-3 pt-3 pb-4">
         <div className="flex items-start justify-between">
           {logo(leftTeam)}
           <div className="flex gap-12 text-[20px] text-neutral-100 pt-2"><span>{sl}</span><span>:</span><span>{sr}</span></div>
           {logo(rightTeam)}
         </div>
-        {final ? (
+        {final && view === null ? (
           <div className="text-center my-5">
             <LegacyImg dir="기타" name="Winner" className="mx-auto max-h-20" fallback={<div className="text-[28px] font-black italic text-[#ffe45c] tracking-widest">WINNER</div>} />
             <div className="mt-2 text-[16px]">{s.teams[won ? leftTeam : rightTeam].name}</div>
@@ -607,13 +678,19 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose }: {
           <>
             <div className="flex justify-center mt-2"><MapInfo mapId={mapId} size={60} /></div>
             <div className="text-center text-[15px] mt-2">&lt; {isAce ? "ACE" : `${i + 1} Set`} &gt;</div>
+            {past && results[i] && (
+              <div className="text-center text-[11px] text-[#ffe45c]">
+                지난 경기 · {s.players[results[i].winner === "a" ? results[i].a : results[i].b]?.name} 승
+                <button onClick={() => setView(null)} className="ml-2 border border-neutral-500 px-1.5 text-neutral-200">이번 세트로</button>
+              </div>
+            )}
             {isAce && !results[i] ? (
               <div className="text-center text-[12px] text-[#ffe45c] my-6">{sl}:{sr} — ACE 결정전! 다음 화면에서 출전 선수를 고릅니다</div>
             ) : lp && rp && (
               <div className="grid grid-cols-2 gap-2 mt-2">
                 {[{ p: lp, o: rp }, { p: rp, o: lp }].map(({ p, o }) => (
                   <div key={p.id} className="flex flex-col items-center">
-                    <PlayerCard p={p} vsRace={o.race} />
+                    <PlayerCard p={p} opp={o} />
                     <LegacyRadar stats={condStats(p)} base={p.stats} level={p.level} size={112} />
                     <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p) * 10} %</div>
                     {p.team === s.myTeam && info.items?.[i] && <div className="text-[11px] text-[#ffe45c]">아이템 : {ITEM_BY_KEY[info.items[i].key]?.name}</div>}
@@ -624,7 +701,8 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose }: {
           </>
         )}
         <div className="mt-3">
-          <SetList s={s} left={mine} right={opp} maps={m.maps} total={total} idx={final ? results.length : idx} results={results} leftIsA={leftIsA} showAce={mine[total - 1] !== undefined} />
+          <SetList s={s} left={mine} right={opp} maps={m.maps} total={total} idx={final ? results.length : idx} results={results.slice(0, final ? results.length : idx)} leftIsA={leftIsA} showAce={mine[total - 1] !== undefined}
+            view={view ?? undefined} onView={k => setView(k === (final ? -1 : idx) ? null : k)} />
         </div>
       </div>
     </LegacyFrame>
@@ -676,7 +754,7 @@ export function MslFlow({ s, reports, onDone }: { s: CareerState; reports: MslRe
         <div className="grid grid-cols-2 gap-2 mt-3">
           {[{ p: lp, o: rp }, { p: rp, o: lp }].map(({ p, o }) => (
             <div key={p.id} className="flex flex-col items-center">
-              <PlayerCard p={p} vsRace={o.race} />
+              <PlayerCard p={p} opp={o} />
               <div className="text-[10px] text-neutral-500">{s.teams[p.team]?.name}</div>
               <LegacyRadar stats={condStats(p)} base={p.stats} level={p.level} size={112} />
               <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p) * 10} %</div>

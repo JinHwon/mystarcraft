@@ -88,6 +88,18 @@ export function migrateCareer(s: CareerState) {
   if (!s.mapPool?.length) s.mapPool = drawMapPool();
   ensureClub(s);
   ensurePotential(s);
+  ensureHeadToHead(s);
+}
+
+/** 상대 전적 기록이 생기기 전 세이브: 이번 시즌 치른 프로리그 세트로 채움 */
+function ensureHeadToHead(s: CareerState) {
+  if (s.players.some(p => p.h2h)) return;
+  for (const m of s.matches) for (const x of m.sets ?? []) {
+    const [w, l] = x.winner === "a" ? [s.players[x.a], s.players[x.b]] : [s.players[x.b], s.players[x.a]];
+    if (!w || !l) continue;
+    if (w.team === s.myTeam) w.h2h = { ...w.h2h, [l.id]: [(w.h2h?.[l.id]?.[0] ?? 0) + 1, w.h2h?.[l.id]?.[1] ?? 0] };
+    if (l.team === s.myTeam) l.h2h = { ...l.h2h, [w.id]: [l.h2h?.[w.id]?.[0] ?? 0, (l.h2h?.[w.id]?.[1] ?? 0) + 1] };
+  }
 }
 
 /**
