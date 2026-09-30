@@ -44,6 +44,7 @@ export { CareerError };
 import { initialPlayers, initialTeams } from "@shared/career/init";
 import { eventOn } from "./events";
 import { aiShopping } from "./aiShop";
+import { runReserveWeek } from "./reserveLeague";
 import { createMsl, nominationPending, runMslWeek, type MslReport } from "./msl";
 import { ITEM_BY_KEY, POTION_LIMIT, slotOf } from "@shared/career/items";
 import { ensurePotential, retirements, rookies } from "./generation";
@@ -400,6 +401,8 @@ function finishWeek(s: CareerState): WeekResult {
     }
   }
   const { reports: mslReports, plans: mslPlans } = s.phase !== "offseason" ? runMslWeek(s) : { reports: [], plans: [] };
+  // 2부 리그 (정규시즌 매주 2경기, 마지막 주에 우승자)
+  if (s.phase === "regular") runReserveWeek(s, s.week >= REGULAR_WEEKS);
   // 다른 팀은 고정 후원금, 우리 팀은 고른 스폰서 (구단 운영 → 스폰서)
   for (const t of proTeams(s)) if (t.id !== s.myTeam) t.money += WEEKLY_SPONSOR;
   weeklyClub(s);

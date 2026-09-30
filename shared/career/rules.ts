@@ -396,6 +396,8 @@ export interface CareerState {
   history: Array<{ season: number; champion: number; myRank: number; myResult: string; mslChampion?: number; mslRunnerUp?: number; /** 그 시즌 우리(감독) 팀 */ team?: number }>;
   /** 이번 시즌 마이스타리그 */
   msl?: MslState;
+  /** 2부 리그 (2부 선수·무소속 유망주 개인리그, 정규시즌 매주 2경기) */
+  reserveLeague?: ReserveLeague;
   /** 이번 시즌 맵 추첨 결과 */
   mapPool?: number[];
   /** 받은 영입 제안 */
@@ -445,6 +447,22 @@ export interface CareerState {
   inventory?: Record<string, number>;
   /** 진행 중인 우리 경기 (세트마다 하나씩 진행, 2:2 면 ACE 결정전 선수를 그때 고름) */
   live?: LiveMatch;
+}
+
+/** 2부 리그: 선수별 승패, 이번 주 경기, 우승자 */
+export interface ReserveLeague {
+  season: number;
+  /** 참가 선수 (우리 2부 선수 + 무소속 유망주) */
+  field: number[];
+  table: Record<number, [number, number]>;
+  /** 가장 최근 주의 경기 */
+  last: Array<{ week: number; a: number; b: number; winner: number; mapId: number; gain: Record<number, number> }>;
+  champion?: number;
+}
+
+/** 2부 리그 나이별 성장 배율: 어릴수록 크게 (오르는 쪽) */
+export function youthGrowth(age: number) {
+  return age <= 17 ? 2.2 : age <= 19 ? 1.8 : age <= 21 ? 1.4 : age <= 23 ? 1 : age <= 25 ? 0.7 : 0.5;
 }
 
 export function ageOf(p: Pick<CPlayer, "birth">, season: number): number {

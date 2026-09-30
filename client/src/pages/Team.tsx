@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { ageOf, askingPrice, gradeColor, legacyGrade, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
+import { ageOf, askingPrice, gradeColor, legacyGrade, youthGrowth, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
 import { reserveOf, rosterOf, teamPower } from "@shared/career/view";
 import { ContractEditor } from "@/components/legacy/Club";
 import { PlayerPhoto } from "@/components/legacy/Legacy";
@@ -81,6 +81,59 @@ export function PlayerSheet({ s, player, onClose, actions }: { s: CareerState; p
   );
 }
 
+/** 2부 리그 순위표와 이번 주 우리 선수 경기 */
+function ReserveLeagueCard({ s, onPick }: { s: CareerState; onPick: (id: number) => void }) {
+  const L = s.reserveLeague?.season === s.season ? s.reserveLeague : undefined;
+  if (!L) {
+    return <div className="rounded-xl bg-card border border-border p-2.5 text-xs text-muted-foreground">🏟️ 2부 리그는 정규시즌 1주차가 끝나면 시작합니다 (우리 2부 선수 + 무소속 유망주 16명 안팎)</div>;
+  }
+  const order = [...L.field].sort((a, b) => {
+    const [aw, al] = L.table[a] ?? [0, 0], [bw, bl] = L.table[b] ?? [0, 0];
+    return bw - aw || (bw - bl) - (aw - al) || totalOf(s.players[b].stats) - totalOf(s.players[a].stats);
+  });
+  const mineGames = L.last.filter(g => s.players[g.a]?.team === s.myTeam || s.players[g.b]?.team === s.myTeam);
+  return (
+    <div className="rounded-2xl bg-card border border-border p-3 space-y-2">
+      <div className="text-sm font-bold text-foreground">🏟️ {s.season}시즌 2부 리그{L.champion !== undefined && <span className="ml-1.5 text-amber-300 text-xs">우승 {s.players[L.champion]?.name}</span>}</div>
+      {mineGames.length > 0 && (
+        <div className="space-y-0.5">
+          <div className="text-[11px] text-muted-foreground">지난 주 우리 선수 경기</div>
+          {mineGames.map((g, i) => {
+            const me = s.players[g.a].team === s.myTeam ? g.a : g.b, opp = me === g.a ? g.b : g.a;
+            const won = g.winner === me, d = g.gain[me] ?? 0;
+            return (
+              <div key={i} className="flex items-center gap-1.5 text-xs">
+                <span className={won ? "text-emerald-300 font-bold w-5" : "text-rose-300 font-bold w-5"}>{won ? "승" : "패"}</span>
+                <span className="font-bold text-foreground">{s.players[me].name}</span>
+                <span className="text-muted-foreground">vs {s.players[opp]?.name}</span>
+                <span className={cn("ml-auto font-mono", d >= 0 ? "text-emerald-300" : "text-rose-300")}>능력치 {d >= 0 ? "+" : ""}{d}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div className="divide-y divide-border/60">
+        {order.map((id, i) => {
+          const p = s.players[id];
+          if (!p) return null;
+          const [w, l] = L.table[id] ?? [0, 0];
+          const mine = p.team === s.myTeam;
+          return (
+            <button key={id} onClick={() => onPick(id)} className={cn("w-full flex items-center gap-1.5 py-1 text-xs text-left", mine && "bg-amber-500/10")}>
+              <span className="w-5 text-muted-foreground font-bold">{i + 1}</span>
+              <RaceBadge race={p.race} />
+              <span className={cn("truncate", mine ? "text-amber-200 font-bold" : "text-foreground")}>{p.name}</span>
+              <span className="text-[10px] text-muted-foreground">{ageOf(p, s.season)}세{mine ? "" : " · 무소속"}</span>
+              <span className="ml-auto font-mono text-muted-foreground">{totalOf(p.stats).toLocaleString()}</span>
+              <span className="w-12 text-right font-bold text-foreground">{w}승 {l}패</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function Team() {
   const { state: s, loading } = useCareer();
   const [, navigate] = useLocation();
@@ -135,10 +188,15 @@ export default function Team() {
       </div>
       {squad === "reserve" && (
         <div className="rounded-xl bg-emerald-500/10 border border-emerald-400/30 p-2.5 text-xs text-foreground">
-          🌱 2부 선수는 프로리그에 나가지 않고 매주 2부 경기·훈련으로 성장합니다 (어릴수록 빨리). 연봉이 싸고, 잘 크면 <b>계약을 맺어 1부로 승격</b>시키세요. 무소속 유망주는 이적시장 → 스카웃에서 "2부로 영입".
+          <div className="font-bold mb-0.5">🌱 2부 육성 방법</div>
+          <div>① 이적시장 → 스카웃에서 어린 무소속 유망주를 <b>"2부로 영입"</b> (또는 1부 선수를 2부로 보내기)</div>
+          <div>② 2부 선수는 정규시즌 동안 <b>2부 리그</b>(개인리그)에 자동 출전 — 매주 2경기 + 훈련으로 능력치가 오르내립니다</div>
+          <div>③ 어릴수록 훨씬 빨리 큽니다 (17세 이하 ×2.2 · 18~19세 ×1.8 · 20~21세 ×1.4 · 22~23세 ×1.0 · 그 위는 느림), 어린 선수는 져도 덜 떨어짐</div>
+          <div>④ 잘 크면 선수를 눌러 <b>1부 승격 계약</b> — 연봉이 싸서 부담이 적습니다</div>
           {reserveOf(s, s.myTeam).length === 0 && <button onClick={() => navigate("/transfer")} className="block mt-1 text-primary font-bold">이적시장에서 유망주 찾기 ›</button>}
         </div>
       )}
+      {squad === "reserve" && <ReserveLeagueCard s={s} onPick={id => { if (s.players[id]?.team === s.myTeam) { setOpen(id); setReply(null); } }} />}
 
       <div className="flex gap-1.5">
         {([["total", "능력치순"], ["cond", "컨디션순"], ["level", "레벨순"], ["age", "나이순"]] as const).map(([k, l]) => (
@@ -155,13 +213,14 @@ export default function Team() {
                 <RaceBadge race={p.race} />
                 <span className="font-bold text-foreground truncate">{p.name}</span>
                 <span className="text-[10px] text-muted-foreground">Lv.{p.level} · {ageOf(p, s.season)}세</span>
-                {squad === "reserve" && <span className="text-[10px] text-amber-300">재능 {potentialStars(p)}</span>}
+                {squad === "reserve" && <span className="text-[10px] text-amber-300">재능 {potentialStars(p)} · 성장 ×{youthGrowth(ageOf(p, s.season))}</span>}
                 {p.wantsOut && <span className="text-[10px] text-rose-300 font-bold">이적희망</span>}
               </div>
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                 <CondBadge cond={p.cond} />
                 <span className="text-emerald-300 font-bold">⚡{p.ap ?? 20}</span>
                 <span>{p.sWins}승 {p.sLosses}패</span>
+                {squad === "reserve" && s.reserveLeague?.season === s.season && s.reserveLeague.table[p.id] && <span className="text-emerald-300">2부 {s.reserveLeague.table[p.id][0]}승 {s.reserveLeague.table[p.id][1]}패</span>}
               </div>
               <div className={cn("text-[10.5px]", (p.contract?.years ?? 9) <= 1 ? "text-amber-300 font-bold" : "text-muted-foreground")}>
                 📄 계약 {p.contract ? `남은 ${p.contract.years}시즌 · 연봉 ${p.contract.salary.toLocaleString()}만` : "없음"}{(p.contract?.years ?? 9) <= 1 ? " · 이번 시즌 만료" : ""}
