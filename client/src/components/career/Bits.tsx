@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { STAT_KEYS, STAT_LABELS, type StatKey } from "@shared/gameConstants";
-import { COND_LABELS, type Race } from "@shared/career/rules";
+import { condLabel, type Race } from "@shared/career/rules";
 
 export const RACE_SHORT: Record<string, string> = { terran: "T", zerg: "Z", protoss: "P" };
 export const RACE_NAME: Record<string, string> = { terran: "테란", zerg: "저그", protoss: "프로토스" };
@@ -22,11 +22,11 @@ export function TeamBadge({ short, color, className }: { short: string; color: s
   );
 }
 
-/** 컨디션 1~10 (원작: 의욕/짜증) */
+/** 컨디션 % (원작: 의욕/짜증) */
 export function CondBadge({ cond, className }: { cond: number; className?: string }) {
-  const face = cond >= 9 ? "😆" : cond >= 7 ? "🙂" : cond >= 5 ? "😐" : cond >= 3 ? "😒" : "😡";
-  const color = cond >= 7 ? "text-emerald-300" : cond >= 5 ? "text-slate-200" : cond >= 3 ? "text-amber-300" : "text-rose-300";
-  return <span className={cn("inline-flex items-center gap-0.5 text-xs font-bold", color, className)}>{face}{COND_LABELS[cond]}</span>;
+  const face = cond >= 85 ? "😆" : cond >= 65 ? "🙂" : cond >= 45 ? "😐" : cond >= 25 ? "😒" : "😡";
+  const color = cond >= 65 ? "text-emerald-300" : cond >= 45 ? "text-slate-200" : cond >= 25 ? "text-amber-300" : "text-rose-300";
+  return <span className={cn("inline-flex items-center gap-0.5 text-xs font-bold", color, className)}>{face}{condLabel(cond)} {cond}%</span>;
 }
 
 const BAR_COLORS: Record<StatKey, string> = {

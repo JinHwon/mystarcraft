@@ -61,7 +61,7 @@ export { rosterOf, proTeams, standings, myPendingMatch };
 
 export function newCareer(myTeam: number): CareerState {
   if (myTeam < 0 || myTeam >= FREE_AGENT_TEAM) throw new CareerError("팀을 선택해주세요");
-  const players = initialPlayers(() => randInt(4, 7));
+  const players = initialPlayers(() => randInt(50, 90));
   const s: CareerState = {
     version: 1,
     myTeam,
@@ -76,6 +76,7 @@ export function newCareer(myTeam: number): CareerState {
     news: [],
     history: [],
     mapPool: drawMapPool(),
+    condScale: 100,
   };
   ensureClub(s);
   ensurePotential(s);
@@ -90,6 +91,8 @@ export function migrateCareer(s: CareerState) {
   ensureClub(s);
   ensurePotential(s);
   ensureHeadToHead(s);
+  // 컨디션 1~10 단위 → % 단위
+  if (!s.condScale) { for (const p of s.players) p.cond = Math.min(100, Math.max(1, p.cond * 10)); s.condScale = 100; }
 }
 
 /** 상대 전적 기록이 생기기 전 세이브: 이번 시즌 치른 프로리그 세트로 채움 */
@@ -151,13 +154,13 @@ function applyActions(s: CareerState) {
   // 훈련 효과 2배 이벤트 (우리 선수)
   const boost = (p: CPlayer) => (p.team === s.myTeam && eventOn("stat_boost") ? 2 : 1);
   for (const p of activePlayers(s)) {
-    if (p.team === FREE_AGENT_TEAM) { p.cond = clampCond(p.cond + (rand() < 0.5 ? 1 : -1)); continue; }
+    if (p.team === FREE_AGENT_TEAM) { p.cond = clampCond(p.cond + randInt(-4, 4)); continue; }
     let action: ActionKey | null | undefined = p.action;
     if (p.team !== s.myTeam) action = rand() < 0.55 ? "train" : "rest"; // AI 팀
     switch (action) {
-      case "train": gainStats(p, 2, 2 * boost(p), 6 * boost(p)); p.cond = clampCond(p.cond - 1); break;
-      case "best": gainStats(p, 3, 5 * boost(p), 12 * boost(p)); p.cond = clampCond(p.cond - 2); break;
-      case "rest": p.cond = clampCond(p.cond + 2); break;
+      case "train": gainStats(p, 2, 2 * boost(p), 6 * boost(p)); p.cond = clampCond(p.cond - randInt(2, 4)); break;
+      case "best": gainStats(p, 3, 5 * boost(p), 12 * boost(p)); p.cond = clampCond(p.cond - randInt(5, 8)); break;
+      case "rest": p.cond = clampCond(p.cond + randInt(10, 15)); break;
       case "event": {
         const earn = 30 + p.level * 12 + randInt(0, 40);
         if (p.team === s.myTeam) {
@@ -168,10 +171,10 @@ function applyActions(s: CareerState) {
             news(s, `📣 ${p.name} 선수가 팬미팅에서 치어풀을 선물 받았습니다!`);
           }
         }
-        p.cond = clampCond(p.cond + 1);
+        p.cond = clampCond(p.cond + randInt(3, 6));
         break;
       }
-      default: p.cond = clampCond(p.cond + (rand() < 0.5 ? 1 : 0));
+      default: p.cond = clampCond(p.cond + randInt(2, 6));
     }
     if (p.team === s.myTeam && action === "best") pay(s, "특별 훈련", -ACTIONS.find(a => a.key === "best")!.money);
     // 우리 선수 행동은 바꾸거나 초기화할 때까지 매주 유지
@@ -499,7 +502,7 @@ export function startNextSeason(s: CareerState, opts: { releaseExpiring?: boolea
     }
     p.sWins = 0; p.sLosses = 0;
     p.potions = 0;
-    p.cond = randInt(4, 7);
+    p.cond = randInt(50, 90);
   }
   for (const t of s.teams) { t.wins = 0; t.losses = 0; t.setWins = 0; t.setLosses = 0; }
   // 세대 교체: 은퇴 → 신인 등장

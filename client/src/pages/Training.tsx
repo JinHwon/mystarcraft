@@ -59,7 +59,7 @@ export default function Training() {
             </div>
           ))}
         </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">행동은 경기(한 주)를 진행할 때 적용되고, 바꾸거나 초기화할 때까지 매주 그대로 유지됩니다. 지정하지 않은 선수는 자율 연습(컨디션 소폭 회복)을 합니다. 경기를 뛰면 컨디션이 떨어지니(승 -10%, 패 -20%) 휴식도 챙기세요.</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">행동은 경기(한 주)를 진행할 때 적용되고, 바꾸거나 초기화할 때까지 매주 그대로 유지됩니다. 지정하지 않은 선수는 자율 연습(컨디션 소폭 회복)을 합니다. 경기를 뛰면 컨디션이 떨어지니(승 0~3%, 패 3~10%) 휴식(+10~15%)도 챙기세요.</p>
       </div>
 
       <div className="space-y-2">

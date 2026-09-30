@@ -63,7 +63,7 @@ function makeRookie(s: CareerState, base: Partial<CPlayer> & { name: string; rac
   const p: CPlayer = {
     id: s.players.length,
     team: FREE_AGENT_TEAM,
-    level: 1, exp: 0, cond: randInt(5, 7),
+    level: 1, exp: 0, cond: randInt(50, 70),
     birth: BASE_YEAR + s.season - 1 - (age - 1),
     gender: "M",
     wins: 0, losses: 0, sWins: 0, sLosses: 0, action: null, titles: [],

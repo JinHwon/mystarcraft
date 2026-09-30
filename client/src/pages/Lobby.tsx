@@ -1,3 +1,4 @@
+import { MAX_SPONSORS, activeSponsors } from "@shared/career/sponsor";
 import { EVENT_INFO, type CareerEventType } from "@shared/career/events";
 import { DEBT_LIMIT_WEEKS, MSL_STAGE_NAMES } from "@shared/career/rules";
 import { useEffect, useMemo, useState } from "react";
@@ -123,7 +124,7 @@ function Office({ s }: { s: CareerState }) {
   const wantOut = roster.filter(p => p.wantsOut);
   const alerts: Array<[string, string]> = [];
   if ((s.debtWeeks ?? 0) > 0 || me.money < 0) alerts.push(["⚠️", `운영 자금 적자 ${s.debtWeeks ?? 0}주째 — ${DEBT_LIMIT_WEEKS}주 연속이면 구단 해체`]);
-  if (s.sponsor?.season !== s.season && s.phase !== "offseason") alerts.push(["🤝", "이번 시즌 서브 스폰서를 아직 정하지 않았습니다 (후원금 없음)"]);
+  if (activeSponsors(s).length < MAX_SPONSORS && s.phase !== "offseason") alerts.push(["🤝", activeSponsors(s).length ? `서브 스폰서를 ${MAX_SPONSORS - activeSponsors(s).length}곳 더 계약할 수 있습니다` : "이번 시즌 서브 스폰서를 아직 정하지 않았습니다 (후원금 없음)"]);
   if (s.phase !== "offseason" && s.week === 1 && !s.matches.some(m => m.done && (m.a === s.myTeam || m.b === s.myTeam))) alerts.push(["🏢", "첫 경기 전: 메인 스폰서와 승리·패배·우승 수당을 재협상할 수 있습니다"]);
   if (s.offers?.length) alerts.push(["📨", `받은 영입 제안 ${s.offers.length}건`]);
   if (s.jobOffers?.length) alerts.push(["🤵", `감독 제의 ${s.jobOffers.length}건 (${s.jobOffers.map(id => s.teams[id].name).join(", ")})`]);

@@ -53,7 +53,7 @@ function TargetList({ s, item, sel, onSel }: { s: CareerState; item: ItemDef; se
   const right = (p: CPlayer) => {
     if (slot) { const e = p.equip?.[slot]; return e ? `${ITEMS.find(i => i.key === e.key)?.name ?? ""} (${e.left})` : "-"; }
     if (item.kind === "potion") return `포션 ${p.potions ?? 0}/${POTION_LIMIT}`;
-    return `컨디션 ${p.cond * 10}%`;
+    return `컨디션 ${p.cond}%`;
   };
   return (
     <div className="border-2 border-neutral-300 p-0.5 max-h-[230px] overflow-y-auto">

@@ -263,7 +263,7 @@ export const careerRouter = router({
         if (input.reputation !== undefined) s.manager.reputation = input.reputation;
       }
       for (const [k, n] of Object.entries(input.items ?? {})) if (ITEM_BY_KEY[k]) s.inventory = { ...s.inventory, [k]: n };
-      if (input.healAll) for (const p of rosterOfView(s, s.myTeam)) p.cond = 10;
+      if (input.healAll) for (const p of rosterOfView(s, s.myTeam)) p.cond = 100;
       if (input.clearGameOver) { delete s.gameOver; s.debtWeeks = 0; }
       summaryCache = null;
       return summaryOf(s);
@@ -310,7 +310,7 @@ export const careerRouter = router({
     for (const p of roster) p.action = null;
     let ap = s.ap;
     for (const p of [...roster].sort((a, b) => a.cond - b.cond)) {
-      if (p.cond <= 4) p.action = "rest";
+      if (p.cond <= 40) p.action = "rest";
       else if (ap >= 1) { p.action = "train"; ap -= 1; }
       else p.action = "rest";
     }

@@ -7,8 +7,8 @@ import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { DEBT_LIMIT_WEEKS, OPERATING_COST, totalOf, type CareerState, type Contract } from "@shared/career/rules";
 import { jobThreshold, playerDemand, teamWages } from "@shared/career/contract";
-import { questLabel, questProgress, questRange, questReward, sponsorOffers } from "@shared/career/sponsor";
-import { MAIN_SPONSORS, TERM_NAMES, levelPerks, managerExpNeed, managerLevel, sponsorBudget, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
+import { MAX_SPONSORS, activeSponsors, questLabel, questProgress, questRange, questReward, sponsorOfferCount, sponsorOffers, type SponsorQuest } from "@shared/career/sponsor";
+import { MAIN_SPONSORS, TERM_NAMES, jobSigningFee, levelPerks, managerExpNeed, managerLevel, sponsorBudget, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
 import { proTeams, rosterOf, teamPower } from "@shared/career/view";
 import { useCareer, useCareerPatch } from "@/lib/career";
 import type { CareerDiff } from "@shared/career/diff";
@@ -37,7 +37,8 @@ function MoneyTab({ s }: { s: CareerState }) {
   const items = Object.entries(s.ledger?.season === s.season ? s.ledger.items : {}).sort((a, b) => b[1] - a[1]);
   const income = items.filter(([, v]) => v > 0).reduce((a, [, v]) => a + v, 0);
   const expense = items.filter(([, v]) => v < 0).reduce((a, [, v]) => a + v, 0);
-  const spon = s.sponsor?.season === s.season ? s.sponsor.weekly : 0;
+  const sponsors = activeSponsors(s);
+  const spon = sponsors.reduce((a, x) => a + x.weekly, 0);
   const weekly = spon - Math.round(wages / 11) - OPERATING_COST;
   return (
     <div className="space-y-2 text-[12.5px]">
@@ -48,7 +49,7 @@ function MoneyTab({ s }: { s: CareerState }) {
       {(s.debtWeeks ?? 0) > 0 && <Reply text={`⚠️ 적자 ${s.debtWeeks}주째! ${DEBT_LIMIT_WEEKS - (s.debtWeeks ?? 0)}주 안에 흑자로 돌리지 못하면 구단이 해체됩니다`} />}
       <div className="border border-neutral-600 p-2 space-y-0.5">
         <div className="text-[#ffe45c] mb-1">매주 고정 수입·지출</div>
-        <div className="flex justify-between"><span className="text-neutral-400">서브 스폰서 후원금{spon ? ` (${s.sponsor!.name})` : " (없음)"}</span><span className="text-[#bff5c6]">+{spon}</span></div>
+        <div className="flex justify-between"><span className="text-neutral-400">서브 스폰서 후원금{spon ? ` (${sponsors.map(x => x.name).join("·")})` : " (없음)"}</span><span className="text-[#bff5c6]">+{spon}</span></div>
         <div className="flex justify-between"><span className="text-neutral-400">연봉 (정규시즌, 총 {wages.toLocaleString()}만 ÷ 11주)</span><span className="text-[#ffb8c8]">-{Math.round(wages / 11)}</span></div>
         <div className="flex justify-between"><span className="text-neutral-400">구단 운영비</span><span className="text-[#ffb8c8]">-{OPERATING_COST}</span></div>
         <div className="flex justify-between border-t border-neutral-700 pt-0.5"><span>합계 (경기 수당 제외)</span><span className={weekly >= 0 ? "text-[#bff5c6]" : "text-[#ffb8c8]"}>{weekly >= 0 ? "+" : ""}{weekly}</span></div>
@@ -174,8 +175,9 @@ function ManagerTab({ s }: { s: CareerState }) {
         {(s.jobOffers ?? []).map(id => (
           <div key={id} className="flex items-center gap-2 py-1">
             <TeamLogo team={s.teams[id]} className="w-[52px] h-[30px]" />
-            <span className="flex-1">{s.teams[id].name} <span className="text-neutral-500">전력 {teamPower(s, id).toLocaleString()}</span></span>
-            <button disabled={accept.isPending || s.phase !== "offseason"} onClick={() => confirm(`${s.teams[id].name} 감독으로 옮길까요? (운영 자금 ${s.teams[s.myTeam].money.toLocaleString()}만원과 함께)`) && accept.mutate({ teamId: id })}
+            <span className="flex-1">{s.teams[id].name} <span className="text-neutral-500">전력 {teamPower(s, id).toLocaleString()}</span>
+              <span className="block text-[10.5px] text-[#bff5c6]">영입 계약금 {jobSigningFee(s, id).toLocaleString()}만 · 구단 자금 {s.teams[id].money.toLocaleString()}만</span></span>
+            <button disabled={accept.isPending || s.phase !== "offseason"} onClick={() => confirm(`${s.teams[id].name} 감독으로 옮길까요?\n지금 구단 자금은 두고 가고, ${s.teams[id].name}이(가) 영입 계약금 ${jobSigningFee(s, id).toLocaleString()}만원을 운영 자금(현재 ${s.teams[id].money.toLocaleString()}만원)에 더해 줍니다.`) && accept.mutate({ teamId: id })}
               className="border border-[#8fe07a] text-[#bff5c6] px-2 py-1 disabled:opacity-40">수락</button>
           </div>
         ))}
@@ -248,60 +250,69 @@ function canNegotiate(s: CareerState) {
   return s.week === 1 && !s.live && !s.matches.some(m => m.done && (m.a === s.myTeam || m.b === s.myTeam));
 }
 
+function QuestRow({ s, q }: { s: CareerState; q: SponsorQuest }) {
+  const pr = questProgress(s, q);
+  const pct = q.kind === "rank" ? (pr.now <= q.target ? 100 : Math.max(5, 100 - (pr.now - q.target) * 15)) : Math.min(100, (pr.now / q.target) * 100);
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between"><span>{questLabel(s, q)}</span><span className={q.done ? "text-[#bff5c6]" : "text-[#ffe45c]"}>{q.done ? "✔ 달성" : `${questReward(q).toLocaleString()}만`}</span></div>
+      <div className="h-1.5 bg-neutral-800"><div className="h-full" style={{ width: `${pct}%`, background: q.done ? "#8fe07a" : "#f8e070" }} /></div>
+      <div className="text-[10.5px] text-neutral-500">{q.kind === "rank" ? `현재 ${pr.now}위 (정규시즌 끝에 판정)` : `현재 ${pr.now} / ${q.target}`}</div>
+    </div>
+  );
+}
+
 function SponsorTab({ s }: { s: CareerState }) {
   const { reply, done, fail } = useMut();
   const choose = trpc.career.chooseSponsor.useMutation({ onSuccess: done, onError: fail });
-  const offers = useMemo(() => sponsorOffers(s), [s.season, s.myTeam]);
+  const offers = useMemo(() => sponsorOffers(s), [s.season, s.myTeam, s.manager?.level]);
   const [targets, setTargets] = useState<number[][]>(() => offers.map(o => o.quests.map(q => q.target)));
-  const sp = s.sponsor?.season === s.season ? s.sponsor : undefined;
-  if (sp) {
-    return (
-      <div className="space-y-2 text-[12.5px]">
-        <MainSponsorCard s={s} />
-        <div className="text-[#ffe45c] text-[13px] pt-1">서브 스폰서 (퀘스트)</div>
-        <div className="border border-neutral-600 p-2">
-          <div className="text-[15px] text-[#ffe45c]">{sp.name}</div>
-          <div className="text-neutral-400">후원금 주 {sp.weekly}만원 · {s.season}시즌</div>
-        </div>
-        {sp.quests.map((q, i) => {
-          const pr = questProgress(s, q);
-          const pct = q.kind === "rank" ? (pr.now <= q.target ? 100 : Math.max(5, 100 - (pr.now - q.target) * 15)) : Math.min(100, (pr.now / q.target) * 100);
-          return (
-            <div key={i} className="border border-neutral-600 p-2 space-y-1">
-              <div className="flex justify-between"><span>{questLabel(s, q)}</span><span className={q.done ? "text-[#bff5c6]" : "text-[#ffe45c]"}>{q.done ? "✔ 달성" : `${questReward(q).toLocaleString()}만`}</span></div>
-              <div className="h-1.5 bg-neutral-800"><div className="h-full" style={{ width: `${pct}%`, background: q.done ? "#8fe07a" : "#f8e070" }} /></div>
-              <div className="text-[10.5px] text-neutral-500">{q.kind === "rank" ? `현재 ${pr.now}위 (정규시즌 끝에 판정)` : `현재 ${pr.now} / ${q.target}`}</div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
+  const mine = activeSponsors(s);
+  const { count, basis } = sponsorOfferCount(s);
+  const full = mine.length >= MAX_SPONSORS;
+  const left = offers.map((o, k) => ({ o, k })).filter(({ o }) => !mine.some(x => x.name === o.name));
   return (
     <div className="space-y-2 text-[12.5px]">
       <MainSponsorCard s={s} />
-      <div className="text-[#ffe45c] text-[13px] pt-1">서브 스폰서 (퀘스트)</div>
-      <div className="text-center text-[11.5px] text-neutral-300">이번 시즌 서브 스폰서를 고르세요. 퀘스트 목표를 올리면 보상이 커지고, 낮추면 줄어듭니다.<br />스폰서가 없으면 후원금이 없습니다.</div>
-      {reply && <Reply {...reply} />}
-      {offers.map((o, k) => (
-        <div key={k} className="border border-neutral-600 p-2 space-y-1.5">
-          <div className="flex justify-between items-baseline"><span className="text-[15px] text-[#ffe45c]">{o.name}</span><span>후원금 주 <b>{o.weekly}</b>만원</span></div>
-          {o.quests.map((q, i) => {
-            const [lo, hi] = questRange(q);
-            const tg = targets[k][i];
-            const set = (v: number) => setTargets(prev => prev.map((row, kk) => (kk === k ? row.map((x, ii) => (ii === i ? Math.max(lo, Math.min(hi, v)) : x)) : row)));
-            return (
-              <div key={i} className="flex items-center gap-1.5">
-                <span className="flex-1 min-w-0 truncate">{questLabel(s, q, tg)}</span>
-                <button onClick={() => set(q.kind === "rank" ? tg + 1 : tg - 1)} className="border border-neutral-600 px-1.5 text-[11px]">쉽게</button>
-                <button onClick={() => set(q.kind === "rank" ? tg - 1 : tg + 1)} className="border border-neutral-600 px-1.5 text-[11px]">어렵게</button>
-                <span className="w-14 text-right text-[#bff5c6]">{questReward(q, tg).toLocaleString()}만</span>
-              </div>
-            );
-          })}
-          <button disabled={choose.isPending} onClick={() => choose.mutate({ index: k, targets: targets[k] })} className="w-full py-1.5 text-[13px] font-bold text-black border border-neutral-500" style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}>이 스폰서와 계약</button>
+      <div className="flex items-baseline justify-between pt-1">
+        <span className="text-[#ffe45c] text-[13px]">서브 스폰서 (퀘스트)</span>
+        <span className="text-[11px] text-neutral-400">계약 {mine.length}/{MAX_SPONSORS} · 후원금 주 {mine.reduce((a, x) => a + x.weekly, 0)}만</span>
+      </div>
+      {mine.map(sp => (
+        <div key={sp.name} className="border border-[#8fe07a]/70 p-2 space-y-1.5">
+          <div className="flex justify-between items-baseline"><span className="text-[15px] text-[#ffe45c]">{sp.name}</span><span className="text-neutral-400">후원금 주 {sp.weekly}만원</span></div>
+          {sp.quests.map((q, i) => <QuestRow key={i} s={s} q={q} />)}
         </div>
       ))}
+      {reply && <Reply {...reply} />}
+      {!full && (
+        <>
+          <div className="text-center text-[11.5px] text-neutral-300">
+            이번 시즌 스폰서 제의 <b className="text-[#ffe45c]">{count}곳</b> ({basis}·감독 명성·레벨 기준) — 최대 {MAX_SPONSORS}곳과 계약할 수 있습니다.<br />
+            퀘스트 목표를 올리면 보상이 커지고, 낮추면 줄어듭니다.
+          </div>
+          {left.map(({ o, k }) => (
+            <div key={o.name} className="border border-neutral-600 p-2 space-y-1.5">
+              <div className="flex justify-between items-baseline"><span className="text-[15px] text-[#ffe45c]">{o.name}</span><span>후원금 주 <b>{o.weekly}</b>만원</span></div>
+              {o.quests.map((q, i) => {
+                const [lo, hi] = questRange(q);
+                const tg = targets[k]?.[i] ?? q.target;
+                const set = (v: number) => setTargets(prev => prev.map((row, kk) => (kk === k ? row.map((x, ii) => (ii === i ? Math.max(lo, Math.min(hi, v)) : x)) : row)));
+                return (
+                  <div key={i} className="flex items-center gap-1.5">
+                    <span className="flex-1 min-w-0 truncate">{questLabel(s, q, tg)}</span>
+                    <button onClick={() => set(q.kind === "rank" ? tg + 1 : tg - 1)} className="border border-neutral-600 px-1.5 text-[11px]">쉽게</button>
+                    <button onClick={() => set(q.kind === "rank" ? tg - 1 : tg + 1)} className="border border-neutral-600 px-1.5 text-[11px]">어렵게</button>
+                    <span className="w-14 text-right text-[#bff5c6]">{questReward(q, tg).toLocaleString()}만</span>
+                  </div>
+                );
+              })}
+              <button disabled={choose.isPending} onClick={() => choose.mutate({ index: k, targets: targets[k] ?? o.quests.map(q => q.target) })} className="w-full py-1.5 text-[13px] font-bold text-black border border-neutral-500" style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}>이 스폰서와 계약 ({mine.length + 1}/{MAX_SPONSORS})</button>
+            </div>
+          ))}
+        </>
+      )}
+      {full && <div className="text-center text-[11px] text-neutral-500">이번 시즌 스폰서 계약을 모두 마쳤습니다</div>}
     </div>
   );
 }
@@ -316,7 +327,7 @@ export default function Club() {
 
 function ClubScreen({ s }: { s: CareerState }) {
   const [, navigate] = useLocation();
-  const [tab, setTab] = useState<Tab>(() => (s.sponsor?.season !== s.season ? "sponsor" : "money"));
+  const [tab, setTab] = useState<Tab>(() => (activeSponsors(s).length === 0 ? "sponsor" : "money"));
   return (
     <LegacyFrame season={s.season} onBack={() => navigate("/lobby")} onNext={() => navigate("/lobby")} nextLabel="◁◁ 감독실">
       <div className="px-3 pt-2 pb-4">
