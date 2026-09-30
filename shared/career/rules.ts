@@ -43,9 +43,14 @@ export const COND_MIN = 1;
 export const COND_MAX = 100;
 export const COND_LABELS = ["", "최악", "짜증", "나쁨", "저조", "보통", "양호", "좋음", "의욕", "최상", "절정"];
 export const condLabel = (cond: number) => COND_LABELS[Math.max(1, Math.min(10, Math.ceil(cond / 10)))];
-/** 컨디션에 따른 경기력 배율 (1 → 0.91, 5 → 0.99, 10 → 1.09) */
+/** 컨디션에 따른 경기력 배율: 100% 가 원래 능력치, 낮을수록 줄어듦 (50% → 0.9, 1% → 0.8) */
 export function condMultiplier(cond: number): number {
-  return 1 + (Math.max(COND_MIN, Math.min(COND_MAX, cond)) - 55) * 0.002;
+  return 1 - (COND_MAX - Math.max(COND_MIN, Math.min(COND_MAX, cond))) * 0.002;
+}
+
+/** 포텐셜 폭발 확률 (세트마다, 컨디션이 좋을수록 잘 터짐) — 터지면 그 세트 능력치 110~120% */
+export function burstChance(cond: number): number {
+  return cond >= 90 ? 0.08 : cond >= 70 ? 0.05 : cond >= 50 ? 0.03 : 0.01;
 }
 
 // ── 선수 행동 (행동력) ──────────────────────────────────────────────
@@ -181,6 +186,8 @@ export interface SetResult {
   fx?: { a: PlayerFx; b: PlayerFx };
   /** 세레모니 보너스 (만원) */
   ceremony?: number;
+  /** 포텐셜 폭발 (그 세트 능력치 배율, 예: 1.15) */
+  burst?: { a?: number; b?: number };
 }
 
 export interface CMatch {

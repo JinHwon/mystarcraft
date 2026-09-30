@@ -9,6 +9,7 @@ import {
   MAP_POOL_SIZE,
   STAT_MAX_CAREER,
   STAT_MIN,
+  burstChance,
   condMultiplier,
   totalOf,
   type CareerState,
@@ -144,11 +145,18 @@ function wearEquip(s: CareerState, p: CPlayer) {
   }
 }
 
+/** 세트마다 포텐셜 폭발 판정 → 능력치 배율 (1.1~1.2) */
+function rollBurst(p: CPlayer): number | undefined {
+  return rand() < burstChance(gearCond(p)) ? Math.round((1.1 + rand() * 0.1) * 100) / 100 : undefined;
+}
+const withBurst = (mod: SetMods | undefined, burst: number | undefined): SetMods | undefined => (burst ? { ...mod, mul: (mod?.mul ?? 1) * burst } : mod);
+
 export function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, withHighlights: boolean, withTimeline = false, mods?: { a?: SetMods; b?: SetMods }): PlayedSet {
   const m = mapView(mapId);
+  const burst = { a: rollBurst(a), b: rollBurst(b) };
   const r = simulateSet(
-    { id: a.id + 1, name: a.name, race: a.race, stats: effStats(a, mods?.a), fatigue: 100 },
-    { id: b.id + 1, name: b.name, race: b.race, stats: effStats(b, mods?.b), fatigue: 100 },
+    { id: a.id + 1, name: a.name, race: a.race, stats: effStats(a, withBurst(mods?.a, burst.a)), fatigue: 100 },
+    { id: b.id + 1, name: b.name, race: b.race, stats: effStats(b, withBurst(mods?.b, burst.b)), fatigue: 100 },
     mapAdvantage(mapId, a.race, b.race),
     // 원작 100 기준 → 엔진 50 기준
     { rushDistance: m.rush / 2, resources: m.res / 2, complexity: m.complexity / 2 },
@@ -157,8 +165,13 @@ export function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, w
   );
   const aWin = r.winnerId === a.id + 1;
   const fx = afterSet(s, a, b, aWin, mods, r.content, r.duration);
+  // 중계: 포텐셜이 터진 선수 해설
+  for (const [side, p] of [[1, a], [2, b]] as const) {
+    if (burst[side === 1 ? "a" : "b"] && r.timeline) r.timeline.lines.unshift({ t: 0, side, text: `${p.name} 선수, 오늘 뭔가 다릅니다! 포텐셜이 터졌어요!` });
+  }
   return {
     mapId, a: a.id, b: b.id, winner: aWin ? "a" : "b", duration: r.duration, fx,
+    burst: burst.a || burst.b ? burst : undefined,
     highlights: withHighlights ? r.highlights : undefined,
     timeline: r.timeline,
   };
@@ -169,7 +182,7 @@ export function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, w
  * 세트 후 처리는 playSet 과 같다
  */
 export function quickSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number): SetResult {
-  const pa = totalOf(effStats(a)), pb = totalOf(effStats(b));
+  const pa = totalOf(effStats(a, withBurst(undefined, rollBurst(a)))), pb = totalOf(effStats(b, withBurst(undefined, rollBurst(b))));
   const adv = a.race === b.race ? 0 : (matchupValue(mapId, a.race, b.race) - 50) / 100;
   const pWin = 1 / (1 + Math.exp(-((pa - pb) / 450 + adv * 2.2)));
   const aWin = rand() < pWin;
