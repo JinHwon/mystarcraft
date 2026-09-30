@@ -5,7 +5,8 @@
  * 원작 공식은 확인하지 못해, 경기 엔진 이벤트로 능력치마다 잘한 점·못한 점을 매겨 변동 폭을 정한다.
  * - 이기면 대부분 오르고, 지면 대부분 떨어진다. 잘한 능력치는 더 오르고(졌어도 오를 수 있음), 못한 능력치는 더 떨어진다
  * - 강한 상대를 이기면 크게 오르고, 약한 상대에게 지면 크게 떨어진다 (이변 배율 0.35~3배)
- * - 오를 때는 높은 능력치일수록·잠재력에 가까울수록 덜 오른다. 츄잉껌을 쓰면 떨어지는 폭이 66% 줄어든다
+ * - 선수별 성장 한계는 없다. 이번 시즌 승률이 좋을수록(폼) 더 잘 크고, 재능(잠재력 값)은 크는 속도만 바꾼다
+ * - 오를 때는 능력치 하나가 높을수록 덜 오른다 (한 능력치 최대 1000). 츄잉껌을 쓰면 떨어지는 폭이 66% 줄어든다
  */
 import { STAT_KEYS, type StatKey } from "@shared/gameConstants";
 import { totalOf, type CPlayer } from "@shared/career/rules";
@@ -28,12 +29,20 @@ export function contentScores(c: SetContent, won: boolean, duration: number): Re
   };
 }
 
-/** 오를 여지: 높은 능력치·잠재력 근처일수록 작음 */
+/** 오를 여지: 능력치 하나가 높을수록 조금 덜 오름 (선수별 한계는 없음) */
 function room(p: CPlayer, k: StatKey) {
-  const byStat = Math.max(0.2, 1 - (p.stats[k] - 500) / 700);
-  const left = p.potential ? p.potential - totalOf(p.stats) : 1000;
-  const byPotential = left <= 0 ? 0.15 : Math.min(1, 0.3 + left / 500);
-  return byStat * byPotential;
+  return Math.max(0.4, 1 - (p.stats[k] - 600) / 900);
+}
+
+/** 재능: 크는 속도 배율 (0.9~1.3, 잠재력 값에서) — 한계가 아님 */
+export function talent(p: CPlayer) {
+  return p.potential ? Math.max(0.9, Math.min(1.3, 1 + (p.potential - 5500) / 5000)) : 1;
+}
+
+/** 폼: 이번 시즌 승률이 좋을수록 더 잘 큼 (승률 50% 1.2배, 80% 1.5배, 20% 0.9배) */
+export function form(p: CPlayer) {
+  const wr = (p.sWins + 1) / (p.sWins + p.sLosses + 2);
+  return 0.7 + wr;
 }
 
 /**
@@ -46,19 +55,20 @@ export function setDeltas(p: CPlayer, opp: CPlayer, won: boolean, content: SetCo
   // 능력치 합 700 차이마다 ±1배 (0.35~3배): 강자가 약자를 이기면 조금만, 약자가 강자를 이기면 크게 오름
   const upset = won ? Math.max(0.35, Math.min(3, 1 + gap / 700)) : Math.max(0.35, Math.min(3, 1 - gap / 700));
   const score = content ? contentScores(content, won, duration) : undefined;
+  const grow = talent(p) * form(p);
   const out: Partial<Record<StatKey, number>> = {};
   for (const k of STAT_KEYS) {
     const sc = score?.[k] ?? 0;
     let d: number;
     if (won) {
-      // 기본 0~3 + 잘한 만큼, 못했어도 이기면 거의 안 떨어짐
-      d = Math.max(-1, Math.min(14, rand() * 3.5 + sc * 1.6)) * upset;
-      if (d > 0) d *= room(p, k);
+      // 기본 0~4.5 + 잘한 만큼, 못했어도 이기면 거의 안 떨어짐
+      d = Math.max(-1, Math.min(16, rand() * 4.5 + sc * 1.9)) * upset;
+      if (d > 0) d *= room(p, k) * grow;
     } else {
-      // 기본 -0~3 + 잘한 만큼 (잘했으면 졌어도 조금 오름)
-      d = Math.max(-12, Math.min(4, -rand() * 3.5 + sc * 1.3));
+      // 기본 -0~5.5 + 잘한 만큼 (잘했으면 졌어도 조금 오름)
+      d = Math.max(-16, Math.min(5, -rand() * 5.5 + sc * 1.4));
       if (d < 0) d *= upset * (gum ? 0.34 : 1);
-      else d *= room(p, k);
+      else d *= room(p, k) * grow;
     }
     const r = Math.round(d);
     if (r !== 0) out[k] = r;

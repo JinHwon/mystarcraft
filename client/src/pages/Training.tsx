@@ -39,6 +39,11 @@ export default function Training() {
     onError: resync,
   });
   const clear = trpc.career.clearActions.useMutation({ onError: resync });
+  const setAll = trpc.career.setAllActions.useMutation({ onError: resync });
+  const chooseAll = (action: ActionKey) => {
+    patch(st => { for (const p of rosterOf(st, st.myTeam)) p.action = action; });
+    setAll.mutate({ action });
+  };
   const careerPatch = useCareerPatch();
   const [results, setResults] = useState<ActionResult[] | null>(null);
   const run = trpc.career.runActions.useMutation({
@@ -93,6 +98,12 @@ export default function Training() {
             <button onClick={() => { patch(st => { for (const p of rosterOf(st, st.myTeam)) p.action = null; }); clear.mutate(); }} disabled={!!s.live} className="px-2.5 py-2 rounded-xl bg-muted border border-border text-foreground text-xs font-bold whitespace-nowrap">↺ 초기화</button>
             <button onClick={() => auto.mutate()} disabled={auto.isPending} className="px-2.5 py-2 rounded-xl bg-primary/20 border border-primary/40 text-primary text-xs font-bold whitespace-nowrap">🤖 자동 배정</button>
           </div>
+        </div>
+        <div className="mt-2.5 grid grid-cols-3 gap-1.5">
+          {ACTIONS.map(a => (
+            <button key={a.key} onClick={() => chooseAll(a.key)} disabled={!!s.live}
+              className="rounded-xl py-1.5 text-xs font-bold border border-border bg-muted/50 text-foreground">전체 {a.emoji} {a.name}</button>
+          ))}
         </div>
         <button onClick={() => run.mutate(undefined)} disabled={run.isPending || ready === 0 || !!s.live}
           className="mt-2.5 w-full py-3 rounded-xl font-black text-sm bg-gradient-to-r from-emerald-500 to-teal-600 text-white disabled:opacity-50">

@@ -22,7 +22,7 @@ import {
 import { mapView, matchupValue } from "@shared/career/view";
 import { ITEM_BY_KEY, gearCond, gearStats } from "@shared/career/items";
 import { simulateSet, type SetContent } from "../gameSimulation";
-import { setDeltas } from "./growth";
+import { setDeltas, talent } from "./growth";
 import { eventOn } from "./events";
 
 export const rand = () => Math.random();
@@ -49,12 +49,9 @@ export function news(s: CareerState, text: string) {
 export function gainStats(p: CPlayer, picks: number, min: number, max: number): string[] {
   const keys = shuffle([...STAT_KEYS]).slice(0, picks);
   return keys.map(k => {
-    // 능력치가 높을수록 잘 안 오름
-    const room = Math.max(0.15, 1 - (p.stats[k] - 500) / 600);
-    // 성장 한계(잠재력)에 가까우면 거의 안 오름
-    const left = p.potential ? p.potential - totalOf(p.stats) : 1000;
-    const cap = left <= 0 ? 0.1 : Math.min(1, 0.25 + left / 600);
-    const g = Math.max(left <= 0 && rand() > 0.3 ? 0 : 1, Math.round(randInt(min, max) * room * cap));
+    // 능력치가 높을수록 조금 덜 오름 (선수별 성장 한계는 없음, 재능은 속도만)
+    const room = Math.max(0.4, 1 - (p.stats[k] - 600) / 900);
+    const g = Math.max(1, Math.round(randInt(min, max) * room * talent(p)));
     p.stats[k] = clampStat(p.stats[k] + g);
     return k;
   });

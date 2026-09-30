@@ -13,7 +13,7 @@ import { setActiveEvents } from "./events";
 import type { CareerState } from "@shared/career/rules";
 import { diffOf, jsonOf, snapshot, type Snapshot } from "./diff";
 import { nominate } from "./msl";
-import { ACTIONS } from "@shared/career/rules";
+import { ACTIONS, type ActionKey } from "@shared/career/rules";
 import { negotiateMainSponsor } from "./club";
 import { acceptJob, bidPlayer, chooseSponsor, demotePlayer, negotiateContract, respondOffer, signReserve } from "./club";
 import {
@@ -324,6 +324,15 @@ export const careerRouter = router({
   nominate: protectedProcedure
     .input(z.object({ pick: z.number().int().optional() }).optional())
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => nominate(s, input?.pick))),
+
+  /** 우리 선수 전원 같은 행동으로 지정 (훈련·휴식·이벤트) */
+  setAllActions: protectedProcedure
+    .input(z.object({ action: z.enum(actionKeys) }))
+    .mutation(({ ctx, input }) => mutateLite(ctx.user.id, s => {
+      if (s.live) throw new CareerError("경기 중에는 행동을 바꿀 수 없습니다");
+      for (const p of rosterOf(s, s.myTeam)) setAction(s, p.id, input.action as ActionKey);
+      return { ok: true };
+    })),
 
   /** 우리 선수 행동 모두 해제 (행동은 바꾸거나 초기화할 때까지 매주 유지) */
   clearActions: protectedProcedure.mutation(({ ctx }) => mutateLite(ctx.user.id, s => {
