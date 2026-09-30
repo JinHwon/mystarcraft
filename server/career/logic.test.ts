@@ -44,6 +44,17 @@ describe("등급", () => {
     for (const k of Object.keys(p.stats) as (keyof typeof p.stats)[]) p.stats[k] = 880; // 7040 → SS
     expect(legacyGrade(totalOf(p.stats))).toBe("SS");
     expect(topGradeLossMul(p)).toBeGreaterThan(1.5);
+    // S 가 A 에게 지면 훨씬 크게, 차이가 클수록 더
+    const set = (x: typeof p, v: number) => { for (const k of Object.keys(x.stats) as (keyof typeof x.stats)[]) x.stats[k] = v; };
+    const [sp, a, b] = rosterOf(newCareer(0), 0);
+    set(sp, 835); // 6680 → S
+    set(a, 770); // 6160 → A
+    set(b, 710); // 5680 → B
+    expect(legacyGrade(totalOf(sp.stats))).toBe("S");
+    expect(legacyGrade(totalOf(a.stats))).toBe("A");
+    expect(topGradeLossMul(sp, sp)).toBe(1);
+    expect(topGradeLossMul(sp, a)).toBeGreaterThanOrEqual(5);
+    expect(topGradeLossMul(sp, b)).toBeGreaterThan(topGradeLossMul(sp, a));
   });
 });
 
