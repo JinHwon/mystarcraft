@@ -9,13 +9,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { toast } from 'sonner';
 import { Plus, Trash2, Play, Pause, Calendar, Edit2, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { EVENT_INFO, type CareerEventType } from '@shared/career/events';
 
-const EVENT_TYPE_LABELS: Record<string, { label: string; icon: string; color: string }> = {
-  exp_double: { label: '경험치 2배', icon: '⭐', color: 'text-blue-400' },
-  fatigue_unlimited: { label: '무제한 피로도', icon: '⚡', color: 'text-green-400' },
-  gold_double: { label: '골드 2배', icon: '💰', color: 'text-yellow-400' },
-  stat_boost: { label: '능력치 부스트', icon: '💪', color: 'text-purple-400' },
-};
+/** 커리어 모드 이벤트 효과 (shared/career/events.ts) */
+const COLORS: Record<CareerEventType, string> = { exp_double: 'text-blue-400', fatigue_unlimited: 'text-green-400', gold_double: 'text-yellow-400', stat_boost: 'text-purple-400' };
+const EVENT_TYPE_LABELS: Record<string, { label: string; icon: string; color: string; desc: string }> = Object.fromEntries(
+  (Object.keys(EVENT_INFO) as CareerEventType[]).map(k => [k, { ...EVENT_INFO[k], color: COLORS[k] }]),
+);
 
 export default function AdminEvents() {
   const [showCreateEvent, setShowCreateEvent] = useState(false);
@@ -108,6 +108,7 @@ export default function AdminEvents() {
               <div className="flex-1">
                 <CardTitle className="text-base text-white">{event.name}</CardTitle>
                 <p className={cn('text-xs font-semibold mt-1', typeInfo.color)}>{typeInfo.label}</p>
+                {'desc' in typeInfo && <p className="text-[11px] text-gray-400 mt-0.5">{(typeInfo as { desc: string }).desc}</p>}
               </div>
             </div>
             <div className="text-right">
@@ -203,7 +204,7 @@ export default function AdminEvents() {
             <div>
               <label className="text-sm text-gray-300 block mb-2 font-semibold">이벤트 유형</label>
               <div className="grid grid-cols-2 gap-2">
-                {Object.entries(EVENT_TYPE_LABELS).map(([key, { label, icon, color }]) => (
+                {Object.entries(EVENT_TYPE_LABELS).map(([key, { label, icon, color, desc }]) => (
                   <button
                     key={key}
                     onClick={() => setNewEvent({ ...newEvent, type: key as any })}
@@ -216,6 +217,7 @@ export default function AdminEvents() {
                   >
                     <span className="text-2xl block mb-1">{icon}</span>
                     <p className={cn('text-xs font-semibold', color)}>{label}</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{desc}</p>
                   </button>
                 ))}
               </div>

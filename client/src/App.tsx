@@ -14,6 +14,7 @@ import League from "./pages/League";
 import Lobby from "./pages/Lobby";
 import Transfer from "./pages/Transfer";
 import Records from "./pages/Records";
+import Ranking from "./pages/Ranking";
 import StarLeague from "./pages/StarLeague";
 import Shop from "./pages/Shop";
 import Club from "./pages/Club";
@@ -38,6 +39,7 @@ function Router() {
       <Route path="/league" component={withLayout(League)} />
       <Route path="/transfer" component={withLayout(Transfer)} />
       <Route path="/records" component={withLayout(Records)} />
+      <Route path="/ranking" component={withLayout(Ranking)} />
       <Route path="/starleague" component={withLayout(StarLeague)} />
       <Route path="/shop" component={withLayout(Shop)} />
       <Route path="/club" component={withLayout(Club)} />

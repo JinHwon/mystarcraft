@@ -21,6 +21,7 @@ import {
 import { mapView, matchupValue } from "@shared/career/view";
 import { ITEM_BY_KEY, gearCond, gearStats } from "@shared/career/items";
 import { simulateSet } from "../gameSimulation";
+import { eventOn } from "./events";
 
 export const rand = () => Math.random();
 export const randInt = (a: number, b: number) => a + Math.floor(rand() * (b - a + 1));
@@ -102,7 +103,9 @@ function afterSet(s: CareerState, a: CPlayer, b: CPlayer, aWin: boolean, mods?: 
   l.vs = { ...l.vs, [w.race]: [l.vs?.[w.race]?.[0] ?? 0, (l.vs?.[w.race]?.[1] ?? 0) + 1] };
   if (w.team === s.myTeam) w.h2h = { ...w.h2h, [l.id]: [(w.h2h?.[l.id]?.[0] ?? 0) + 1, w.h2h?.[l.id]?.[1] ?? 0] };
   if (l.team === s.myTeam) l.h2h = { ...l.h2h, [w.id]: [l.h2h?.[w.id]?.[0] ?? 0, (l.h2h?.[w.id]?.[1] ?? 0) + 1] };
-  w.cond = clampCond(w.cond - 1); l.cond = clampCond(l.cond - 2);
+  // 컨디션 유지 이벤트: 우리 선수는 지치지 않음
+  const tire = (p: CPlayer, d: number) => { if (!(p.team === s.myTeam && eventOn("fatigue_unlimited"))) p.cond = clampCond(p.cond - d); };
+  tire(w, 1); tire(l, 2);
   addExp(s, w, 30); addExp(s, l, 10);
   if (rand() < 0.5) gainStats(w, 1, 1, 4);
   // 원작: 패배하면 능력치가 조금 떨어진다 (츄잉껌이면 66% 덜)
@@ -162,7 +165,7 @@ export function quickSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number):
 }
 
 export function addExp(s: CareerState, p: CPlayer, exp: number) {
-  p.exp += exp;
+  p.exp += p.team === s.myTeam && eventOn("exp_double") ? exp * 2 : exp;
   const need = () => 100 + p.level * 60;
   while (p.exp >= need()) {
     p.exp -= need();

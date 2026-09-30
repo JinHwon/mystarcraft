@@ -74,7 +74,7 @@ import { type MapCharacteristic } from "./buildSystem";
 import { calculateStatChanges, applyReverseSystem } from "./statDynamicSystem";
 import { teamRouter } from "./teamRouter";
 import { leagueRouter } from "./leagueRouter";
-import { careerRouter } from "./career/router";
+import { careerRouter, resetEventsCache } from "./career/router";
 import { refreshPlayerDaily, getPlayerCondition, changeCondition } from "./team";
 import { applyCondition } from "@shared/teamConstants";
 
@@ -472,6 +472,7 @@ const eventRouter = router({
     )
     .mutation(async ({ input }) => {
       await createEvent(input);
+      resetEventsCache();
       return { success: true };
     }),
 
@@ -489,6 +490,7 @@ const eventRouter = router({
     .mutation(async ({ input }) => {
       const { eventId, ...updates } = input;
       await updateEvent(eventId, updates);
+      resetEventsCache();
       return { success: true };
     }),
 
@@ -496,6 +498,7 @@ const eventRouter = router({
     .input(z.object({ eventId: z.number().int() }))
     .mutation(async ({ input }) => {
       await deleteEvent(input.eventId);
+      resetEventsCache();
       return { success: true };
     }),
 });

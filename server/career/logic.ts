@@ -40,6 +40,7 @@ import {
 } from "./core";
 export { CareerError };
 import { initialPlayers, initialTeams } from "@shared/career/init";
+import { eventOn } from "./events";
 import { runMslWeek, type MslReport } from "./msl";
 import { ITEM_BY_KEY, POTION_LIMIT, slotOf } from "@shared/career/items";
 import { ensurePotential, retirements, rookies } from "./generation";
@@ -147,13 +148,15 @@ function applyActions(s: CareerState) {
   if (s.actionsWeek === wk) return; // 한 주에 한 번만 (프로리그가 한 주 2경기)
   s.actionsWeek = wk;
   const me = s.teams[s.myTeam];
+  // 훈련 효과 2배 이벤트 (우리 선수)
+  const boost = (p: CPlayer) => (p.team === s.myTeam && eventOn("stat_boost") ? 2 : 1);
   for (const p of activePlayers(s)) {
     if (p.team === FREE_AGENT_TEAM) { p.cond = clampCond(p.cond + (rand() < 0.5 ? 1 : -1)); continue; }
     let action: ActionKey | null | undefined = p.action;
     if (p.team !== s.myTeam) action = rand() < 0.55 ? "train" : "rest"; // AI 팀
     switch (action) {
-      case "train": gainStats(p, 2, 2, 6); p.cond = clampCond(p.cond - 1); break;
-      case "best": gainStats(p, 3, 5, 12); p.cond = clampCond(p.cond - 2); break;
+      case "train": gainStats(p, 2, 2 * boost(p), 6 * boost(p)); p.cond = clampCond(p.cond - 1); break;
+      case "best": gainStats(p, 3, 5 * boost(p), 12 * boost(p)); p.cond = clampCond(p.cond - 2); break;
       case "rest": p.cond = clampCond(p.cond + 2); break;
       case "event": {
         const earn = 30 + p.level * 12 + randInt(0, 40);

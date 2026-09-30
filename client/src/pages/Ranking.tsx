@@ -1,151 +1,86 @@
-import { useMemo, useState } from "react";
+/**
+ * 감독 랭킹: 가입한 사용자들의 감독 레벨·구단·구단 가치·우승
+ */
+import { useState } from "react";
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "../../../server/routers";
 import { trpc } from "@/lib/trpc";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { STAT_KEYS, STAT_LABELS, RACE_LABELS, RACE_COLORS, GRADE_COLORS, type Grade } from "@shared/gameConstants";
-import { ChevronDown, Search, Crosshair } from "lucide-react";
+import { TeamBadge } from "@/components/career/Bits";
 
-const PAGE = 30;
-type RaceFilter = "all" | "terran" | "zerg" | "protoss";
+type Row = inferRouterOutputs<AppRouter>["career"]["ranking"]["rows"][number];
 
-function RankNo({ rank }: { rank: number }) {
-  const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
-  return (
-    <div className="w-9 shrink-0 text-center">
-      {medal ? <span className="text-2xl">{medal}</span> : <span className="text-sm font-black text-muted-foreground">{rank}</span>}
-    </div>
-  );
-}
+const SORTS: Array<{ key: string; label: string; value: (r: Row) => number; show: (r: Row) => string }> = [
+  { key: "level", label: "감독 레벨", value: r => r.level * 1e6 + r.exp, show: r => `Lv.${r.level}` },
+  { key: "value", label: "구단 가치", value: r => r.clubValue, show: r => `${r.clubValue.toLocaleString()}만` },
+  { key: "titles", label: "우승", value: r => r.proTitles * 1000 + r.mslTitles * 100 + r.level, show: r => `🏆${r.proTitles}` },
+  { key: "power", label: "전력", value: r => r.power, show: r => r.power.toLocaleString() },
+];
 
-function HeadToHead({ opponentId }: { opponentId: number }) {
-  const { data, isLoading } = trpc.ranking.headToHead.useQuery({ opponentPlayerId: opponentId });
-  if (isLoading) return <span className="text-xs text-muted-foreground">상대 전적 조회 중...</span>;
-  if (!data || data.total === 0) return <span className="text-xs text-muted-foreground">아직 맞붙은 적이 없습니다</span>;
-  return (
-    <span className="text-xs text-foreground">
-      나와의 상대 전적 <b className="text-emerald-300">{data.wins}승</b> <b className="text-rose-300">{data.losses}패</b>
-    </span>
-  );
-}
-
-export default function RankingPage() {
-  const { data: rankings = [], isLoading } = trpc.ranking.list.useQuery();
-  const { data: me } = trpc.player.get.useQuery();
-  const [query, setQuery] = useState("");
-  const [race, setRace] = useState<RaceFilter>("all");
-  const [humansOnly, setHumansOnly] = useState(false);
-  const [limit, setLimit] = useState(PAGE);
+export default function Ranking() {
+  const q = trpc.career.ranking.useQuery(undefined, { staleTime: 60_000 });
+  const [sort, setSort] = useState("level");
   const [open, setOpen] = useState<number | null>(null);
-
-  const ranked = useMemo(() => rankings.map((r, i) => ({ ...r, rank: i + 1 })), [rankings]);
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return ranked.filter(r =>
-      (race === "all" || r.race === race) &&
-      (!humansOnly || !r.isBot) &&
-      (!q || r.name.toLowerCase().includes(q)));
-  }, [ranked, query, race, humansOnly]);
-  const myRow = ranked.find(r => r.playerId === me?.id);
-
-  const jumpToMe = () => {
-    if (!myRow) return;
-    setQuery(""); setRace("all"); setHumansOnly(false);
-    setLimit(Math.max(PAGE, Math.ceil(myRow.rank / PAGE) * PAGE));
-    setOpen(myRow.playerId);
-    setTimeout(() => document.getElementById(`rank-${myRow.playerId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
-  };
-
-  if (isLoading) return <div className="p-6 text-muted-foreground">랭킹 불러오는 중...</div>;
+  const cur = SORTS.find(x => x.key === sort)!;
+  const rows = [...(q.data?.rows ?? [])].sort((a, b) => cur.value(b) - cur.value(a));
+  const myRank = rows.findIndex(r => r.userId === q.data?.me) + 1;
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-4">
-      <div className="hidden md:block">
-        <h1 className="text-3xl font-black text-foreground">🏆 랭킹</h1>
-        <p className="text-sm text-muted-foreground">능력치 합계 순 · 총 {rankings.length}명</p>
+    <div className="p-4 space-y-3">
+      <div className="rounded-2xl bg-card border border-border p-3.5">
+        <div className="font-black text-foreground">🏅 감독 랭킹</div>
+        <div className="text-xs text-muted-foreground mt-0.5">가입한 감독 {rows.length}명{myRank ? ` · 내 순위 ${myRank}위` : ""} · 1분마다 갱신</div>
       </div>
-
-      {/* 내 순위 */}
-      {myRow && (
-        <button onClick={jumpToMe} className="w-full flex items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600/40 to-indigo-600/30 border border-blue-400/40 p-3 text-left active:scale-[0.99] transition-transform">
-          <RankNo rank={myRow.rank} />
-          <div className="flex-1 min-w-0">
-            <div className="text-xs text-blue-200">내 순위</div>
-            <div className="font-bold text-foreground truncate">{myRow.name} · {myRow.totalStats.toLocaleString()}</div>
-          </div>
-          <span className="flex items-center gap-1 text-xs text-blue-200 font-semibold"><Crosshair className="w-4 h-4" />위치로</span>
-        </button>
-      )}
-
-      {/* 검색 / 필터 */}
-      <div className="space-y-2">
-        <div className="relative">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input value={query} onChange={e => { setQuery(e.target.value); setLimit(PAGE); }} placeholder="선수 이름 검색" className="pl-9 h-11 rounded-xl bg-card" />
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {(["all", "terran", "zerg", "protoss"] as const).map(r => (
-            <button key={r} onClick={() => { setRace(r); setLimit(PAGE); }}
-              className={cn("px-3 py-1.5 rounded-full text-xs font-semibold border", race === r ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-muted-foreground")}>
-              {r === "all" ? "전체" : RACE_LABELS[r]}
-            </button>
-          ))}
-          <button onClick={() => setHumansOnly(v => !v)}
-            className={cn("px-3 py-1.5 rounded-full text-xs font-semibold border", humansOnly ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-muted-foreground")}>
-            👤 유저만
-          </button>
-          <span className="ml-auto self-center text-xs text-muted-foreground">{filtered.length}명</span>
-        </div>
+      <div className="grid grid-cols-4 gap-1 p-1 rounded-xl bg-card border border-border">
+        {SORTS.map(x => (
+          <button key={x.key} onClick={() => setSort(x.key)} className={cn("py-2 rounded-lg text-xs font-bold", sort === x.key ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{x.label}</button>
+        ))}
       </div>
-
-      {/* 목록 */}
-      <div className="rounded-2xl bg-card border border-border divide-y divide-border overflow-hidden">
-        {filtered.slice(0, limit).map(r => {
-          const isMe = r.playerId === me?.id;
-          const expanded = open === r.playerId;
-          const record = r.totalGames ? `${r.wins}승 ${r.losses}패` : "전적 없음";
+      {q.isLoading && <div className="text-sm text-muted-foreground p-4">불러오는 중...</div>}
+      <div className="space-y-1.5">
+        {rows.map((r, i) => {
+          const mine = r.userId === q.data?.me;
           return (
-            <div key={r.playerId} id={`rank-${r.playerId}`} className={cn(isMe && "bg-blue-500/15")}>
-              <button onClick={() => setOpen(expanded ? null : r.playerId)} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left">
-                <RankNo rank={r.rank} />
+            <button key={r.userId} onClick={() => setOpen(open === r.userId ? null : r.userId)}
+              className={cn("w-full text-left rounded-2xl border p-3", mine ? "bg-primary/10 border-primary/50" : "bg-card border-border")}>
+              <div className="flex items-center gap-2">
+                <span className={cn("w-7 text-center font-black", i < 3 ? "text-amber-300 text-lg" : "text-muted-foreground")}>{i < 3 ? ["🥇", "🥈", "🥉"][i] : i + 1}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className={cn("font-bold truncate", isMe ? "text-blue-200" : "text-foreground")}>{r.name}</span>
-                    {r.isBot && <span className="text-[9px] font-bold px-1 rounded bg-purple-500/30 text-purple-200">AI</span>}
-                    {isMe && <span className="text-[9px] font-bold px-1 rounded bg-blue-500/40 text-blue-100">나</span>}
+                    <span className="font-bold text-foreground truncate">{r.name}</span>
+                    {mine && <span className="text-[10px] text-primary font-bold">나</span>}
                   </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    <span style={{ color: RACE_COLORS[r.race] }} className="font-semibold">{RACE_LABELS[r.race]}</span> · Lv.{r.level} · {record}
+                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">
+                    <TeamBadge short={r.team.short} color={r.team.color} />
+                    <span className="truncate">{r.team.name}</span>
+                    <span>· Lv.{r.level}</span>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-sm font-black" style={{ color: GRADE_COLORS[r.grade as Grade] }}>{r.grade}</div>
-                  <div className="text-[11px] text-muted-foreground font-mono">{r.totalStats.toLocaleString()}</div>
-                </div>
-                <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", expanded && "rotate-180")} />
-              </button>
-              {expanded && (
-                <div className="px-3 pb-3 space-y-2">
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {STAT_KEYS.map(k => (
-                      <div key={k} className="rounded-lg bg-muted/70 px-2 py-1.5 text-center">
-                        <div className="text-[10px] text-muted-foreground">{STAT_LABELS[k]}</div>
-                        <div className="text-sm font-bold text-foreground">{(r as any)[k]}</div>
-                      </div>
-                    ))}
-                  </div>
-                  {!isMe && me && <HeadToHead opponentId={r.playerId} />}
+                <span className="font-black text-foreground text-sm">{cur.show(r)}</span>
+              </div>
+              {open === r.userId && (
+                <div className="grid grid-cols-3 gap-1.5 mt-2.5 text-center">
+                  {[
+                    ["감독 레벨", `Lv.${r.level} (${r.exp}/${r.expNeed})`],
+                    ["명성", `${r.reputation}`],
+                    ["시즌", `${r.season}시즌 ${r.phase === "regular" ? `${r.week}주` : r.phase === "postseason" ? "PO" : "종료"}`],
+                    ["구단 자금", `${r.money.toLocaleString()}만`],
+                    ["선수 가치", `${r.playerValue.toLocaleString()}만`],
+                    ["구단 가치", `${r.clubValue.toLocaleString()}만`],
+                    ["팀 전력", r.power.toLocaleString()],
+                    ["이번 시즌", `${r.record.wins}승 ${r.record.losses}패`],
+                    ["우승", `프로 ${r.proTitles} · 개인 ${r.mslTitles}`],
+                  ].map(([k, v]) => (
+                    <div key={k} className="rounded-xl bg-muted/60 py-1.5"><div className="text-[10px] text-muted-foreground">{k}</div><div className="text-xs font-bold text-foreground">{v}</div></div>
+                  ))}
+                  {r.gameOver && <div className="col-span-3 text-xs text-rose-300">게임 종료: {r.gameOver}</div>}
                 </div>
               )}
-            </div>
+            </button>
           );
         })}
-        {filtered.length === 0 && <div className="p-8 text-center text-muted-foreground text-sm">검색 결과가 없습니다</div>}
       </div>
-      {filtered.length > limit && (
-        <button onClick={() => setLimit(l => l + PAGE)} className="w-full py-3 rounded-xl bg-card border border-border text-sm font-semibold text-foreground">
-          더 보기 ({filtered.length - limit}명 남음)
-        </button>
-      )}
+      <div className="text-[11px] text-muted-foreground text-center">구단 가치 = 구단 자금 + 선수단(1부·2부) 영입 시세 합계 · 개인 우승은 지금 소속 선수 기준</div>
     </div>
   );
 }
