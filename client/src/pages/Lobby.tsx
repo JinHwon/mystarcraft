@@ -121,6 +121,7 @@ function Office({ s }: { s: CareerState }) {
   const wantOut = roster.filter(p => p.wantsOut);
   const alerts: Array<[string, string]> = [];
   if ((s.debtWeeks ?? 0) > 0 || me.money < 0) alerts.push(["⚠️", `운영 자금 적자 ${s.debtWeeks ?? 0}주째 — ${DEBT_LIMIT_WEEKS}주 연속이면 구단 해체`]);
+  if (s.sponsor?.season !== s.season && s.phase !== "offseason") alerts.push(["🤝", "이번 시즌 스폰서를 아직 정하지 않았습니다 (후원금 없음)"]);
   if (s.offers?.length) alerts.push(["📨", `받은 영입 제안 ${s.offers.length}건`]);
   if (s.jobOffers?.length) alerts.push(["🤵", `감독 제의 ${s.jobOffers.length}건 (${s.jobOffers.map(id => s.teams[id].name).join(", ")})`]);
   if (wantOut.length) alerts.push(["😤", `이적 희망: ${wantOut.map(p => p.name).join(", ")}`]);

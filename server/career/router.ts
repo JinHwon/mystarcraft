@@ -6,7 +6,7 @@ import { getDb } from "../db";
 import { careers } from "../../drizzle/schema";
 import type { CareerState } from "@shared/career/rules";
 import { ACTIONS } from "@shared/career/rules";
-import { acceptJob, bidPlayer, negotiateContract, respondOffer } from "./club";
+import { acceptJob, bidPlayer, chooseSponsor, negotiateContract, respondOffer } from "./club";
 import {
   CareerError,
   advanceWeek,
@@ -182,4 +182,9 @@ export const careerRouter = router({
   acceptJob: protectedProcedure
     .input(z.object({ teamId: z.number().int() }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => acceptJob(s, input.teamId))),
+
+  /** 스폰서 선택 (퀘스트 목표 조정) */
+  chooseSponsor: protectedProcedure
+    .input(z.object({ index: z.number().int().min(0).max(2), targets: z.array(z.number().int()).max(5) }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => chooseSponsor(s, input.index, input.targets))),
 });

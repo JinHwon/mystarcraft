@@ -5,8 +5,9 @@ import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { DEBT_LIMIT_WEEKS, OPERATING_COST, WEEKLY_SPONSOR, totalOf, type CareerState, type Contract } from "@shared/career/rules";
+import { DEBT_LIMIT_WEEKS, OPERATING_COST, totalOf, type CareerState, type Contract } from "@shared/career/rules";
 import { jobThreshold, playerDemand, teamWages } from "@shared/career/contract";
+import { questLabel, questProgress, questRange, questReward, sponsorOffers } from "@shared/career/sponsor";
 import { proTeams, rosterOf, teamPower } from "@shared/career/view";
 import { useCareer } from "@/lib/career";
 import { LegacyFrame, TeamLogo } from "@/components/legacy/Legacy";
@@ -14,7 +15,7 @@ import { PlayerPanel } from "@/components/legacy/LegacyMatch";
 import { ContractEditor, ContractText, FeeStepper, MoraleBar, Reply } from "@/components/legacy/Club";
 
 const R = { terran: "T", zerg: "Z", protoss: "P" } as const;
-type Tab = "money" | "contracts" | "offers" | "manager";
+type Tab = "sponsor" | "money" | "contracts" | "offers" | "manager";
 
 function useMut() {
   const utils = trpc.useUtils();
@@ -34,7 +35,8 @@ function MoneyTab({ s }: { s: CareerState }) {
   const items = Object.entries(s.ledger?.season === s.season ? s.ledger.items : {}).sort((a, b) => b[1] - a[1]);
   const income = items.filter(([, v]) => v > 0).reduce((a, [, v]) => a + v, 0);
   const expense = items.filter(([, v]) => v < 0).reduce((a, [, v]) => a + v, 0);
-  const weekly = WEEKLY_SPONSOR - Math.round(wages / 11) - OPERATING_COST;
+  const spon = s.sponsor?.season === s.season ? s.sponsor.weekly : 0;
+  const weekly = spon - Math.round(wages / 11) - OPERATING_COST;
   return (
     <div className="space-y-2 text-[12.5px]">
       <div className="border border-neutral-600 p-2 flex justify-between items-center">
@@ -44,11 +46,11 @@ function MoneyTab({ s }: { s: CareerState }) {
       {(s.debtWeeks ?? 0) > 0 && <Reply text={`⚠️ 적자 ${s.debtWeeks}주째! ${DEBT_LIMIT_WEEKS - (s.debtWeeks ?? 0)}주 안에 흑자로 돌리지 못하면 구단이 해체됩니다`} />}
       <div className="border border-neutral-600 p-2 space-y-0.5">
         <div className="text-[#ffe45c] mb-1">매주 고정 수입·지출</div>
-        <div className="flex justify-between"><span className="text-neutral-400">스폰서</span><span className="text-[#bff5c6]">+{WEEKLY_SPONSOR}</span></div>
+        <div className="flex justify-between"><span className="text-neutral-400">스폰서 후원금{spon ? ` (${s.sponsor!.name})` : " (스폰서 없음)"}</span><span className="text-[#bff5c6]">+{spon}</span></div>
         <div className="flex justify-between"><span className="text-neutral-400">연봉 (정규시즌, 총 {wages.toLocaleString()}만 ÷ 11주)</span><span className="text-[#ffb8c8]">-{Math.round(wages / 11)}</span></div>
         <div className="flex justify-between"><span className="text-neutral-400">구단 운영비</span><span className="text-[#ffb8c8]">-{OPERATING_COST}</span></div>
         <div className="flex justify-between border-t border-neutral-700 pt-0.5"><span>합계 (경기 수당 제외)</span><span className={weekly >= 0 ? "text-[#bff5c6]" : "text-[#ffb8c8]"}>{weekly >= 0 ? "+" : ""}{weekly}</span></div>
-        <div className="text-[10.5px] text-neutral-500">경기 수당: 승리 +200, 패배 +50 · 상금·보너스·이적료는 따로</div>
+        <div className="text-[10.5px] text-neutral-500">경기 수당(주 2경기): 승리 +200, 패배 +50 · 스폰서 퀘스트·상금·보너스·이적료는 따로</div>
       </div>
       <div className="border border-neutral-600 p-2 space-y-0.5">
         <div className="text-[#ffe45c] mb-1">{s.season}시즌 장부</div>
@@ -175,19 +177,78 @@ function ManagerTab({ s }: { s: CareerState }) {
   );
 }
 
-const TABS: Array<[Tab, string]> = [["money", "재정"], ["contracts", "계약"], ["offers", "받은 제안"], ["manager", "감독"]];
+const TABS: Array<[Tab, string]> = [["sponsor", "스폰서"], ["money", "재정"], ["contracts", "계약"], ["offers", "제안"], ["manager", "감독"]];
+
+function SponsorTab({ s }: { s: CareerState }) {
+  const { reply, done, fail } = useMut();
+  const choose = trpc.career.chooseSponsor.useMutation({ onSuccess: done, onError: fail });
+  const offers = useMemo(() => sponsorOffers(s), [s.season, s.myTeam]);
+  const [targets, setTargets] = useState<number[][]>(() => offers.map(o => o.quests.map(q => q.target)));
+  const sp = s.sponsor?.season === s.season ? s.sponsor : undefined;
+  if (sp) {
+    return (
+      <div className="space-y-2 text-[12.5px]">
+        <div className="border border-neutral-600 p-2">
+          <div className="text-[15px] text-[#ffe45c]">{sp.name}</div>
+          <div className="text-neutral-400">후원금 주 {sp.weekly}만원 · {s.season}시즌</div>
+        </div>
+        {sp.quests.map((q, i) => {
+          const pr = questProgress(s, q);
+          const pct = q.kind === "rank" ? (pr.now <= q.target ? 100 : Math.max(5, 100 - (pr.now - q.target) * 15)) : Math.min(100, (pr.now / q.target) * 100);
+          return (
+            <div key={i} className="border border-neutral-600 p-2 space-y-1">
+              <div className="flex justify-between"><span>{questLabel(s, q)}</span><span className={q.done ? "text-[#bff5c6]" : "text-[#ffe45c]"}>{q.done ? "✔ 달성" : `${questReward(q).toLocaleString()}만`}</span></div>
+              <div className="h-1.5 bg-neutral-800"><div className="h-full" style={{ width: `${pct}%`, background: q.done ? "#8fe07a" : "#f8e070" }} /></div>
+              <div className="text-[10.5px] text-neutral-500">{q.kind === "rank" ? `현재 ${pr.now}위 (정규시즌 끝에 판정)` : `현재 ${pr.now} / ${q.target}`}</div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2 text-[12.5px]">
+      <div className="text-center text-[11.5px] text-neutral-300">이번 시즌 스폰서를 고르세요. 퀘스트 목표를 올리면 보상이 커지고, 낮추면 줄어듭니다.<br />스폰서가 없으면 후원금이 없습니다.</div>
+      {reply && <Reply {...reply} />}
+      {offers.map((o, k) => (
+        <div key={k} className="border border-neutral-600 p-2 space-y-1.5">
+          <div className="flex justify-between items-baseline"><span className="text-[15px] text-[#ffe45c]">{o.name}</span><span>후원금 주 <b>{o.weekly}</b>만원</span></div>
+          {o.quests.map((q, i) => {
+            const [lo, hi] = questRange(q);
+            const tg = targets[k][i];
+            const set = (v: number) => setTargets(prev => prev.map((row, kk) => (kk === k ? row.map((x, ii) => (ii === i ? Math.max(lo, Math.min(hi, v)) : x)) : row)));
+            return (
+              <div key={i} className="flex items-center gap-1.5">
+                <span className="flex-1 min-w-0 truncate">{questLabel(s, q, tg)}</span>
+                <button onClick={() => set(q.kind === "rank" ? tg + 1 : tg - 1)} className="border border-neutral-600 px-1.5 text-[11px]">쉽게</button>
+                <button onClick={() => set(q.kind === "rank" ? tg - 1 : tg + 1)} className="border border-neutral-600 px-1.5 text-[11px]">어렵게</button>
+                <span className="w-14 text-right text-[#bff5c6]">{questReward(q, tg).toLocaleString()}만</span>
+              </div>
+            );
+          })}
+          <button disabled={choose.isPending} onClick={() => choose.mutate({ index: k, targets: targets[k] })} className="w-full py-1.5 text-[13px] font-bold text-black border border-neutral-500" style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}>이 스폰서와 계약</button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function Club() {
   const { state: s, loading } = useCareer();
   const [, navigate] = useLocation();
-  const [tab, setTab] = useState<Tab>("money");
   if (loading) return <div className="p-6 text-muted-foreground">불러오는 중...</div>;
   if (!s) { navigate("/lobby"); return null; }
+  return <ClubScreen s={s} />;
+}
+
+function ClubScreen({ s }: { s: CareerState }) {
+  const [, navigate] = useLocation();
+  const [tab, setTab] = useState<Tab>(() => (s.sponsor?.season !== s.season ? "sponsor" : "money"));
   return (
     <LegacyFrame season={s.season} onBack={() => navigate("/lobby")} onNext={() => navigate("/lobby")} nextLabel="◁◁ 감독실">
       <div className="px-3 pt-2 pb-4">
         <div className="text-center text-[16px] tracking-[0.3em] text-neutral-100 mb-2">구 단 운 영</div>
-        <div className="grid grid-cols-4 gap-1 mb-2">
+        <div className="grid grid-cols-5 gap-1 mb-2">
           {TABS.map(([k, label]) => (
             <button key={k} onClick={() => setTab(k)} className={cn("text-[12px] py-1 border relative", tab === k ? "text-black border-white" : "text-neutral-200 border-neutral-600")}
               style={tab === k ? { background: "linear-gradient(#ffffff,#cfcfcf)" } : undefined}>
@@ -197,6 +258,7 @@ export default function Club() {
             </button>
           ))}
         </div>
+        {tab === "sponsor" && <SponsorTab s={s} />}
         {tab === "money" && <MoneyTab s={s} />}
         {tab === "contracts" && <ContractsTab s={s} />}
         {tab === "offers" && <OffersTab s={s} />}

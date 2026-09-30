@@ -278,8 +278,8 @@ export function advanceWeek(s: CareerState, myEntry?: number[]): WeekResult {
 function finishWeek(s: CareerState): WeekResult {
   for (const m of s.matches.filter(x => !x.done && x.week === s.week)) playMatch(s, m);
   const mslReports = s.phase !== "offseason" ? runMslWeek(s) : [];
-  for (const t of proTeams(s)) t.money += WEEKLY_SPONSOR;
-  book(s, "스폰서", WEEKLY_SPONSOR);
+  // 다른 팀은 고정 후원금, 우리 팀은 고른 스폰서 (구단 운영 → 스폰서)
+  for (const t of proTeams(s)) if (t.id !== s.myTeam) t.money += WEEKLY_SPONSOR;
   weeklyClub(s);
   pruneHighlights(s);
   s.week++;

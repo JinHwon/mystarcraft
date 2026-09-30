@@ -21,6 +21,7 @@ import {
 import { contractScore, defaultContract, expectedShare, jobThreshold, playerDemand, sellMinimum, squadRank, weeklyWage } from "@shared/career/contract";
 import { proTeams, rosterOf, teamPower } from "@shared/career/view";
 import { CareerError, clampCond, news, rand, randInt } from "./core";
+import { questLabel, questProgress, questRange, questReward, sponsorOffers } from "@shared/career/sponsor";
 
 const round10 = (v: number) => Math.round(v / 10) * 10;
 
@@ -64,6 +65,34 @@ function moveTo(s: CareerState, p: CPlayer, team: number, contract?: Contract) {
   if (contract) p.contract = contract;
 }
 
+// ── 스폰서 ───────────────────────────────────────────────────────
+export function chooseSponsor(s: CareerState, index: number, targets: number[]) {
+  if (s.sponsor?.season === s.season) throw new CareerError("이번 시즌 스폰서는 이미 정했습니다");
+  const offer = sponsorOffers(s)[index];
+  if (!offer) throw new CareerError("스폰서를 선택하세요");
+  const quests = offer.quests.map((q, i) => {
+    const [lo, hi] = questRange(q);
+    const target = Math.max(lo, Math.min(hi, Math.round(targets[i] ?? q.target)));
+    return { ...q, target };
+  });
+  s.sponsor = { ...offer, quests, season: s.season };
+  news(s, `🤝 ${offer.name}와(과) 스폰서 계약! 주 ${offer.weekly}만원 + 퀘스트 보상`);
+  return { name: offer.name };
+}
+
+/** 스폰서 퀘스트 달성 확인 → 보상 지급 */
+export function checkSponsor(s: CareerState) {
+  const sp = s.sponsor;
+  if (!sp || sp.season !== s.season) return;
+  for (const q of sp.quests) {
+    if (q.done || !questProgress(s, q).done) continue;
+    q.done = true;
+    const reward = questReward(q);
+    pay(s, "스폰서 보상", reward);
+    news(s, `🎁 스폰서 퀘스트 달성! "${questLabel(s, q)}" — ${sp.name}에서 ${reward.toLocaleString()}만원`);
+  }
+}
+
 // ── 한 주 (finishWeek 에서) ─────────────────────────────────────────
 export function weeklyClub(s: CareerState) {
   const me = s.teams[s.myTeam];
@@ -74,6 +103,9 @@ export function weeklyClub(s: CareerState) {
     pay(s, "연봉", -wages);
   }
   pay(s, "운영비", -OPERATING_COST);
+  // 스폰서 후원금·퀘스트
+  if (s.sponsor?.season === s.season) pay(s, "스폰서", s.sponsor.weekly);
+  checkSponsor(s);
 
   // 출전 기회에 따른 사기
   const played = s.matches.filter(m => m.done && m.stage === "regular" && (m.a === s.myTeam || m.b === s.myTeam)).length;
@@ -130,6 +162,7 @@ export function weeklyClub(s: CareerState) {
 
 // ── 시즌 끝 (finishSeason 에서) ────────────────────────────────────
 export function seasonEndClub(s: CareerState, myResult: string, champion: number) {
+  checkSponsor(s);
   const mine = rosterOf(s, s.myTeam);
   // 다승 랭킹 (이번 시즌 전체 선수)
   const ranking = [...s.players].filter(p => p.team !== FREE_AGENT_TEAM).sort((a, b) => b.sWins - a.sWins || a.sLosses - b.sLosses);

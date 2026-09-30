@@ -6,6 +6,9 @@ import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ageOf, askingPrice, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
 import { rosterOf, teamPower } from "@shared/career/view";
+import { PlayerPhoto } from "@/components/legacy/Legacy";
+import { popularity } from "@shared/career/contract";
+import { BONUS_NAMES, type BonusKey } from "@shared/career/rules";
 import { useCareer, useCareerUpdater } from "@/lib/career";
 import { CondBadge, RaceBadge, RACE_NAME, StatBars, TeamBadge } from "@/components/career/Bits";
 import { StatRadarChart } from "@/components/StatRadarChart";
@@ -20,6 +23,7 @@ export function PlayerSheet({ s, player, onClose, actions }: { s: CareerState; p
           <div className="p-4 space-y-3">
             <SheetHeader className="p-0">
               <SheetTitle className="flex items-center gap-2 text-left">
+                <PlayerPhoto id={player.id} name={player.name} size={52} />
                 <RaceBadge race={player.race} />
                 <span className="text-lg">{player.name}</span>
                 <TeamBadge short={s.teams[player.team].short} color={s.teams[player.team].color} />
@@ -44,6 +48,12 @@ export function PlayerSheet({ s, player, onClose, actions }: { s: CareerState; p
             {player.titles && player.titles.length > 0 && (
               <div className="text-xs text-amber-300">🏆 {player.titles.join(" · ")}</div>
             )}
+            <div className="rounded-xl bg-muted/50 p-2.5 text-xs space-y-0.5">
+              <div>📄 계약: <b>{player.contract ? `남은 ${player.contract.years}시즌 · 연봉 ${player.contract.salary.toLocaleString()}만원` : "없음 (무소속)"}</b></div>
+              {player.contract?.minApps ? <div>출전 보장: 시즌 {player.contract.minApps}경기 (이번 시즌 {player.sApps ?? 0}경기 출전)</div> : null}
+              {player.contract?.bonus && Object.keys(player.contract.bonus).length > 0 && <div>보너스: {Object.entries(player.contract.bonus).map(([k, v]) => `${BONUS_NAMES[k as BonusKey]} ${v}만`).join(" · ")}</div>}
+              <div>인기 {popularity(player)} · 사기 {player.morale ?? 70}{player.wantsOut ? " · 😤 이적 희망" : ""}</div>
+            </div>
             <div className="text-[11px] text-muted-foreground">영입 시세 약 {askingPrice(player, s.season).toLocaleString()}만원</div>
             {actions}
           </div>
@@ -99,16 +109,21 @@ export default function Team() {
 
       <div className="rounded-2xl bg-card border border-border divide-y divide-border overflow-hidden">
         {roster.map(p => (
-          <button key={p.id} onClick={() => setOpen(p.id)} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left active:bg-muted/40">
-            <RaceBadge race={p.race} />
+          <button key={p.id} onClick={() => setOpen(p.id)} className="w-full flex items-center gap-2.5 px-3 py-2 text-left active:bg-muted/40">
+            <PlayerPhoto id={p.id} name={p.name} size={38} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
+                <RaceBadge race={p.race} />
                 <span className="font-bold text-foreground truncate">{p.name}</span>
                 <span className="text-[10px] text-muted-foreground">Lv.{p.level} · {ageOf(p, s.season)}세</span>
+                {p.wantsOut && <span className="text-[10px] text-rose-300 font-bold">이적희망</span>}
               </div>
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                 <CondBadge cond={p.cond} />
                 <span>{p.sWins}승 {p.sLosses}패</span>
+              </div>
+              <div className={cn("text-[10.5px]", (p.contract?.years ?? 9) <= 1 ? "text-amber-300 font-bold" : "text-muted-foreground")}>
+                📄 계약 {p.contract ? `남은 ${p.contract.years}시즌 · 연봉 ${p.contract.salary.toLocaleString()}만` : "없음"}{(p.contract?.years ?? 9) <= 1 ? " · 이번 시즌 만료" : ""}
               </div>
             </div>
             <div className="text-right">

@@ -299,6 +299,8 @@ export interface CareerState {
   gameOver?: { season: number; week: number; reason: string };
   /** 이번 시즌 수입·지출 (항목별, 지출은 음수) */
   ledger?: { season: number; items: Record<string, number> };
+  /** 이번 시즌 스폰서 */
+  sponsor?: import("./sponsor").Sponsor & { season: number };
   /** 선수 행동을 반영한 주 (한 주 한 번) */
   actionsWeek?: string;
   /** 보유 경기 아이템 (츄잉껌·세레모니·스나이핑·치어풀) */
