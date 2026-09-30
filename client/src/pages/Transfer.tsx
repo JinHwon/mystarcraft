@@ -9,7 +9,8 @@ import { cn } from "@/lib/utils";
 import { FREE_AGENT_TEAM } from "@shared/career/originalData";
 import { MAX_ROSTER, ageOf, askingPrice, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
 import { evaluateTrade, proTeams, rosterOf } from "@shared/career/view";
-import { useCareer, useCareerUpdater } from "@/lib/career";
+import { useCareer, useCareerPatch, useCareerUpdater } from "@/lib/career";
+import type { CareerDiff } from "@shared/career/diff";
 import { LegacyFrame, LegacyImg, TeamLogo } from "@/components/legacy/Legacy";
 import { PlayerPanel, condStats } from "@/components/legacy/LegacyMatch";
 import { ContractEditor, ContractText, FeeStepper, Reply } from "@/components/legacy/Club";
@@ -50,7 +51,7 @@ function Money({ s }: { s: CareerState }) {
 
 /** 다른 팀 선수 영입 요청: 이적료 협상(합의·보류·거절) → 선수 계약 협상 */
 function BidTab({ s }: { s: CareerState }) {
-  const utils = trpc.useUtils();
+  const patch = useCareerPatch();
   const teams = proTeams(s).filter(t => t.id !== s.myTeam);
   const [teamId, setTeamId] = useState(teams[0]?.id ?? 0);
   const [sel, setSel] = useState<number | undefined>();
@@ -60,8 +61,8 @@ function BidTab({ s }: { s: CareerState }) {
   const p = sel !== undefined ? s.players[sel] : undefined;
   const deal = p ? s.agreements?.[p.id] : undefined;
   const agreed = !!deal && deal.season === s.season && deal.week === s.week && deal.team === p!.team;
-  const onDone = (r: { state: CareerState; result: unknown }) => {
-    utils.career.get.setData(undefined, { state: r.state });
+  const onDone = (r: { diff: CareerDiff; result: unknown }) => {
+    patch(r.diff);
     const res = r.result as { result: string; message: string; fee?: number };
     setReply({ text: res.message, ok: res.result === "agreed" || res.result === "signed" });
     if (res.result === "countered" && res.fee) setFee(res.fee);

@@ -91,7 +91,7 @@ function Office({ s }: { s: CareerState }) {
   const updater = useCareerUpdater();
   const { canInstall, install } = useInstallPrompt();
   const [restart, setRestart] = useState(false);
-  const nextSeason = trpc.career.nextSeason.useMutation({ ...updater, onSuccess: r => { updater.onSuccess(r); toast.success(`${r.state.season}시즌 개막!`); } });
+  const nextSeason = trpc.career.nextSeason.useMutation({ ...updater, onSuccess: r => { updater.onSuccess(r); toast.success(`${(r.diff.set.season as number | undefined) ?? s.season + 1}시즌 개막!`); } });
   const me = s.teams[s.myTeam];
   const st = standings(s);
   const rank = st.findIndex(t => t.id === s.myTeam) + 1;
