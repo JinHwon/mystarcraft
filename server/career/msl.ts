@@ -125,7 +125,10 @@ function runDual(s: CareerState, m: MslState, report: MslReport[], part: number)
   news(s, `🎮 듀얼 토너먼트 ${done.map(g => g.name).join("·")}조 종료${q.length ? ` — 우리 팀 ${q.map(id => s.players[id].name).join(", ")} 32강 진출!` : ""}`);
 }
 
-/** 조 지명식: 시드 상위 8명이 조 1번, 3라운드 동안 차례로 (짝수 라운드는 A→H, 홀수는 H→A) 상대를 지명 */
+/**
+ * 조 지명식: 시드 상위 8명이 조 1번, 3라운드 동안 차례로 (짝수 라운드는 A→H, 홀수는 H→A) 상대를 지명
+ * 지명하는 선수는 그 조에 마지막으로 들어온 선수 (1라운드는 조장, 2라운드는 조장이 지명한 선수, 3라운드는 그 선수가 지명한 선수)
+ */
 const DRAFT_STEPS = 24;
 function draftTurn(step: number) {
   const round = Math.floor(step / 8), i = step % 8;
@@ -140,13 +143,19 @@ function startDraft(s: CareerState, m: MslState) {
   return m.draft;
 }
 
+/** 이번 차례에 지명하는 선수: 그 조에 마지막으로 들어온 선수 */
+function draftChooser(d: NonNullable<MslState["draft"]>) {
+  const { g } = draftTurn(d.step);
+  return d.groups[g][d.groups[g].length - 1];
+}
+
 function draftPick(s: CareerState, m: MslState, pick: number) {
   const d = m.draft!;
-  const { round, g } = draftTurn(d.step);
-  const head = d.groups[g][0];
+  const { g } = draftTurn(d.step);
+  const by = draftChooser(d);
   d.pool = d.pool.filter(id => id !== pick);
   d.groups[g].push(pick);
-  if (round === 0) m.nominations.push({ by: head, pick, group: GROUP_NAMES[g] });
+  m.nominations.push({ by, pick, group: GROUP_NAMES[g] });
   d.step++;
 }
 
@@ -160,31 +169,35 @@ function aiPick(s: CareerState, head: number, pool: number[]) {
 function draftRun(s: CareerState, m: MslState, auto: boolean) {
   const d = startDraft(s, m);
   while (d.step < DRAFT_STEPS) {
-    const { g } = draftTurn(d.step);
-    const head = d.groups[g][0];
-    if (!auto && isMine(s, head)) return;
-    draftPick(s, m, aiPick(s, head, d.pool));
+    const chooser = draftChooser(d);
+    if (!auto && isMine(s, chooser)) return;
+    draftPick(s, m, aiPick(s, chooser, d.pool));
   }
 }
 
-/** 지금 지명할 우리 조장 (없으면 undefined) */
+/** 지금 지명할 우리 선수 (없으면 undefined) — head 는 지명하는 선수 */
 export function draftWaiting(s: CareerState): { head: number; group: string; round: number } | undefined {
   const m = s.msl;
   const d = m?.draft;
   if (!m || !d || d.step >= DRAFT_STEPS || m.stage !== "nom") return undefined;
   const { round, g } = draftTurn(d.step);
-  const head = d.groups[g][0];
+  const head = draftChooser(d);
   return isMine(s, head) ? { head, group: GROUP_NAMES[g], round: round + 1 } : undefined;
 }
 
-/** 이번 주 개인리그 일정이 조 지명식이고 우리 선수가 조장이라 직접 지명해야 함 */
+/**
+ * 이번 주 개인리그 일정이 조 지명식이고 우리 선수가 지명할 차례가 옴 (조장이거나, 지명받은 뒤 다음 선수를 지명)
+ * 다른 선수 차례는 여기서 미리 진행해 두고, 우리 차례가 없으면 멈추지 않음
+ */
 export function nominationPending(s: CareerState): boolean {
   const m = s.msl;
   if (!m || m.season !== s.season || m.stage !== "nom" || s.phase === "offseason") return false;
   const plan = MSL_PLAN[m.planIdx ?? 0];
   if (!plan || plan.stage !== "nom" || plan.week > s.week) return false;
-  if (!m.seeds.slice(0, 8).some(id => isMine(s, id))) return false;
-  return !m.draft || m.draft.step < DRAFT_STEPS;
+  const inDraft = [...m.seeds, ...m.duals.flatMap(g => g.qualified)].some(id => isMine(s, id));
+  if (!inDraft) return false;
+  draftRun(s, m, false);
+  return m.draft!.step < DRAFT_STEPS;
 }
 
 /**

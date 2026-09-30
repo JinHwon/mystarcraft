@@ -673,6 +673,33 @@ export function signReserve(s: CareerState, pid: number) {
   return { fee };
 }
 
+/** 다른 구단 2부 운영 (시즌마다): 잘 큰 2부 선수는 1부로 올리고, 어린 무소속 유망주를 2부로 영입 (2명까지) */
+const AI_RESERVE_TARGET = 2;
+export function aiReserves(s: CareerState) {
+  for (const t of proTeams(s)) {
+    if (t.id === s.myTeam) continue;
+    const first = rosterOf(s, t.id);
+    const weakest = first.length ? Math.min(...first.map(p => totalOf(p.stats))) : 0;
+    for (const p of reserveOf(s, t.id)) {
+      if (totalOf(p.stats) >= weakest) {
+        p.reserve = false;
+        news(s, `⬆️ ${t.name}: 2부 ${p.name} 선수 1부 승격`);
+      }
+    }
+    const prospects = s.players
+      .filter(p => p.team === FREE_AGENT_TEAM && ageOf(p, s.season) <= 23)
+      .sort((a, b) => ageOf(a, s.season) - ageOf(b, s.season) || totalOf(b.stats) - totalOf(a.stats));
+    for (const p of prospects) {
+      if (reserveOf(s, t.id).length >= AI_RESERVE_TARGET) break;
+      const fee = reserveSignFee(p, s.season);
+      if (t.money - fee < 1500) continue;
+      t.money -= fee;
+      moveTo(s, p, t.id, { salary: reserveSalary(p, s.season), years: 3 });
+      p.reserve = true;
+    }
+  }
+}
+
 /** 1부 선수를 2부로 (주전급이면 사기가 크게 떨어짐) */
 export function demotePlayer(s: CareerState, pid: number) {
   const p = s.players[pid];
