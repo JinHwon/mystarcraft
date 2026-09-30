@@ -10,7 +10,8 @@ import { jobThreshold, playerDemand, teamWages } from "@shared/career/contract";
 import { questLabel, questProgress, questRange, questReward, sponsorOffers } from "@shared/career/sponsor";
 import { MAIN_SPONSORS, TERM_NAMES, levelPerks, managerExpNeed, managerLevel, sponsorBudget, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
 import { proTeams, rosterOf, teamPower } from "@shared/career/view";
-import { useCareer } from "@/lib/career";
+import { useCareer, useCareerPatch } from "@/lib/career";
+import type { CareerDiff } from "@shared/career/diff";
 import { LegacyFrame, TeamLogo } from "@/components/legacy/Legacy";
 import { PlayerPanel } from "@/components/legacy/LegacyMatch";
 import { ContractEditor, ContractText, FeeStepper, MoraleBar, Reply } from "@/components/legacy/Club";
@@ -19,10 +20,10 @@ const R = { terran: "T", zerg: "Z", protoss: "P" } as const;
 type Tab = "sponsor" | "money" | "contracts" | "offers" | "manager";
 
 function useMut() {
-  const utils = trpc.useUtils();
+  const patch = useCareerPatch();
   const [reply, setReply] = useState<{ text: string; ok: boolean } | null>(null);
-  const done = (r: { state: CareerState; result: unknown }) => {
-    utils.career.get.setData(undefined, { state: r.state });
+  const done = (r: { diff: CareerDiff; result: unknown }) => {
+    patch(r.diff);
     const res = r.result as { message?: string; result?: string };
     if (res?.message) setReply({ text: res.message, ok: res.result === "signed" || res.result === "sold" });
   };

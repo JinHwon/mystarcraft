@@ -83,7 +83,7 @@ function ShopScreen({ s }: { s: CareerState }) {
   const patch = useCareerPatch();
   const buy = trpc.career.buyItem.useMutation({
     onSuccess: r => {
-      patch(r.patch);
+      patch(r.diff);
       const res = r.result as { message: string; delta?: Record<string, number> };
       setMsg({ text: res.message, ok: true, delta: res.delta });
     },

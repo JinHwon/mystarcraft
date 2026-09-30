@@ -5,6 +5,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { careers } from "../../drizzle/schema";
 import type { CareerState } from "@shared/career/rules";
+import { diffOf, snapshot } from "./diff";
 import { ACTIONS } from "@shared/career/rules";
 import { negotiateMainSponsor } from "./club";
 import { acceptJob, bidPlayer, chooseSponsor, demotePlayer, negotiateContract, respondOffer, signReserve } from "./club";
@@ -33,36 +34,72 @@ async function requireDb() {
 
 /**
  * 세이브 메모리 캐시: 요청마다 DB 에서 큰 JSON 을 읽고 파싱하지 않도록 (서버는 한 프로세스)
- * 꺼낼 때는 복사본을 줘서, 규칙 오류로 중간에 멈춘 변경이 캐시에 남지 않게 한다
+ * - json 은 마지막으로 저장된 모습: 규칙 오류로 중간에 멈춘 변경은 이것으로 되돌린다
+ * - DB 쓰기는 응답 뒤에 (사용자마다 최신 것만, 순서대로). 서버 종료 시 남은 쓰기를 마친다
  */
-const cache = new Map<number, CareerState>();
+const cache = new Map<number, { state: CareerState; json: string }>();
 const CACHE_MAX = 300;
 
 async function load(userId: number): Promise<CareerState | null> {
   const hit = cache.get(userId);
-  if (hit) return structuredClone(hit);
+  if (hit) return hit.state;
   const db = await requireDb();
   const rows = await db.select().from(careers).where(eq(careers.userId, userId)).limit(1);
   if (!rows[0]) return null;
   const s = JSON.parse(rows[0].state) as CareerState;
   migrateCareer(s);
-  remember(userId, s);
-  return structuredClone(s);
+  remember(userId, s, JSON.stringify(s));
+  return s;
 }
 
-function remember(userId: number, s: CareerState) {
+function remember(userId: number, state: CareerState, json: string) {
   cache.delete(userId);
-  cache.set(userId, s);
-  if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value!);
+  cache.set(userId, { state, json });
+  if (cache.size > CACHE_MAX) {
+    // 아직 DB 에 안 쓴 세이브는 캐시에서 빼지 않음
+    for (const k of cache.keys()) { if (!pendingWrites.has(k)) { cache.delete(k); break; } }
+  }
 }
 
-async function save(userId: number, state: CareerState) {
+const pendingWrites = new Map<number, string>();
+const flushing = new Map<number, Promise<void>>();
+
+async function writeDb(userId: number, json: string) {
   const db = await requireDb();
-  const json = JSON.stringify(state);
   const existing = await db.select({ id: careers.id }).from(careers).where(eq(careers.userId, userId)).limit(1);
   if (existing[0]) await db.update(careers).set({ state: json }).where(eq(careers.id, existing[0].id));
   else await db.insert(careers).values({ userId, state: json });
-  remember(userId, structuredClone(state));
+}
+
+function flush(userId: number): Promise<void> {
+  const running = flushing.get(userId);
+  if (running) return running;
+  const run = (async () => {
+    for (let json = pendingWrites.get(userId); json !== undefined; json = pendingWrites.get(userId)) {
+      pendingWrites.delete(userId);
+      try { await writeDb(userId, json); } catch (e) {
+        console.error("[career] 세이브 저장 실패", userId, e);
+        if (!pendingWrites.has(userId)) pendingWrites.set(userId, json);
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
+  })().finally(() => flushing.delete(userId));
+  flushing.set(userId, run);
+  return run;
+}
+
+function save(userId: number, state: CareerState, json = JSON.stringify(state)) {
+  remember(userId, state, json);
+  pendingWrites.set(userId, json);
+  void flush(userId);
+}
+
+/** 서버 종료 전 남은 세이브 쓰기 */
+export async function flushAllCareers() {
+  await Promise.all([...new Set([...pendingWrites.keys(), ...flushing.keys()])].map(flush));
+}
+for (const sig of ["SIGINT", "SIGTERM"] as const) {
+  process.once(sig, () => { void flushAllCareers().finally(() => process.exit(0)); });
 }
 
 // 같은 유저의 요청은 순서대로 처리 (세이브 덮어쓰기 방지)
@@ -74,17 +111,21 @@ function withLock<T>(userId: number, fn: () => Promise<T>): Promise<T> {
   return run.finally(() => { if (locks.get(userId) === run) locks.delete(userId); });
 }
 
-/** 세이브를 불러와 수정하고 저장. 게임 규칙 오류는 사용자에게 보여줄 메시지로 변환 */
+/** 세이브를 불러와 수정하고 저장. 바뀐 부분(diff)만 돌려준다. 게임 규칙 오류는 사용자에게 보여줄 메시지로 변환 */
 function mutate<T>(userId: number, fn: (s: CareerState) => T) {
   return withLock(userId, async () => {
     const s = await load(userId);
     if (!s) throw new TRPCError({ code: "NOT_FOUND", message: "진행 중인 커리어가 없습니다. 새 게임을 시작하세요" });
+    const before = snapshot(s);
     try {
       if (s.gameOver) throw new CareerError(`게임이 종료되었습니다: ${s.gameOver.reason}. 새 게임을 시작하세요`);
       const result = fn(s);
-      await save(userId, s);
-      return { state: s, result };
+      save(userId, s);
+      return { result, diff: diffOf(before, s) };
     } catch (e) {
+      // 중간에 멈춘 변경은 버리고 마지막 저장 상태로
+      const hit = cache.get(userId);
+      if (hit) remember(userId, JSON.parse(hit.json) as CareerState, hit.json);
       if (e instanceof CareerError) throw new TRPCError({ code: "BAD_REQUEST", message: e.message });
       throw e;
     }
@@ -94,34 +135,6 @@ function mutate<T>(userId: number, fn: (s: CareerState) => T) {
 /** 결과만 돌려주는 가벼운 변경 (화면은 미리 반영해 둠) */
 function mutateLite<T>(userId: number, fn: (s: CareerState) => T) {
   return mutate(userId, fn).then(r => ({ result: r.result }));
-}
-
-/** 바뀐 부분만 돌려주는 변경: 팀 자금·보유 아이템·장부·대상 선수 */
-function mutatePatch<T>(userId: number, target: number | undefined, fn: (s: CareerState) => T) {
-  return mutate(userId, fn).then(({ state: s, result }) => ({
-    result,
-    patch: {
-      money: s.teams[s.myTeam].money,
-      inventory: s.inventory ?? {},
-      ledger: s.ledger,
-      player: target !== undefined ? s.players[target] : undefined,
-    },
-  }));
-}
-
-/** 경기 진행 중 바뀐 부분: 우리 선수·세트 상대·진행 중 경기·자금·아이템·장부·소식 */
-function livePatch(s: CareerState, extra: number[] = []) {
-  const ids = new Set([...s.players.filter(p => p.team === s.myTeam).map(p => p.id), ...extra]);
-  return {
-    money: s.teams[s.myTeam].money,
-    inventory: s.inventory ?? {},
-    ledger: s.ledger,
-    players: [...ids].map(id => s.players[id]),
-    // 지난 세트 해설은 화면이 이미 갖고 있으므로 마지막 세트만 통째로
-    live: s.live ? { ...s.live, sets: s.live.sets.map((x, k, all) => (k === all.length - 1 ? x : { ...x, timeline: undefined })) } : null,
-    actionsWeek: s.actionsWeek,
-    news: s.news,
-  };
 }
 
 const actionKeys = ACTIONS.map(a => a.key) as [string, ...string[]];
@@ -136,7 +149,7 @@ export const careerRouter = router({
     .mutation(({ ctx, input }) => withLock(ctx.user.id, async () => {
       try {
         const state = newCareer(input.teamId);
-        await save(ctx.user.id, state);
+        save(ctx.user.id, state);
         return { state };
       } catch (e) {
         if (e instanceof CareerError) throw new TRPCError({ code: "BAD_REQUEST", message: e.message });
@@ -193,25 +206,22 @@ export const careerRouter = router({
       entry: z.array(z.number().int()).min(1).max(8),
       items: z.record(z.string(), z.object({ key: z.string(), predict: z.number().int().optional() })).optional(),
     }))
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => beginMatch(s, input.entry, Object.fromEntries(Object.entries(input.items ?? {}).map(([k, v]) => [Number(k), v]))))
-      .then(({ state: s, result }) => ({ result, patch: livePatch(s, s.live?.opp) }))),
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => beginMatch(s, input.entry, Object.fromEntries(Object.entries(input.items ?? {}).map(([k, v]) => [Number(k), v]))))),
 
   /** 아이템 구입 (장비·즉시·포션은 target 선수에게 바로 사용) */
   buyItem: protectedProcedure
     .input(z.object({ key: z.string(), target: z.number().int().optional(), qty: z.number().int().min(1).max(99).optional() }))
-    .mutation(({ ctx, input }) => mutatePatch(ctx.user.id, input.target, s => buyItem(s, input.key, input.target, input.qty ?? 1))),
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => buyItem(s, input.key, input.target, input.qty ?? 1))),
 
   /** 보관한 아이템 사용 (비타비타) */
   useItem: protectedProcedure
     .input(z.object({ key: z.string(), target: z.number().int() }))
-    .mutation(({ ctx, input }) => mutatePatch(ctx.user.id, input.target, s => useStockItem(s, input.key, input.target))),
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => useStockItem(s, input.key, input.target))),
 
   /** 다음 세트 진행 (ACE 결정전이면 ace 선수) */
   playSet: protectedProcedure
     .input(z.object({ ace: z.number().int().optional() }))
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => playLiveSet(s, input.ace))
-      // 경기가 끝나면 순위·일정 등이 모두 바뀌므로 전체, 아니면 바뀐 부분만
-      .then(({ state: s, result }) => (result.matchOver ? { result, state: s, patch: undefined } : { result, state: undefined, patch: livePatch(s, [result.set.a, result.set.b]) }))),
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => playLiveSet(s, input.ace))),
 
   /** 받은 영입 제안: 수락·거절·역제안(금액) */
   respondOffer: protectedProcedure

@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { FINAL_SETS, PRO_SETS, type CareerState, type CMatch } from "@shared/career/rules";
 import { STAGE_NAMES, myPendingMatch, rosterOf, standings } from "@shared/career/view";
 import { useCareer, useCareerPatch, useCareerUpdater } from "@/lib/career";
+import type { CareerDiff } from "@shared/career/diff";
 import { TeamBadge } from "@/components/career/Bits";
 import { EntryScreen, LiveMatch, MapDrawScreen, MslFlow, ScheduleScreen, SeriesViewer, type BroadcastSet, type ItemPlan, type MslReportView, type WeekDone } from "@/components/legacy/LegacyMatch";
 
@@ -35,7 +36,8 @@ export function MslReports({ s, reports, onWatch }: { s: CareerState; reports: M
 }
 
 function MatchTab({ s }: { s: CareerState }) {
-  const pendingState = useRef<CareerState | null>(null);
+  /** 경기가 끝난 세트의 변경분: 결과 화면을 다 본 뒤 반영 (진행 중 경기가 사라지므로) */
+  const pendingDiff = useRef<CareerDiff | null>(null);
   const lastMatch = useRef<number | null>(null);
   const updater = useCareerUpdater();
   const patch = useCareerPatch();
@@ -65,7 +67,7 @@ function MatchTab({ s }: { s: CareerState }) {
 
   const begin = trpc.career.beginMatch.useMutation({
     onError: updater.onError,
-    onSuccess: r => { patch(r.patch); setEditing(false); setWatching(true); setItems({}); },
+    onSuccess: r => { patch(r.diff); setEditing(false); setWatching(true); setItems({}); },
   });
   const playSetM = trpc.career.playSet.useMutation({ onError: updater.onError });
   const advance = trpc.career.advance.useMutation({
@@ -93,17 +95,17 @@ function MatchTab({ s }: { s: CareerState }) {
             const res = r.result as { set: BroadcastSet; matchOver: boolean; playedMatchId?: number; week?: WeekDone; needAce: boolean };
             done(res);
             // 경기가 끝나 세이브에서 진행 중 경기가 사라져도 관전 화면은 끝까지 유지 (결과 확인 후 반영)
-            if (res.matchOver) { pendingState.current = r.state!; lastMatch.current = res.playedMatchId ?? null; } else patch(r.patch!);
+            if (res.matchOver) { pendingDiff.current = r.diff; lastMatch.current = res.playedMatchId ?? null; } else patch(r.diff);
           },
         })}
         onFinished={w => {
-          if (pendingState.current) updater.onSuccess({ state: pendingState.current });
-          pendingState.current = null;
+          if (pendingDiff.current) patch(pendingDiff.current);
+          pendingDiff.current = null;
           setWatching(false);
           if (w) finishWeekView(w); else setLegDone(lastMatch.current);
           window.scrollTo(0, 0);
         }}
-        onClose={() => { if (pendingState.current) { updater.onSuccess({ state: pendingState.current }); pendingState.current = null; setLegDone(lastMatch.current); } setWatching(false); }}
+        onClose={() => { if (pendingDiff.current) { patch(pendingDiff.current); pendingDiff.current = null; setLegDone(lastMatch.current); } setWatching(false); }}
       />
     );
   }
