@@ -198,15 +198,20 @@ export function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, w
   };
 }
 
+/** 빠른 판정 승패: 실전 능력치 차이와 맵 종족 상성으로 (a 가 이기면 true) */
+export function quickWin(s: CareerState, a: CPlayer, b: CPlayer, mapId: number): boolean {
+  const pa = totalOf(effStats(a, withBurst(undefined, burstOf(s, a)))), pb = totalOf(effStats(b, withBurst(undefined, burstOf(s, b))));
+  const adv = a.race === b.race ? 0 : (matchupValue(mapId, a.race, b.race) - 50) / 100;
+  const pWin = 1 / (1 + Math.exp(-((pa - pb) / 450 + adv * 2.2)));
+  return rand() < pWin;
+}
+
 /**
  * 빠른 세트 (중계 없이 능력치·컨디션·맵 상성으로 승패만): PC방 예선처럼 경기 수가 많을 때
  * 세트 후 처리는 playSet 과 같다
  */
 export function quickSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number): SetResult {
-  const pa = totalOf(effStats(a, withBurst(undefined, burstOf(s, a)))), pb = totalOf(effStats(b, withBurst(undefined, burstOf(s, b))));
-  const adv = a.race === b.race ? 0 : (matchupValue(mapId, a.race, b.race) - 50) / 100;
-  const pWin = 1 / (1 + Math.exp(-((pa - pb) / 450 + adv * 2.2)));
-  const aWin = rand() < pWin;
+  const aWin = quickWin(s, a, b, mapId);
   afterSet(s, a, b, aWin);
   return { mapId, a: a.id, b: b.id, winner: aWin ? "a" : "b", duration: 0 };
 }

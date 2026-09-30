@@ -58,6 +58,34 @@ describe("등급", () => {
   });
 });
 
+describe("2부 리그", () => {
+  it("정규시즌 매주 2경기, 우리 2부 선수는 항상 참가, 어릴수록 크게 성장, 끝나면 우승자", async () => {
+    const { ageOf } = await import("@shared/career/rules");
+    const s = newCareer(0);
+    const young = s.players.filter(p => p.team === 12).sort((a, b) => ageOf(a, s.season) - ageOf(b, s.season))[0];
+    young.team = 0; young.reserve = true;
+    const before = totalOf(young.stats);
+    let guard = 0;
+    while (s.phase === "regular" && guard++ < 20) {
+      const m = myPendingMatch(s);
+      advanceWeek(s, m ? aiEntry(s, 0, PRO_SETS) : undefined);
+      if (guard === 1) {
+        const L = s.reserveLeague!;
+        expect(L.field).toContain(young.id);
+        expect(L.field.length).toBeGreaterThanOrEqual(16);
+        expect(L.last.length).toBe(16); // 16명 × 2경기 / 2
+      }
+    }
+    const L = s.reserveLeague!;
+    const [w, l] = L.table[young.id];
+    expect(w + l).toBe(22);
+    expect(L.champion).toBeDefined();
+    expect(s.players[L.champion!].titles?.some(t => t.includes("2부리그 우승"))).toBe(true);
+    // 16세 유망주는 한 시즌에 크게 성장
+    expect(totalOf(young.stats) - before).toBeGreaterThan(150);
+  });
+});
+
 describe("비타비타 여러 개", () => {
   it("컨디션이 가득 차거나 가진 수량이 떨어질 때까지 한 번에 먹인다", () => {
     const s = newCareer(0);
