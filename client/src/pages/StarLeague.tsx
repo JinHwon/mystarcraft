@@ -187,7 +187,7 @@ function StarLeagueScreen({ s }: { s: CareerState }) {
         {round === "final" && m.champion !== undefined && (
           <div className="flex flex-col items-center mt-4 gap-1">
             <LegacyImg dir="기타" name="금배지" className="max-h-10" fallback={null} />
-            <PlayerPhoto id={m.champion} name={s.players[m.champion].name} size={72} />
+            <PlayerPhoto id={s.players[m.champion].photoOf ?? m.champion} name={s.players[m.champion].name} size={72} />
             <div className="text-[15px] text-[#ffe45c]">{s.players[m.champion].name}</div>
             <div className="text-[14px] tracking-[0.2em]">우승을 축하합니다</div>
             <div className="text-[11px] text-neutral-400">준우승 {s.players[m.runnerUp!]?.name}</div>

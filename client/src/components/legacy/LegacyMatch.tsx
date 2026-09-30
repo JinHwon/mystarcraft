@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { STAT_KEYS, type StatKey } from "@shared/gameConstants";
-import { FINAL_SETS, MSL_PLAN, PRO_SETS, condMultiplier, totalOf, type CareerState, type CMatch, type CPlayer, type SetResult, type SetTimeline } from "@shared/career/rules";
+import { FINAL_SETS, MATCH_MONEY, MSL_PLAN, PRO_SETS, condMultiplier, totalOf, type CareerState, type CMatch, type CPlayer, type SetResult, type SetTimeline } from "@shared/career/rules";
 import { STAGE_NAMES, mapView, rosterOf } from "@shared/career/view";
 import { ITEMS, ITEM_BY_KEY, SLOT_NAMES, gearCond, gearStats, itemImg, type EquipSlot } from "@shared/career/items";
 import { GrayBox, LEGACY_FONT, LegacyFrame, LegacyImg, LegacyRadar, MapImage, MapInfo, PlayerPhoto, TeamLogo } from "./Legacy";
@@ -82,7 +82,7 @@ export function PlayerPanel({ p, color, empty }: { p?: CPlayer; color: string; e
   return (
     <div className="border border-neutral-700 px-1.5 pt-1.5 pb-1 flex flex-col items-center">
       <div className="flex items-start gap-2 w-full justify-center">
-        <PlayerPhoto id={p.id} name={p.name} size={50} />
+        <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} size={50} />
         <div className="text-[11px] leading-[1.45] text-neutral-200 pt-0.5">
           <div className="text-[13px] font-bold" style={{ color }}>{p.name}</div>
           <div>{R[p.race]} · Lv.{p.level}</div>
@@ -413,7 +413,7 @@ export function Broadcast({ s, stageName, lp, rp, mapId, set, leftIsA, score, le
         <div className="flex-1 min-h-0 grid grid-cols-[78px_1fr_78px] gap-2 mt-2">
           <div className="flex flex-col items-center justify-between">
             <div className="flex flex-col items-center">
-              <PlayerPhoto id={lp.id} name={lp.name} size={56} />
+              <PlayerPhoto id={lp.photoOf ?? lp.id} name={lp.name} size={56} />
               <span className="text-[11px] mt-0.5 text-center">{nameRace(lp)}</span>
               {done && leftWon && <Winner />}
             </div>
@@ -427,7 +427,7 @@ export function Broadcast({ s, stageName, lp, rp, mapId, set, leftIsA, score, le
           </div>
           <div className="flex flex-col items-center justify-between">
             <div className="flex flex-col items-center">
-              <PlayerPhoto id={rp.id} name={rp.name} size={56} />
+              <PlayerPhoto id={rp.photoOf ?? rp.id} name={rp.name} size={56} />
               <span className="text-[11px] mt-0.5 text-center">{nameRace(rp)}</span>
               {done && !leftWon && <Winner />}
             </div>
@@ -448,7 +448,7 @@ function PlayerCard({ p, vsRace }: { p: CPlayer; vsRace: CPlayer["race"] }) {
         <div className="text-[9px] text-neutral-300 text-center leading-tight pt-1 w-12">
           {rec ? "전적" : "전적없음"}<br />vs {R[vsRace]}<br /><br />{rec?.[0] ?? 0} 승<br />{rec?.[1] ?? 0} 패
         </div>
-        <PlayerPhoto id={p.id} name={p.name} size={58} />
+        <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} size={58} />
       </div>
       <div className="text-[12px] text-white mt-0.5">{nameRace(p)}</div>
     </div>
@@ -571,7 +571,7 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose }: {
           <div className="text-center my-5">
             <LegacyImg dir="기타" name="Winner" className="mx-auto max-h-20" fallback={<div className="text-[28px] font-black italic text-[#ffe45c] tracking-widest">WINNER</div>} />
             <div className="mt-2 text-[16px]">{s.teams[won ? leftTeam : rightTeam].name}</div>
-            <div className={cn("mt-1 text-[12px]", won ? "text-[#bff5c6]" : "text-[#ffb8c8]")}>{won ? "승리! 팀 자금 +200만원" : "패배 · 팀 자금 +50만원"}</div>
+            <div className={cn("mt-1 text-[12px]", won ? "text-[#bff5c6]" : "text-[#ffb8c8]")}>{won ? `승리! 팀 자금 +${MATCH_MONEY.win}만원` : `패배 · 팀 자금 +${MATCH_MONEY.lose}만원`}</div>
           </div>
         ) : (
           <>

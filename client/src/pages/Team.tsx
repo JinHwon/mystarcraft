@@ -23,7 +23,7 @@ export function PlayerSheet({ s, player, onClose, actions }: { s: CareerState; p
           <div className="p-4 space-y-3">
             <SheetHeader className="p-0">
               <SheetTitle className="flex items-center gap-2 text-left">
-                <PlayerPhoto id={player.id} name={player.name} size={52} />
+                <PlayerPhoto id={player.photoOf ?? player.id} name={player.name} size={52} />
                 <RaceBadge race={player.race} />
                 <span className="text-lg">{player.name}</span>
                 <TeamBadge short={s.teams[player.team].short} color={s.teams[player.team].color} />
@@ -110,7 +110,7 @@ export default function Team() {
       <div className="rounded-2xl bg-card border border-border divide-y divide-border overflow-hidden">
         {roster.map(p => (
           <button key={p.id} onClick={() => setOpen(p.id)} className="w-full flex items-center gap-2.5 px-3 py-2 text-left active:bg-muted/40">
-            <PlayerPhoto id={p.id} name={p.name} size={38} />
+            <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} size={38} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
                 <RaceBadge race={p.race} />

@@ -15,6 +15,7 @@ import {
   type MslState,
 } from "@shared/career/rules";
 import { book } from "./club";
+import { activePlayers } from "@shared/career/view";
 import { news, pickMaps, playSet, quickSet, rand, shuffle, type PlayedSet } from "./core";
 
 const GROUP_NAMES = ["A", "B", "C", "D", "E", "F", "G", "H"];
@@ -32,8 +33,8 @@ export function createMsl(s: CareerState): MslState {
   const prev = s.msl && s.msl.season === s.season - 1 ? s.msl : undefined;
   // 시드: 지난 대회 16강 진출자 → 부족하면 능력치 상위 프로 선수
   const prevSeeds = prev ? Object.entries(prev.placements).filter(([, r]) => ["우승", "준우승", "4강", "8강", "16강"].includes(r)).map(([id]) => Number(id)) : [];
-  const pros = s.players.filter(p => p.team !== FREE_AGENT_TEAM).map(p => p.id);
-  const seeds = byStrength(s, [...new Set([...prevSeeds.filter(id => s.players[id]), ...byStrength(s, pros)])]).slice(0, 16);
+  const pros = activePlayers(s).filter(p => p.team !== FREE_AGENT_TEAM).map(p => p.id);
+  const seeds = byStrength(s, [...new Set([...prevSeeds.filter(id => (s.players[id]?.team ?? -1) >= 0), ...byStrength(s, pros)])]).slice(0, 16);
   return {
     season: s.season, stage: "pc", seeds, pcQualifiers: [], pcEntrants: 0,
     duals: [], nominations: [], groups: [], bracket: [], placements: {},
@@ -85,9 +86,9 @@ function playDual(s: CareerState, name: string, players: number[], report: MslRe
 function runPc(s: CareerState, m: MslState) {
   // 시드·듀얼 직행(능력치 다음 24명)을 뺀 모든 선수가 PC방 예선 (단판 토너먼트, 8명 통과)
   const direct = new Set(m.seeds);
-  const dualDirect = byStrength(s, s.players.map(p => p.id).filter(id => !direct.has(id))).slice(0, 24);
+  const dualDirect = byStrength(s, activePlayers(s).map(p => p.id).filter(id => !direct.has(id))).slice(0, 24);
   dualDirect.forEach(id => direct.add(id));
-  let pool = shuffle(s.players.map(p => p.id).filter(id => !direct.has(id)));
+  let pool = shuffle(activePlayers(s).map(p => p.id).filter(id => !direct.has(id)));
   m.pcEntrants = pool.length;
   while (pool.length > 8) {
     // 정확히 8명이 남도록 필요한 만큼만 경기, 나머지는 부전승

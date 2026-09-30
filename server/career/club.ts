@@ -19,7 +19,7 @@ import {
   BONUS_NAMES,
 } from "@shared/career/rules";
 import { contractScore, defaultContract, expectedShare, jobThreshold, playerDemand, sellMinimum, squadRank, weeklyWage } from "@shared/career/contract";
-import { proTeams, rosterOf, teamPower } from "@shared/career/view";
+import { activePlayers, proTeams, rosterOf, teamPower } from "@shared/career/view";
 import { CareerError, clampCond, news, rand, randInt } from "./core";
 import { questLabel, questProgress, questRange, questReward, sponsorOffers } from "@shared/career/sponsor";
 
@@ -40,7 +40,7 @@ export function pay(s: CareerState, category: string, delta: number) {
 
 /** 예전 세이브 보정: 계약·평판 */
 export function ensureClub(s: CareerState) {
-  for (const p of s.players) {
+  for (const p of activePlayers(s)) {
     if (p.team !== FREE_AGENT_TEAM && !p.contract) p.contract = defaultContract(p, s.season);
     if (p.morale === undefined) p.morale = 70;
   }
@@ -165,7 +165,7 @@ export function seasonEndClub(s: CareerState, myResult: string, champion: number
   checkSponsor(s);
   const mine = rosterOf(s, s.myTeam);
   // 다승 랭킹 (이번 시즌 전체 선수)
-  const ranking = [...s.players].filter(p => p.team !== FREE_AGENT_TEAM).sort((a, b) => b.sWins - a.sWins || a.sLosses - b.sLosses);
+  const ranking = activePlayers(s).filter(p => p.team !== FREE_AGENT_TEAM).sort((a, b) => b.sWins - a.sWins || a.sLosses - b.sLosses);
   const mostWins = ranking[0];
   const top10 = new Set(ranking.slice(0, 10).map(p => p.id));
   const msl = s.msl?.season === s.season ? s.msl : undefined;
@@ -208,7 +208,7 @@ export function seasonEndClub(s: CareerState, myResult: string, champion: number
 
 // ── 새 시즌 (startNextSeason 에서) ──────────────────────────────────
 export function newSeasonClub(s: CareerState) {
-  for (const p of s.players) {
+  for (const p of activePlayers(s)) {
     p.sApps = 0;
     if (p.team === FREE_AGENT_TEAM) { delete p.contract; continue; }
     const c = p.contract ?? defaultContract(p, s.season);
@@ -228,7 +228,7 @@ export function newSeasonClub(s: CareerState) {
     p.contract = c;
   }
   // 다른 팀 선수 중 일부는 이적 희망 (싸게 데려올 기회)
-  for (const p of s.players) {
+  for (const p of activePlayers(s)) {
     if (p.team === s.myTeam || p.team === FREE_AGENT_TEAM) continue;
     p.wantsOut = rand() < 0.06;
   }

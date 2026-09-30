@@ -34,8 +34,8 @@ export const WAGE_WEEKS = 11;
 export const DEBT_LIMIT_WEEKS = 3;
 export const START_MONEY = 3000;
 export const WEEKLY_SPONSOR = 100;
-export const MATCH_MONEY = { win: 200, lose: 50 };
-export const POSTSEASON_PRIZE: Record<string, number> = { 우승: 3000, 준우승: 1500, 플레이오프: 800, 준플레이오프: 500 };
+export const MATCH_MONEY = { win: 120, lose: 30 };
+export const POSTSEASON_PRIZE: Record<string, number> = { 우승: 1500, 준우승: 800, 플레이오프: 400, 준플레이오프: 250 };
 
 // ── 컨디션 (원작: 작은 정수 단계, 의욕/짜증) ─────────────────────────
 export const COND_MIN = 1;
@@ -94,6 +94,18 @@ export interface CPlayer {
   wantsOut?: boolean;
   /** 이번 시즌 프로리그 출전 경기 수 */
   sApps?: number;
+  /** 성장 한계 (능력치 합) */
+  potential?: number;
+  /** 은퇴한 시즌 (팀 번호는 -1) */
+  retired?: number;
+  /** 다시 등장한 신인이면 원래 선수 번호 (사진) */
+  photoOf?: number;
+  /** 이미 어린 선수로 다시 등장함 */
+  reborn?: boolean;
+  /** 2부 팀 소속 (우리 구단) */
+  reserve?: boolean;
+  /** 신인으로 등장한 시즌 */
+  rookie?: number;
 }
 
 /** 보너스 조건: 프로리그 우승 · 개인리그 우승 · 다승왕 · 시즌 다승 10위 안 */
@@ -222,7 +234,7 @@ export const MSL_STAGE_NAMES: Record<MslStage, string> = {
   pc: "PC방 예선", dual: "듀얼 토너먼트", nom: "조 지명식", group: "32강", ro16: "16강", ro8: "8강", ro4: "4강", final: "결승", done: "종료",
 };
 /** 최종 성적별 상금 (만원, 소속 팀에 지급) */
-export const MSL_PRIZE: Record<string, number> = { 우승: 3000, 준우승: 1500, "4강": 700, "8강": 400, "16강": 200, "32강": 100 };
+export const MSL_PRIZE: Record<string, number> = { 우승: 1500, 준우승: 800, "4강": 400, "8강": 250, "16강": 150, "32강": 80 };
 
 /** 다전제 한 경기 (스타리그는 선수 대 선수) */
 export interface MslSeries {

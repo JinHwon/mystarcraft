@@ -50,7 +50,7 @@ function MoneyTab({ s }: { s: CareerState }) {
         <div className="flex justify-between"><span className="text-neutral-400">연봉 (정규시즌, 총 {wages.toLocaleString()}만 ÷ 11주)</span><span className="text-[#ffb8c8]">-{Math.round(wages / 11)}</span></div>
         <div className="flex justify-between"><span className="text-neutral-400">구단 운영비</span><span className="text-[#ffb8c8]">-{OPERATING_COST}</span></div>
         <div className="flex justify-between border-t border-neutral-700 pt-0.5"><span>합계 (경기 수당 제외)</span><span className={weekly >= 0 ? "text-[#bff5c6]" : "text-[#ffb8c8]"}>{weekly >= 0 ? "+" : ""}{weekly}</span></div>
-        <div className="text-[10.5px] text-neutral-500">경기 수당(주 2경기): 승리 +200, 패배 +50 · 스폰서 퀘스트·상금·보너스·이적료는 따로</div>
+        <div className="text-[10.5px] text-neutral-500">경기 수당(주 2경기): 승리 +120, 패배 +30 · 스폰서 퀘스트·상금·보너스·이적료는 따로</div>
       </div>
       <div className="border border-neutral-600 p-2 space-y-0.5">
         <div className="text-[#ffe45c] mb-1">{s.season}시즌 장부</div>

@@ -42,6 +42,7 @@ export { CareerError };
 import { initialPlayers, initialTeams } from "@shared/career/init";
 import { runMslWeek, type MslReport } from "./msl";
 import { ITEM_BY_KEY, POTION_LIMIT, slotOf } from "@shared/career/items";
+import { ensurePotential, retirements, rookies } from "./generation";
 import { book, ensureClub, newSeasonClub, pay, seasonEndClub, weeklyClub } from "./club";
 import { cheerChance, defaultContract } from "@shared/career/contract";
 export type { MslReport };
@@ -52,7 +53,7 @@ const REGULAR_WEEKS = 11;
 
 
 
-import { rosterOf, proTeams, standings, myPendingMatch, evaluateTrade } from "@shared/career/view";
+import { rosterOf, proTeams, standings, myPendingMatch, evaluateTrade, activePlayers } from "@shared/career/view";
 export { rosterOf, proTeams, standings, myPendingMatch };
 
 // ── 새 게임 ─────────────────────────────────────────────────────
@@ -76,6 +77,7 @@ export function newCareer(myTeam: number): CareerState {
     mapPool: drawMapPool(),
   };
   ensureClub(s);
+  ensurePotential(s);
   scheduleRegularSeason(s);
   news(s, `${s.teams[myTeam].name} 감독으로 부임했습니다. ${s.season}시즌 마이프로리그가 곧 개막합니다!`);
   return s;
@@ -85,6 +87,7 @@ export function newCareer(myTeam: number): CareerState {
 export function migrateCareer(s: CareerState) {
   if (!s.mapPool?.length) s.mapPool = drawMapPool();
   ensureClub(s);
+  ensurePotential(s);
 }
 
 /**
@@ -132,7 +135,7 @@ function applyActions(s: CareerState) {
   if (s.actionsWeek === wk) return; // 한 주에 한 번만 (프로리그가 한 주 2경기)
   s.actionsWeek = wk;
   const me = s.teams[s.myTeam];
-  for (const p of s.players) {
+  for (const p of activePlayers(s)) {
     if (p.team === FREE_AGENT_TEAM) { p.cond = clampCond(p.cond + (rand() < 0.5 ? 1 : -1)); continue; }
     let action: ActionKey | null | undefined = p.action;
     if (p.team !== s.myTeam) action = rand() < 0.55 ? "train" : "rest"; // AI 팀
@@ -440,7 +443,7 @@ export function startNextSeason(s: CareerState) {
   s.ap = WEEKLY_AP;
   s.mapPool = drawMapPool();
   // 나이에 따른 성장/노쇠
-  for (const p of s.players) {
+  for (const p of activePlayers(s)) {
     const age = ageOf(p, s.season);
     if (age <= 21) gainStats(p, 3, 8, 25);
     else if (age <= 24) gainStats(p, 2, 3, 12);
@@ -452,6 +455,10 @@ export function startNextSeason(s: CareerState) {
     p.cond = randInt(4, 7);
   }
   for (const t of s.teams) { t.wins = 0; t.losses = 0; t.setWins = 0; t.setLosses = 0; }
+  // 세대 교체: 은퇴 → 신인 등장
+  const gone = retirements(s);
+  rookies(s, gone.length);
+  ensurePotential(s);
   newSeasonClub(s);
   // AI 팀: 선수가 부족하면 자유계약 선수 영입
   for (const t of proTeams(s)) {
