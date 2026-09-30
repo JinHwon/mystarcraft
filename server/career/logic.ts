@@ -10,6 +10,9 @@ import {
   CareerState,
   CMatch,
   COND_MAX,
+  WEEKLY_COND_RECOVERY,
+  AP_CAP,
+  actionOf,
   COND_MIN,
   CPlayer,
   FINAL_SETS,
@@ -91,6 +94,8 @@ export function migrateCareer(s: CareerState) {
   ensureClub(s);
   ensurePotential(s);
   ensureHeadToHead(s);
+  // 없어진 행동(베스트) → 훈련
+  for (const p of s.players) if ((p.action as string) === "best") p.action = "train";
   // 컨디션 1~10 단위 → % 단위
   if (!s.condScale) { for (const p of s.players) p.cond = Math.min(100, Math.max(1, p.cond * 10)); s.condScale = 100; }
 }
@@ -139,48 +144,84 @@ export function setAction(s: CareerState, pid: number, action: ActionKey | null)
   const p = s.players[pid];
   if (!p || p.team !== s.myTeam) throw new CareerError("우리 팀 선수가 아닙니다");
   if (s.live) throw new CareerError("경기 중에는 행동을 바꿀 수 없습니다");
-  const cost = (a: ActionKey | null | undefined) => (a ? ACTIONS.find(x => x.key === a)!.ap : 0);
-  const used = rosterOf(s, s.myTeam).reduce((sum, x) => sum + (x.id === pid ? 0 : cost(x.action)), 0);
-  if (used + cost(action) > s.ap) throw new CareerError(`행동력이 부족합니다 (남은 행동력 ${s.ap - used})`);
+  if (action && !actionOf(action)) throw new CareerError("없는 행동입니다");
   p.action = action;
 }
 
 
+/** 행동 한 명 실행: 능력치·컨디션·돈 변화 */
+function actOne(s: CareerState, p: CPlayer, action: ActionKey | null | undefined) {
+  const mine = p.team === s.myTeam;
+  // 훈련 효과 2배 이벤트 (우리 선수)
+  const boost = mine && eventOn("stat_boost") ? 2 : 1;
+  const tired = p.cond < 30;
+  switch (action) {
+    case "train": gainStats(p, 2, 2 * boost, 6 * boost); p.cond = clampCond(p.cond - randInt(3, 5)); break;
+    case "rest": p.cond = clampCond(p.cond + 5); break;
+    case "event": {
+      const earn = 30 + p.level * 12 + randInt(0, 40);
+      if (mine) {
+        pay(s, "이벤트", earn);
+        // 팬미팅: 인기가 많을수록 치어풀을 받을 확률이 높음
+        if (rand() < cheerChance(p)) {
+          s.inventory = { ...s.inventory, cheer: (s.inventory?.cheer ?? 0) + 1 };
+          news(s, `📣 ${p.name} 선수가 팬미팅에서 치어풀을 선물 받았습니다!`);
+        }
+      }
+      p.cond = clampCond(p.cond - randInt(3, 5));
+      break;
+    }
+    default: break; // 자율 연습: 주가 끝날 때 기본 회복(+10%)만
+  }
+  // 컨디션이 바닥(30% 미만)인데 무리하게 훈련하면 능력치가 떨어지기도
+  if (tired && action === "train" && rand() < 0.35) {
+    const k = STAT_KEYS[randInt(0, STAT_KEYS.length - 1)];
+    p.stats[k] = clampStat(p.stats[k] - randInt(1, 4));
+  }
+}
+
+/** 다른 팀·무소속 선수의 한 주 행동 (한 주 한 번, 경기 시작 때) */
 function applyActions(s: CareerState) {
   const wk = `${s.season}-${s.week}`;
   if (s.actionsWeek === wk) return; // 한 주에 한 번만 (프로리그가 한 주 2경기)
   s.actionsWeek = wk;
-  const me = s.teams[s.myTeam];
-  // 훈련 효과 2배 이벤트 (우리 선수)
-  const boost = (p: CPlayer) => (p.team === s.myTeam && eventOn("stat_boost") ? 2 : 1);
   for (const p of activePlayers(s)) {
+    if (p.team === s.myTeam) continue; // 우리 선수는 선수 행동 화면의 "진행하기"로
     if (p.team === FREE_AGENT_TEAM) { p.cond = clampCond(p.cond + randInt(-4, 4)); continue; }
-    let action: ActionKey | null | undefined = p.action;
-    if (p.team !== s.myTeam) action = rand() < 0.55 ? "train" : "rest"; // AI 팀
-    switch (action) {
-      case "train": gainStats(p, 2, 2 * boost(p), 6 * boost(p)); p.cond = clampCond(p.cond - randInt(2, 4)); break;
-      case "best": gainStats(p, 3, 5 * boost(p), 12 * boost(p)); p.cond = clampCond(p.cond - randInt(5, 8)); break;
-      case "rest": p.cond = clampCond(p.cond + randInt(10, 15)); break;
-      case "event": {
-        const earn = 30 + p.level * 12 + randInt(0, 40);
-        if (p.team === s.myTeam) {
-          pay(s, "이벤트", earn);
-          // 팬미팅: 인기가 많을수록 치어풀을 받을 확률이 높음
-          if (rand() < cheerChance(p)) {
-            s.inventory = { ...s.inventory, cheer: (s.inventory?.cheer ?? 0) + 1 };
-            news(s, `📣 ${p.name} 선수가 팬미팅에서 치어풀을 선물 받았습니다!`);
-          }
-        }
-        p.cond = clampCond(p.cond + randInt(3, 6));
-        break;
-      }
-      default: p.cond = clampCond(p.cond + randInt(2, 6));
-    }
-    if (p.team === s.myTeam && action === "best") pay(s, "특별 훈련", -ACTIONS.find(a => a.key === "best")!.money);
-    // 우리 선수 행동은 바꾸거나 초기화할 때까지 매주 유지
-    if (p.team !== s.myTeam) p.action = null;
+    actOne(s, p, rand() < 0.55 ? "train" : "rest");
+    p.action = null;
   }
 }
+
+export interface ActionResult { id: number; action: ActionKey; ap: number; cond: [number, number]; stats: Partial<Record<StatKey, number>>; money: number; cheer?: boolean }
+
+/**
+ * 우리 선수 행동 바로 진행: 행동을 정한 선수마다 행동력이 남아 있으면 한 번 실행하고 행동력을 쓴다
+ * 고른 행동은 바꾸거나 초기화할 때까지 유지 (행동력이 남으면 또 진행 가능)
+ */
+export function runMyActions(s: CareerState): { results: ActionResult[]; skipped: number[] } {
+  if (s.live) throw new CareerError("경기 중에는 행동을 진행할 수 없습니다");
+  const roster = rosterOf(s, s.myTeam);
+  if (!roster.some(p => p.action)) throw new CareerError("행동을 정한 선수가 없습니다");
+  const results: ActionResult[] = [];
+  const skipped: number[] = [];
+  for (const p of roster) {
+    const a = actionOf(p.action);
+    if (!a) continue;
+    if (playerAp(p) < a.ap) { skipped.push(p.id); continue; }
+    p.ap = playerAp(p) - a.ap;
+    const before = { cond: p.cond, stats: { ...p.stats }, money: s.teams[s.myTeam].money, cheer: s.inventory?.cheer ?? 0 };
+    actOne(s, p, a.key);
+    const stats = Object.fromEntries(STAT_KEYS.map(k => [k, p.stats[k] - before.stats[k]]).filter(([, d]) => d !== 0));
+    results.push({ id: p.id, action: a.key, ap: p.ap, cond: [before.cond, p.cond], stats, money: s.teams[s.myTeam].money - before.money, cheer: (s.inventory?.cheer ?? 0) > before.cheer || undefined });
+  }
+  if (!results.length) throw new CareerError("행동력이 부족합니다 (매주 선수마다 20씩 받습니다)");
+  s.myActionsWeek = `${s.season}-${s.week}`;
+  return { results, skipped };
+}
+
+/** 선수 행동력 (예전 세이브·새로 온 선수는 한 주치) */
+export const playerAp = (p: CPlayer) => p.ap ?? WEEKLY_AP;
 
 // ── 경기 ───────────────────────────────────────────────────────
 
@@ -324,6 +365,10 @@ function finishWeek(s: CareerState): WeekResult {
   // 다른 팀은 고정 후원금, 우리 팀은 고른 스폰서 (구단 운영 → 스폰서)
   for (const t of proTeams(s)) if (t.id !== s.myTeam) t.money += WEEKLY_SPONSOR;
   weeklyClub(s);
+  // 한 주(프로리그 2경기)가 끝나면 모든 선수 컨디션 10% 회복
+  for (const p of activePlayers(s)) p.cond = clampCond(p.cond + WEEKLY_COND_RECOVERY);
+  // 우리 선수 행동력: 매주 20 (최대 40까지 모임)
+  for (const p of [...rosterOf(s, s.myTeam), ...s.players.filter(x => x.team === s.myTeam && x.reserve)]) p.ap = Math.min(AP_CAP, playerAp(p) + WEEKLY_AP);
   pruneHighlights(s);
   s.week++;
   s.ap = WEEKLY_AP;
@@ -492,14 +537,11 @@ export function startNextSeason(s: CareerState, opts: { releaseExpiring?: boolea
   s.phase = "regular";
   s.ap = WEEKLY_AP;
   s.mapPool = drawMapPool();
-  // 나이에 따른 성장/노쇠
+  // 나이에 따른 성장 (능력치는 경기·훈련으로만 떨어짐 — 나이 든 선수는 은퇴로 정리)
   for (const p of activePlayers(s)) {
     const age = ageOf(p, s.season);
     if (age <= 21) gainStats(p, 3, 8, 25);
     else if (age <= 24) gainStats(p, 2, 3, 12);
-    else if (age >= 28) {
-      for (const k of shuffle([...STAT_KEYS]).slice(0, 3)) p.stats[k] = clampStat(p.stats[k] - randInt(5, 20));
-    }
     p.sWins = 0; p.sLosses = 0;
     p.potions = 0;
     p.cond = randInt(50, 90);

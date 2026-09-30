@@ -464,7 +464,7 @@ export function weeklyReserve(s: CareerState) {
     const age = ageOf(p, s.season);
     gainStats(p, 2, age <= 20 ? 3 : 2, age <= 20 ? 8 : 5);
     addExp(s, p, 15);
-    p.cond = clampCond(p.cond + randInt(2, 6));
+    // 2부: 주간 기본 회복은 finishWeek 에서
   }
 }
 

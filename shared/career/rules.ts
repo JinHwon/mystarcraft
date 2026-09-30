@@ -42,6 +42,8 @@ export const POSTSEASON_PRIZE: Record<string, number> = { 우승: 1500, 준우�
 export const COND_MIN = 1;
 export const COND_MAX = 100;
 export const COND_LABELS = ["", "최악", "짜증", "나쁨", "저조", "보통", "양호", "좋음", "의욕", "최상", "절정"];
+/** 한 주가 끝날 때 모든 선수 컨디션 회복량 (%) */
+export const WEEKLY_COND_RECOVERY = 10;
 export const condLabel = (cond: number) => COND_LABELS[Math.max(1, Math.min(10, Math.ceil(cond / 10)))];
 /** 컨디션에 따른 경기력 배율: 100% 가 원래 능력치, 낮을수록 줄어듦 (50% → 0.9, 1% → 0.8) */
 export function condMultiplier(cond: number): number {
@@ -54,16 +56,17 @@ export function burstChance(cond: number): number {
 }
 
 // ── 선수 행동 (행동력) ──────────────────────────────────────────────
-export type ActionKey = "train" | "rest" | "event" | "best";
+export type ActionKey = "train" | "rest" | "event";
 export interface ActionDef { key: ActionKey; name: string; emoji: string; ap: number; money: number; desc: string }
 export const ACTIONS: ActionDef[] = [
-  { key: "train", name: "훈련", emoji: "🏋️", ap: 1, money: 0, desc: "연습을 열심히 합니다. 능력치를 향상시킵니다. (컨디션 -1)" },
-  { key: "rest", name: "휴식", emoji: "😴", ap: 0, money: 0, desc: "휴식을 취합니다. 쉬면서 컨디션을 회복합니다. (컨디션 +2)" },
-  { key: "event", name: "이벤트", emoji: "🎤", ap: 1, money: 0, desc: "팬미팅을 합니다. 팀 자금을 벌고 기분이 좋아집니다. 인기가 많을수록 팬에게 치어풀을 받을 확률이 높습니다. (자금 +, 컨디션 +1)" },
-  { key: "best", name: "베스트", emoji: "🔥", ap: 3, money: 100, desc: "코치진과 집중 특별 훈련. 능력치가 크게 오르지만 지칩니다. (컨디션 -2)" },
+  { key: "train", name: "훈련", emoji: "🏋️", ap: 20, money: 0, desc: "연습을 열심히 합니다. 능력치가 오르지만 지칩니다. (컨디션 -3~5)" },
+  { key: "rest", name: "휴식", emoji: "😴", ap: 10, money: 0, desc: "휴식을 취합니다. 쉬면서 컨디션을 회복합니다. (컨디션 +5)" },
+  { key: "event", name: "이벤트", emoji: "🎤", ap: 20, money: 0, desc: "팬미팅을 합니다. 구단 자금을 벌고, 인기가 많을수록 치어풀을 받을 확률이 높습니다. (컨디션 -3~5)" },
 ];
-/** 주당 행동력 */
-export const WEEKLY_AP = 8;
+/** 선수별 주당 행동력 (매주 받음, 최대 AP_CAP 까지 모임) */
+export const WEEKLY_AP = 20;
+export const AP_CAP = 40;
+export const actionOf = (key: string | null | undefined) => ACTIONS.find(a => a.key === key);
 
 // ── 세이브 상태 ─────────────────────────────────────────────────
 export interface CPlayer {
@@ -85,6 +88,8 @@ export interface CPlayer {
   sLosses: number;
   /** 이번 주 행동 (내 팀 선수만) */
   action?: ActionKey | null;
+  /** 선수 행동력 (우리 팀) */
+  ap?: number;
   /** 우승 경력 */
   titles?: string[];
   /** 종족별 통산 전적 [승, 패] */
@@ -349,6 +354,8 @@ export interface CareerState {
   condScale?: 100;
   /** 선수 행동을 반영한 주 (한 주 한 번) */
   actionsWeek?: string;
+  /** 우리 선수 행동을 진행한 주 (선수 행동 화면 "진행하기") */
+  myActionsWeek?: string;
   /** 보유 경기 아이템 (츄잉껌·세레모니·스나이핑·치어풀) */
   inventory?: Record<string, number>;
   /** 진행 중인 우리 경기 (세트마다 하나씩 진행, 2:2 면 ACE 결정전 선수를 그때 고름) */
