@@ -16,7 +16,7 @@ import {
 } from "@shared/career/rules";
 import { addManagerExp, book, mainSponsorPay } from "./club";
 import { activePlayers } from "@shared/career/view";
-import { CareerError, news, pickMaps, playSet, quickSet, rand, shuffle, type PlayedSet } from "./core";
+import { CareerError, STAGE_GROWTH, news, pickMaps, playSet, quickSet, rand, shuffle, withStageGrowth, type PlayedSet } from "./core";
 
 const GROUP_NAMES = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
@@ -177,8 +177,18 @@ export function draftWaiting(s: CareerState): { head: number; group: string; rou
   return isMine(s, head) ? { head, group: GROUP_NAMES[g], round: round + 1 } : undefined;
 }
 
+/** 이번 주 개인리그 일정이 조 지명식이고 우리 선수가 조장이라 직접 지명해야 함 */
+export function nominationPending(s: CareerState): boolean {
+  const m = s.msl;
+  if (!m || m.season !== s.season || m.stage !== "nom" || s.phase === "offseason") return false;
+  const plan = MSL_PLAN[m.planIdx ?? 0];
+  if (!plan || plan.stage !== "nom" || plan.week > s.week) return false;
+  if (!m.seeds.slice(0, 8).some(id => isMine(s, id))) return false;
+  return !m.draft || m.draft.step < DRAFT_STEPS;
+}
+
 /**
- * 조 지명식 진행 (지명식 주, 경기 전에 화면에서). pick 을 주면 우리 조장 차례에 그 선수를 지명
+ * 조 지명식 진행 (지명식 주, 프로리그 경기가 끝난 뒤 화면에서). pick 을 주면 우리 조장 차례에 그 선수를 지명
  * 우리 조장 차례가 오면 멈추고, 아니면 끝까지 진행
  */
 export function nominate(s: CareerState, pick?: number) {
@@ -233,7 +243,9 @@ function runKnockout(s: CareerState, m: MslState, round: "ro16" | "ro8" | "ro4" 
   if (!stage) return;
   for (let i = from; i < Math.min(to, stage.series.length); i++) {
     const x = stage.series[i];
-    const r = series(s, x.a, x.b, BEST_OF[round], `${ROUND_LABEL[round]} ${i + 1}경기`, report, ROUND_LABEL[round], false, round === "ro4" || round === "final");
+    // 8강부터는 큰 무대: 경기 뒤 능력치가 크게 오름
+    const mul = round === "ro16" ? 1 : STAGE_GROWTH[round === "final" ? "mslFinal" : round];
+    const r = withStageGrowth(mul, () => series(s, x.a, x.b, BEST_OF[round], `${ROUND_LABEL[round]} ${i + 1}경기`, report, ROUND_LABEL[round], false, round === "ro4" || round === "final"));
     const loser = r.winner === x.a ? x.b : x.a;
     m.placements[loser] = round === "final" ? "준우승" : ROUND_LABEL[round];
     stage.series[i] = r;
@@ -273,6 +285,8 @@ function finishMsl(s: CareerState, m: MslState) {
   if (s.players[m.runnerUp!]?.team === s.myTeam) { mainSponsorPay(s, "mslRunnerUp", "메인 스폰서 개인리그 준우승 수당"); addManagerExp(s, 60); }
   const champ = s.players[m.champion!];
   champ.titles = [...(champ.titles ?? []), `${s.season}시즌 마이스타리그 우승`];
+  const runner = s.players[m.runnerUp!];
+  if (runner) runner.titles = [...(runner.titles ?? []), `${s.season}시즌 마이스타리그 준우승`];
   news(s, `👑 ${s.season}시즌 마이스타리그 우승: ${champ.name} (${s.teams[champ.team].name})! 준우승 ${s.players[m.runnerUp!].name}`);
 }
 

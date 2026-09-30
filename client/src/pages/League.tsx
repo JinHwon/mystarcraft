@@ -1,14 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { saveEntryDraft, takeEntryReturn } from "@/components/legacy/match/common";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { FINAL_SETS, MSL_WEEK, PRO_SETS, type CareerState, type CMatch } from "@shared/career/rules";
+import { FINAL_SETS, PRO_SETS, type CareerState, type CMatch } from "@shared/career/rules";
 import { STAGE_NAMES, myPendingMatch, rosterOf, standings } from "@shared/career/view";
 import { useCareer, useCareerPatch, useCareerUpdater } from "@/lib/career";
 import type { CareerDiff } from "@shared/career/diff";
 import { TeamBadge } from "@/components/career/Bits";
-import { EntryScreen, LiveMatch, MapDrawScreen, MslFlow, NominationScreen, ProSeriesFlow, ScheduleScreen, SeriesViewer, type BroadcastSet, type ItemPlan, type MslReportView, type WeekDone } from "@/components/legacy/LegacyMatch";
+import { EntryScreen, LiveMatch, MapDrawScreen, MslFlow, NominationScreen, ProSeriesFlow, ScheduleScreen, SeriesViewer, type BroadcastSet, type HeldFinish, type ItemPlan, type MslReportView, type WeekDone } from "@/components/legacy/LegacyMatch";
 
 type Tab = "match" | "table" | "schedule";
 
@@ -36,10 +36,17 @@ export function MslReports({ s, reports, onWatch }: { s: CareerState; reports: M
   );
 }
 
+/**
+ * 끝까지 보지 않은 관전 (✕ 로 나가도 다른 화면에 다녀와도 그 자리에서 이어 봄)
+ * - heldLive: 마지막 세트까지 서버에서 끝난 우리 경기. s 는 경기가 끝나기 전 세이브 (중계 화면용)
+ * - heldWeek: 주가 끝난 뒤 보는 다른 팀 포스트시즌·개인리그 경기와 결과 요약
+ */
+type HeldLive = { finish: HeldFinish; diff: CareerDiff; s: CareerState; applied: boolean; lastMatch: number | null; closed?: boolean };
+type WeekView = { w: WeekDone; stage: "pro" | "msl" | "summary"; pro?: { k: number; idx: number }; msl?: number; closed?: boolean };
+let heldLive: HeldLive | null = null;
+let heldWeek: WeekView | null = null;
+
 function MatchTab({ s }: { s: CareerState }) {
-  /** 경기가 끝난 세트의 변경분: 결과 화면을 다 본 뒤 반영 (진행 중 경기가 사라지므로) */
-  const pendingDiff = useRef<CareerDiff | null>(null);
-  const lastMatch = useRef<number | null>(null);
   const updater = useCareerUpdater();
   const patch = useCareerPatch();
   const [, navigate] = useLocation();
@@ -47,19 +54,19 @@ function MatchTab({ s }: { s: CareerState }) {
   const sets = pending?.stage === "final" ? FINAL_SETS : PRO_SETS;
   const [front, setFront] = useState<(number | undefined)[]>([]);
   const [items, setItems] = useState<ItemPlan>({});
-  const [weekDone, setWeekDone] = useState<WeekDone | null>(null);
+  const [live, setLiveRaw] = useState<HeldLive | null>(() => heldLive && { ...heldLive, closed: true });
+  const setLive = (v: HeldLive | null) => { heldLive = v; setLiveRaw(v); };
+  // 관전 중 다른 화면으로 가면 끝난 경기 결과는 세이브에 반영 (관전은 돌아와서 이어 봄)
+  useEffect(() => () => { if (heldLive && !heldLive.applied) { patch(heldLive.diff); heldLive = { ...heldLive, applied: true }; } }, []);
+  // 다른 화면에 다녀오면 보던 관전은 "이어서 보기" 로
+  const [wv, setWvRaw] = useState<WeekView | null>(() => heldWeek && (heldWeek.stage === "summary" ? heldWeek : { ...heldWeek, closed: true }));
+  const setWv = (v: WeekView | null) => { heldWeek = v; setWvRaw(v); };
+  const weekDone = wv?.stage === "summary" ? wv.w : null;
   /** 한 주 첫 경기가 끝난 직후 (2경기 준비) */
   const [legDone, setLegDone] = useState<number | null>(null);
-  /** 이번 주 개인리그 관전 중 */
-  const [mslFlow, setMslFlow] = useState<WeekDone | null>(null);
-  /** 우리 팀이 없는 포스트시즌 경기 관전 */
-  const [proFlow, setProFlow] = useState<WeekDone | null>(null);
   const [showNom, setShowNom] = useState(false);
-  // 조 지명식 주: 우리 선수가 조장(시드 상위 8명)이면 직접 지명
-  const nomOpen = !!s.msl && s.msl.season === s.season && s.msl.stage === "nom" && s.week >= MSL_WEEK.nom && s.phase === "regular"
-    && s.msl.seeds.slice(0, 8).some(id => s.players[id]?.team === s.myTeam) && !(s.msl.draft && s.msl.draft.step >= 24);
   const [watch, setWatch] = useState<MslReportView | null>(null);
-  const [watching, setWatching] = useState(!!s.live);
+  const [watching, setWatching] = useState(!!s.live && !heldLive);
   const drawKey = `mysc-mapdraw-${s.season}-${s.myTeam}`;
   const [showMaps, setShowMaps] = useState(false);
   // 엔트리 편성 중 상점에 다녀왔으면 편성하던 화면으로 바로 돌아온다
@@ -92,42 +99,96 @@ function MatchTab({ s }: { s: CareerState }) {
     ...updater,
     onSuccess: r => { updater.onSuccess(r); finishWeekView(r.result as WeekDone); window.scrollTo(0, 0); },
   });
+  // 조 지명식이 끝나면 (또는 자동 지명) 남은 주 일정 진행
+  const complete = trpc.career.completeWeek.useMutation({
+    ...updater,
+    onSuccess: r => { updater.onSuccess(r); setShowNom(false); finishWeekView(r.result as WeekDone); window.scrollTo(0, 0); },
+  });
 
-  // 주가 끝나면 우리 선수 개인리그 경기부터 관전
+  // 주가 끝나면 다른 팀 포스트시즌 → 개인리그 경기 → 결과 요약 순으로 관전
   function finishWeekView(w: WeekDone) {
-    setWeekDone(w);
-    if (w.proReports?.length) setProFlow(w);
-    else if (w.mslReports?.length || w.mslPlans?.length) setMslFlow(w);
+    if (w.needNomination) { setWv(null); return; } // 조 지명식부터 (s.weekHold)
+    setWv({ w, stage: w.proReports?.length ? "pro" : w.mslReports?.length || w.mslPlans?.length ? "msl" : "summary" });
   }
+  const afterPro = (w: WeekDone) => setWv({ w, stage: w.mslReports?.length || w.mslPlans?.length ? "msl" : "summary" });
+  /** 우리 경기 관전 끝 (끝까지 봤거나 건너뜀) */
+  const finishLive = (h: HeldLive) => {
+    if (!h.applied) patch(h.diff);
+    setLive(null);
+    setWatching(false);
+    if (h.finish.week) finishWeekView(h.finish.week); else setLegDone(h.lastMatch);
+    window.scrollTo(0, 0);
+  };
+  const resumeCard = (title: string, onResume: () => void, onSkip: () => void) => (
+    <div className="space-y-3">
+      <div className="rounded-2xl bg-card border border-border p-4 text-center space-y-1">
+        <div className="text-2xl">📺</div>
+        <div className="font-bold text-foreground">{title}</div>
+        <div className="text-xs text-muted-foreground">보던 곳에서 이어서 보거나, 건너뛰고 결과를 볼 수 있습니다.</div>
+      </div>
+      <button onClick={onResume} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black">▶ 관전 이어서 보기</button>
+      <button onClick={onSkip} className="w-full py-2.5 rounded-2xl bg-card border border-border text-sm font-bold text-foreground">건너뛰고 결과 보기</button>
+    </div>
+  );
 
   if (watch) return <SeriesViewer s={s} report={watch} onClose={() => setWatch(null)} />;
-  if (showNom) return <NominationScreen s={s} onClose={() => setShowNom(false)} />;
-  if (proFlow) return <ProSeriesFlow s={s} reports={proFlow.proReports ?? []} onDone={() => { const w = proFlow; setProFlow(null); if (w.mslReports?.length || w.mslPlans?.length) setMslFlow(w); }} />;
-  if (mslFlow) return <MslFlow s={s} reports={mslFlow.mslReports ?? []} plans={mslFlow.mslPlans} onDone={() => setMslFlow(null)} />;
 
-  if (watching && s.live) {
+  if (watching && (s.live || live)) {
     return (
       <LiveMatch
-        s={s}
+        s={live?.s ?? s}
+        held={live?.finish}
         pending={playSetM.isPending}
         playSet={(ace, done, fail) => playSetM.mutate({ ace }, {
           onError: fail,
           onSuccess: r => {
             const res = r.result as { set: BroadcastSet; matchOver: boolean; playedMatchId?: number; week?: WeekDone; needAce: boolean };
             done(res);
-            // 경기가 끝나 세이브에서 진행 중 경기가 사라져도 관전 화면은 끝까지 유지 (결과 확인 후 반영)
-            if (res.matchOver) { pendingDiff.current = r.diff; lastMatch.current = res.playedMatchId ?? null; } else patch(r.diff);
+            // 경기가 끝나 세이브에서 진행 중 경기가 사라져도 관전 화면은 끝까지 유지 (결과를 다 보거나 나갈 때 반영)
+            if (res.matchOver) setLive({ finish: { matchId: s.live!.matchId, set: res.set, week: res.week ?? null, ace }, diff: r.diff, s, applied: false, lastMatch: res.playedMatchId ?? null });
+            else patch(r.diff);
           },
         })}
-        onFinished={w => {
-          if (pendingDiff.current) patch(pendingDiff.current);
-          pendingDiff.current = null;
+        onFinished={() => { if (heldLive) finishLive(heldLive); else { setWatching(false); window.scrollTo(0, 0); } }}
+        onClose={() => {
+          // ✕: 경기 결과는 세이브에 반영하되, 관전은 나중에 그 자리에서 이어 봄
+          if (heldLive) { if (!heldLive.applied) patch(heldLive.diff); setLive({ ...heldLive, applied: true, closed: true }); }
           setWatching(false);
-          if (w) finishWeekView(w); else setLegDone(lastMatch.current);
-          window.scrollTo(0, 0);
         }}
-        onClose={() => { if (pendingDiff.current) { patch(pendingDiff.current); pendingDiff.current = null; setLegDone(lastMatch.current); } setWatching(false); }}
       />
+    );
+  }
+  if (live) return resumeCard("우리 팀 경기를 끝까지 보지 않았습니다", () => { setLive({ ...live, closed: false }); setWatching(true); }, () => finishLive(live));
+
+  if (wv && wv.stage !== "summary") {
+    if (wv.closed) return resumeCard(wv.stage === "pro" ? "포스트시즌 경기를 끝까지 보지 않았습니다" : "개인리그 경기를 끝까지 보지 않았습니다",
+      () => setWv({ ...wv, closed: false }), () => setWv({ w: wv.w, stage: "summary" }));
+    const close = () => setWv({ ...(heldWeek ?? wv), closed: true });
+    if (wv.stage === "pro") {
+      return <ProSeriesFlow s={s} reports={wv.w.proReports ?? []} start={wv.pro}
+        onProgress={p => { if (heldWeek) heldWeek = { ...heldWeek, pro: p }; }}
+        onClose={close} onDone={() => afterPro(wv.w)} />;
+    }
+    return <MslFlow s={s} reports={wv.w.mslReports ?? []} plans={wv.w.mslPlans} start={wv.msl}
+      onProgress={i => { if (heldWeek) heldWeek = { ...heldWeek, msl: i }; }}
+      onClose={close} onDone={() => setWv({ w: wv.w, stage: "summary" })} />;
+  }
+
+  // 주 마무리 전 조 지명식: 우리 선수가 조장이면 차례가 올 때 직접 지명
+  if (s.weekHold) {
+    if (showNom) return <NominationScreen s={s} onClose={() => setShowNom(false)} onDone={() => complete.mutate()} />;
+    return (
+      <div className="space-y-3">
+        <div className="rounded-2xl bg-violet-500/15 border border-violet-400/40 p-4 text-center space-y-1">
+          <div className="text-3xl">🎤</div>
+          <div className="font-black text-foreground">마이스타리그 조 지명식</div>
+          <div className="text-xs text-muted-foreground">우리 선수가 조장입니다. 차례가 오면 같은 조에 넣을 선수를 직접 지명하세요.</div>
+        </div>
+        <button onClick={() => setShowNom(true)} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-violet-500 to-fuchsia-600 text-white font-black">🎤 조 지명식 진행</button>
+        <button onClick={() => complete.mutate()} disabled={complete.isPending} className="w-full py-2.5 rounded-2xl bg-card border border-border text-sm font-bold text-foreground">
+          {complete.isPending ? "진행 중..." : "자동 지명하고 넘어가기"}
+        </button>
+      </div>
     );
   }
 
@@ -170,7 +231,7 @@ function MatchTab({ s }: { s: CareerState }) {
         <MslReports s={s} reports={weekDone.mslReports ?? []} onWatch={setWatch} />
         {!m && !weekDone.mslReports?.length && <div className="rounded-2xl bg-card border border-border p-4 text-center text-sm text-muted-foreground">이번 주 일정이 끝났습니다.</div>}
         <button onClick={() => navigate("/starleague")} className="w-full py-2.5 rounded-2xl bg-card border border-border text-sm font-bold text-foreground">🏆 마이스타리그 대진 보기</button>
-        <button onClick={() => { setWeekDone(null); setLegDone(null); }} className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-black">확인 · 다음 주로</button>
+        <button onClick={() => { setWv(null); setLegDone(null); }} className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-black">확인 · 다음 주로</button>
       </div>
     );
   }
@@ -239,11 +300,6 @@ function MatchTab({ s }: { s: CareerState }) {
         </div>
         <div className="mt-1 text-[11px] text-muted-foreground">엔트리 {filled}/{sets - 1} · ACE 결정전 선수는 2:2 가 되면 고릅니다</div>
       </div>
-      {nomOpen && (
-        <button onClick={() => setShowNom(true)} className="w-full py-3 rounded-2xl bg-gradient-to-r from-violet-500 to-fuchsia-600 text-white font-black">
-          🎤 마이스타리그 조 지명식 — 우리 선수가 조장입니다 (직접 지명)
-        </button>
-      )}
       {!actionsDone && <p className="text-xs text-amber-300 px-1">이번 주 선수 행동을 아직 진행하지 않았습니다. <button onClick={() => navigate("/training")} className="underline font-bold">선수 행동 진행하기</button></p>}
       <button onClick={openEntry} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black">
         ⚔️ 엔트리 편성 · 경기 시작

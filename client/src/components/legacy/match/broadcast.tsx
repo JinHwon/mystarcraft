@@ -99,7 +99,7 @@ export function Broadcast({ s, stageName, lp, rp, mapId, set, leftIsA, score, le
         <div className="flex-1 min-h-0 grid grid-cols-[78px_1fr_78px] gap-2 mt-2">
           <div className="flex flex-col items-center justify-between">
             <div className="flex flex-col items-center">
-              <PlayerPhoto id={lp.photoOf ?? lp.id} name={lp.name} size={56} />
+              <PlayerPhoto id={lp.photoOf ?? lp.id} name={lp.name} titles={lp.titles} size={56} />
               <span className="text-[11px] mt-0.5 text-center">{nameRace(lp)}</span>
               <SetPower s={s} p={lp} item={set.item} />
               {done && leftWon && <Winner />}
@@ -115,7 +115,7 @@ export function Broadcast({ s, stageName, lp, rp, mapId, set, leftIsA, score, le
           </div>
           <div className="flex flex-col items-center justify-between">
             <div className="flex flex-col items-center">
-              <PlayerPhoto id={rp.photoOf ?? rp.id} name={rp.name} size={56} />
+              <PlayerPhoto id={rp.photoOf ?? rp.id} name={rp.name} titles={rp.titles} size={56} />
               <span className="text-[11px] mt-0.5 text-center">{nameRace(rp)}</span>
               <SetPower s={s} p={rp} item={set.item} />
               {done && !leftWon && <Winner />}
@@ -162,14 +162,14 @@ export function PlayerCard({ p, opp }: { p: CPlayer; opp: CPlayer }) {
         <button onClick={() => setOpen(true)} className="text-[9px] text-neutral-300 text-center leading-tight pt-1 w-12 underline decoration-dotted underline-offset-2">
           {rec ? "전적" : "전적없음"}<br />vs {R[opp.race]}<br /><br />{rec?.[0] ?? 0} 승<br />{rec?.[1] ?? 0} 패
         </button>
-        <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} size={58} />
+        <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} titles={p.titles} size={58} />
       </div>
       <div className="text-[12px] text-white mt-0.5">{nameRace(p)}</div>
       {open && createPortal(
         <div className="fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-6" onClick={() => setOpen(false)} style={LEGACY_FONT}>
           <div className="bg-black border-2 border-neutral-300 w-full max-w-[300px] p-3 text-white text-[13px]" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-2">
-              <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} size={46} />
+              <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} titles={p.titles} size={46} />
               <div>
                 <div className="text-[15px] text-[#ffe45c]">{nameRace(p)}</div>
                 <div className="text-[11px] text-neutral-400">통산 {p.wins}승 {p.losses}패 · 이번 시즌 {p.sWins}승 {p.sLosses}패</div>
@@ -204,7 +204,7 @@ export function PlayerCard({ p, opp }: { p: CPlayer; opp: CPlayer }) {
 
 export function SetList({ s, left, right, maps, total, idx, results, leftIsA, showAce, onView, view }: {
   s: CareerState; left: number[]; right: number[]; maps: number[]; total: number; idx: number; results: BroadcastSet[]; leftIsA: boolean; showAce: boolean;
-  /** 이미 치른 세트(또는 지금 세트)의 맵을 누르면 그 세트 선수를 보여줌 */
+  /** 맵을 누르면 그 세트 선수를 보여줌 (보여줄 수 있는지는 부르는 쪽에서 판단) */
   onView?: (i: number) => void;
   view?: number;
 }) {
@@ -222,7 +222,7 @@ export function SetList({ s, left, right, maps, total, idx, results, leftIsA, sh
         return (
           <div key={i} className={cn("grid grid-cols-[1fr_96px_1fr] items-center gap-1.5 text-[12px] px-1 py-[3px]", i === idx && "border border-neutral-300")}>
             <div className="text-center truncate">{cell(lp, leftWon, hideL)}</div>
-            <GrayBox onClick={onView && (r || i === idx) ? () => onView(i) : undefined} active={view === i}>{mapView(maps[i % maps.length]).name}</GrayBox>
+            <GrayBox onClick={onView ? () => onView(i) : undefined} active={view === i}>{mapView(maps[i % maps.length]).name}</GrayBox>
             <div className="text-center truncate">{cell(rp, leftWon === undefined ? undefined : !leftWon, hideR)}</div>
           </div>
         );

@@ -4,10 +4,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
-import { FINAL_SETS, burstOf, PRO_SETS, condMultiplier, totalOf, type CareerState, type CMatch, type CPlayer } from "@shared/career/rules";
+import { FINAL_SETS, burstOf, PRO_SETS, totalOf, type CareerState, type CMatch, type CPlayer } from "@shared/career/rules";
 import { STAGE_NAMES, mapView, rosterOf } from "@shared/career/view";
 import { ITEM_BY_KEY, gearCond, itemImg } from "@shared/career/items";
-import { GrayBox, LEGACY_FONT, LegacyFrame, LegacyImg, MapInfo, TeamLogo } from "../Legacy";
+import { GrayBox, LEGACY_FONT, LegacyFrame, LegacyImg, MapInfo, MslBadges, TeamLogo } from "../Legacy";
 import { MATCH_ITEMS, PlayerPanel, R, VitaButton, condStats, nameRace, navigateShop } from "./common";
 
 // ── 맵 추첨 결과 ─────────────────────────────────────────────────
@@ -30,13 +30,50 @@ export function MapDrawScreen({ s, onNext }: { s: CareerState; onNext: () => voi
 }
 
 // ── 엔트리 편성 ─────────────────────────────────────────────────
-/** 1~(n-1)세트 자동 편성 (컨디션 반영 능력치 순) */
-export function autoEntry(s: CareerState, sets: number): number[] {
-  const ids = rosterOf(s, s.myTeam)
-    .map(p => ({ id: p.id, v: totalOf(p.stats) * condMultiplier(p.cond) }))
-    .sort((a, b) => b.v - a.v)
-    .map(x => x.id);
-  return ids.slice(0, sets - 1);
+/** 맵에서 이 종족의 승률 (다른 두 종족 상대 평균, 50 = 균형) */
+export function mapRaceRate(mapId: number, race: CPlayer["race"]) {
+  const m = mapView(mapId);
+  if (race === "terran") return (m.tvz + (100 - m.pvt)) / 2;
+  if (race === "zerg") return (100 - m.tvz + m.zvp) / 2;
+  return (100 - m.zvp + m.pvt) / 2;
+}
+
+/** 이 맵에서의 선수 기대 전력 (컨디션·포텐셜 반영 능력치 × 맵 종족 유불리) */
+function mapFit(s: CareerState, p: CPlayer, mapId: number) {
+  return totalOf(condStats(p, s)) * (1 + (mapRaceRate(mapId, p.race) - 50) * 0.015);
+}
+
+/**
+ * 1~(n-1)세트 자동 편성
+ * - recommend: 세트마다 그 맵에서 가장 유리한 선수 (종족 유불리·컨디션·포텐셜 폭발 반영)
+ * - rotation: 이번 시즌 출전이 적은 선수부터 뽑아 맵에 맞게 배치
+ */
+export function autoEntry(s: CareerState, maps: number[], sets: number, mode: "recommend" | "rotation" = "recommend"): (number | undefined)[] {
+  const n = sets - 1;
+  let pool = rosterOf(s, s.myTeam);
+  if (mode === "rotation") {
+    pool = [...pool]
+      .sort((a, b) => (a.sApps ?? 0) - (b.sApps ?? 0) || totalOf(condStats(b, s)) - totalOf(condStats(a, s)))
+      .slice(0, n);
+  }
+  // 가장 잘 맞는 (세트, 선수) 짝부터 채움
+  const out: number[] = Array(n).fill(-1);
+  const used = new Set<number>();
+  for (let k = 0; k < n; k++) {
+    let best: { i: number; id: number; v: number } | undefined;
+    for (let i = 0; i < n; i++) {
+      if (out[i] !== -1) continue;
+      for (const p of pool) {
+        if (used.has(p.id)) continue;
+        const v = mapFit(s, p, maps[i % maps.length]);
+        if (!best || v > best.v) best = { i, id: p.id, v };
+      }
+    }
+    if (!best) break;
+    out[best.i] = best.id;
+    used.add(best.id);
+  }
+  return out.map(x => (x === -1 ? undefined : x));
 }
 
 export function SideLabel({ lines, color }: { lines: [string, string]; color: string }) {
@@ -60,7 +97,7 @@ export function RosterList({ players, onPick, selected, marks, s }: { players: C
             className={cn("w-full flex items-center gap-1 px-1 py-[5px] text-left border-b border-neutral-800 last:border-b-0", s ? "text-[12px]" : "text-[13px]",
               mark ? "text-[#ffe45c]" : "text-white", selected === p.id && "bg-[#3a3a5a]")}
           >
-            <span className="truncate flex-1">{s && burstOf(s, p) ? "🔥" : ""}{p.name}</span>
+            <span className="truncate flex-1">{s && burstOf(s, p) ? "🔥" : ""}{p.name}<MslBadges titles={p.titles} size={11} className="ml-0.5 align-middle" /></span>
             <span className="text-[11px] text-neutral-400">{mark ?? ""}</span>
             <span>({R[p.race]})</span>
             {s && (
@@ -78,7 +115,7 @@ export function RosterList({ players, onPick, selected, marks, s }: { players: C
 
 export type ItemPlan = Record<number, { key: string; predict?: number }>;
 
-export function EntryScreen({ s, match, front, setFront, items, setItems, onSubmit, submitting, onShowMaps, onBack }: {
+export function EntryScreen({ s, match, front, setFront, items, setItems, onSubmit, submitting, onBack }: {
   s: CareerState;
   match: CMatch;
   /** 세트별 경기 아이템 */
@@ -89,7 +126,7 @@ export function EntryScreen({ s, match, front, setFront, items, setItems, onSubm
   setFront: (e: (number | undefined)[]) => void;
   onSubmit: () => void;
   submitting: boolean;
-  onShowMaps: () => void;
+  onShowMaps?: () => void;
   onBack: () => void;
 }) {
   const sets = match.stage === "final" ? FINAL_SETS : PRO_SETS;
@@ -194,9 +231,12 @@ export function EntryScreen({ s, match, front, setFront, items, setItems, onSubm
             })}
             <div className="text-[9px] text-neutral-500 text-center leading-tight">ACE 결정전은 2:2 가 되면<br />그때 선수를 고릅니다</div>
             <div className="flex gap-1 pt-0.5">
-              <button onClick={() => { const e = autoEntry(s, sets); setFront(e); setSlot(0); setViewMine(e[0]); }} className="flex-1 text-[10px] border border-neutral-600 text-neutral-300 py-1.5">자동 편성</button>
-              <button onClick={onShowMaps} className="flex-1 text-[10px] border border-neutral-600 text-neutral-300 py-1.5">맵 추첨</button>
+              {([["recommend", "자동편성(추천)"], ["rotation", "자동편성(빈도낮음)"]] as const).map(([mode, label]) => (
+                <button key={mode} onClick={() => { const e = autoEntry(s, match.maps, sets, mode); setFront(e); setSlot(0); setViewMine(e[0]); }}
+                  className="flex-1 text-[10px] leading-tight border border-neutral-600 text-neutral-300 py-1.5">{label}</button>
+              ))}
             </div>
+            <div className="text-[8.5px] text-neutral-500 text-center leading-tight">추천: 맵 종족 유불리·컨디션 순<br />빈도낮음: 이번 시즌 출전이 적은 선수</div>
           </div>
 
           <div className="space-y-1">
