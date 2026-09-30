@@ -1,5 +1,5 @@
 /**
- * 2부 리그: 우리 2부 선수와 무소속 유망주가 겨루는 개인리그 (정규시즌 매주 2경기, 빠른 판정)
+ * 2부 리그: 모든 구단의 2부 선수와 무소속 유망주가 겨루는 개인리그 (정규시즌 매주 2경기, 빠른 판정)
  * - 경기 뒤 능력치가 오르내리고, 어릴수록 훨씬 빨리 큼 (나이가 많으면 오히려 떨어지기도)
  * - 프로리그 전적(승패·출전)에는 들어가지 않음
  * - 정규시즌이 끝나면 1위가 우승 (능력치 보너스)
@@ -9,6 +9,7 @@ import { ageOf, totalOf, youthGrowth, type CareerState, type CPlayer, type Reser
 import { STAT_KEYS, type StatKey } from "@shared/gameConstants";
 import { addExp, clampStat, gainStats, news, pickMaps, quickWin, rand } from "./core";
 import { setDeltas } from "./growth";
+import { aiReserves } from "./club";
 
 const FIELD_SIZE = 16;
 /** 한 주 경기 수 (프로리그처럼 2경기) */
@@ -18,15 +19,19 @@ const ROUNDS_PER_WEEK = 2;
 const youthLoss = (age: number) => (age <= 19 ? 0.5 : age <= 21 ? 0.7 : 1);
 
 const eligible = (s: CareerState, p: CPlayer | undefined): p is CPlayer =>
-  !!p && ((p.team === s.myTeam && !!p.reserve) || p.team === FREE_AGENT_TEAM);
+  !!p && ((p.team >= 0 && p.team !== FREE_AGENT_TEAM && !!p.reserve) || p.team === FREE_AGENT_TEAM);
 
 /** 이번 시즌 2부 리그 (없으면 만들고, 참가 선수를 채움) */
 export function ensureReserveLeague(s: CareerState): ReserveLeague {
   let L = s.reserveLeague;
-  if (!L || L.season !== s.season) L = s.reserveLeague = { season: s.season, field: [], table: {}, last: [] };
-  // 1부로 올라가거나 다른 구단에 간 선수는 빠짐, 우리 2부 선수는 항상 참가
+  if (!L || L.season !== s.season) {
+    // 새 시즌: 다른 구단도 2부를 꾸림 (유망주 영입·잘 큰 선수 승격)
+    aiReserves(s);
+    L = s.reserveLeague = { season: s.season, field: [], table: {}, last: [] };
+  }
+  // 1부로 올라가거나 방출·은퇴한 선수는 빠짐, 모든 구단 2부 선수는 항상 참가
   L.field = L.field.filter(id => eligible(s, s.players[id]));
-  for (const p of s.players) if (p.team === s.myTeam && p.reserve && !L.field.includes(p.id)) L.field.push(p.id);
+  for (const p of s.players) if (p.reserve && p.team >= 0 && p.team !== FREE_AGENT_TEAM && !L.field.includes(p.id)) L.field.push(p.id);
   // 남는 자리는 무소속 유망주 (어린 순, 같은 나이면 능력치 순)
   if (L.field.length < FIELD_SIZE) {
     const pool = s.players
@@ -98,7 +103,7 @@ export function runReserveWeek(s: CareerState, lastWeek: boolean) {
       L.champion = champ.id;
       champ.titles = [...(champ.titles ?? []), `${s.season}시즌 2부리그 우승`];
       gainStats(champ, 4, 10, 20);
-      news(s, `🌱 ${s.season}시즌 2부 리그 우승: ${champ.name}${champ.team === s.myTeam ? " (우리 2부 선수!)" : " (무소속)"}`);
+      news(s, `🌱 ${s.season}시즌 2부 리그 우승: ${champ.name}${champ.team === s.myTeam ? " (우리 2부 선수!)" : champ.team === FREE_AGENT_TEAM ? " (무소속)" : ` (${s.teams[champ.team].name})`}`);
     }
   }
 }

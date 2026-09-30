@@ -73,12 +73,14 @@ describe("2부 리그", () => {
         const L = s.reserveLeague!;
         expect(L.field).toContain(young.id);
         expect(L.field.length).toBeGreaterThanOrEqual(16);
-        expect(L.last.length).toBe(16); // 16명 × 2경기 / 2
+        expect(L.last.length).toBe(Math.floor(L.field.length / 2) * 2); // 한 주 2경기
+        // 다른 구단 2부 선수도 참가
+        expect(L.field.some(id => s.players[id].reserve && s.players[id].team !== 0 && s.players[id].team !== 12)).toBe(true);
       }
     }
     const L = s.reserveLeague!;
     const [w, l] = L.table[young.id];
-    expect(w + l).toBe(22);
+    expect(w + l).toBeGreaterThanOrEqual(20); // 홀수 인원이면 가끔 쉼
     expect(L.champion).toBeDefined();
     expect(s.players[L.champion!].titles?.some(t => t.includes("2부리그 우승"))).toBe(true);
     // 16세 유망주는 한 시즌에 크게 성장
@@ -135,8 +137,9 @@ describe("조 지명식", () => {
       }
       // 우리 선수가 조장이 아니면 멈추지 않고 조 편성까지 끝남
       const mineHead = s.msl!.seeds.slice(0, 8).some(id => s.players[id]?.team === s.myTeam);
-      expect(!!s.weekHold).toBe(mineHead);
-      if (!mineHead) continue;
+      // 조장이면 반드시 우리 차례가 옴 (조장이 아니어도 지명받으면 다음 차례에 지명)
+      if (mineHead) expect(s.weekHold).toBeDefined();
+      if (!s.weekHold) continue;
       const week = s.week;
       expect(() => advanceOnly(s)).toThrow(CareerError);
       // 우리 차례까지 진행 → 직접 지명
@@ -147,6 +150,12 @@ describe("조 지명식", () => {
         const pick = d.pool[d.pool.length - 1];
         nominate(s, pick);
         expect(d.groups.some(g => g.includes(pick))).toBe(true);
+      }
+      // 지명받은 선수가 다음 차례에 지명 (조마다 앞 선수 → 뒤 선수)
+      const draft = s.msl!.draft!;
+      for (const n of s.msl!.nominations) {
+        const g = draft.groups.find(x => x.includes(n.pick))!;
+        expect(g.indexOf(n.pick)).toBe(g.indexOf(n.by) + 1);
       }
       const r = completeWeek(s);
       expect(s.weekHold).toBeUndefined();

@@ -540,7 +540,8 @@ export function NominationScreen({ s, onClose, onDone }: { s: CareerState; onClo
   );
   const step = d.step, done = step >= 24;
   const round = Math.floor(step / 8), gi = round % 2 === 0 ? step % 8 : 7 - (step % 8);
-  const head = done ? undefined : d.groups[gi][0];
+  // 지명하는 선수: 그 조에 마지막으로 들어온 선수 (조장 → 조장이 지명한 선수 → …)
+  const head = done ? undefined : d.groups[gi][d.groups[gi].length - 1];
   const myTurn = head !== undefined && s.players[head]?.team === s.myTeam;
   const pool = [...d.pool].sort((a, b) => totalOf(s.players[b].stats) - totalOf(s.players[a].stats));
   const G = ["A", "B", "C", "D", "E", "F", "G", "H"];
@@ -569,7 +570,7 @@ export function NominationScreen({ s, onClose, onDone }: { s: CareerState; onClo
         </div>
         {myTurn && (
           <>
-            <div className="text-center text-[12px] text-neutral-300 mt-3">{s.players[head!].name} 선수의 조에 넣을 상대를 지명하세요 (약한 선수나 상대하기 좋은 종족을 고르는 게 유리)</div>
+            <div className="text-center text-[12px] text-neutral-300 mt-3">{s.players[head!].name} 선수가 {G[gi]}조에 넣을 상대를 지명하세요 (지명받은 선수가 다음 차례에 지명합니다)</div>
             <div className="border-2 border-neutral-300 p-0.5 mt-1.5 max-h-[300px] overflow-y-auto">
               {pool.map(id => {
                 const p = s.players[id];
@@ -585,7 +586,7 @@ export function NominationScreen({ s, onClose, onDone }: { s: CareerState; onClo
             </div>
           </>
         )}
-        {!myTurn && !done && <div className="text-center text-[11px] text-neutral-500 mt-3">Next 로 다음 우리 선수 차례까지 진행 (다른 조장은 자동 지명)</div>}
+        {!myTurn && !done && <div className="text-center text-[11px] text-neutral-500 mt-3">Next 로 다음 우리 선수 차례까지 진행 (다른 선수는 자동 지명, 지명받은 선수가 다음 차례에 지명)</div>}
       </div>
     </LegacyFrame>
   );
