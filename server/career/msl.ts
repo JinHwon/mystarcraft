@@ -43,9 +43,10 @@ export function createMsl(s: CareerState): MslState {
 
 // ── 경기 ───────────────────────────────────────────────────────
 
-function series(s: CareerState, a: number, b: number, bestOf: number, label: string, report: MslReport[], stage: string): MslSeries {
+/** quiet: 중계·감독 경험치 없이 빠른 판정만 (PC방 예선) */
+function series(s: CareerState, a: number, b: number, bestOf: number, label: string, report: MslReport[], stage: string, quiet = false): MslSeries {
   const need = Math.ceil(bestOf / 2);
-  const mine = isMine(s, a) || isMine(s, b);
+  const mine = !quiet && (isMine(s, a) || isMine(s, b));
   const maps = pickMaps(bestOf, s.mapPool);
   let sa = 0, sb = 0;
   const sets: PlayedSet[] = [];
@@ -91,13 +92,17 @@ function runPc(s: CareerState, m: MslState) {
   dualDirect.forEach(id => direct.add(id));
   let pool = shuffle(activePlayers(s).map(p => p.id).filter(id => !direct.has(id)));
   m.pcEntrants = pool.length;
-  while (pool.length > 8) {
+  m.pcGames = [];
+  for (let round = 1; pool.length > 8; round++) {
     // 정확히 8명이 남도록 필요한 만큼만 경기, 나머지는 부전승
     const games = Math.min(Math.floor(pool.length / 2), pool.length - 8);
     const next: number[] = pool.slice(games * 2);
     for (let i = 0; i < games * 2; i += 2) {
-      const r = quickSet(s, s.players[pool[i]], s.players[pool[i + 1]], pickMaps(1, s.mapPool)[0]);
-      next.push(r.winner === "a" ? pool[i] : pool[i + 1]);
+      // 참가자가 많아 하나씩 중계하지 않고, 결과 화면에서 우리 선수 전적을 보여준다
+      const r = series(s, pool[i], pool[i + 1], 1, `${round}회전`, [], "PC방 예선", true);
+      next.push(r.winner);
+      if (isMine(s, r.a) || isMine(s, r.b)) m.pcGames.push(r);
+      m.placements[r.winner === pool[i] ? pool[i + 1] : pool[i]] = "PC방 탈락";
     }
     pool = shuffle(next);
   }
@@ -215,14 +220,16 @@ function finishMsl(s: CareerState, m: MslState) {
 const NEXT_STAGE: Record<MslStage, MslStage> = { pc: "dual", dual: "nom", nom: "group", group: "ro16", ro16: "ro8", ro8: "ro4", ro4: "final", final: "done", done: "done" };
 
 /** 이번 주 개인리그 일정 진행 (MSL_PLAN). 우리 선수 경기 목록을 돌려준다 */
-export function runMslWeek(s: CareerState): MslReport[] {
+export function runMslWeek(s: CareerState): { reports: MslReport[]; plans: number[] } {
   if (!s.msl || s.msl.season !== s.season) s.msl = createMsl(s);
   const m = s.msl;
   const report: MslReport[] = [];
   // 예전 세이브: 단계로 위치 추정
   if (m.planIdx === undefined) m.planIdx = m.stage === "done" ? MSL_PLAN.length : Math.max(0, MSL_PLAN.findIndex(x => x.stage === m.stage));
+  const plans: number[] = [];
   while (m.planIdx < MSL_PLAN.length && MSL_PLAN[m.planIdx].week <= s.week) {
     const plan = MSL_PLAN[m.planIdx];
+    plans.push(m.planIdx);
     const last = !MSL_PLAN[m.planIdx + 1] || MSL_PLAN[m.planIdx + 1].stage !== plan.stage;
     switch (plan.stage) {
       case "pc": runPc(s, m); break;
@@ -237,7 +244,7 @@ export function runMslWeek(s: CareerState): MslReport[] {
     if (last) m.stage = NEXT_STAGE[plan.stage];
     m.planIdx++;
   }
-  return report;
+  return { reports: report, plans };
 }
 
 export { MSL_STAGE_NAMES };

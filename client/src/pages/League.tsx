@@ -48,7 +48,7 @@ function MatchTab({ s }: { s: CareerState }) {
   /** 한 주 첫 경기가 끝난 직후 (2경기 준비) */
   const [legDone, setLegDone] = useState<number | null>(null);
   /** 이번 주 개인리그 관전 중 */
-  const [mslFlow, setMslFlow] = useState<MslReportView[] | null>(null);
+  const [mslFlow, setMslFlow] = useState<WeekDone | null>(null);
   const [watch, setWatch] = useState<MslReportView | null>(null);
   const [watching, setWatching] = useState(!!s.live);
   const drawKey = `mysc-mapdraw-${s.season}-${s.myTeam}`;
@@ -76,11 +76,11 @@ function MatchTab({ s }: { s: CareerState }) {
   // 주가 끝나면 우리 선수 개인리그 경기부터 관전
   function finishWeekView(w: WeekDone) {
     setWeekDone(w);
-    if (w.mslReports?.length) setMslFlow(w.mslReports);
+    if (w.mslReports?.length || w.mslPlans?.length) setMslFlow(w);
   }
 
   if (watch) return <SeriesViewer s={s} report={watch} onClose={() => setWatch(null)} />;
-  if (mslFlow) return <MslFlow s={s} reports={mslFlow} onDone={() => setMslFlow(null)} />;
+  if (mslFlow) return <MslFlow s={s} reports={mslFlow.mslReports ?? []} plans={mslFlow.mslPlans} onDone={() => setMslFlow(null)} />;
 
   if (watching && s.live) {
     return (

@@ -272,6 +272,8 @@ export interface WeekResult {
   /** 우리 경기 세트별 중계 (원작식 중계 화면용) */
   broadcast?: PlayedSet[];
   mslReports: MslReport[];
+  /** 이번 주에 치른 개인리그 일정 (MSL_PLAN 번호) — 결과 화면용 */
+  mslPlans?: number[];
 }
 
 export function advanceWeek(s: CareerState, myEntry?: number[]): WeekResult {
@@ -298,7 +300,7 @@ export function advanceWeek(s: CareerState, myEntry?: number[]): WeekResult {
 /** 이번 주 나머지 일정 (다른 팀 경기·스타리그·스폰서) 진행 후 다음 주로 */
 function finishWeek(s: CareerState): WeekResult {
   for (const m of s.matches.filter(x => !x.done && x.week === s.week)) playMatch(s, m);
-  const mslReports = s.phase !== "offseason" ? runMslWeek(s) : [];
+  const { reports: mslReports, plans: mslPlans } = s.phase !== "offseason" ? runMslWeek(s) : { reports: [], plans: [] };
   // 다른 팀은 고정 후원금, 우리 팀은 고른 스폰서 (구단 운영 → 스폰서)
   for (const t of proTeams(s)) if (t.id !== s.myTeam) t.money += WEEKLY_SPONSOR;
   weeklyClub(s);
@@ -306,7 +308,7 @@ function finishWeek(s: CareerState): WeekResult {
   s.week++;
   s.ap = WEEKLY_AP;
   progressSchedule(s);
-  return { mslReports };
+  return { mslReports, mslPlans };
 }
 
 // ── 우리 경기: 세트마다 진행 ──────────────────────────────────────
