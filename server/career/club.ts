@@ -1,6 +1,7 @@
 /**
  * 구단 운영: 연봉·운영비·장부, 선수 사기와 이적 희망, 영입 제안(받기·보내기)과 협상, 계약, 감독 평판과 이동, 파산
  */
+import { eventOn } from "./events";
 import { FREE_AGENT_TEAM } from "@shared/career/originalData";
 import {
   AI_MIN_ROSTER,
@@ -120,8 +121,9 @@ export function negotiateMainSponsor(s: CareerState, terms: MainSponsorTerms, ye
 /** 메인 스폰서 수당 지급 */
 export function mainSponsorPay(s: CareerState, key: keyof MainSponsorTerms, label: string) {
   ensureMainSponsor(s);
-  const v = s.mainSponsor![key] ?? 0;
-  if (v > 0) pay(s, label, v);
+  // 수당 2배 이벤트: 프로리그 승리·패배 수당
+  const v = (s.mainSponsor![key] ?? 0) * ((key === "win" || key === "loss") && eventOn("gold_double") ? 2 : 1);
+  if (v > 0) pay(s, label + (v !== s.mainSponsor![key] ? " (이벤트 2배)" : ""), v);
   return v;
 }
 

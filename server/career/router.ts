@@ -2,8 +2,14 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
-import { getDb } from "../db";
-import { careers } from "../../drizzle/schema";
+import { getActiveEvents, getDb } from "../db";
+import { careers, users } from "../../drizzle/schema";
+import { ITEM_BY_KEY } from "@shared/career/items";
+import { askingPrice } from "@shared/career/rules";
+import { reserveOf, rosterOf as rosterOfView, teamPower } from "@shared/career/view";
+import { managerExpNeed } from "@shared/career/mainSponsor";
+import type { CareerEventType } from "@shared/career/events";
+import { setActiveEvents } from "./events";
 import type { CareerState } from "@shared/career/rules";
 import { diffOf, snapshot } from "./diff";
 import { ACTIONS } from "@shared/career/rules";
@@ -111,9 +117,24 @@ function withLock<T>(userId: number, fn: () => Promise<T>): Promise<T> {
   return run.finally(() => { if (locks.get(userId) === run) locks.delete(userId); });
 }
 
+// ── 운영 이벤트 (30초마다 DB 에서 갱신) ─────────────────────────
+let eventsAt = 0;
+async function refreshEvents() {
+  if (Date.now() - eventsAt < 30_000) return;
+  eventsAt = Date.now();
+  try {
+    const now = Date.now();
+    const ev = await getActiveEvents();
+    setActiveEvents(ev.filter(e => (!e.startTime || new Date(e.startTime).getTime() <= now) && (!e.endTime || new Date(e.endTime).getTime() >= now)).map(e => e.type as CareerEventType));
+  } catch (e) { console.error("[career] 이벤트 조회 실패", e); }
+}
+/** 관리자가 이벤트를 바꾸면 바로 반영 */
+export function resetEventsCache() { eventsAt = 0; }
+
 /** 세이브를 불러와 수정하고 저장. 바뀐 부분(diff)만 돌려준다. 게임 규칙 오류는 사용자에게 보여줄 메시지로 변환 */
 function mutate<T>(userId: number, fn: (s: CareerState) => T) {
   return withLock(userId, async () => {
+    await refreshEvents();
     const s = await load(userId);
     if (!s) throw new TRPCError({ code: "NOT_FOUND", message: "진행 중인 커리어가 없습니다. 새 게임을 시작하세요" });
     const before = snapshot(s);
@@ -132,14 +153,135 @@ function mutate<T>(userId: number, fn: (s: CareerState) => T) {
   });
 }
 
+/** 관리자용: 게임 오버 세이브도 수정 */
+function mutateAny<T>(userId: number, fn: (s: CareerState) => T) {
+  return withLock(userId, async () => {
+    const s = await load(userId);
+    if (!s) throw new TRPCError({ code: "NOT_FOUND", message: "이 사용자는 커리어가 없습니다" });
+    try {
+      const result = fn(s);
+      save(userId, s);
+      return { result };
+    } catch (e) {
+      const hit = cache.get(userId);
+      if (hit) remember(userId, JSON.parse(hit.json) as CareerState, hit.json);
+      throw e;
+    }
+  });
+}
+
 /** 결과만 돌려주는 가벼운 변경 (화면은 미리 반영해 둠) */
 function mutateLite<T>(userId: number, fn: (s: CareerState) => T) {
   return mutate(userId, fn).then(r => ({ result: r.result }));
 }
 
+// ── 랭킹·관리자 ───────────────────────────────────────────────
+/** 커리어 한 줄 요약 (랭킹·관리자 화면) */
+function summaryOf(s: CareerState) {
+  const me = s.teams[s.myTeam];
+  const players = [...rosterOfView(s, s.myTeam), ...reserveOf(s, s.myTeam)];
+  const playerValue = players.reduce((sum, p) => sum + askingPrice(p, s.season), 0);
+  return {
+    team: { id: s.myTeam, name: me.name, short: me.short, color: me.color },
+    level: s.manager?.level ?? 1,
+    exp: s.manager?.exp ?? 0,
+    expNeed: managerExpNeed(s.manager?.level ?? 1),
+    reputation: s.manager?.reputation ?? 50,
+    season: s.season,
+    week: s.week,
+    phase: s.phase,
+    money: me.money,
+    playerValue,
+    clubValue: me.money + playerValue,
+    power: teamPower(s, s.myTeam),
+    players: players.length,
+    record: { wins: me.wins, losses: me.losses },
+    proTitles: s.history.filter(h => h.champion === s.myTeam).length,
+    mslTitles: s.players.reduce((n, p) => n + (p.team === s.myTeam ? (p.titles ?? []).filter(x => x.includes("스타리그") || x.includes("MSL")).length : 0), 0),
+    gameOver: s.gameOver?.reason,
+  };
+}
+export type CareerSummary = ReturnType<typeof summaryOf>;
+
+/** 모든 커리어 요약 (메모리 캐시 우선, 1분 캐시) */
+let summaryCache: { at: number; rows: Array<{ userId: number; name: string; role: string; lastSignedIn: Date | null; summary: CareerSummary | null }> } | null = null;
+async function allSummaries(force = false) {
+  if (!force && summaryCache && Date.now() - summaryCache.at < 60_000) return summaryCache.rows;
+  const db = await requireDb();
+  const us = await db.select({ id: users.id, name: users.name, role: users.role, lastSignedIn: users.lastSignedIn }).from(users);
+  const rows = await db.select({ userId: careers.userId, state: careers.state }).from(careers);
+  const byUser = new Map(rows.map(r => [r.userId, r.state]));
+  const out = us.map(u => {
+    let summary: CareerSummary | null = null;
+    try {
+      const hit = cache.get(u.id)?.state;
+      const s = hit ?? (byUser.has(u.id) ? (JSON.parse(byUser.get(u.id)!) as CareerState) : null);
+      if (s) summary = summaryOf(s);
+    } catch { summary = null; }
+    return { userId: u.id, name: u.name || `감독${u.id}`, role: u.role, lastSignedIn: u.lastSignedIn, summary };
+  });
+  summaryCache = { at: Date.now(), rows: out };
+  return out;
+}
+
+const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "관리자 권한이 필요합니다" });
+  return next({ ctx });
+});
+
 const actionKeys = ACTIONS.map(a => a.key) as [string, ...string[]];
 
 export const careerRouter = router({
+  /** 감독 랭킹 (커리어가 있는 사용자) */
+  ranking: protectedProcedure.query(async ({ ctx }) => {
+    const rows = await allSummaries();
+    return {
+      me: ctx.user.id,
+      rows: rows.filter(r => r.summary).map(r => ({ userId: r.userId, name: r.name, ...r.summary! })),
+    };
+  }),
+
+  /** 관리자: 사용자 목록 + 커리어 요약 */
+  adminUsers: adminProcedure.query(async () => (await allSummaries(true)).map(r => ({ ...r, lastSignedIn: r.lastSignedIn ? String(r.lastSignedIn) : null }))),
+
+  /** 관리자: 커리어 수정 (자금·감독 레벨·명성·아이템 지급·컨디션 회복) */
+  adminEdit: adminProcedure
+    .input(z.object({
+      userId: z.number().int(),
+      money: z.number().int().min(-1_000_000).max(10_000_000).optional(),
+      level: z.number().int().min(1).max(50).optional(),
+      reputation: z.number().int().min(0).max(100).optional(),
+      items: z.record(z.string(), z.number().int().min(0).max(999)).optional(),
+      healAll: z.boolean().optional(),
+      clearGameOver: z.boolean().optional(),
+    }))
+    .mutation(({ input }) => mutateAny(input.userId, s => {
+      if (input.money !== undefined) s.teams[s.myTeam].money = input.money;
+      if (input.level !== undefined || input.reputation !== undefined) {
+        s.manager = { reputation: 50, level: 1, exp: 0, ...s.manager };
+        if (input.level !== undefined) { s.manager.level = input.level; s.manager.exp = 0; }
+        if (input.reputation !== undefined) s.manager.reputation = input.reputation;
+      }
+      for (const [k, n] of Object.entries(input.items ?? {})) if (ITEM_BY_KEY[k]) s.inventory = { ...s.inventory, [k]: n };
+      if (input.healAll) for (const p of rosterOfView(s, s.myTeam)) p.cond = 10;
+      if (input.clearGameOver) { delete s.gameOver; s.debtWeeks = 0; }
+      summaryCache = null;
+      return summaryOf(s);
+    })),
+
+  /** 관리자: 커리어 초기화 (세이브 삭제) */
+  adminResetCareer: adminProcedure
+    .input(z.object({ userId: z.number().int() }))
+    .mutation(({ input }) => withLock(input.userId, async () => {
+      const db = await requireDb();
+      pendingWrites.delete(input.userId);
+      await flushing.get(input.userId);
+      await db.delete(careers).where(eq(careers.userId, input.userId));
+      cache.delete(input.userId);
+      summaryCache = null;
+      return { ok: true };
+    })),
+
   get: protectedProcedure.query(async ({ ctx }) => {
     return { state: await load(ctx.user.id) };
   }),
