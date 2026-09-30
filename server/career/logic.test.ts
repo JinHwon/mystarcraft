@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FINAL_SETS, PRO_SETS } from "@shared/career/rules";
-import { CareerError, advanceWeek, aiEntry, beginMatch, buyItem, myPendingMatch, newCareer, playLiveSet, proposeTrade, releasePlayer, rosterOf, scoutPlayer, setAction, standings, startNextSeason } from "./logic";
+import { CareerError, advanceWeek, aiEntry, beginMatch, buyItem, useStockItem, myPendingMatch, newCareer, playLiveSet, proposeTrade, releasePlayer, rosterOf, scoutPlayer, setAction, standings, startNextSeason } from "./logic";
 
 describe("커리어 모드", () => {
   it("원작 데이터로 새 게임을 만든다 (230명, 12팀 2라운드 풀리그 11주 132경기)", () => {
@@ -178,6 +178,22 @@ describe("아이템 상점", () => {
     expect(s.inventory!.cheer).toBe(0);
     playLiveSet(s);
     expect(s.inventory!.sniping).toBe(0);
+  });
+
+  it("소모품은 여러 개를 한 번에 사고, 비타비타는 사 두었다가 선수에게 먹인다", () => {
+    const s = newCareer(2);
+    s.teams[2].money = 1000;
+    buyItem(s, "vitavita", undefined, 5);
+    expect(s.inventory!.vitavita).toBe(5);
+    expect(s.teams[2].money).toBe(1000 - 40 * 5);
+    const p = rosterOf(s, 2)[0];
+    p.cond = 4;
+    useStockItem(s, "vitavita", p.id);
+    expect(p.cond).toBe(7);
+    expect(s.inventory!.vitavita).toBe(4);
+    p.cond = 10;
+    expect(() => useStockItem(s, "vitavita", p.id)).toThrow("컨디션이 최대 입니다");
+    expect(() => buyItem(s, "vitavita", undefined, 1000)).toThrow(CareerError);
   });
 });
 

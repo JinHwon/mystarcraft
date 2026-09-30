@@ -531,16 +531,18 @@ export function releasePlayer(s: CareerState, pid: number) {
 export interface BuyResult { message: string; delta?: Partial<Record<string, number>> }
 
 /** 아이템 구입. 장비·즉시 사용·포션은 선수(target)에게 바로 쓴다 */
-export function buyItem(s: CareerState, key: string, target?: number): BuyResult {
+export function buyItem(s: CareerState, key: string, target?: number, qty = 1): BuyResult {
   const it = ITEM_BY_KEY[key];
   if (!it || it.notForSale) throw new CareerError("구입 불가능 품목입니다");
   const me = s.teams[s.myTeam];
-  if (me.money < it.price) throw new CareerError("소지금이 부족합니다");
-  if (it.kind === "match") {
-    pay(s, "아이템", -it.price);
-    s.inventory = { ...s.inventory, [key]: (s.inventory?.[key] ?? 0) + 1 };
-    return { message: "구입하였습니다" };
+  if (it.kind === "match" || it.kind === "stock") {
+    const n = Math.max(1, Math.min(99, Math.floor(qty)));
+    if (me.money < it.price * n) throw new CareerError("소지금이 부족합니다");
+    pay(s, "아이템", -it.price * n);
+    s.inventory = { ...s.inventory, [key]: (s.inventory?.[key] ?? 0) + n };
+    return { message: n > 1 ? `${n}개 구입하였습니다` : "구입하였습니다" };
   }
+  if (me.money < it.price) throw new CareerError("소지금이 부족합니다");
   const p = target !== undefined ? s.players[target] : undefined;
   if (!p || p.team !== s.myTeam) throw new CareerError("선수를 선택하세요");
   if (it.kind === "equip") {
@@ -583,6 +585,19 @@ export function buyItem(s: CareerState, key: string, target?: number): BuyResult
   const avg = sum / keys.length;
   const message = avg < 0 ? "정신이 몽롱해진다..." : avg < (po.max - po.min) * 0.25 + Math.max(0, po.min) ? "먹은것 같긴한데..." : avg >= po.max * 0.7 ? "호랑이 기운이 솟아났다" : "맛있게 마셨다";
   return { message, delta };
+}
+
+/** 보관한 아이템을 선수에게 사용 (비타비타: 컨디션 +3) */
+export function useStockItem(s: CareerState, key: string, target: number): BuyResult {
+  const it = ITEM_BY_KEY[key];
+  if (!it || it.kind !== "stock") throw new CareerError("사용할 수 없는 아이템입니다");
+  if ((s.inventory?.[key] ?? 0) <= 0) throw new CareerError("아이템이 없습니다");
+  const p = s.players[target];
+  if (!p || p.team !== s.myTeam) throw new CareerError("대상을 선택해 주세요");
+  if (p.cond >= COND_MAX) throw new CareerError("컨디션이 최대 입니다");
+  s.inventory![key]--;
+  p.cond = clampCond(p.cond + (it.cond ?? 0));
+  return { message: "아이템을 사용했습니다" };
 }
 
 // ── 트레이드 ───────────────────────────────────────────────────

@@ -16,3 +16,23 @@ export function useCareerUpdater() {
     onError: (e: { message: string }) => toast.error(e.message),
   };
 }
+
+export interface CareerPatch {
+  money: number;
+  inventory: Record<string, number>;
+  ledger?: CareerState["ledger"];
+  player?: CareerState["players"][number];
+}
+/** 서버가 돌려준 바뀐 부분만 캐시에 반영 (세이브 전체를 다시 받지 않음) */
+export function useCareerPatch() {
+  const utils = trpc.useUtils();
+  return (patch: CareerPatch) => utils.career.get.setData(undefined, old => {
+    if (!old?.state) return old;
+    const s = structuredClone(old.state) as CareerState;
+    s.teams[s.myTeam].money = patch.money;
+    s.inventory = patch.inventory;
+    if (patch.ledger) s.ledger = patch.ledger;
+    if (patch.player) s.players[patch.player.id] = patch.player;
+    return { state: s };
+  });
+}

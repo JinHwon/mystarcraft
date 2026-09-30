@@ -13,6 +13,7 @@ import {
   advanceWeek,
   beginMatch,
   buyItem,
+  useStockItem,
   playLiveSet,
   migrateCareer,
   newCareer,
@@ -95,6 +96,19 @@ function mutateLite<T>(userId: number, fn: (s: CareerState) => T) {
   return mutate(userId, fn).then(r => ({ result: r.result }));
 }
 
+/** 바뀐 부분만 돌려주는 변경: 팀 자금·보유 아이템·장부·대상 선수 */
+function mutatePatch<T>(userId: number, target: number | undefined, fn: (s: CareerState) => T) {
+  return mutate(userId, fn).then(({ state: s, result }) => ({
+    result,
+    patch: {
+      money: s.teams[s.myTeam].money,
+      inventory: s.inventory ?? {},
+      ledger: s.ledger,
+      player: target !== undefined ? s.players[target] : undefined,
+    },
+  }));
+}
+
 const actionKeys = ACTIONS.map(a => a.key) as [string, ...string[]];
 
 export const careerRouter = router({
@@ -168,8 +182,13 @@ export const careerRouter = router({
 
   /** 아이템 구입 (장비·즉시·포션은 target 선수에게 바로 사용) */
   buyItem: protectedProcedure
-    .input(z.object({ key: z.string(), target: z.number().int().optional() }))
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => buyItem(s, input.key, input.target))),
+    .input(z.object({ key: z.string(), target: z.number().int().optional(), qty: z.number().int().min(1).max(99).optional() }))
+    .mutation(({ ctx, input }) => mutatePatch(ctx.user.id, input.target, s => buyItem(s, input.key, input.target, input.qty ?? 1))),
+
+  /** 보관한 아이템 사용 (비타비타) */
+  useItem: protectedProcedure
+    .input(z.object({ key: z.string(), target: z.number().int() }))
+    .mutation(({ ctx, input }) => mutatePatch(ctx.user.id, input.target, s => useStockItem(s, input.key, input.target))),
 
   /** 다음 세트 진행 (ACE 결정전이면 ace 선수) */
   playSet: protectedProcedure

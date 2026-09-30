@@ -5,9 +5,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { STAT_KEYS, type StatKey } from "@shared/gameConstants";
-import { FINAL_SETS, MATCH_MONEY, MSL_PLAN, PRO_SETS, condMultiplier, totalOf, type CareerState, type CMatch, type CPlayer, type SetResult, type SetTimeline } from "@shared/career/rules";
+import { COND_MAX, FINAL_SETS, MATCH_MONEY, MSL_PLAN, PRO_SETS, condMultiplier, totalOf, type CareerState, type CMatch, type CPlayer, type SetResult, type SetTimeline } from "@shared/career/rules";
 import { STAGE_NAMES, mapView, rosterOf } from "@shared/career/view";
 import { ITEMS, ITEM_BY_KEY, SLOT_NAMES, gearCond, gearStats, itemImg, type EquipSlot } from "@shared/career/items";
+import { trpc } from "@/lib/trpc";
+import { useCareerPatch } from "@/lib/career";
 import { GrayBox, LEGACY_FONT, LegacyFrame, LegacyImg, LegacyRadar, MapImage, MapInfo, PlayerPhoto, TeamLogo } from "./Legacy";
 
 const R = { terran: "T", zerg: "Z", protoss: "P" } as const;
@@ -17,6 +19,33 @@ const MATCH_ITEMS = ITEMS.filter(i => i.kind === "match");
 /** 엔트리에서 상점으로 (편성 내용은 유지되지 않음) */
 const navigateShop = () => { window.location.href = "/shop"; };
 const RIGHT_COLOR = "#ffb8c8";
+
+/** 경기 전 비타비타 먹이기 (사 둔 것을 사용, 컨디션 +3) */
+function VitaButton({ s, pid }: { s: CareerState; pid: number }) {
+  const patch = useCareerPatch();
+  const [msg, setMsg] = useState<string | null>(null);
+  const use = trpc.career.useItem.useMutation({
+    onSuccess: r => { patch(r.patch); setMsg(`${s.players[pid].name} 컨디션 ${(r.patch.player?.cond ?? 0) * 10}%`); },
+    onError: e => setMsg(e.message),
+  });
+  useEffect(() => setMsg(null), [pid]);
+  const have = s.inventory?.vitavita ?? 0;
+  const p = s.players[pid];
+  const full = p.cond >= COND_MAX;
+  return (
+    <div className="flex items-center justify-between gap-2 mt-1.5 border border-neutral-600 px-2 py-1 text-[12px]">
+      <span className="text-neutral-300 truncate">🥤 {msg ? `${msg} · 남은 ${have}개` : `비타비타 보유 ${have}개`}</span>
+      {have > 0 ? (
+        <button disabled={use.isPending || full} onClick={() => use.mutate({ key: "vitavita", target: pid })}
+          className={cn("shrink-0 border px-2 py-0.5", full ? "border-neutral-700 text-neutral-500" : "border-[#8fe07a] text-[#bff5c6]")}>
+          {full ? "컨디션 최대" : use.isPending ? "먹이는 중..." : `${p.name}에게 먹이기`}
+        </button>
+      ) : (
+        <button onClick={navigateShop} className="shrink-0 border border-neutral-600 px-2 py-0.5 text-neutral-300">상점에서 사기</button>
+      )}
+    </div>
+  );
+}
 
 /** 컨디션이 반영된 능력치 */
 export function condStats(p: CPlayer): Record<StatKey, number> {
@@ -212,6 +241,7 @@ export function EntryScreen({ s, match, front, setFront, items, setItems, onSubm
           <PlayerPanel p={viewMine !== undefined ? s.players[viewMine] : undefined} color="#8fd0ff" empty="우리 선수를 누르면 사진과 능력치가 보입니다" />
           <PlayerPanel p={viewOpp !== undefined ? s.players[viewOpp] : undefined} color="#ff9a9a" empty="상대 선수를 누르면 사진과 컨디션이 보입니다" />
         </div>
+        {viewMine !== undefined && <VitaButton s={s} pid={viewMine} />}
 
         <div className="grid grid-cols-[1fr_minmax(108px,0.9fr)_1fr] gap-1.5 mt-2.5 items-start">
           <div className="space-y-1">

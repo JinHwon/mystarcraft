@@ -109,6 +109,7 @@ export default function Team() {
           <div className="text-xs text-muted-foreground">{roster.length}명 · 테란 {races.terran} / 저그 {races.zerg} / 프로토스 {races.protoss} · 전력 {teamPower(s, s.myTeam).toLocaleString()}</div>
         </div>
       </div>
+      <button onClick={() => navigate("/training")} className="w-full rounded-xl bg-primary text-primary-foreground font-bold py-2.5 text-sm">🏋️ 선수 행동 정하기 (행동력 {s.ap})</button>
 
       <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-card border border-border">
         {([["first", `1부 (${rosterOf(s, s.myTeam).length})`], ["reserve", `2부 육성 (${reserveOf(s, s.myTeam).length}/10)`]] as const).map(([k, l]) => (
