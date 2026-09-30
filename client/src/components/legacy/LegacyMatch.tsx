@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { STAT_KEYS, type StatKey } from "@shared/gameConstants";
-import { COND_MAX, FINAL_SETS, MATCH_MONEY, MSL_PLAN, PRO_SETS, condMultiplier, totalOf, type CareerState, type CMatch, type CPlayer, type SetResult, type SetTimeline } from "@shared/career/rules";
+import { COND_MAX, FINAL_SETS, MATCH_MONEY, MSL_PLAN, PRO_SETS, condMultiplier, totalOf, type CareerState, type CMatch, type CPlayer, type MslGroup, type MslSeries, type SetResult, type SetTimeline } from "@shared/career/rules";
 import { STAGE_NAMES, headToHead, mapView, rosterOf } from "@shared/career/view";
 import { ITEMS, ITEM_BY_KEY, SLOT_NAMES, gearCond, gearStats, itemImg, type EquipSlot } from "@shared/career/items";
 import { trpc } from "@/lib/trpc";
@@ -551,7 +551,7 @@ function SetList({ s, left, right, maps, total, idx, results, leftIsA, showAce, 
 }
 
 // ── 경기 진행 (세트마다 서버에서 진행) ─────────────────────────────────
-export interface WeekDone { playedMatchId?: number; mslReports?: MslReportView[] }
+export interface WeekDone { playedMatchId?: number; mslReports?: MslReportView[]; mslPlans?: number[] }
 export type MslReportView = { stage: string; label: string; a: number; b: number; sa: number; sb: number; winner: number; bestOf: number; sets: BroadcastSet[] };
 
 export function LiveMatch({ s, playSet, pending, onFinished, onClose }: {
@@ -732,16 +732,20 @@ export function SeriesViewer({ s, report, onClose }: { s: CareerState; report: M
 
 
 /** 이번 주 개인리그: 우리 선수 경기를 차례로 (경기 전 화면 → 중계) */
-export function MslFlow({ s, reports, onDone }: { s: CareerState; reports: MslReportView[]; onDone: () => void }) {
+export function MslFlow({ s, reports, plans = [], onDone }: { s: CareerState; reports: MslReportView[]; plans?: number[]; onDone: () => void }) {
   const [i, setI] = useState(0);
   const [watching, setWatching] = useState(false);
   const r = reports[i];
-  if (!r) { onDone(); return null; }
-  const next = () => { setWatching(false); if (i + 1 < reports.length) setI(i + 1); else onDone(); };
+  const planAt = plans[i - reports.length];
+  const over = !r && planAt === undefined;
+  useEffect(() => { if (over) onDone(); }, [over]);
+  // 우리 선수 경기를 다 본 뒤 이번 주 개인리그 결과
+  if (!r) return planAt === undefined ? null : <MslStageResult s={s} planIdx={planAt} onNext={() => setI(i + 1)} onClose={onDone} />;
+  const next = () => { setWatching(false); setI(i + 1); };
   if (watching) return <SeriesViewer s={s} report={r} onClose={next} />;
   const mineLeft = s.players[r.a]?.team === s.myTeam || s.players[r.b]?.team !== s.myTeam;
   const lp = s.players[mineLeft ? r.a : r.b], rp = s.players[mineLeft ? r.b : r.a];
-  const logo = r.stage === "듀얼 토너먼트" ? "DT" : "MySL";
+  const logo = r.stage === "듀얼 토너먼트" ? "DT" : r.stage === "PC방 예선" ? "PC방" : "MySL";
   return (
     <LegacyFrame season={s.season} onBack={onDone} onNext={() => setWatching(true)}>
       <div className="px-3 pt-3 pb-4">
@@ -777,9 +781,119 @@ export function MslFlow({ s, reports, onDone }: { s: CareerState; reports: MslRe
 }
 
 const MSL_ICON: Record<string, string> = { "PC방 예선전": "PC방", 듀얼토너먼트: "DT" };
+/** 일정표에 들어갈 짧은 이름 */
+function mslShort(k: number) {
+  const p = MSL_PLAN[k];
+  const nth = MSL_PLAN.filter(x => x.stage === p.stage).length > 1 ? ` ${p.part + 1}차` : "";
+  return p.stage === "pc" ? "PC방 예선" : p.stage === "dual" ? `듀얼${nth}` : p.stage === "nom" ? "조지명식" : `${p.label}${nth}`;
+}
+
+function SeriesRow({ s, x }: { s: CareerState; x: MslSeries }) {
+  const name = (id: number) => {
+    const p = s.players[id];
+    return <span className={cn("truncate", x.winner === id ? "text-white" : "text-neutral-500", p?.team === s.myTeam && "text-[#8fd0ff]")}>{nameRace(p)}</span>;
+  };
+  return (
+    <div className="grid grid-cols-[70px_1fr_34px_1fr] items-center gap-1 text-[11.5px] py-[2px]">
+      <span className="text-[10px] text-neutral-400 truncate">{x.label.replace(/^[A-H]조 /, "")}</span>
+      <div className="text-right truncate">{name(x.a)}</div>
+      <span className="text-center text-[#ffe45c]">{x.sa}:{x.sb}</span>
+      <div className="truncate">{name(x.b)}</div>
+    </div>
+  );
+}
+
+function GroupCard({ s, g }: { s: CareerState; g: MslGroup }) {
+  return (
+    <div className="border border-neutral-600 p-1.5">
+      <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[12px] mb-1">
+        <span className="text-[#ffe45c]">{g.name}조</span>
+        {g.players.map(id => {
+          const p = s.players[id];
+          const q = g.qualified.includes(id);
+          return <span key={id} className={cn(p?.team === s.myTeam ? "text-[#8fd0ff]" : "text-neutral-200", g.games.length && !q && "opacity-50")}>{p?.name}{q ? " ✓" : ""}</span>;
+        })}
+      </div>
+      {g.games.map((x, k) => <SeriesRow key={k} s={s} x={x} />)}
+    </div>
+  );
+}
+
+/** PC방 예선: 우리 선수마다 몇 승, 몇 회전에서 누구에게 졌는지 */
+function pcSummary(s: CareerState, games: MslSeries[], qualifiers: number[]) {
+  const out = new Map<number, { id: number; wins: number; round: number; lostTo?: number; passed: boolean }>();
+  for (const g of games) {
+    const round = Number(g.label.match(/\d+/)?.[0] ?? 1);
+    for (const id of [g.a, g.b]) {
+      if (s.players[id]?.team !== s.myTeam) continue;
+      const x = out.get(id) ?? { id, wins: 0, round, passed: qualifiers.includes(id) };
+      x.round = round;
+      if (g.winner === id) x.wins++; else x.lostTo = id === g.a ? g.b : g.a;
+      out.set(id, x);
+    }
+  }
+  return [...out.values()].sort((a, b) => Number(b.passed) - Number(a.passed) || b.wins - a.wins);
+}
+
+/** 개인리그 일정 하나의 결과 (PC방 예선·듀얼·조지명식·32강·16강·8강·4강·결승) */
+export function MslStageResult({ s, planIdx, onNext, onClose }: { s: CareerState; planIdx: number; onNext?: () => void; onClose: () => void }) {
+  const plan = MSL_PLAN[planIdx];
+  const m = s.msl?.season === s.season ? s.msl : undefined;
+  const done = m ? (m.planIdx ?? 0) > planIdx : false;
+  const logo = plan.stage === "pc" ? "PC방" : plan.stage === "dual" ? "DT" : "MySL";
+  let body: React.ReactNode = <div className="text-center text-[12px] text-neutral-400 my-8">아직 진행되지 않은 일정입니다 ({plan.week}주차)</div>;
+  if (m && done) {
+    if (plan.stage === "pc") {
+      body = (
+        <div className="space-y-2">
+          <div className="text-center text-[12px] text-neutral-300">참가 {m.pcEntrants}명 · 단판 토너먼트 · {m.pcQualifiers.length}명 듀얼 토너먼트 진출</div>
+          <div className="border border-neutral-600 p-1.5">
+            <div className="text-[11px] text-neutral-400 mb-1">예선 통과</div>
+            <div className="grid grid-cols-2 gap-x-2 text-[12px]">
+              {m.pcQualifiers.map(id => <span key={id} className={cn("truncate", s.players[id]?.team === s.myTeam ? "text-[#8fd0ff]" : "text-neutral-200")}>{nameRace(s.players[id])} <span className="text-[10px] text-neutral-500">{s.teams[s.players[id]?.team]?.short ?? "무소속"}</span></span>)}
+            </div>
+          </div>
+          <div className="border border-neutral-600 p-1.5">
+            <div className="text-[11px] text-neutral-400 mb-1">우리 선수 성적</div>
+            {m.pcGames?.length ? pcSummary(s, m.pcGames, m.pcQualifiers).map(x => (
+              <div key={x.id} className="grid grid-cols-[1fr_auto_auto] gap-2 items-center text-[12px] py-[2px]">
+                <span className="truncate text-[#8fd0ff]">{nameRace(s.players[x.id])}</span>
+                <span className="text-[10.5px] text-neutral-400">{x.wins}승{x.lostTo !== undefined ? ` · ${s.players[x.lostTo]?.name}에게 패` : ""}</span>
+                <span className={cn("text-[11px]", x.passed ? "text-[#ffe45c]" : "text-neutral-500")}>{x.passed ? "예선 통과" : `${x.round}회전 탈락`}</span>
+              </div>
+            )) : <div className="text-[11px] text-neutral-500">{m.pcGames ? "우리 선수는 시드·듀얼 직행이라 예선에 나가지 않았습니다" : "이 시즌 예선 기록은 남아 있지 않습니다"}</div>}
+          </div>
+        </div>
+      );
+    } else if (plan.stage === "dual") {
+      body = <div className="space-y-1.5">{m.duals.slice(plan.part * 3, plan.part * 3 + 3).map(g => <GroupCard key={g.name} s={s} g={g} />)}</div>;
+    } else if (plan.stage === "nom") {
+      body = <div className="space-y-1.5">{m.groups.map(g => <GroupCard key={g.name} s={s} g={{ ...g, games: [], qualified: [] }} />)}</div>;
+    } else if (plan.stage === "group") {
+      body = <div className="space-y-1.5">{m.groups.slice(plan.part * 4, plan.part * 4 + 4).map(g => <GroupCard key={g.name} s={s} g={g} />)}</div>;
+    } else {
+      const [from, to] = plan.stage === "ro16" ? [plan.part * 4, plan.part * 4 + 4] : plan.stage === "ro8" ? [plan.part * 2, plan.part * 2 + 2] : plan.stage === "ro4" ? [0, 2] : [0, 1];
+      const round = m.bracket.find(b => b.round === plan.stage);
+      body = <div className="border border-neutral-600 p-1.5">{round?.series.slice(from, to).map((x, k) => <SeriesRow key={k} s={s} x={x} />)}</div>;
+    }
+  }
+  return (
+    <LegacyFrame season={s.season} onBack={onClose} onNext={onNext ?? onClose}>
+      <div className="px-3 pt-3 pb-4">
+        <div className="flex flex-col items-center gap-1 mb-2.5">
+          <LegacyImg dir="로고" name={logo} className="max-h-12 object-contain" fallback={<div className="text-[18px] italic font-black text-[#c9a0ff]">MySL</div>} />
+          <div className="text-[15px] tracking-[0.2em]">마이스타리그 {mslShort(planIdx)} 결과</div>
+          <div className="text-[10px] text-neutral-500">{plan.week}주차 · 파란 이름 = 우리 선수 · ✓ = 다음 단계 진출</div>
+        </div>
+        {body}
+      </div>
+    </LegacyFrame>
+  );
+}
 
 /** 원작 "정규 시즌 일정" 화면: 주마다 프로리그 2경기 + 개인리그 일정 */
 export function ScheduleScreen({ s, onClose }: { s: CareerState; onClose: () => void }) {
+  const [viewPlan, setViewPlan] = useState<number | null>(null);
   const me = s.teams[s.myTeam];
   const weeks = Math.max(11, ...s.matches.map(m => m.week));
   const mine = (w: number) => s.matches.filter(m => m.week === w && (m.a === s.myTeam || m.b === s.myTeam)).sort((a, b) => (a.leg ?? 1) - (b.leg ?? 1));
@@ -792,11 +906,13 @@ export function ScheduleScreen({ s, onClose }: { s: CareerState; onClose: () => 
       <div className="h-9 flex items-center gap-1.5 px-1.5 border-r border-neutral-600 min-w-0">
         <span className="text-[10px] text-neutral-300">{m.stage === "regular" ? "VS" : STAGE_NAMES[m.stage].slice(0, 3)}</span>
         <TeamLogo team={opp} className="w-[34px] h-[20px] shrink-0" />
-        <span className="text-[11px] truncate flex-1">{opp.name}</span>
+        <span className="text-[11px] truncate flex-1"><span className="min-[480px]:hidden">{opp.short}</span><span className="hidden min-[480px]:inline">{opp.name}</span></span>
         {m.done && <span className={cn("text-[10.5px] font-bold", won ? "text-[#bff5c6]" : "text-[#ff9a9a]")}>{my}:{their}</span>}
       </div>
     );
   };
+  if (viewPlan !== null) return <MslStageResult s={s} planIdx={viewPlan} onClose={() => setViewPlan(null)} />;
+  const mslDone = (k: number) => s.msl?.season === s.season && (s.msl.planIdx ?? 0) > k;
   return (
     <LegacyFrame season={s.season} onBack={onClose} onNext={onClose}>
       <div className="px-2 pt-3 pb-4">
@@ -805,27 +921,29 @@ export function ScheduleScreen({ s, onClose }: { s: CareerState; onClose: () => 
           <div className="text-center"><div className="text-[15px] tracking-[0.3em]">▽ 정규 시즌 일정 ▽</div><div className="text-[13px] mt-1">{me.name}</div></div>
           <TeamLogo team={me} className="w-[64px] h-[38px]" />
         </div>
-        <div className="grid grid-cols-[1fr_1fr_92px] text-[10px] text-neutral-400 mt-2 px-0.5">
+        <div className="grid grid-cols-[1fr_1fr_104px] text-[10px] text-neutral-400 mt-2 px-0.5">
           <span className="pl-1">프로리그 1경기</span><span className="pl-1">프로리그 2경기</span><span className="text-center text-[#8fe07a]">개인리그</span>
         </div>
         <div className="border border-neutral-500">
           {Array.from({ length: weeks }, (_, k) => k + 1).map(w => {
             const [m1, m2] = mine(w);
-            const plan = MSL_PLAN.find(p => p.week === w);
+            const k = MSL_PLAN.findIndex(p => p.week === w);
+            const plan = MSL_PLAN[k];
             const icon = plan ? MSL_ICON[plan.label] ?? "MySL" : undefined;
             return (
-              <div key={w} className={cn("grid grid-cols-[1fr_1fr_92px] border-b border-neutral-700 last:border-b-0", w === s.week && s.phase !== "offseason" && "outline outline-2 outline-white -outline-offset-2")}>
+              <div key={w} className={cn("grid grid-cols-[1fr_1fr_104px] border-b border-neutral-700 last:border-b-0", w === s.week && s.phase !== "offseason" && "outline outline-2 outline-white -outline-offset-2")}>
                 <Cell m={m1} />
                 <Cell m={m2} />
-                <div className="h-9 flex items-center gap-1 px-1 border-l border-[#8fe07a]/60">
-                  {icon && <LegacyImg dir="로고" name={icon} className="h-6 w-7 object-contain" fallback={null} />}
-                  <span className="text-[10.5px] truncate">{plan?.label ?? ""}</span>
-                </div>
+                <button disabled={!plan} onClick={() => plan && setViewPlan(k)} className="h-9 flex items-center gap-1 px-1 border-l border-[#8fe07a]/60 min-w-0 text-left">
+                  {icon && <LegacyImg dir="로고" name={icon} className="h-6 w-6 shrink-0 object-contain" fallback={null} />}
+                  <span className="text-[10.5px] leading-tight whitespace-nowrap">{plan ? mslShort(k) : ""}</span>
+                  {plan && mslDone(k) && <span className="ml-auto text-[10px] text-[#8fe07a]">✓</span>}
+                </button>
               </div>
             );
           })}
         </div>
-        <div className="text-[10px] text-neutral-500 text-center mt-2">주마다 프로리그 2경기와 개인리그 일정이 차례로 진행됩니다 · 흰 테두리 = 이번 주</div>
+        <div className="text-[10px] text-neutral-500 text-center mt-2">주마다 프로리그 2경기와 개인리그 일정이 차례로 진행됩니다 · 흰 테두리 = 이번 주 · 개인리그를 누르면 결과</div>
       </div>
     </LegacyFrame>
   );

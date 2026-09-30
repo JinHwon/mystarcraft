@@ -263,6 +263,8 @@ export interface MslState {
   pcQualifiers: number[];
   /** PC방 예선 참가 인원 */
   pcEntrants: number;
+  /** PC방 예선 중 우리 선수 경기 */
+  pcGames?: MslSeries[];
   duals: MslGroup[];
   nominations: Array<{ by: number; pick: number; group: string }>;
   groups: MslGroup[];
