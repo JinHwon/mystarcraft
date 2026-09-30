@@ -175,6 +175,13 @@ export const careerRouter = router({
     return { actions: Object.fromEntries(roster.map(p => [p.id, p.action ?? null])) as Record<number, string | null> };
   })),
 
+  /** 우리 선수 행동 모두 해제 (행동은 바꾸거나 초기화할 때까지 매주 유지) */
+  clearActions: protectedProcedure.mutation(({ ctx }) => mutateLite(ctx.user.id, s => {
+    if (s.live) throw new CareerError("경기 중에는 행동을 바꿀 수 없습니다");
+    for (const p of rosterOf(s, s.myTeam)) p.action = null;
+    return { ok: true };
+  })),
+
   advance: protectedProcedure
     .input(z.object({ entry: z.array(z.number().int()).optional() }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => advanceWeek(s, input.entry))),

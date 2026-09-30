@@ -171,7 +171,8 @@ function applyActions(s: CareerState) {
       default: p.cond = clampCond(p.cond + (rand() < 0.5 ? 1 : 0));
     }
     if (p.team === s.myTeam && action === "best") pay(s, "특별 훈련", -ACTIONS.find(a => a.key === "best")!.money);
-    p.action = null;
+    // 우리 선수 행동은 바꾸거나 초기화할 때까지 매주 유지
+    if (p.team !== s.myTeam) p.action = null;
   }
 }
 
@@ -391,6 +392,7 @@ export function playLiveSet(s: CareerState, ace?: number): LiveSetResult {
     const myWin = (set.winner === "a") === meA;
     if (plan.key === "ceremony" && myWin) {
       pay(s, "세레모니", 150);
+      set.ceremony = 150;
       for (const p of rosterOf(s, s.myTeam)) p.cond = clampCond(p.cond + 1);
     }
   }

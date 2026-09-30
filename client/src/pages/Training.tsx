@@ -25,6 +25,7 @@ export default function Training() {
     onSuccess: r => patch(st => { for (const [id, a] of Object.entries(r.result.actions)) st.players[Number(id)].action = a as ActionKey | null; }),
     onError: resync,
   });
+  const clear = trpc.career.clearActions.useMutation({ onError: resync });
   const choose = (pid: number, action: ActionKey | null) => {
     patch(st => { st.players[pid].action = action; });
     setAction.mutate({ playerId: pid, action });
@@ -44,7 +45,10 @@ export default function Training() {
             <div className="text-xs text-muted-foreground">이번 주 행동력</div>
             <div className="text-2xl font-black text-emerald-300">{left} <span className="text-sm text-muted-foreground">/ {WEEKLY_AP}</span></div>
           </div>
-          <button onClick={() => auto.mutate()} disabled={auto.isPending} className="px-3 py-2 rounded-xl bg-primary/20 border border-primary/40 text-primary text-sm font-bold">🤖 자동 배정</button>
+          <div className="flex gap-1.5">
+            <button onClick={() => { patch(st => { for (const p of rosterOf(st, st.myTeam)) p.action = null; }); clear.mutate(); }} disabled={!!s.live} className="px-3 py-2 rounded-xl bg-muted border border-border text-foreground text-sm font-bold">↺ 초기화</button>
+            <button onClick={() => auto.mutate()} disabled={auto.isPending} className="px-3 py-2 rounded-xl bg-primary/20 border border-primary/40 text-primary text-sm font-bold">🤖 자동 배정</button>
+          </div>
         </div>
         <div className="mt-2 grid grid-cols-4 gap-1.5">
           {ACTIONS.map(a => (
@@ -55,7 +59,7 @@ export default function Training() {
             </div>
           ))}
         </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">행동은 경기(한 주)를 진행할 때 적용됩니다. 지정하지 않은 선수는 자율 연습(컨디션 소폭 회복)을 합니다.</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">행동은 경기(한 주)를 진행할 때 적용되고, 바꾸거나 초기화할 때까지 매주 그대로 유지됩니다. 지정하지 않은 선수는 자율 연습(컨디션 소폭 회복)을 합니다. 경기를 뛰면 컨디션이 떨어지니(승 -10%, 패 -20%) 휴식도 챙기세요.</p>
       </div>
 
       <div className="space-y-2">

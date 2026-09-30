@@ -154,6 +154,16 @@ export interface CTeam {
   setLosses: number;
 }
 
+/** 세트 뒤 선수 변화 (중계 끝에 보여줌) */
+export interface PlayerFx {
+  /** 컨디션 [전, 후] */
+  cond: [number, number];
+  /** 바뀐 능력치 */
+  stats?: Partial<Record<StatKey, number>>;
+  exp: number;
+  /** 레벨 업 했으면 새 레벨 */
+  level?: number;
+}
 export interface SetResult {
   mapId: number;
   a: number;
@@ -165,6 +175,10 @@ export interface SetResult {
   item?: string;
   /** 스나이핑 적중 */
   sniped?: boolean;
+  /** 세트 뒤 두 선수 변화 */
+  fx?: { a: PlayerFx; b: PlayerFx };
+  /** 세레모니 보너스 (만원) */
+  ceremony?: number;
 }
 
 export interface CMatch {
