@@ -121,7 +121,8 @@ function Office({ s }: { s: CareerState }) {
   const wantOut = roster.filter(p => p.wantsOut);
   const alerts: Array<[string, string]> = [];
   if ((s.debtWeeks ?? 0) > 0 || me.money < 0) alerts.push(["⚠️", `운영 자금 적자 ${s.debtWeeks ?? 0}주째 — ${DEBT_LIMIT_WEEKS}주 연속이면 구단 해체`]);
-  if (s.sponsor?.season !== s.season && s.phase !== "offseason") alerts.push(["🤝", "이번 시즌 스폰서를 아직 정하지 않았습니다 (후원금 없음)"]);
+  if (s.sponsor?.season !== s.season && s.phase !== "offseason") alerts.push(["🤝", "이번 시즌 서브 스폰서를 아직 정하지 않았습니다 (후원금 없음)"]);
+  if (s.phase !== "offseason" && s.week === 1 && !s.matches.some(m => m.done && (m.a === s.myTeam || m.b === s.myTeam))) alerts.push(["🏢", "첫 경기 전: 메인 스폰서와 승리·패배·우승 수당을 재협상할 수 있습니다"]);
   if (s.offers?.length) alerts.push(["📨", `받은 영입 제안 ${s.offers.length}건`]);
   if (s.jobOffers?.length) alerts.push(["🤵", `감독 제의 ${s.jobOffers.length}건 (${s.jobOffers.map(id => s.teams[id].name).join(", ")})`]);
   if (wantOut.length) alerts.push(["😤", `이적 희망: ${wantOut.map(p => p.name).join(", ")}`]);
@@ -144,6 +145,7 @@ function Office({ s }: { s: CareerState }) {
             <div className="text-xs text-white/70">{s.season}시즌 · {phaseText}</div>
             <div className="text-xl font-black text-white truncate">{me.name}</div>
             <div className="text-xs text-white/80">{me.wins}승 {me.losses}패 · 세트 {me.setWins}:{me.setLosses} · <b>{rank}위</b></div>
+            <div className="text-[11px] text-yellow-200/90 font-bold">🎓 감독 Lv.{s.manager?.level ?? 1} · 평판 {s.manager?.reputation ?? 50}</div>
           </div>
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2 text-center">

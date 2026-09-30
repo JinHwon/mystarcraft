@@ -6,6 +6,7 @@ import { FREE_AGENT_TEAM } from "./originalData";
 import { totalOf, type CareerState } from "./rules";
 import { rosterOf, standings } from "./view";
 import { seeded } from "./contract";
+import { levelPerks, managerLevel } from "./mainSponsor";
 
 export type QuestKind = "teamWins" | "setWins" | "playerWins" | "playerApps" | "rank" | "mslRo16";
 export interface SponsorQuest {
@@ -91,8 +92,9 @@ export function sponsorOffers(s: CareerState): Sponsor[] {
     ];
     // 제안마다 퀘스트 3개, 후원금이 많으면 퀘스트 보상은 적게
     const quests = pool.map((q, i) => ({ q, o: r(10 + i) })).sort((a, b) => a.o - b.o).slice(0, 3).map(x => x.q);
-    const weekly = [70, 50, 35][k];
-    const mul = [0.8, 1.1, 1.5][k];
+    const perk = levelPerks(managerLevel(s)).sponsor;
+    const weekly = Math.round([70, 50, 35][k] * perk);
+    const mul = [0.8, 1.1, 1.5][k] * perk;
     out.push({ name, weekly, quests: quests.map(q => ({ ...q, baseReward: Math.round((q.baseReward * mul) / 10) * 10 })) });
   }
   return out;

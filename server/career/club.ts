@@ -23,6 +23,7 @@ import { contractScore, defaultContract, expectedShare, jobThreshold, playerDema
 import { activePlayers, proTeams, reserveOf, rosterOf, teamPower } from "@shared/career/view";
 import { CareerError, addExp, clampCond, gainStats, news, rand, randInt } from "./core";
 import { questLabel, questProgress, questRange, questReward, sponsorOffers } from "@shared/career/sponsor";
+import { MAIN_SPONSORS, defaultOffer, managerExpNeed, sponsorBudget, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
 
 const round10 = (v: number) => Math.round(v / 10) * 10;
 
@@ -46,6 +47,8 @@ export function ensureClub(s: CareerState) {
     if (p.morale === undefined) p.morale = 70;
   }
   if (!s.manager) s.manager = { reputation: 50 };
+  if (!s.manager.level) { s.manager.level = 1; s.manager.exp = 0; }
+  ensureMainSponsor(s);
 }
 
 /** 이번 주 협상 횟수 제한 (같은 상대와 3번) */
@@ -65,6 +68,61 @@ function moveTo(s: CareerState, p: CPlayer, team: number, contract?: Contract) {
   p.morale = 70;
   p.wantsOut = false;
   if (contract) p.contract = contract;
+}
+
+// ── 감독 레벨 ────────────────────────────────────────────────────
+export function addManagerExp(s: CareerState, exp: number) {
+  const m = s.manager ?? (s.manager = { reputation: 50 });
+  m.level = m.level ?? 1;
+  m.exp = (m.exp ?? 0) + exp;
+  while (m.exp >= managerExpNeed(m.level)) {
+    m.exp -= managerExpNeed(m.level);
+    m.level++;
+    news(s, `🎓 감독 레벨 업! Lv.${m.level} — 스폰서 예산·선수 영입 조건이 좋아집니다`);
+  }
+}
+
+// ── 메인 스폰서 (모기업) ──────────────────────────────────────────
+export function ensureMainSponsor(s: CareerState) {
+  const sp = s.mainSponsor;
+  if (sp && sp.team === s.myTeam) return;
+  s.mainSponsor = { ...defaultOffer(s), years: 1, season: s.season, team: s.myTeam };
+}
+
+/** 메인 스폰서 재협상 가능한 때: 비시즌, 또는 시즌 첫 주 우리 경기 전 */
+export function canNegotiateMain(s: CareerState): boolean {
+  if (s.phase === "offseason") return true;
+  const played = s.matches.some(m => m.done && (m.a === s.myTeam || m.b === s.myTeam));
+  return s.week === 1 && !played && !s.live;
+}
+
+export function negotiateMainSponsor(s: CareerState, terms: MainSponsorTerms, years: number) {
+  if (!canNegotiateMain(s)) throw new CareerError("메인 스폰서 계약은 비시즌이나 시즌 첫 경기 전에만 할 수 있습니다");
+  if (!(years >= 1 && years <= 3)) throw new CareerError("계약 기간은 1~3년입니다");
+  for (const v of Object.values(terms)) if (!(v >= 0)) throw new CareerError("금액을 확인하세요");
+  const name = MAIN_SPONSORS[s.myTeam]?.name ?? "모기업";
+  useTry(s, "mainSponsor");
+  const budget = sponsorBudget(s);
+  const value = termsValue(terms);
+  if (value <= budget) {
+    s.mainSponsor = { ...terms, years: years + (s.phase === "offseason" ? 1 : 0), season: s.season, team: s.myTeam };
+    news(s, `🏢 ${name}와(과) 메인 스폰서 계약 (${years}년, 승리 수당 ${terms.win}만원)`);
+    return { result: "signed" as const, message: `${name}: "좋습니다. 이 조건으로 계약하죠" (계약 성사)` };
+  }
+  if (value <= budget * 1.2) {
+    const k = budget / value;
+    const counter = Object.fromEntries(Object.entries(terms).map(([key, v]) => [key, Math.floor((v * k) / 10) * 10])) as unknown as MainSponsorTerms;
+    return { result: "countered" as const, counter, message: `${name}: "예산이 부족합니다. 이 정도면 가능합니다" (역제안)` };
+  }
+  return { result: "rejected" as const, message: `${name}: "그 조건은 무리입니다" (거절 · 기대 지급 ${value.toLocaleString()} > 예산 ${budget.toLocaleString()})` };
+}
+
+/** 메인 스폰서 수당 지급 */
+export function mainSponsorPay(s: CareerState, key: keyof MainSponsorTerms, label: string) {
+  ensureMainSponsor(s);
+  const v = s.mainSponsor![key] ?? 0;
+  if (v > 0) pay(s, label, v);
+  return v;
 }
 
 // ── 스폰서 ───────────────────────────────────────────────────────
@@ -192,6 +250,10 @@ export function seasonEndClub(s: CareerState, myResult: string, champion: number
   }
   if (mostWins) news(s, `🏅 ${s.season}시즌 다승왕: ${mostWins.name} (${mostWins.sWins}승)`);
 
+  // 메인 스폰서 우승·준우승 수당, 감독 경험치
+  if (myResult === "우승") mainSponsorPay(s, "proTitle", "메인 스폰서 우승 수당");
+  if (myResult === "준우승") mainSponsorPay(s, "proRunnerUp", "메인 스폰서 준우승 수당");
+  addManagerExp(s, { 우승: 300, 준우승: 180, 플레이오프: 100, 준플레이오프: 60 }[myResult] ?? 20);
   // 감독 평판
   const m = s.manager ?? (s.manager = { reputation: 50 });
   const delta = { 우승: 20, 준우승: 12, 플레이오프: 7, 준플레이오프: 4 }[myResult] ?? -6;
@@ -239,6 +301,14 @@ export function newSeasonClub(s: CareerState) {
   s.offers = [];
   s.agreements = {};
   s.jobOffers = [];
+  // 메인 스폰서 계약 기간
+  if (s.mainSponsor) {
+    s.mainSponsor.years--;
+    if (s.mainSponsor.years <= 0) {
+      s.mainSponsor = { ...defaultOffer(s), years: 1, season: s.season, team: s.myTeam };
+      news(s, `🏢 ${MAIN_SPONSORS[s.myTeam]?.name ?? "메인 스폰서"} 계약이 끝나 기본 조건으로 1년 연장했습니다 — 첫 경기 전에 재협상할 수 있습니다`);
+    }
+  }
   s.ledger = { season: s.season, items: {} };
 }
 
@@ -405,6 +475,8 @@ export function acceptJob(s: CareerState, teamId: number) {
   next.money = money;
   for (const p of rosterOf(s, s.myTeam)) p.action = null;
   s.myTeam = teamId;
+  s.mainSponsor = undefined;
+  ensureMainSponsor(s);
   s.jobOffers = [];
   s.offers = [];
   s.agreements = {};

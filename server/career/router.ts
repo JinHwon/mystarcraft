@@ -6,6 +6,7 @@ import { getDb } from "../db";
 import { careers } from "../../drizzle/schema";
 import type { CareerState } from "@shared/career/rules";
 import { ACTIONS } from "@shared/career/rules";
+import { negotiateMainSponsor } from "./club";
 import { acceptJob, bidPlayer, chooseSponsor, demotePlayer, negotiateContract, respondOffer, signReserve } from "./club";
 import {
   CareerError,
@@ -198,4 +199,12 @@ export const careerRouter = router({
   demote: protectedProcedure
     .input(z.object({ playerId: z.number().int() }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => demotePlayer(s, input.playerId))),
+
+  /** 메인 스폰서(모기업) 계약 협상 */
+  mainSponsor: protectedProcedure
+    .input(z.object({
+      years: z.number().int().min(1).max(3),
+      terms: z.object({ win: z.number().int().min(0).max(100_000), loss: z.number().int().min(0).max(100_000), proTitle: z.number().int().min(0).max(1_000_000), proRunnerUp: z.number().int().min(0).max(1_000_000), mslTitle: z.number().int().min(0).max(1_000_000), mslRunnerUp: z.number().int().min(0).max(1_000_000) }),
+    }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => negotiateMainSponsor(s, input.terms, input.years))),
 });
