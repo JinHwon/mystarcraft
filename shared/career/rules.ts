@@ -82,6 +82,8 @@ export interface CPlayer {
   titles?: string[];
   /** 종족별 통산 전적 [승, 패] */
   vs?: Partial<Record<Race, [number, number]>>;
+  /** 상대 선수별 전적 [승, 패] (우리 팀 선수만 기록 — 상대 쪽은 뒤집어서 본다) */
+  h2h?: Record<number, [number, number]>;
   /** 장착 장비 (남은 경기 수) */
   equip?: Partial<Record<"mouse" | "keyboard" | "monitor" | "etc", { key: string; left: number }>>;
   /** 이번 시즌 마신 포션 수 */

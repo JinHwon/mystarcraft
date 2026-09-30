@@ -109,6 +109,21 @@ function mutatePatch<T>(userId: number, target: number | undefined, fn: (s: Care
   }));
 }
 
+/** 경기 진행 중 바뀐 부분: 우리 선수·세트 상대·진행 중 경기·자금·아이템·장부·소식 */
+function livePatch(s: CareerState, extra: number[] = []) {
+  const ids = new Set([...s.players.filter(p => p.team === s.myTeam).map(p => p.id), ...extra]);
+  return {
+    money: s.teams[s.myTeam].money,
+    inventory: s.inventory ?? {},
+    ledger: s.ledger,
+    players: [...ids].map(id => s.players[id]),
+    // 지난 세트 해설은 화면이 이미 갖고 있으므로 마지막 세트만 통째로
+    live: s.live ? { ...s.live, sets: s.live.sets.map((x, k, all) => (k === all.length - 1 ? x : { ...x, timeline: undefined })) } : null,
+    actionsWeek: s.actionsWeek,
+    news: s.news,
+  };
+}
+
 const actionKeys = ACTIONS.map(a => a.key) as [string, ...string[]];
 
 export const careerRouter = router({
@@ -178,7 +193,8 @@ export const careerRouter = router({
       entry: z.array(z.number().int()).min(1).max(8),
       items: z.record(z.string(), z.object({ key: z.string(), predict: z.number().int().optional() })).optional(),
     }))
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => beginMatch(s, input.entry, Object.fromEntries(Object.entries(input.items ?? {}).map(([k, v]) => [Number(k), v]))))),
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => beginMatch(s, input.entry, Object.fromEntries(Object.entries(input.items ?? {}).map(([k, v]) => [Number(k), v]))))
+      .then(({ state: s, result }) => ({ result, patch: livePatch(s, s.live?.opp) }))),
 
   /** 아이템 구입 (장비·즉시·포션은 target 선수에게 바로 사용) */
   buyItem: protectedProcedure
@@ -193,7 +209,9 @@ export const careerRouter = router({
   /** 다음 세트 진행 (ACE 결정전이면 ace 선수) */
   playSet: protectedProcedure
     .input(z.object({ ace: z.number().int().optional() }))
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => playLiveSet(s, input.ace))),
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => playLiveSet(s, input.ace))
+      // 경기가 끝나면 순위·일정 등이 모두 바뀌므로 전체, 아니면 바뀐 부분만
+      .then(({ state: s, result }) => (result.matchOver ? { result, state: s, patch: undefined } : { result, state: undefined, patch: livePatch(s, [result.set.a, result.set.b]) }))),
 
   /** 받은 영입 제안: 수락·거절·역제안(금액) */
   respondOffer: protectedProcedure

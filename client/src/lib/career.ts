@@ -22,6 +22,10 @@ export interface CareerPatch {
   inventory: Record<string, number>;
   ledger?: CareerState["ledger"];
   player?: CareerState["players"][number];
+  players?: CareerState["players"];
+  live?: CareerState["live"] | null;
+  actionsWeek?: CareerState["actionsWeek"];
+  news?: CareerState["news"];
 }
 /** 서버가 돌려준 바뀐 부분만 캐시에 반영 (세이브 전체를 다시 받지 않음) */
 export function useCareerPatch() {
@@ -33,6 +37,10 @@ export function useCareerPatch() {
     s.inventory = patch.inventory;
     if (patch.ledger) s.ledger = patch.ledger;
     if (patch.player) s.players[patch.player.id] = patch.player;
+    for (const p of patch.players ?? []) s.players[p.id] = p;
+    if (patch.live !== undefined) { if (patch.live) s.live = patch.live; else delete s.live; }
+    if (patch.actionsWeek !== undefined) s.actionsWeek = patch.actionsWeek;
+    if (patch.news) s.news = patch.news;
     return { state: s };
   });
 }

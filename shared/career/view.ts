@@ -2,7 +2,7 @@
  * 커리어 상태에서 화면용 정보를 뽑는 함수들 (서버·클라이언트 공용, 게임 엔진과 무관)
  */
 import { ORIG_MAPS, FREE_AGENT_TEAM } from "./originalData";
-import type { CareerState, CMatch, Race } from "./rules";
+import type { CareerState, CMatch, CPlayer, Race } from "./rules";
 import { TRADE_ACE_PREMIUM, TRADE_PREMIUM, totalOf, tradeValue } from "./rules";
 
 /** 1부 선수단 (2부는 reserveOf) */
@@ -66,4 +66,12 @@ export function evaluateTrade(s: CareerState, teamId: number, myIds: number[], t
   const premium = ace && theirIds.includes(ace.id) ? TRADE_ACE_PREMIUM : TRADE_PREMIUM;
   const need = Math.round(give * premium);
   return { give, get, need, ratio: need > 0 ? get / need : 0, acesInvolved: premium === TRADE_ACE_PREMIUM };
+}
+
+/** p 가 o 를 상대로 거둔 전적 [승, 패] (우리 팀 선수 쪽 기록을 뒤집어서도 찾음) */
+export function headToHead(p: CPlayer, o: CPlayer): [number, number] {
+  const mine = p.h2h?.[o.id];
+  if (mine) return mine;
+  const theirs = o.h2h?.[p.id];
+  return theirs ? [theirs[1], theirs[0]] : [0, 0];
 }

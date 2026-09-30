@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { FINAL_SETS, PRO_SETS, type CareerState, type CMatch } from "@shared/career/rules";
 import { STAGE_NAMES, myPendingMatch, rosterOf, standings } from "@shared/career/view";
-import { useCareer, useCareerUpdater } from "@/lib/career";
+import { useCareer, useCareerPatch, useCareerUpdater } from "@/lib/career";
 import { TeamBadge } from "@/components/career/Bits";
 import { EntryScreen, LiveMatch, MapDrawScreen, MslFlow, ScheduleScreen, SeriesViewer, type BroadcastSet, type ItemPlan, type MslReportView, type WeekDone } from "@/components/legacy/LegacyMatch";
 
@@ -38,6 +38,7 @@ function MatchTab({ s }: { s: CareerState }) {
   const pendingState = useRef<CareerState | null>(null);
   const lastMatch = useRef<number | null>(null);
   const updater = useCareerUpdater();
+  const patch = useCareerPatch();
   const [, navigate] = useLocation();
   const pending = myPendingMatch(s);
   const sets = pending?.stage === "final" ? FINAL_SETS : PRO_SETS;
@@ -63,8 +64,8 @@ function MatchTab({ s }: { s: CareerState }) {
   };
 
   const begin = trpc.career.beginMatch.useMutation({
-    ...updater,
-    onSuccess: r => { updater.onSuccess(r); setEditing(false); setWatching(true); setItems({}); },
+    onError: updater.onError,
+    onSuccess: r => { patch(r.patch); setEditing(false); setWatching(true); setItems({}); },
   });
   const playSetM = trpc.career.playSet.useMutation({ onError: updater.onError });
   const advance = trpc.career.advance.useMutation({
@@ -86,12 +87,13 @@ function MatchTab({ s }: { s: CareerState }) {
       <LiveMatch
         s={s}
         pending={playSetM.isPending}
-        playSet={(ace, done) => playSetM.mutate({ ace }, {
+        playSet={(ace, done, fail) => playSetM.mutate({ ace }, {
+          onError: fail,
           onSuccess: r => {
             const res = r.result as { set: BroadcastSet; matchOver: boolean; playedMatchId?: number; week?: WeekDone; needAce: boolean };
             done(res);
             // 경기가 끝나 세이브에서 진행 중 경기가 사라져도 관전 화면은 끝까지 유지 (결과 확인 후 반영)
-            if (res.matchOver) { pendingState.current = r.state; lastMatch.current = res.playedMatchId ?? null; } else updater.onSuccess(r);
+            if (res.matchOver) { pendingState.current = r.state!; lastMatch.current = res.playedMatchId ?? null; } else patch(r.patch!);
           },
         })}
         onFinished={w => {

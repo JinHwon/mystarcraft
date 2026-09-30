@@ -193,7 +193,7 @@ export function LegacyFrame({ season, children, onNext, nextLabel = "Next (Bar) 
     <div className="fixed inset-0 app-fixed-x w-full z-[60] flex flex-col select-none text-white" style={{ ...LEGACY_FONT, background: "linear-gradient(135deg,#9a9a9a 0%,#4a4a4a 18%,#1c1c1c 45%,#2c2c2c 70%,#8a8a8a 100%)" }}>
       <div className="relative h-6 shrink-0 flex items-center justify-center gap-4 text-[12px] text-neutral-100 tracking-wide" style={{ background: "linear-gradient(#bdbdbd,#6f6f6f)", color: "#fff", textShadow: "0 1px 1px #000" }}>
         {onBack && <button onClick={onBack} aria-label="닫기" className="absolute left-1 top-[3px] w-[18px] h-[18px] bg-white text-black text-[11px] font-bold leading-none border border-neutral-600" style={{ textShadow: "none" }}>✕</button>}
-        <span>☆</span><span>MyStarcraft</span><span>Season Mode</span><span>2010</span><span>S{season}</span><span>☆</span>
+        <span>☆</span><span>MyStarcraft</span><span>Season Mode</span><span>{new Date().getFullYear()}</span><span>S{season}</span><span>☆</span>
       </div>
       <div className="relative flex-1 min-h-0 mx-2 mt-2 mb-0">
         <span className="absolute left-1 top-0 text-[9px] font-black italic text-neutral-300/70 leading-none rotate-[-35deg] origin-top-left translate-y-7">MY<br />STARCRAFT</span>
