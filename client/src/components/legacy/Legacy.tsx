@@ -38,15 +38,18 @@ function photoName(id: number | undefined, name: string) {
 
 export const legacySrc = (dir: string, name: string) => `/legacy/${encodeURIComponent(dir)}/${encodeURIComponent(name)}.gif`;
 
-/** 없는 원작 이미지는 기억해 두고 다시 요청하지 않음 */
-const missingImg = new Set<string>();
-
+/** 원작 이미지. 불러오기에 실패하면 잠시 뒤 한 번 더 시도 (배포 중 서버 재시작 등 일시적 실패), 그래도 안 되면 대체 그림 */
 export function LegacyImg({ dir, name, className, style, fallback }: { dir: string; name: string; className?: string; style?: CSSProperties; fallback: ReactNode }) {
   const src = legacySrc(dir, name);
-  const [err, setErr] = useState(() => missingImg.has(src));
-  useEffect(() => setErr(missingImg.has(src)), [src]);
-  if (err) return <>{fallback}</>;
-  return <img src={src} alt={name} draggable={false} decoding="async" onError={() => { missingImg.add(src); setErr(true); }} className={className} style={style} />;
+  const [tries, setTries] = useState(0);
+  useEffect(() => setTries(0), [src]);
+  useEffect(() => {
+    if (tries !== 1) return;
+    const id = setTimeout(() => setTries(2), 1500);
+    return () => clearTimeout(id);
+  }, [tries]);
+  if (tries === 1 || tries >= 3) return <>{fallback}</>;
+  return <img key={tries} src={tries === 2 ? `${src}?retry=1` : src} alt={name} draggable={false} decoding="async" onError={() => setTries(n => n + 1)} className={className} style={style} />;
 }
 
 function hue(name: string) {

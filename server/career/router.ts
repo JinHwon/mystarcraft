@@ -11,7 +11,7 @@ import { managerExpNeed } from "@shared/career/mainSponsor";
 import type { CareerEventType } from "@shared/career/events";
 import { setActiveEvents } from "./events";
 import type { CareerState } from "@shared/career/rules";
-import { diffOf, snapshot } from "./diff";
+import { diffOf, jsonOf, snapshot, type Snapshot } from "./diff";
 import { nominate } from "./msl";
 import { ACTIONS } from "@shared/career/rules";
 import { negotiateMainSponsor } from "./club";
@@ -45,7 +45,7 @@ async function requireDb() {
  * - json 은 마지막으로 저장된 모습: 규칙 오류로 중간에 멈춘 변경은 이것으로 되돌린다
  * - DB 쓰기는 응답 뒤에 (사용자마다 최신 것만, 순서대로). 서버 종료 시 남은 쓰기를 마친다
  */
-const cache = new Map<number, { state: CareerState; json: string }>();
+const cache = new Map<number, { state: CareerState; json: string; snap?: Snapshot }>();
 const CACHE_MAX = 300;
 
 async function load(userId: number): Promise<CareerState | null> {
@@ -60,9 +60,10 @@ async function load(userId: number): Promise<CareerState | null> {
   return s;
 }
 
-function remember(userId: number, state: CareerState, json: string) {
+/** snap: 저장된 모습과 같은 스냅샷 (있으면 다음 변경 때 비교 기준으로 재사용) */
+function remember(userId: number, state: CareerState, json: string, snap?: Snapshot) {
   cache.delete(userId);
-  cache.set(userId, { state, json });
+  cache.set(userId, { state, json, snap });
   if (cache.size > CACHE_MAX) {
     // 아직 DB 에 안 쓴 세이브는 캐시에서 빼지 않음
     for (const k of cache.keys()) { if (!pendingWrites.has(k)) { cache.delete(k); break; } }
@@ -96,8 +97,8 @@ function flush(userId: number): Promise<void> {
   return run;
 }
 
-function save(userId: number, state: CareerState, json = JSON.stringify(state)) {
-  remember(userId, state, json);
+function save(userId: number, state: CareerState, json = JSON.stringify(state), snap?: Snapshot) {
+  remember(userId, state, json, snap);
   pendingWrites.set(userId, json);
   void flush(userId);
 }
@@ -139,16 +140,17 @@ function mutate<T>(userId: number, fn: (s: CareerState) => T) {
     await refreshEvents();
     const s = await load(userId);
     if (!s) throw new TRPCError({ code: "NOT_FOUND", message: "진행 중인 커리어가 없습니다. 새 게임을 시작하세요" });
-    const before = snapshot(s);
+    const before = cache.get(userId)?.snap ?? snapshot(s);
     try {
       if (s.gameOver) throw new CareerError(`게임이 종료되었습니다: ${s.gameOver.reason}. 새 게임을 시작하세요`);
       const result = fn(s);
-      save(userId, s);
-      return { result, diff: diffOf(before, s) };
+      const { after, ...diff } = diffOf(before, s);
+      save(userId, s, jsonOf(s, after), after);
+      return { result, diff };
     } catch (e) {
       // 중간에 멈춘 변경은 버리고 마지막 저장 상태로
       const hit = cache.get(userId);
-      if (hit) remember(userId, JSON.parse(hit.json) as CareerState, hit.json);
+      if (hit) remember(userId, JSON.parse(hit.json) as CareerState, hit.json, hit.snap);
       if (e instanceof CareerError) throw new TRPCError({ code: "BAD_REQUEST", message: e.message });
       throw e;
     }
@@ -166,7 +168,7 @@ function mutateAny<T>(userId: number, fn: (s: CareerState) => T) {
       return { result };
     } catch (e) {
       const hit = cache.get(userId);
-      if (hit) remember(userId, JSON.parse(hit.json) as CareerState, hit.json);
+      if (hit) remember(userId, JSON.parse(hit.json) as CareerState, hit.json, hit.snap);
       throw e;
     }
   });

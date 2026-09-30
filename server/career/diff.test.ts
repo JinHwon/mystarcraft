@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { applyDiff } from "@shared/career/diff";
 import { advanceWeek, beginMatch, newCareer, playLiveSet, rosterOf } from "./logic";
-import { diffOf, snapshot } from "./diff";
+import { diffOf, jsonOf, snapshot } from "./diff";
 
 /** 서버 변경분을 적용한 결과가 서버 세이브와 같은지 (해설 빼고 비교) */
 function roundTrip(s: ReturnType<typeof newCareer>, fn: () => void) {
   const client = structuredClone(s);
   const before = snapshot(s);
   fn();
-  const d = diffOf(before, s);
+  const { after, ...d } = diffOf(before, s);
+  // 스냅샷으로 조립한 세이브 JSON 이 그대로 직렬화한 것과 같아야 함 (다음 요청의 비교 기준도 같아야 함)
+  expect(jsonOf(s, after)).toBe(JSON.stringify(s));
+  expect(after).toEqual(snapshot(s));
   const next = applyDiff(client, JSON.parse(JSON.stringify(d)));
   const strip = (x: unknown) => JSON.parse(JSON.stringify(x, (k, v) => (k === "timeline" ? undefined : v)));
   expect(strip(next)).toEqual(strip(s));

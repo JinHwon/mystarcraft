@@ -16,11 +16,21 @@ export default function Training() {
   const updater = useCareerUpdater();
   const utils = trpc.useUtils();
   // 누르자마자 화면에 반영하고, 서버에는 뒤에서 저장 (실패하면 다시 불러옴)
+  // 세이브 전체를 복사하지 않고 선수 배열만 얕게 복사 (선수 객체는 바꿀 것만 새로)
   const patch = (fn: (s: CareerState) => void) => utils.career.get.setData(undefined, old => {
     if (!old?.state) return old;
-    const next = structuredClone(old.state);
+    const prev = old.state as CareerState;
+    const touched = new Set<number>();
+    const players = new Proxy(prev.players.slice(), {
+      get: (arr, key) => {
+        const i = typeof key === "string" && /^\d+$/.test(key) ? Number(key) : -1;
+        if (i >= 0 && !touched.has(i) && arr[i]) { touched.add(i); arr[i] = { ...arr[i] }; }
+        return Reflect.get(arr, key);
+      },
+    });
+    const next = { ...prev, players } as CareerState;
     fn(next);
-    return { state: next };
+    return { state: { ...next, players: [...players] } };
   });
   const resync = (e: { message: string }) => { updater.onError(e); utils.career.get.invalidate(); };
   const setAction = trpc.career.setAction.useMutation({ onError: resync });
