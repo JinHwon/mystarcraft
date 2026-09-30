@@ -397,8 +397,8 @@ export const careerRouter = router({
 
   /** 보관한 아이템 사용 (비타비타) */
   useItem: protectedProcedure
-    .input(z.object({ key: z.string(), target: z.number().int() }))
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => useStockItem(s, input.key, input.target))),
+    .input(z.object({ key: z.string(), target: z.number().int(), qty: z.number().int().min(1).max(99).optional() }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => useStockItem(s, input.key, input.target, input.qty ?? 1))),
 
   /** 다음 세트 진행 (ACE 결정전이면 ace 선수) */
   playSet: protectedProcedure

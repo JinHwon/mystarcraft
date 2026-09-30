@@ -104,7 +104,7 @@ export default function Team() {
     if (!s) return [];
     const list = squad === "first" ? rosterOf(s, s.myTeam) : reserveOf(s, s.myTeam);
     return list.sort((a, b) =>
-      sort === "total" ? totalOf(b.stats) - totalOf(a.stats)
+      sort === "total" ? totalOf(gearStats(b)) - totalOf(gearStats(a))
         : sort === "cond" ? b.cond - a.cond
         : sort === "level" ? b.level - a.level
         : ageOf(a, s.season) - ageOf(b, s.season));
@@ -168,8 +168,8 @@ export default function Team() {
               </div>
             </div>
             <div className="text-right">
-              <div className="text-sm font-black text-foreground font-mono">{totalOf(p.stats).toLocaleString()}</div>
-              <div className="text-[10px] text-muted-foreground">능력치 합</div>
+              <div className="text-sm font-black font-mono" style={{ color: gradeColor(legacyGrade(totalOf(gearStats(p)))) }}>{legacyGrade(totalOf(gearStats(p)))}</div>
+              <div className="text-[11px] font-mono text-foreground">{totalOf(gearStats(p)).toLocaleString()}</div>
             </div>
           </button>
         ))}
