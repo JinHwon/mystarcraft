@@ -6,7 +6,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { STAT_LABELS, type StatKey } from "@shared/gameConstants";
-import { legacyGrade, totalOf } from "@shared/career/rules";
+import { gradeColor, legacyGrade, totalOf } from "@shared/career/rules";
 import { mapView } from "@shared/career/view";
 import { ORIG_PLAYERS } from "@shared/career/originalData";
 
@@ -188,7 +188,6 @@ export function LegacyRadar({ stats, level, size = 150, base, gear }: { stats: R
   // 등급은 장비까지 포함한 능력치 합으로 (컨디션·포텐셜은 그 경기의 실전 능력치에만 반영)
   const baseTotal = totalOf(gear ?? base ?? stats), realTotal = totalOf(stats);
   const grade = legacyGrade(baseTotal);
-  const high = /^[SAB]/.test(grade);
   return (
     <svg width={full} height={full} viewBox={`0 0 ${full} ${full}`} className="block max-w-full h-auto">
       <polygon points={outline} fill="none" stroke="#9a9a9a" strokeWidth={1.2} />
@@ -208,7 +207,7 @@ export function LegacyRadar({ stats, level, size = 150, base, gear }: { stats: R
           </g>
         );
       })}
-      <text x={c} y={c - 4} textAnchor="middle" fontSize={15} fill={high ? "#ffe45c" : "#dcdcdc"}>{grade}</text>
+      <text x={c} y={c - 4} textAnchor="middle" fontSize={15} fill={gradeColor(grade)} fontWeight={/^[SA]/.test(grade) ? "bold" : undefined}>{grade}</text>
       <text x={c} y={c + 8} textAnchor="middle" fontSize={9} fill="#e5e5e5">{Math.round(baseTotal).toLocaleString()}</text>
       {base && Math.round(realTotal) !== Math.round(baseTotal) && (
         <text x={c} y={c + 18} textAnchor="middle" fontSize={8} fill={realTotal > baseTotal ? "#8fe07a" : "#ff8a8a"}>실전 {Math.round(realTotal).toLocaleString()}</text>

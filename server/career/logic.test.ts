@@ -31,6 +31,22 @@ describe("다른 구단 아이템 구입", () => {
   });
 });
 
+describe("등급", () => {
+  it("F, D-, D, D+, C- … 순서이고 SS 이상은 지면 더 크게 떨어진다", async () => {
+    const { legacyGrade } = await import("@shared/career/rules");
+    const { topGradeLossMul } = await import("./growth");
+    expect([4200, 4380, 4560, 4740, 4920].map(legacyGrade)).toEqual(["F", "D-", "D", "D+", "C-"]);
+    expect(legacyGrade(5850)).toBe("B+");
+    expect(legacyGrade(9000)).toBe("SSS");
+    const p = rosterOf(newCareer(0), 0)[0];
+    for (const k of Object.keys(p.stats) as (keyof typeof p.stats)[]) p.stats[k] = 600;
+    expect(topGradeLossMul(p)).toBe(1);
+    for (const k of Object.keys(p.stats) as (keyof typeof p.stats)[]) p.stats[k] = 880; // 7040 → SS
+    expect(legacyGrade(totalOf(p.stats))).toBe("SS");
+    expect(topGradeLossMul(p)).toBeGreaterThan(1.5);
+  });
+});
+
 describe("큰 무대 성장", () => {
   it("포스트시즌·개인리그 8강 이상은 오르는 능력치가 크게 늘어난다", async () => {
     const { withStageGrowth, quickSet } = await import("./core");
