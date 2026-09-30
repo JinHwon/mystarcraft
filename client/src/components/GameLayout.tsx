@@ -30,11 +30,11 @@ interface NavItem { path: string; label: string; tab?: string; icon: LucideIcon 
 const NAV: NavItem[] = [
   { path: "/lobby", label: "감독실", tab: "감독실", icon: Home },
   { path: "/team", label: "선수단", tab: "선수단", icon: Users },
-  { path: "/training", label: "선수 행동", tab: "행동", icon: Dumbbell },
   { path: "/league", label: "마이프로리그", tab: "리그", icon: Trophy },
+  { path: "/shop", label: "아이템 상점", tab: "상점", icon: ShoppingBag },
+  { path: "/training", label: "선수 행동", icon: Dumbbell },
   { path: "/starleague", label: "마이스타리그", icon: Crown },
   { path: "/club", label: "구단 운영", icon: Building2 },
-  { path: "/shop", label: "아이템 상점", icon: ShoppingBag },
   { path: "/transfer", label: "이적시장", icon: Handshake },
   { path: "/records", label: "기록", icon: ScrollText },
 ];
@@ -43,6 +43,8 @@ const ADMIN_NAV: NavItem[] = [
   { path: "/admin/events", label: "이벤트 관리", icon: CalendarCog },
 ];
 const TABS = NAV.filter(n => n.tab);
+/** 탭에 속한 하위 화면 (선수 행동은 선수단 탭) */
+const tabOf = (path: string) => (path === "/training" ? "/team" : path);
 
 export default function GameLayout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -109,7 +111,7 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
       <nav className="fixed bottom-0 app-fixed-x w-full z-40 bg-sidebar/95 backdrop-blur border-t border-sidebar-border safe-bottom">
         <div className="grid grid-cols-5 h-16">
           {TABS.map(item => {
-            const active = location === item.path;
+            const active = tabOf(location) === item.path;
             const Icon = item.icon;
             return (
               <button key={item.path} onClick={() => go(item.path)} className={cn("flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors", active ? "text-primary" : "text-muted-foreground")}>
@@ -120,8 +122,8 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
               </button>
             );
           })}
-          <button onClick={() => setMenuOpen(true)} className={cn("flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold", !TABS.some(t => t.path === location) ? "text-primary" : "text-muted-foreground")}>
-            <span className={cn("w-12 h-7 rounded-full flex items-center justify-center", !TABS.some(t => t.path === location) && "bg-primary/20")}>
+          <button onClick={() => setMenuOpen(true)} className={cn("flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold", !TABS.some(t => t.path === tabOf(location)) ? "text-primary" : "text-muted-foreground")}>
+            <span className={cn("w-12 h-7 rounded-full flex items-center justify-center", !TABS.some(t => t.path === tabOf(location)) && "bg-primary/20")}>
               <LayoutGrid className="w-5 h-5" />
             </span>
             메뉴
