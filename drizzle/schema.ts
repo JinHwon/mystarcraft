@@ -1,6 +1,16 @@
 import { mysqlTable, mysqlSchema, AnyMySqlColumn, int, mysqlEnum, varchar, text, longtext, timestamp, json, index, uniqueIndex, tinyint } from "drizzle-orm/mysql-core"
 import { sql } from "drizzle-orm"
 
+/*
+ * 현재 쓰는 테이블: users, local_credentials, events, careers
+ *
+ * 나머지(players, player_stats, items, player_items, maps, games, game_results,
+ * quests, player_quest_progress, teams, league_seasons, league_matches)는
+ * 없앤 "내 선수 육성" 모드의 테이블이다. 코드에서는 더 이상 읽고 쓰지 않는다.
+ * 배포 스크립트가 `drizzle-kit push` 로 스키마를 맞추므로, 여기서 지우면 운영 DB 의
+ * 테이블과 데이터가 삭제된다. 백업 후 의도적으로 지울 때만 이 정의들을 제거할 것.
+ */
+
 export const events = mysqlTable("events", {
 	id: int().autoincrement().notNull().primaryKey(),
 	type: mysqlEnum(['exp_double','fatigue_unlimited','gold_double','stat_boost']).notNull(),

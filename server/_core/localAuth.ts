@@ -4,11 +4,10 @@ import { randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
-import { sdk } from "./sdk";
+import { createSessionToken } from "./session";
 
 // 자체 로그인 (아이디/비밀번호)
-// Manus OAuth 없이 오라클 서버 등에 단독 배포할 때 사용한다.
-// 로컬 계정의 openId는 "local_<아이디>" 형식으로 users 테이블에 저장된다.
+// 로컬 계정의 openId는 "local_<아이디 소문자>" 형식으로 users 테이블에 저장된다.
 
 const scrypt = promisify(scryptCb) as (password: string, salt: Buffer, keylen: number) => Promise<Buffer>;
 
@@ -62,7 +61,7 @@ function tooManyAttempts(key: string, limit: number): boolean {
 }
 
 async function issueSession(req: Request, res: Response, openId: string, name: string) {
-  const sessionToken = await sdk.createSessionToken(openId, { name, expiresInMs: ONE_YEAR_MS });
+  const sessionToken = await createSessionToken(openId, name, ONE_YEAR_MS);
   const cookieOptions = getSessionCookieOptions(req);
   res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 }
@@ -113,6 +112,7 @@ export function registerLocalAuthRoutes(app: Express) {
         return;
       }
       await issueSession(req, res, openId, user.name ?? input.username);
+      db.touchLastSignedIn(user.id).catch(() => { /* 로그인 자체는 성공 */ });
       res.json({ success: true });
     } catch (error) {
       console.error("[LocalAuth] login failed", error);

@@ -1,1 +1,0 @@
-ALTER TABLE `players` ADD `grade` enum('S','A','B','C','D') DEFAULT 'D' NOT NULL;

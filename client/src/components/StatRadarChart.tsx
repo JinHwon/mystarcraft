@@ -1,12 +1,10 @@
-import { STAT_KEYS, STAT_LABELS, STAT_MAX, calcEffectiveStatWithFatigue } from "../../../shared/gameConstants";
-import type { StatKey } from "../../../shared/gameConstants";
+import { STAT_KEYS, STAT_LABELS, type StatKey } from "@shared/gameConstants";
 
 interface StatRadarChartProps {
   stats: Record<StatKey, number>;
   grade: string;
   gradeColor?: string;
   size?: number;
-  fatigue?: number; // 피로도 (전달 시 패널티 능력치 오버레이 표시)
   /** 능력치 최대값 (커리어 모드는 1000) */
   maxValue?: number;
 }
@@ -16,8 +14,7 @@ export function StatRadarChart({
   grade,
   gradeColor = "#4A9EFF",
   size = 240,
-  fatigue,
-  maxValue = STAT_MAX,
+  maxValue = 1000,
 }: StatRadarChartProps) {
   const statColors: Record<StatKey, string> = {
     sense: "#4A9EFF",
@@ -55,20 +52,6 @@ export function StatRadarChart({
     const y = center + r * Math.sin(angle);
     return { x, y };
   });
-
-  // 피로도 패널티 적용 능력치 좌표 (fatigue가 전달된 경우)
-  const hasFatiguePenalty = fatigue !== undefined && fatigue < 90;
-  const fatigueStatPoints = hasFatiguePenalty
-    ? STAT_KEYS.map((key, i) => {
-        const value = calcEffectiveStatWithFatigue(stats[key], fatigue);
-        const ratio = Math.min(value / maxValue, 1);
-        const angle = angleSlice * i - Math.PI / 2;
-        const r = radius * ratio;
-        const x = center + r * Math.cos(angle);
-        const y = center + r * Math.sin(angle);
-        return { x, y };
-      })
-    : null;
 
   // 배경 그리드 (5단계)
   const gridLevels = 5;
@@ -127,18 +110,6 @@ export function StatRadarChart({
           strokeWidth="2"
           opacity="0.8"
         />
-
-        {/* 피로도 패널티 능력치 다각형 (빨간색 오버레이) */}
-        {hasFatiguePenalty && fatigueStatPoints && (
-          <polygon
-            points={fatigueStatPoints.map((p) => `${p.x},${p.y}`).join(" ")}
-            fill="#EF444420"
-            stroke="#EF4444"
-            strokeWidth="1.5"
-            strokeDasharray="4 3"
-            opacity="0.7"
-          />
-        )}
 
         {/* 능력치 포인트 */}
         {statPoints.map((point, i) => (
@@ -219,14 +190,8 @@ export function StatRadarChart({
       </svg>
 
       {/* 범례 */}
-      <div className="text-xs text-muted-foreground text-center space-y-1">
+      <div className="text-xs text-muted-foreground text-center">
         <p>최대 능력치: {maxValue}</p>
-        {hasFatiguePenalty && (
-          <p className="text-red-400 flex items-center justify-center gap-1.5">
-            <span className="inline-block w-4 h-0.5 border-t-2 border-dashed border-red-400" />
-            피로도 패널티 적용 능력치
-          </p>
-        )}
       </div>
     </div>
   );

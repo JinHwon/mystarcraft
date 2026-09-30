@@ -37,3 +37,12 @@ inclusion: auto
 - [x] 9. 경기 중 종족이 프로토스로 나오는 버그 재발 → 완료
   - 근본 원인: createGame 반환값에서 insertId 추출 실패 → gameId가 항상 1 → 이전 게임(프로토스)의 종족 데이터 사용
   - 수정: createGame이 insertId를 확실하게 반환하도록 수정, routers.ts에서 gameId 추출 로직 개선
+
+> 1~9 는 없앤 연습게임(육성 모드) 시절 기록이다. 해당 코드(routers.ts, db.ts 의 선수/퀘스트 함수 등)는 v62.0 에서 삭제됨.
+
+- [x] 10. 프로젝트 분석 후 정리 요청 (v62.0) → 완료
+  - 10-1. 예전 육성 모드 제거: 서버 player/shop/quest/practice/team/league 라우터와 db 함수, 클라이언트 페이지 6개·미사용 컴포넌트 삭제
+  - 10-2. 보안: 치트성 API(addExp·addFatigue 등) 함께 제거, JWT_SECRET 32자 미만이면 운영 서버 시작 거부, 요청마다 하던 lastSignedIn DB 쓰기를 1시간 간격으로, 본인/설정 관리자 강등 금지
+  - 10-3. 버그: getActiveEvents 가 시작·종료 시간을 무시하던 문제 수정
+  - 10-4. Manus 잔재 제거 (OAuth, Forge 스토리지, vite 플러그인, 미사용 의존성 40여 개)
+  - 10-5. 파일 분리: server/routers.ts → server/routers/*, LegacyMatch.tsx → components/legacy/match/*

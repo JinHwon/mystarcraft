@@ -1,6 +1,4 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { trpc } from "@/lib/trpc";
-import { getLoginUrl } from "@/const";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -107,13 +105,13 @@ export default function Home() {
             <Button
               size="lg"
               className="w-full px-6 md:px-10 py-5 md:py-6 text-sm md:text-base font-bold glow-blue"
-              onClick={() => window.location.href = getLoginUrl()}
+              onClick={() => navigate("/login")}
             >
               <Sword className="w-4 md:w-5 h-4 md:h-5 mr-2" />
               지금 시작하기
             </Button>
             <p className="text-xs text-muted-foreground">
-              {getLoginUrl() === "/login" ? "아이디로 로그인하거나 회원가입하여 시작하세요" : "Manus 계정으로 로그인하여 시작하세요"}
+              아이디로 로그인하거나 회원가입하여 시작하세요
             </p>
           </div>
         </div>

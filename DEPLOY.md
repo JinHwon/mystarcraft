@@ -14,7 +14,7 @@ Demo_Trading 과 같은 구조로 배포합니다.
 
 - 브라우저 입장에서는 API 가 Vercel 도메인과 같은 출처(`/api/...`)라서 로그인 쿠키가 그대로 동작합니다.
 - Demo_Trading 백엔드(3000 포트)와 겹치지 않게 **3100 포트**, 별도 nginx server 블록, 별도 MySQL 컨테이너를 사용합니다.
-- Manus 밖에서는 Manus OAuth 를 쓸 수 없으므로 **아이디/비밀번호 로그인(`/login`)** 과 **로컬 디스크 사진 저장**을 기본으로 사용합니다.
+- 로그인은 **아이디/비밀번호(`/login`)** 하나뿐입니다 (Manus OAuth 코드는 제거됨).
 
 ---
 
@@ -57,8 +57,8 @@ nano .env
 ```bash
 PORT=3100
 DOMAIN=mystarcraft.duckdns.org            # 1단계에서 만든 백엔드 도메인
-JWT_SECRET=<openssl rand -hex 32 결과>
-OWNER_OPEN_ID=local_admin                 # 'admin' 아이디로 가입하면 관리자
+JWT_SECRET=<openssl rand -hex 32 결과>    # 32자 이상. 짧으면 운영 서버가 시작되지 않음
+ADMIN_USERNAMES=<관리자 아이디>            # 쉼표로 여러 개. 이미 가입한 아이디를 적으세요
 MYSQL_PASSWORD=<임의 비밀번호>
 MYSQL_ROOT_PASSWORD=<임의 비밀번호>
 DATABASE_URL=mysql://mystarcraft:<MYSQL_PASSWORD>@127.0.0.1:3307/mystarcraft
@@ -91,7 +91,7 @@ pm2 logs mystarcraft
    - Install: `pnpm install --frozen-lockfile`
    - Build: `pnpm build:client`
    - Output: `dist/public`
-4. 환경 변수는 필요 없습니다 (`VITE_OAUTH_PORTAL_URL`, `VITE_APP_ID` 를 비워두면 `/login` 사용)
+4. 환경 변수는 필요 없습니다
 5. Deploy → `https://<프로젝트>.vercel.app` 접속 → **지금 시작하기** → 회원가입
 
 ## 3. 업데이트 배포 (이후 매번)
@@ -110,6 +110,6 @@ cd ~/mystarcraft && bash deploy/server-deploy.sh
 ## 참고
 
 - **DB 백업**: `sudo docker exec mystarcraft-mysql sh -c 'mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" mystarcraft' > backup.sql`
-- **사진 파일**: `uploads/` (또는 `UPLOAD_DIR`) 에 저장되며 `/api/uploads/...` 로 서빙됩니다. 백업 대상에 포함하세요.
-- **Manus 데이터**: 새 서버는 빈 DB 로 시작합니다. Manus 에 있던 기존 선수 데이터를 옮기려면 Manus DB 덤프가 필요하고, 기존 Manus 로그인 계정은 아이디/비밀번호 계정과 연결 작업이 추가로 필요합니다.
+- **쓰는 테이블**: `users`, `local_credentials`, `events`, `careers` (커리어 세이브). 나머지 테이블은 없앤 육성 모드용이라 코드에서 쓰지 않지만, `db:sync` 가 지우지 않도록 스키마에 남겨 두었습니다 (`drizzle/schema.ts` 주석 참고).
+- **예전 업로드 사진**: 육성 모드의 선수 사진(`uploads/`)은 더 이상 서빙하지 않습니다. 필요 없으면 서버에서 지워도 됩니다.
 - **로컬 개발**: `cd deploy && docker compose --env-file ../.env up -d` 로 MySQL 을 띄운 뒤 `pnpm db:sync && pnpm dev`.

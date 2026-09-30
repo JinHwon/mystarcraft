@@ -1732,20 +1732,3 @@ export function gameStateToTurnData(gs: GameState) {
     p2: snapshot(gs.player2),
   };
 }
-
-/**
- * 경기 종료 후 패배 선수의 병력과 자원을 대폭 감소 (항복 연출)
- * ratio: 남는 비율 (0.1 ~ 0.2)
- */
-export function collapseLoser(gs: GameState, ratio: number): BwPlayer {
-  const loser = gs.winner === gs.player1.id ? gs.player2 : gs.player1;
-  for (const k of Object.keys(loser.units)) {
-    const d = UNITS[k];
-    if (d && isCombat(d)) loser.units[k] = Math.floor(loser.units[k] * ratio);
-  }
-  loser.minerals = Math.floor(loser.minerals * ratio);
-  loser.gas = Math.floor(loser.gas * ratio);
-  loser.workers = Math.floor(loser.workers * Math.max(ratio, 0.5));
-  syncCompat(loser);
-  return loser;
-}

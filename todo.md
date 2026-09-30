@@ -425,3 +425,17 @@
 - [x] 시간 표시 해설, 경기 화면에 인구수·일꾼·기지·분당 채취·보유 자원·병력 구성·빌드 표시
 - [x] 밸런스: 같은 능력치에서 모든 종족전 약 50%, 능력치 +100 ≈ 63%, +200 ≈ 78%, 평균 11~13분
 - [x] 개발용 시뮬레이션 도구: npx tsx server/bw/balance.sim.ts / timeline.sim.ts / trace.sim.ts / tune.sim.ts
+
+## 정리 (v62.0) - 예전 육성 모드 제거
+
+- [x] 예전 "내 선수 육성" 모드 삭제 (연습게임·퀘스트·아이템 상점·선수 프로필·팀/리그 v1)
+  - 서버: routers.ts(→ server/routers/{auth,admin,event,index}.ts), practice/team/league/statDynamicSystem/buildSystem/storage 삭제, db.ts 는 사용자·이벤트만
+  - 클라이언트: Practice/CreatePlayer/PlayerProfile/GameResults/Events/ComponentShowcase 페이지와 미사용 컴포넌트·shadcn ui 46개 삭제
+  - DB 테이블은 운영 데이터 보호를 위해 스키마에 남김 (drizzle/schema.ts 주석)
+- [x] 보안: 치트 API 제거, JWT_SECRET 길이 검증, lastSignedIn 쓰기 줄임, 관리자 강등 보호, 요청 본문 한도 50mb → 1mb
+- [x] getActiveEvents 시작·종료 시간 반영
+- [x] Manus 잔재 제거 (OAuth·Forge·LLM 헬퍼, vite 플러그인, OWNER_OPEN_ID, 미사용 의존성)
+- [x] LegacyMatch.tsx(1230줄) → components/legacy/match/{common,entry,broadcast,proleague,msl}.tsx
+- [x] 화면별 코드 분할 (첫 번들 697kB → 243kB), 배포 중 조각 불러오기 실패 시 한 번 새로고침
+- [x] 쓰지 않던 마이그레이션 기록(drizzle/*.sql, 0015 번호 중복) 삭제 — 스키마는 db:sync(drizzle-kit push)로만 맞춤
+- [ ] (선택) 육성 모드 DB 테이블 삭제 — 백업 후 schema.ts 에서 정의를 지우고 db:sync

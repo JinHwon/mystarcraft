@@ -68,7 +68,6 @@ if [ -n "${PREBUILT_DIST:-}" ] && [ -f "$PREBUILT_DIST" ]; then
 else
   pnpm build
 fi
-mkdir -p "${UPLOAD_DIR:-uploads}"
 ok "완료"
 
 step 6/8 "PM2 로 백엔드 실행"

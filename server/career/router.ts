@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { eq, inArray } from "drizzle-orm";
-import { protectedProcedure, router } from "../_core/trpc";
+import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { getActiveEvents, getDb } from "../db";
 import { careers, users } from "../../drizzle/schema";
 import { ITEM_BY_KEY } from "@shared/career/items";
@@ -132,9 +132,9 @@ async function refreshEvents() {
   if (Date.now() - eventsAt < 30_000) return;
   eventsAt = Date.now();
   try {
-    const now = Date.now();
+    // getActiveEvents 가 켜짐 여부와 시작~종료 시간을 함께 확인한다
     const ev = await getActiveEvents();
-    setActiveEvents(ev.filter(e => (!e.startTime || new Date(e.startTime).getTime() <= now) && (!e.endTime || new Date(e.endTime).getTime() >= now)).map(e => e.type as CareerEventType));
+    setActiveEvents(ev.map(e => e.type as CareerEventType));
   } catch (e) { console.error("[career] 이벤트 조회 실패", e); }
 }
 /** 관리자가 이벤트를 바꾸면 바로 반영 */
@@ -244,11 +244,6 @@ async function allSummaries(force = false) {
 
 // 서버가 뜬 뒤 랭킹 요약을 미리 만들어 둠 (첫 랭킹 요청도 빠르게)
 if (process.env.NODE_ENV !== "test") setTimeout(() => { void allSummaries().catch(() => {}); }, 5000).unref();
-
-const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "관리자 권한이 필요합니다" });
-  return next({ ctx });
-});
 
 const actionKeys = ACTIONS.map(a => a.key) as [string, ...string[]];
 
