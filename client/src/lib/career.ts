@@ -6,7 +6,8 @@ import { applyDiff, type CareerDiff } from "@shared/career/diff";
 /** 커리어 세이브 조회 */
 export function useCareer() {
   // 화면 캐시는 서버 변경분으로 계속 맞춰지므로, 앱 전환 때마다 세이브 전체를 다시 받지 않음
-  const q = trpc.career.get.useQuery(undefined, { staleTime: 5 * 60_000, refetchOnWindowFocus: false });
+  // structuralSharing 끔: 변경분 적용(applyDiff)이 이미 바뀌지 않은 부분의 참조를 유지하므로, 매번 세이브 전체를 깊게 비교할 필요가 없음
+  const q = trpc.career.get.useQuery(undefined, { staleTime: 5 * 60_000, refetchOnWindowFocus: false, structuralSharing: false });
   return { state: (q.data?.state ?? null) as CareerState | null, loading: q.isLoading };
 }
 
