@@ -4,6 +4,8 @@ interface StatRadarChartProps {
   stats: Record<StatKey, number>;
   grade: string;
   gradeColor?: string;
+  /** 등급 글자색 (없으면 gradeColor) */
+  gradeTextColor?: string;
   size?: number;
   /** 능력치 최대값 (커리어 모드는 1000) */
   maxValue?: number;
@@ -13,6 +15,7 @@ export function StatRadarChart({
   stats,
   grade,
   gradeColor = "#4A9EFF",
+  gradeTextColor,
   size = 240,
   maxValue = 1000,
 }: StatRadarChartProps) {
@@ -134,7 +137,7 @@ export function StatRadarChart({
           textAnchor="middle"
           fontSize="16"
           fontWeight="bold"
-          fill={gradeColor}
+          fill={gradeTextColor ?? gradeColor}
           fontFamily="system-ui, -apple-system"
         >
           {grade}

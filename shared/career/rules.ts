@@ -452,10 +452,20 @@ export function ageOf(p: Pick<CPlayer, "birth">, season: number): number {
   return BASE_YEAR + season - 1 - p.birth + 1;
 }
 
-/** 원작식 등급 (F ~ SSS, +). 강현우 4650 → E, 허영무 5850 → B+ 에 맞춘 근사치 */
-const LEGACY_GRADES = ["F", "F+", "E", "E+", "D", "D+", "C", "C+", "B", "B+", "A", "A+", "S", "S+", "SS", "SSS"];
+/** 원작식 등급 (F, D-, D, D+, C- … S+, SS, SSS). 능력치 합 4200 부터 175 마다 한 등급 (허영무 5850 → B+) */
+export const LEGACY_GRADES = ["F", "D-", "D", "D+", "C-", "C", "C+", "B-", "B", "B+", "A-", "A", "A+", "S-", "S", "S+", "SS", "SSS"];
+export function gradeIndex(total: number): number {
+  return Math.max(0, Math.min(LEGACY_GRADES.length - 1, Math.floor((total - 4200) / 175)));
+}
 export function legacyGrade(total: number): string {
-  return LEGACY_GRADES[Math.max(0, Math.min(LEGACY_GRADES.length - 1, Math.floor((total - 4200) / 175)))];
+  return LEGACY_GRADES[gradeIndex(total)];
+}
+/** 등급 글자색: S 계열은 분홍빛 빨강, A 계열은 빨강, B 계열은 노랑 */
+export function gradeColor(grade: string): string {
+  if (grade.startsWith("S")) return "#ff4f8b";
+  if (grade.startsWith("A")) return "#ff3b30";
+  if (grade.startsWith("B")) return "#ffe45c";
+  return "#dcdcdc";
 }
 
 export function totalOf(stats: Record<StatKey, number>): number {

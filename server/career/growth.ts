@@ -5,11 +5,13 @@
  * 원작 공식은 확인하지 못해, 경기 엔진 이벤트로 능력치마다 잘한 점·못한 점을 매겨 변동 폭을 정한다.
  * - 이기면 대부분 오르고, 지면 대부분 떨어진다. 잘한 능력치는 더 오르고(졌어도 오를 수 있음), 못한 능력치는 더 떨어진다
  * - 강한 상대를 이기면 크게 오르고, 약한 상대에게 지면 크게 떨어진다 (이변 배율 0.35~3배)
+ * - SS 등급 이상은 지면 더 크게 떨어진다 (topGradeLossMul)
  * - 선수별 성장 한계는 없다. 이번 시즌 승률이 좋을수록(폼) 더 잘 크고, 재능(잠재력 값)은 크는 속도만 바꾼다
  * - 오를 때는 능력치 하나가 높을수록 덜 오른다 (한 능력치 최대 1000). 츄잉껌을 쓰면 떨어지는 폭이 66% 줄어든다
  */
 import { STAT_KEYS, type StatKey } from "@shared/gameConstants";
-import { totalOf, type CPlayer } from "@shared/career/rules";
+import { LEGACY_GRADES, gradeIndex, totalOf, type CPlayer } from "@shared/career/rules";
+import { gearStats } from "@shared/career/items";
 import type { SetContent } from "../gameSimulation";
 
 const rand = () => Math.random();
@@ -45,6 +47,13 @@ export function form(p: CPlayer) {
   return 0.7 + wr;
 }
 
+const SS = LEGACY_GRADES.indexOf("SS");
+/** 최상위 등급 패배 배율: SS 이상은 지면 크게 떨어짐 (계속 높은 능력치로 머무는 것 방지) — SS 1.8배, SSS 2.4배 */
+export function topGradeLossMul(p: CPlayer) {
+  const g = gradeIndex(totalOf(gearStats(p)));
+  return g >= SS ? 1.8 + (g - SS) * 0.6 : 1;
+}
+
 /**
  * 한 선수의 세트 뒤 능력치 변동
  * @param content 경기 내용 (빠른 판정 경기는 없음 → 승패와 이변만 반영)
@@ -67,7 +76,7 @@ export function setDeltas(p: CPlayer, opp: CPlayer, won: boolean, content: SetCo
     } else {
       // 기본 -0~5.5 + 잘한 만큼 (잘했으면 졌어도 조금 오름)
       d = Math.max(-16, Math.min(5, -rand() * 5.5 + sc * 1.4));
-      if (d < 0) d *= upset * (gum ? 0.34 : 1);
+      if (d < 0) d *= upset * topGradeLossMul(p) * (gum ? 0.34 : 1);
       else d *= room(p, k) * grow;
     }
     const r = Math.round(d);
