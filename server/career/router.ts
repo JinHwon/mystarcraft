@@ -30,13 +30,29 @@ async function requireDb() {
   return db;
 }
 
+/**
+ * 세이브 메모리 캐시: 요청마다 DB 에서 큰 JSON 을 읽고 파싱하지 않도록 (서버는 한 프로세스)
+ * 꺼낼 때는 복사본을 줘서, 규칙 오류로 중간에 멈춘 변경이 캐시에 남지 않게 한다
+ */
+const cache = new Map<number, CareerState>();
+const CACHE_MAX = 300;
+
 async function load(userId: number): Promise<CareerState | null> {
+  const hit = cache.get(userId);
+  if (hit) return structuredClone(hit);
   const db = await requireDb();
   const rows = await db.select().from(careers).where(eq(careers.userId, userId)).limit(1);
   if (!rows[0]) return null;
   const s = JSON.parse(rows[0].state) as CareerState;
   migrateCareer(s);
-  return s;
+  remember(userId, s);
+  return structuredClone(s);
+}
+
+function remember(userId: number, s: CareerState) {
+  cache.delete(userId);
+  cache.set(userId, s);
+  if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value!);
 }
 
 async function save(userId: number, state: CareerState) {
@@ -45,6 +61,7 @@ async function save(userId: number, state: CareerState) {
   const existing = await db.select({ id: careers.id }).from(careers).where(eq(careers.userId, userId)).limit(1);
   if (existing[0]) await db.update(careers).set({ state: json }).where(eq(careers.id, existing[0].id));
   else await db.insert(careers).values({ userId, state: json });
+  remember(userId, structuredClone(state));
 }
 
 // 같은 유저의 요청은 순서대로 처리 (세이브 덮어쓰기 방지)
@@ -73,6 +90,11 @@ function mutate<T>(userId: number, fn: (s: CareerState) => T) {
   });
 }
 
+/** 결과만 돌려주는 가벼운 변경 (화면은 미리 반영해 둠) */
+function mutateLite<T>(userId: number, fn: (s: CareerState) => T) {
+  return mutate(userId, fn).then(r => ({ result: r.result }));
+}
+
 const actionKeys = ACTIONS.map(a => a.key) as [string, ...string[]];
 
 export const careerRouter = router({
@@ -95,10 +117,11 @@ export const careerRouter = router({
 
   setAction: protectedProcedure
     .input(z.object({ playerId: z.number().int(), action: z.enum(actionKeys).nullable() }))
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => setAction(s, input.playerId, input.action as any))),
+    .mutation(({ ctx, input }) => mutateLite(ctx.user.id, s => { setAction(s, input.playerId, input.action as any); return { ok: true }; })),
 
   /** 행동력 안에서 컨디션 낮은 선수는 휴식, 나머지는 훈련으로 자동 배정 */
-  autoActions: protectedProcedure.mutation(({ ctx }) => mutate(ctx.user.id, s => {
+  autoActions: protectedProcedure.mutation(({ ctx }) => mutateLite(ctx.user.id, s => {
+    if (s.live) throw new CareerError("경기 중에는 행동을 바꿀 수 없습니다");
     const roster = rosterOf(s, s.myTeam);
     for (const p of roster) p.action = null;
     let ap = s.ap;
@@ -107,6 +130,7 @@ export const careerRouter = router({
       else if (ap >= 1) { p.action = "train"; ap -= 1; }
       else p.action = "rest";
     }
+    return { actions: Object.fromEntries(roster.map(p => [p.id, p.action ?? null])) as Record<number, string | null> };
   })),
 
   advance: protectedProcedure

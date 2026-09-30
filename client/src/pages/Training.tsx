@@ -1,7 +1,7 @@
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { ACTIONS, WEEKLY_AP, ageOf, totalOf, type ActionKey } from "@shared/career/rules";
+import { ACTIONS, WEEKLY_AP, ageOf, totalOf, type ActionKey, type CareerState } from "@shared/career/rules";
 import { rosterOf } from "@shared/career/view";
 import { useCareer, useCareerUpdater } from "@/lib/career";
 import { CondBadge, RaceBadge } from "@/components/career/Bits";
@@ -11,8 +11,24 @@ export default function Training() {
   const { state: s, loading } = useCareer();
   const [, navigate] = useLocation();
   const updater = useCareerUpdater();
-  const setAction = trpc.career.setAction.useMutation(updater);
-  const auto = trpc.career.autoActions.useMutation(updater);
+  const utils = trpc.useUtils();
+  // 누르자마자 화면에 반영하고, 서버에는 뒤에서 저장 (실패하면 다시 불러옴)
+  const patch = (fn: (s: CareerState) => void) => utils.career.get.setData(undefined, old => {
+    if (!old?.state) return old;
+    const next = structuredClone(old.state);
+    fn(next);
+    return { state: next };
+  });
+  const resync = (e: { message: string }) => { updater.onError(e); utils.career.get.invalidate(); };
+  const setAction = trpc.career.setAction.useMutation({ onError: resync });
+  const auto = trpc.career.autoActions.useMutation({
+    onSuccess: r => patch(st => { for (const [id, a] of Object.entries(r.result.actions)) st.players[Number(id)].action = a as ActionKey | null; }),
+    onError: resync,
+  });
+  const choose = (pid: number, action: ActionKey | null) => {
+    patch(st => { st.players[pid].action = action; });
+    setAction.mutate({ playerId: pid, action });
+  };
 
   if (loading) return <div className="p-6 text-muted-foreground">불러오는 중...</div>;
   if (!s) { navigate("/lobby"); return null; }
@@ -58,8 +74,8 @@ export default function Training() {
                 return (
                   <button
                     key={a.key}
-                    disabled={!affordable || setAction.isPending}
-                    onClick={() => setAction.mutate({ playerId: p.id, action: active ? null : (a.key as ActionKey) })}
+                    disabled={!affordable || !!s.live}
+                    onClick={() => choose(p.id, active ? null : (a.key as ActionKey))}
                     className={cn("rounded-xl py-2 text-xs font-bold border transition-colors",
                       active ? "bg-primary text-primary-foreground border-primary" : affordable ? "bg-muted/50 border-border text-foreground" : "bg-muted/30 border-border text-muted-foreground/50")}
                   >
