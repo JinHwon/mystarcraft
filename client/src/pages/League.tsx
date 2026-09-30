@@ -2,12 +2,12 @@ import { useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { FINAL_SETS, PRO_SETS, type CareerState, type CMatch } from "@shared/career/rules";
+import { FINAL_SETS, MSL_WEEK, PRO_SETS, type CareerState, type CMatch } from "@shared/career/rules";
 import { STAGE_NAMES, myPendingMatch, rosterOf, standings } from "@shared/career/view";
 import { useCareer, useCareerPatch, useCareerUpdater } from "@/lib/career";
 import type { CareerDiff } from "@shared/career/diff";
 import { TeamBadge } from "@/components/career/Bits";
-import { EntryScreen, LiveMatch, MapDrawScreen, MslFlow, ProSeriesFlow, ScheduleScreen, SeriesViewer, type BroadcastSet, type ItemPlan, type MslReportView, type WeekDone } from "@/components/legacy/LegacyMatch";
+import { EntryScreen, LiveMatch, MapDrawScreen, MslFlow, NominationScreen, ProSeriesFlow, ScheduleScreen, SeriesViewer, type BroadcastSet, type ItemPlan, type MslReportView, type WeekDone } from "@/components/legacy/LegacyMatch";
 
 type Tab = "match" | "table" | "schedule";
 
@@ -53,6 +53,10 @@ function MatchTab({ s }: { s: CareerState }) {
   const [mslFlow, setMslFlow] = useState<WeekDone | null>(null);
   /** 우리 팀이 없는 포스트시즌 경기 관전 */
   const [proFlow, setProFlow] = useState<WeekDone | null>(null);
+  const [showNom, setShowNom] = useState(false);
+  // 조 지명식 주: 우리 선수가 조장(시드 상위 8명)이면 직접 지명
+  const nomOpen = !!s.msl && s.msl.season === s.season && s.msl.stage === "nom" && s.week >= MSL_WEEK.nom && s.phase === "regular"
+    && s.msl.seeds.slice(0, 8).some(id => s.players[id]?.team === s.myTeam) && !(s.msl.draft && s.msl.draft.step >= 24);
   const [watch, setWatch] = useState<MslReportView | null>(null);
   const [watching, setWatching] = useState(!!s.live);
   const drawKey = `mysc-mapdraw-${s.season}-${s.myTeam}`;
@@ -85,6 +89,7 @@ function MatchTab({ s }: { s: CareerState }) {
   }
 
   if (watch) return <SeriesViewer s={s} report={watch} onClose={() => setWatch(null)} />;
+  if (showNom) return <NominationScreen s={s} onClose={() => setShowNom(false)} />;
   if (proFlow) return <ProSeriesFlow s={s} reports={proFlow.proReports ?? []} onDone={() => { const w = proFlow; setProFlow(null); if (w.mslReports?.length || w.mslPlans?.length) setMslFlow(w); }} />;
   if (mslFlow) return <MslFlow s={s} reports={mslFlow.mslReports ?? []} plans={mslFlow.mslPlans} onDone={() => setMslFlow(null)} />;
 
@@ -222,6 +227,11 @@ function MatchTab({ s }: { s: CareerState }) {
         </div>
         <div className="mt-1 text-[11px] text-muted-foreground">엔트리 {filled}/{sets - 1} · ACE 결정전 선수는 2:2 가 되면 고릅니다</div>
       </div>
+      {nomOpen && (
+        <button onClick={() => setShowNom(true)} className="w-full py-3 rounded-2xl bg-gradient-to-r from-violet-500 to-fuchsia-600 text-white font-black">
+          🎤 마이스타리그 조 지명식 — 우리 선수가 조장입니다 (직접 지명)
+        </button>
+      )}
       {!actionsDone && <p className="text-xs text-amber-300 px-1">이번 주 선수 행동을 아직 진행하지 않았습니다. <button onClick={() => navigate("/training")} className="underline font-bold">선수 행동 진행하기</button></p>}
       <button onClick={openEntry} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black">
         ⚔️ 엔트리 편성 · 경기 시작

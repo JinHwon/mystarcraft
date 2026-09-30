@@ -410,3 +410,26 @@ describe("선수 행동 진행", () => {
     expect(r[1].ap).toBe(20);
   });
 });
+
+describe("조 지명식", () => {
+  it("우리 조장 차례에서 멈추고 직접 지명, 주가 끝나면 조 편성", async () => {
+    const { nominate } = await import("./msl");
+    // 강한 팀으로 시작해 시드 상위에 우리 선수가 있도록
+    const s = newCareer(0);
+    for (let w = 0; w < 4; w++) advanceWeek(s, aiEntry(s, 0, PRO_SETS));
+    expect(s.msl?.stage).toBe("nom");
+    const heads = s.msl!.seeds.slice(0, 8);
+    const mineHead = heads.find(id => s.players[id].team === 0);
+    const r = nominate(s);
+    if (mineHead !== undefined) {
+      expect(r.waiting?.head).toBe(mineHead);
+      const pick = s.msl!.draft!.pool[0];
+      nominate(s, pick);
+      expect(s.msl!.draft!.groups.some(g => g[0] === mineHead && g.includes(pick))).toBe(true);
+    }
+    advanceWeek(s, aiEntry(s, 0, PRO_SETS));
+    expect(s.msl!.groups).toHaveLength(8);
+    expect(s.msl!.groups.every(g => g.players.length === 4)).toBe(true);
+    expect(s.msl!.draft).toBeUndefined();
+  });
+});

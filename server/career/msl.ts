@@ -16,7 +16,7 @@ import {
 } from "@shared/career/rules";
 import { addManagerExp, book, mainSponsorPay } from "./club";
 import { activePlayers } from "@shared/career/view";
-import { news, pickMaps, playSet, quickSet, rand, shuffle, type PlayedSet } from "./core";
+import { CareerError, news, pickMaps, playSet, quickSet, rand, shuffle, type PlayedSet } from "./core";
 
 const GROUP_NAMES = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
@@ -125,24 +125,81 @@ function runDual(s: CareerState, m: MslState, report: MslReport[], part: number)
   news(s, `🎮 듀얼 토너먼트 ${done.map(g => g.name).join("·")}조 종료${q.length ? ` — 우리 팀 ${q.map(id => s.players[id].name).join(", ")} 32강 진출!` : ""}`);
 }
 
-/** 조 지명식: 시드 상위 8명이 조 1번, 차례로 원하는 상대를 지명 (약한 선수나 같은 종족을 피하는 경향) */
-function runNomination(s: CareerState, m: MslState) {
+/** 조 지명식: 시드 상위 8명이 조 1번, 3라운드 동안 차례로 (짝수 라운드는 A→H, 홀수는 H→A) 상대를 지명 */
+const DRAFT_STEPS = 24;
+function draftTurn(step: number) {
+  const round = Math.floor(step / 8), i = step % 8;
+  return { round, g: round % 2 === 0 ? i : 7 - i };
+}
+
+function startDraft(s: CareerState, m: MslState) {
+  if (m.draft) return m.draft;
   const heads = m.seeds.slice(0, 8);
-  const pool = new Set([...m.seeds.slice(8), ...m.duals.flatMap(g => g.qualified)]);
-  const groups: number[][] = heads.map(h => [h]);
+  m.draft = { groups: heads.map(h => [h]), pool: [...new Set([...m.seeds.slice(8), ...m.duals.flatMap(g => g.qualified)])], step: 0 };
   m.nominations = [];
-  for (let round = 0; round < 3; round++) {
-    const order = round % 2 === 0 ? [...heads.keys()] : [...heads.keys()].reverse();
-    for (const g of order) {
-      const head = heads[g];
-      const candidates = [...pool];
-      const score = (id: number) => strength(s, id) + (s.players[id].race === s.players[head].race ? 150 : 0) + rand() * 400;
-      const pick = candidates.sort((a, b) => score(a) - score(b))[0];
-      pool.delete(pick);
-      groups[g].push(pick);
-      if (round === 0) m.nominations.push({ by: head, pick, group: GROUP_NAMES[g] });
-    }
+  return m.draft;
+}
+
+function draftPick(s: CareerState, m: MslState, pick: number) {
+  const d = m.draft!;
+  const { round, g } = draftTurn(d.step);
+  const head = d.groups[g][0];
+  d.pool = d.pool.filter(id => id !== pick);
+  d.groups[g].push(pick);
+  if (round === 0) m.nominations.push({ by: head, pick, group: GROUP_NAMES[g] });
+  d.step++;
+}
+
+/** AI 조장 지명: 약한 선수나 같은 종족을 피하는 경향 */
+function aiPick(s: CareerState, head: number, pool: number[]) {
+  const score = (id: number) => strength(s, id) + (s.players[id].race === s.players[head].race ? 150 : 0) + rand() * 400;
+  return [...pool].sort((a, b) => score(a) - score(b))[0];
+}
+
+/** 다음 우리 조장 차례까지 AI 지명 진행 (auto 면 우리 차례도 자동) */
+function draftRun(s: CareerState, m: MslState, auto: boolean) {
+  const d = startDraft(s, m);
+  while (d.step < DRAFT_STEPS) {
+    const { g } = draftTurn(d.step);
+    const head = d.groups[g][0];
+    if (!auto && isMine(s, head)) return;
+    draftPick(s, m, aiPick(s, head, d.pool));
   }
+}
+
+/** 지금 지명할 우리 조장 (없으면 undefined) */
+export function draftWaiting(s: CareerState): { head: number; group: string; round: number } | undefined {
+  const m = s.msl;
+  const d = m?.draft;
+  if (!m || !d || d.step >= DRAFT_STEPS || m.stage !== "nom") return undefined;
+  const { round, g } = draftTurn(d.step);
+  const head = d.groups[g][0];
+  return isMine(s, head) ? { head, group: GROUP_NAMES[g], round: round + 1 } : undefined;
+}
+
+/**
+ * 조 지명식 진행 (지명식 주, 경기 전에 화면에서). pick 을 주면 우리 조장 차례에 그 선수를 지명
+ * 우리 조장 차례가 오면 멈추고, 아니면 끝까지 진행
+ */
+export function nominate(s: CareerState, pick?: number) {
+  const m = s.msl;
+  if (!m || m.season !== s.season || m.stage !== "nom") throw new CareerError("지금은 조 지명식 기간이 아닙니다");
+  startDraft(s, m);
+  if (pick !== undefined) {
+    const w = draftWaiting(s);
+    if (!w) throw new CareerError("지금은 우리 선수 지명 차례가 아닙니다");
+    if (!m.draft!.pool.includes(pick)) throw new CareerError("지명할 수 없는 선수입니다");
+    draftPick(s, m, pick);
+  }
+  draftRun(s, m, false);
+  return { waiting: draftWaiting(s) ?? null, done: m.draft!.step >= DRAFT_STEPS };
+}
+
+function runNomination(s: CareerState, m: MslState) {
+  // 화면에서 하던 지명식은 이어서, 안 했으면 처음부터 (남은 차례는 모두 자동)
+  draftRun(s, m, true);
+  const groups = m.draft!.groups;
+  delete m.draft;
   m.groups = groups.map((players, g) => ({ name: GROUP_NAMES[g], players, games: [], qualified: [] }));
   const mine = m.nominations.filter(n => isMine(s, n.by) || isMine(s, n.pick));
   const top = m.nominations[0];
