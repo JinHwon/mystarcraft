@@ -20,7 +20,8 @@ import {
 } from "@shared/career/rules";
 import { mapView, matchupValue } from "@shared/career/view";
 import { ITEM_BY_KEY, gearCond, gearStats } from "@shared/career/items";
-import { simulateSet } from "../gameSimulation";
+import { simulateSet, type SetContent } from "../gameSimulation";
+import { setDeltas } from "./growth";
 import { eventOn } from "./events";
 
 export const rand = () => Math.random();
@@ -91,13 +92,15 @@ function fxOf(p: CPlayer, before: { cond: number; stats: Record<StatKey, number>
 
 /**
  * 세트 후 처리: 전적·컨디션(둘 다 지침: 승자 -1, 패자 -2)·경험치·장비 내구도
- * 능력치: 이기면 50% 확률로 하나 오르고, 지면 40% 확률로 하나 떨어짐 (츄잉껌이면 66% 덜)
+ * 능력치: 경기 내용에 따라 여러 능력치가 오르내림 (growth.ts, 츄잉껌이면 떨어지는 폭 66% 덜)
  */
-function afterSet(s: CareerState, a: CPlayer, b: CPlayer, aWin: boolean, mods?: { a?: SetMods; b?: SetMods }): { a: PlayerFx; b: PlayerFx } {
+function afterSet(s: CareerState, a: CPlayer, b: CPlayer, aWin: boolean, mods?: { a?: SetMods; b?: SetMods }, content?: [SetContent, SetContent], duration = 0): { a: PlayerFx; b: PlayerFx } {
   const snap = (p: CPlayer) => ({ cond: p.cond, stats: { ...p.stats }, level: p.level });
   const before = { a: snap(a), b: snap(b) };
   const [w, l] = aWin ? [a, b] : [b, a];
-  const lMod = aWin ? mods?.b : mods?.a;
+  // 능력치 변동은 세트 전 능력치로 계산 (두 선수 동시에)
+  const da = setDeltas(a, b, aWin, content?.[0], duration, !aWin && !!mods?.a?.gum);
+  const db = setDeltas(b, a, !aWin, content?.[1], duration, aWin && !!mods?.b?.gum);
   w.wins++; w.sWins++; l.losses++; l.sLosses++;
   w.vs = { ...w.vs, [l.race]: [(w.vs?.[l.race]?.[0] ?? 0) + 1, w.vs?.[l.race]?.[1] ?? 0] };
   l.vs = { ...l.vs, [w.race]: [l.vs?.[w.race]?.[0] ?? 0, (l.vs?.[w.race]?.[1] ?? 0) + 1] };
@@ -107,13 +110,7 @@ function afterSet(s: CareerState, a: CPlayer, b: CPlayer, aWin: boolean, mods?: 
   const tire = (p: CPlayer, d: number) => { if (!(p.team === s.myTeam && eventOn("fatigue_unlimited"))) p.cond = clampCond(p.cond - d); };
   tire(w, 1); tire(l, 2);
   addExp(s, w, 30); addExp(s, l, 10);
-  if (rand() < 0.5) gainStats(w, 1, 1, 4);
-  // 원작: 패배하면 능력치가 조금 떨어진다 (츄잉껌이면 66% 덜)
-  if (rand() < 0.4) {
-    const k = STAT_KEYS[Math.floor(rand() * STAT_KEYS.length)];
-    const loss = Math.round(randInt(2, 6) * (lMod?.gum ? 0.34 : 1));
-    if (loss > 0) l.stats[k] = clampStat(l.stats[k] - loss);
-  }
+  for (const [p, d] of [[a, da], [b, db]] as const) for (const [k, v] of Object.entries(d)) p.stats[k as StatKey] = clampStat(p.stats[k as StatKey] + v!);
   for (const p of [a, b]) wearEquip(s, p);
   return { a: fxOf(a, before.a, aWin ? 30 : 10), b: fxOf(b, before.b, aWin ? 10 : 30) };
 }
@@ -143,7 +140,7 @@ export function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, w
     withTimeline
   );
   const aWin = r.winnerId === a.id + 1;
-  const fx = afterSet(s, a, b, aWin, mods);
+  const fx = afterSet(s, a, b, aWin, mods, r.content, r.duration);
   return {
     mapId, a: a.id, b: b.id, winner: aWin ? "a" : "b", duration: r.duration, fx,
     highlights: withHighlights ? r.highlights : undefined,
