@@ -150,7 +150,9 @@ export function LegacyRadar({ stats, level, size = 150, base }: { stats: Record<
   const outline = RADAR_ORDER.map((_, i) => pt(i, 1).join(",")).join(" ");
   const polyOf = (v: Record<StatKey, number>) => RADAR_ORDER.map((k, i) => pt(i, Math.max(0.05, Math.min(1.1, v[k] / 1000))).join(",")).join(" ");
   const poly = polyOf(stats);
-  const grade = legacyGrade(totalOf(stats));
+  // 등급은 원래 능력치 합으로 (컨디션·장비는 그 경기의 실전 능력치에만 반영)
+  const baseTotal = totalOf(base ?? stats), realTotal = totalOf(stats);
+  const grade = legacyGrade(baseTotal);
   const high = /^[SAB]/.test(grade);
   return (
     <svg width={full} height={full} viewBox={`0 0 ${full} ${full}`} className="block max-w-full h-auto">
@@ -171,8 +173,12 @@ export function LegacyRadar({ stats, level, size = 150, base }: { stats: Record<
           </g>
         );
       })}
-      <text x={c} y={c + 2} textAnchor="middle" fontSize={15} fill={high ? "#ffe45c" : "#dcdcdc"}>{grade}</text>
-      <text x={c} y={c + 15} textAnchor="middle" fontSize={9} fill="#bdbdbd">Lv. {level}</text>
+      <text x={c} y={c - 4} textAnchor="middle" fontSize={15} fill={high ? "#ffe45c" : "#dcdcdc"}>{grade}</text>
+      <text x={c} y={c + 8} textAnchor="middle" fontSize={9} fill="#e5e5e5">{Math.round(baseTotal).toLocaleString()}</text>
+      {base && Math.round(realTotal) !== Math.round(baseTotal) && (
+        <text x={c} y={c + 18} textAnchor="middle" fontSize={8} fill={realTotal > baseTotal ? "#8fe07a" : "#ff8a8a"}>실전 {Math.round(realTotal).toLocaleString()}</text>
+      )}
+      <text x={c} y={c + (base && Math.round(realTotal) !== Math.round(baseTotal) ? 28 : 19)} textAnchor="middle" fontSize={8.5} fill="#bdbdbd">Lv. {level}</text>
     </svg>
   );
 }
