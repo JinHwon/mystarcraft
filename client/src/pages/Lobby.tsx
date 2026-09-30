@@ -1,4 +1,4 @@
-import { MSL_STAGE_NAMES } from "@shared/career/rules";
+import { DEBT_LIMIT_WEEKS, MSL_STAGE_NAMES } from "@shared/career/rules";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -104,8 +104,37 @@ function Office({ s }: { s: CareerState }) {
 
   if (restart) return <TeamSelect onCancel={() => setRestart(false)} />;
 
+  if (s.gameOver) {
+    return (
+      <div className="p-4 space-y-4">
+        <div className="rounded-2xl bg-rose-500/15 border border-rose-400/50 p-5 text-center space-y-2">
+          <div className="text-4xl">💀</div>
+          <div className="text-lg font-black text-foreground">GAME OVER</div>
+          <div className="text-sm text-foreground">{s.gameOver.reason}</div>
+          <div className="text-xs text-muted-foreground">{me.name} · {s.gameOver.season}시즌 {s.gameOver.week}주차 · 통산 {s.history.length}시즌 · 감독 평판 {s.manager?.reputation ?? 50}</div>
+          <button onClick={() => setRestart(true)} className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-black">새 게임 시작</button>
+        </div>
+      </div>
+    );
+  }
+
+  const wantOut = roster.filter(p => p.wantsOut);
+  const alerts: Array<[string, string]> = [];
+  if ((s.debtWeeks ?? 0) > 0 || me.money < 0) alerts.push(["⚠️", `운영 자금 적자 ${s.debtWeeks ?? 0}주째 — ${DEBT_LIMIT_WEEKS}주 연속이면 구단 해체`]);
+  if (s.offers?.length) alerts.push(["📨", `받은 영입 제안 ${s.offers.length}건`]);
+  if (s.jobOffers?.length) alerts.push(["🤵", `감독 제의 ${s.jobOffers.length}건 (${s.jobOffers.map(id => s.teams[id].name).join(", ")})`]);
+  if (wantOut.length) alerts.push(["😤", `이적 희망: ${wantOut.map(p => p.name).join(", ")}`]);
+  const expiring = roster.filter(p => (p.contract?.years ?? 9) <= 1);
+  if (s.phase === "offseason" && expiring.length) alerts.push(["📄", `계약 만료 예정 (재계약 안 하면 떠남): ${expiring.map(p => p.name).join(", ")}`]);
+
   return (
     <div className="p-4 space-y-4">
+      {alerts.length > 0 && (
+        <button onClick={() => navigate("/club")} className="w-full text-left rounded-2xl bg-amber-500/10 border border-amber-400/40 p-3 space-y-1">
+          {alerts.map(([icon, text], i) => <div key={i} className="text-xs text-foreground">{icon} {text}</div>)}
+          <div className="text-[11px] text-amber-300 font-bold">구단 운영에서 확인 ›</div>
+        </button>
+      )}
       {/* 팀 카드 */}
       <div className="rounded-2xl p-4 border border-white/10 shadow-xl" style={{ background: `linear-gradient(135deg, ${me.color}55, oklch(0.32 0.05 258) 60%)` }}>
         <div className="flex items-center gap-3">
@@ -162,6 +191,7 @@ function Office({ s }: { s: CareerState }) {
         <Tile emoji="🏆" title="마이프로리그" desc={`${rank}위 · 순위표·일정`} onClick={() => navigate("/league")} className="bg-gradient-to-br from-amber-500 to-orange-600 border-amber-300/40" />
         <Tile emoji="👥" title="선수단" desc={`${roster.length}명 · 능력치·컨디션`} onClick={() => navigate("/team")} className="bg-gradient-to-br from-violet-500 to-purple-700 border-violet-300/40" />
         <Tile emoji="🤝" title="이적시장" desc={`무소속 ${rosterOf(s, FREE_AGENT_TEAM).length}명 영입·방출`} onClick={() => navigate("/transfer")} className="bg-gradient-to-br from-sky-500 to-blue-700 border-sky-300/40" />
+        <Tile emoji="🏢" title="구단 운영" desc={`연봉·계약·제안${s.offers?.length ? ` · 제안 ${s.offers.length}` : ""}`} onClick={() => navigate("/club")} className="bg-gradient-to-br from-teal-500 to-cyan-800 border-teal-300/40" />
         <Tile emoji="🛒" title="아이템 상점" desc="장비·포션·경기 아이템" onClick={() => navigate("/shop")} className="bg-gradient-to-br from-rose-500 to-pink-700 border-rose-300/40" />
         <Tile emoji="👑" title="마이스타리그" desc={s.msl ? MSL_STAGE_NAMES[s.msl.stage] : "1주차 개막"} onClick={() => navigate("/starleague")} className="bg-gradient-to-br from-indigo-500 to-slate-700 border-indigo-300/40" />
       </div>

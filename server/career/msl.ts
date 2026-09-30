@@ -13,6 +13,7 @@ import {
   type MslSeries,
   type MslState,
 } from "@shared/career/rules";
+import { book } from "./club";
 import { news, pickMaps, playSet, quickSet, rand, shuffle, type PlayedSet } from "./core";
 
 const GROUP_NAMES = ["A", "B", "C", "D", "E", "F", "G", "H"];
@@ -187,7 +188,7 @@ function finishMsl(s: CareerState, m: MslState) {
   for (const [id, place] of Object.entries(m.placements)) {
     const prize = MSL_PRIZE[place];
     const p = s.players[Number(id)];
-    if (prize && p && p.team !== FREE_AGENT_TEAM) s.teams[p.team].money += prize;
+    if (prize && p && p.team !== FREE_AGENT_TEAM) { s.teams[p.team].money += prize; if (p.team === s.myTeam) book(s, "개인리그 상금", prize); }
   }
   const champ = s.players[m.champion!];
   champ.titles = [...(champ.titles ?? []), `${s.season}시즌 마이스타리그 우승`];

@@ -6,6 +6,7 @@ import { getDb } from "../db";
 import { careers } from "../../drizzle/schema";
 import type { CareerState } from "@shared/career/rules";
 import { ACTIONS } from "@shared/career/rules";
+import { acceptJob, bidPlayer, negotiateContract, respondOffer } from "./club";
 import {
   CareerError,
   advanceWeek,
@@ -60,6 +61,7 @@ function mutate<T>(userId: number, fn: (s: CareerState) => T) {
     const s = await load(userId);
     if (!s) throw new TRPCError({ code: "NOT_FOUND", message: "진행 중인 커리어가 없습니다. 새 게임을 시작하세요" });
     try {
+      if (s.gameOver) throw new CareerError(`게임이 종료되었습니다: ${s.gameOver.reason}. 새 게임을 시작하세요`);
       const result = fn(s);
       await save(userId, s);
       return { state: s, result };
@@ -146,4 +148,38 @@ export const careerRouter = router({
   playSet: protectedProcedure
     .input(z.object({ ace: z.number().int().optional() }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => playLiveSet(s, input.ace))),
+
+  /** 받은 영입 제안: 수락·거절·역제안(금액) */
+  respondOffer: protectedProcedure
+    .input(z.object({ offerId: z.number().int(), action: z.enum(["accept", "reject", "counter"]), fee: z.number().int().min(0).max(1_000_000).optional() }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => respondOffer(s, input.offerId, input.action, input.fee))),
+
+  /** 다른 팀 선수 영입 요청 (이적료 제시) */
+  bid: protectedProcedure
+    .input(z.object({ playerId: z.number().int(), fee: z.number().int().min(0).max(1_000_000) }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => bidPlayer(s, input.playerId, input.fee))),
+
+  /** 계약 협상 (영입 합의 후 또는 재계약) */
+  contract: protectedProcedure
+    .input(z.object({
+      playerId: z.number().int(),
+      salary: z.number().int().min(1).max(100_000),
+      years: z.number().int().min(1).max(5),
+      minApps: z.number().int().min(0).max(11).optional(),
+      bonus: z.object({
+        proTitle: z.number().int().min(0).max(100_000).optional(),
+        mslTitle: z.number().int().min(0).max(100_000).optional(),
+        mostWins: z.number().int().min(0).max(100_000).optional(),
+        topRank: z.number().int().min(0).max(100_000).optional(),
+      }).optional(),
+    }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => negotiateContract(s, input.playerId, {
+      salary: input.salary, years: input.years, minApps: input.minApps || undefined,
+      bonus: Object.fromEntries(Object.entries(input.bonus ?? {}).filter(([, v]) => (v ?? 0) > 0)),
+    }))),
+
+  /** 다른 팀 감독 제의 수락 */
+  acceptJob: protectedProcedure
+    .input(z.object({ teamId: z.number().int() }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => acceptJob(s, input.teamId))),
 });
