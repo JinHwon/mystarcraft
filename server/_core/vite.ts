@@ -58,10 +58,21 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  // 빌드 산출물(파일 이름에 해시)은 영구 캐시
+  app.use("/assets", express.static(path.join(distPath, "assets"), { immutable: true, maxAge: "365d", fallthrough: false }));
+  // 원작 이미지(선수 사진·맵·아이템·로고)는 한 달 캐시 → 화면마다 서버에 다시 묻지 않음. 없는 파일은 바로 404
+  app.use("/legacy", express.static(path.join(distPath, "legacy"), { maxAge: "30d", fallthrough: false }));
+  app.use(express.static(distPath, {
+    maxAge: "1d",
+    // 화면(html)·서비스 워커·매니페스트는 배포 뒤 바로 바뀌어야 하므로 캐시하지 않음
+    setHeaders: (res, file) => {
+      if (/\.(html|webmanifest)$|sw\.js$/.test(file)) res.setHeader("Cache-Control", "no-cache");
+    },
+  }));
 
   // fall through to index.html if the file doesn't exist
   app.use("*", (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache");
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }

@@ -38,11 +38,15 @@ function photoName(id: number | undefined, name: string) {
 
 export const legacySrc = (dir: string, name: string) => `/legacy/${encodeURIComponent(dir)}/${encodeURIComponent(name)}.gif`;
 
+/** 없는 원작 이미지는 기억해 두고 다시 요청하지 않음 */
+const missingImg = new Set<string>();
+
 export function LegacyImg({ dir, name, className, style, fallback }: { dir: string; name: string; className?: string; style?: CSSProperties; fallback: ReactNode }) {
-  const [err, setErr] = useState(false);
-  useEffect(() => setErr(false), [dir, name]);
+  const src = legacySrc(dir, name);
+  const [err, setErr] = useState(() => missingImg.has(src));
+  useEffect(() => setErr(missingImg.has(src)), [src]);
   if (err) return <>{fallback}</>;
-  return <img src={legacySrc(dir, name)} alt={name} draggable={false} onError={() => setErr(true)} className={className} style={style} />;
+  return <img src={src} alt={name} draggable={false} decoding="async" onError={() => { missingImg.add(src); setErr(true); }} className={className} style={style} />;
 }
 
 function hue(name: string) {
