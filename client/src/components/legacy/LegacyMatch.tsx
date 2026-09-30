@@ -1204,3 +1204,72 @@ export function ScheduleScreen({ s, onClose }: { s: CareerState; onClose: () => 
     </LegacyFrame>
   );
 }
+
+/** 마이스타리그 조 지명식: 우리 조장 차례에 직접 지명 (다른 조장은 자동) */
+export function NominationScreen({ s, onClose }: { s: CareerState; onClose: () => void }) {
+  const patch = useCareerPatch();
+  const [sel, setSel] = useState<number | undefined>();
+  const [err, setErr] = useState<string | null>(null);
+  const nom = trpc.career.nominate.useMutation({
+    onSuccess: r => { patch(r.diff); setSel(undefined); setErr(null); },
+    onError: e => setErr(e.message),
+  });
+  // 들어오면 우리 차례까지 진행
+  useEffect(() => { nom.mutate(undefined); }, []);
+  const m = s.msl;
+  const d = m?.draft;
+  if (!m || !d) return (
+    <LegacyFrame season={s.season} onBack={onClose}><div className="p-6 text-center text-neutral-400 text-[13px]">{err ?? "조 지명식을 준비하고 있습니다..."}</div></LegacyFrame>
+  );
+  const step = d.step, done = step >= 24;
+  const round = Math.floor(step / 8), gi = round % 2 === 0 ? step % 8 : 7 - (step % 8);
+  const head = done ? undefined : d.groups[gi][0];
+  const myTurn = head !== undefined && s.players[head]?.team === s.myTeam;
+  const pool = [...d.pool].sort((a, b) => totalOf(s.players[b].stats) - totalOf(s.players[a].stats));
+  const G = ["A", "B", "C", "D", "E", "F", "G", "H"];
+  const next = () => {
+    if (done) { onClose(); return; }
+    if (myTurn && sel !== undefined) nom.mutate({ pick: sel });
+    else if (!myTurn) nom.mutate(undefined);
+  };
+  return (
+    <LegacyFrame season={s.season} onBack={onClose} onNext={next} nextDisabled={nom.isPending || (myTurn && sel === undefined)}
+      nextLabel={done ? "확인 ▷▷" : myTurn ? (sel !== undefined ? `${s.players[sel].name} 지명 ▷▷` : "지명할 선수를 고르세요") : "진행 ▷▷"}>
+      <div className="px-3 pt-3 pb-4">
+        <div className="flex flex-col items-center gap-1">
+          <LegacyImg dir="로고" name="MySL" className="max-h-12 object-contain" fallback={<div className="text-[18px] italic font-black text-[#c9a0ff]">MySL</div>} />
+          <div className="text-[15px] tracking-[0.2em]">마이스타리그 조 지명식</div>
+          <div className="text-[12px] text-[#ffe45c]">{done ? "지명 완료 — 32강 조 편성" : `${round + 1}라운드 · ${G[gi]}조 ${s.players[head!].name} 선수 차례${myTurn ? " (우리 선수!)" : ""}`}</div>
+        </div>
+        {err && <div className="mt-2 border border-[#ff6b6b] text-[#ffb8c8] text-center text-[12px] py-1">{err}</div>}
+        <div className="grid grid-cols-2 gap-1.5 mt-3">
+          {d.groups.map((g, k) => (
+            <div key={k} className={cn("border p-1.5 text-[11.5px]", !done && k === gi ? "border-[#ff6b6b]" : "border-neutral-600")}>
+              <div className="text-[#ffe45c]">{G[k]}조</div>
+              {g.map((id, j) => <div key={id} className={cn("truncate", s.players[id]?.team === s.myTeam && "text-[#8fd0ff]", j === 0 && "font-bold")}>{j === 0 ? "👑 " : ""}{nameRace(s.players[id])}</div>)}
+            </div>
+          ))}
+        </div>
+        {myTurn && (
+          <>
+            <div className="text-center text-[12px] text-neutral-300 mt-3">{s.players[head!].name} 선수의 조에 넣을 상대를 지명하세요 (약한 선수나 상대하기 좋은 종족을 고르는 게 유리)</div>
+            <div className="border-2 border-neutral-300 p-0.5 mt-1.5 max-h-[300px] overflow-y-auto">
+              {pool.map(id => {
+                const p = s.players[id];
+                return (
+                  <button key={id} onClick={() => setSel(id)} className={cn("w-full flex items-center gap-2 px-1.5 py-1 text-left border-b border-neutral-800 last:border-b-0", sel === id ? "bg-[#3a3a5a]" : "")}>
+                    <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} size={30} />
+                    <span className={cn("flex-1 truncate text-[12.5px]", p.team === s.myTeam ? "text-[#8fd0ff]" : sel === id ? "text-[#ffe45c]" : "text-white")}>{nameRace(p)}</span>
+                    <span className="text-[10.5px] text-neutral-400 truncate max-w-[30%]">{s.teams[p.team]?.short ?? "무소속"}</span>
+                    <span className="text-[11px] text-neutral-200 w-12 text-right">{totalOf(p.stats).toLocaleString()}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+        {!myTurn && !done && <div className="text-center text-[11px] text-neutral-500 mt-3">Next 로 다음 우리 선수 차례까지 진행 (다른 조장은 자동 지명)</div>}
+      </div>
+    </LegacyFrame>
+  );
+}

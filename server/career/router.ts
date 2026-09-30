@@ -12,6 +12,7 @@ import type { CareerEventType } from "@shared/career/events";
 import { setActiveEvents } from "./events";
 import type { CareerState } from "@shared/career/rules";
 import { diffOf, snapshot } from "./diff";
+import { nominate } from "./msl";
 import { ACTIONS } from "@shared/career/rules";
 import { negotiateMainSponsor } from "./club";
 import { acceptJob, bidPlayer, chooseSponsor, demotePlayer, negotiateContract, respondOffer, signReserve } from "./club";
@@ -316,6 +317,11 @@ export const careerRouter = router({
   runActions: protectedProcedure
     .input(z.object({ playerId: z.number().int().optional() }).optional())
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => runMyActions(s, input?.playerId))),
+
+  /** 마이스타리그 조 지명식: 우리 조장 차례까지 진행, pick 이 있으면 그 선수를 지명 */
+  nominate: protectedProcedure
+    .input(z.object({ pick: z.number().int().optional() }).optional())
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => nominate(s, input?.pick))),
 
   /** 우리 선수 행동 모두 해제 (행동은 바꾸거나 초기화할 때까지 매주 유지) */
   clearActions: protectedProcedure.mutation(({ ctx }) => mutateLite(ctx.user.id, s => {

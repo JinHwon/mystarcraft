@@ -294,6 +294,8 @@ export interface MslState {
   pcGames?: MslSeries[];
   duals: MslGroup[];
   nominations: Array<{ by: number; pick: number; group: string }>;
+  /** 진행 중인 조 지명식 (우리 선수가 조장이면 그 차례에 직접 지명) */
+  draft?: { groups: number[][]; pool: number[]; step: number };
   groups: MslGroup[];
   bracket: Array<{ round: "ro16" | "ro8" | "ro4" | "final"; series: MslSeries[] }>;
   /** 선수별 최종 성적 */
