@@ -2,21 +2,45 @@
  * 원작식 경기 화면: 맵 추첨 결과 → 엔트리 편성 → (세트마다) 경기 전 화면 → 중계 화면 → … (2:2 면 ACE 결정전 엔트리) → 결과
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { STAT_KEYS, type StatKey } from "@shared/gameConstants";
 import { FINAL_SETS, PRO_SETS, condMultiplier, totalOf, type CareerState, type CMatch, type CPlayer, type SetResult, type SetTimeline } from "@shared/career/rules";
 import { STAGE_NAMES, mapView, rosterOf } from "@shared/career/view";
-import { GrayBox, LegacyFrame, LegacyImg, LegacyRadar, MapImage, MapInfo, PlayerPhoto, TeamLogo } from "./Legacy";
+import { ITEMS, ITEM_BY_KEY, SLOT_NAMES, gearCond, gearStats, itemImg, type EquipSlot } from "@shared/career/items";
+import { GrayBox, LEGACY_FONT, LegacyFrame, LegacyImg, LegacyRadar, MapImage, MapInfo, PlayerPhoto, TeamLogo } from "./Legacy";
 
 const R = { terran: "T", zerg: "Z", protoss: "P" } as const;
 const nameRace = (p?: CPlayer) => (p ? `${p.name} (${R[p.race]})` : "");
 const LEFT_COLOR = "#bff5c6";
+const MATCH_ITEMS = ITEMS.filter(i => i.kind === "match");
+/** 엔트리에서 상점으로 (편성 내용은 유지되지 않음) */
+const navigateShop = () => { window.location.href = "/shop"; };
 const RIGHT_COLOR = "#ffb8c8";
 
 /** 컨디션이 반영된 능력치 */
 export function condStats(p: CPlayer): Record<StatKey, number> {
-  const k = condMultiplier(p.cond);
-  return Object.fromEntries(STAT_KEYS.map(s => [s, Math.round(p.stats[s] * k)])) as Record<StatKey, number>;
+  const g = gearStats(p);
+  const k = condMultiplier(gearCond(p));
+  return Object.fromEntries(STAT_KEYS.map(s => [s, Math.round(g[s] * k)])) as Record<StatKey, number>;
+}
+
+/** 장착 장비 4칸 (마우스·키보드·모니터·기타) */
+export function EquipRow({ p, size = 22 }: { p: CPlayer; size?: number }) {
+  return (
+    <div className="flex gap-1 justify-center">
+      {(Object.keys(SLOT_NAMES) as EquipSlot[]).map(slot => {
+        const e = p.equip?.[slot];
+        const it = e ? ITEM_BY_KEY[e.key] : undefined;
+        return (
+          <div key={slot} title={it ? `${it.name} (남은 ${e!.left}경기)` : `${SLOT_NAMES[slot]} 없음`}
+            className={cn("border flex items-center justify-center overflow-hidden", it ? "bg-white border-neutral-300" : "border-neutral-700 border-dashed")} style={{ width: size, height: size }}>
+            {it && <LegacyImg dir={itemImg(it).dir} name={itemImg(it).name} className="max-w-full max-h-full object-contain" fallback={<span className="text-[7px] text-black">{it.name.slice(0, 2)}</span>} />}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 // ── 배속 (한 번 정하면 바꿀 때까지 유지) ─────────────────────────────
@@ -62,10 +86,11 @@ export function PlayerPanel({ p, color, empty }: { p?: CPlayer; color: string; e
         <div className="text-[11px] leading-[1.45] text-neutral-200 pt-0.5">
           <div className="text-[13px] font-bold" style={{ color }}>{p.name}</div>
           <div>{R[p.race]} · Lv.{p.level}</div>
-          <div>Condition <b className={p.cond >= 7 ? "text-[#bff5c6]" : p.cond <= 3 ? "text-[#ff9a9a]" : "text-white"}>{p.cond * 10}%</b></div>
+          <div>Condition <b className={gearCond(p) >= 7 ? "text-[#bff5c6]" : gearCond(p) <= 3 ? "text-[#ff9a9a]" : "text-white"}>{gearCond(p) * 10}%</b>{gearCond(p) !== p.cond && <span className="text-[9px] text-neutral-500"> (장비)</span>}</div>
           <div className="text-neutral-400">{totalOf(p.stats).toLocaleString()} → <b className="text-[#ffe45c]">{totalOf(cs).toLocaleString()}</b></div>
         </div>
       </div>
+      <div className="mt-1"><EquipRow p={p} /></div>
       <LegacyRadar stats={cs} level={p.level} size={92} />
     </div>
   );
@@ -111,9 +136,14 @@ export function RosterList({ players, onPick, selected, marks }: { players: CPla
   );
 }
 
-export function EntryScreen({ s, match, front, setFront, onSubmit, submitting, onShowMaps, onBack }: {
+export type ItemPlan = Record<number, { key: string; predict?: number }>;
+
+export function EntryScreen({ s, match, front, setFront, items, setItems, onSubmit, submitting, onShowMaps, onBack }: {
   s: CareerState;
   match: CMatch;
+  /** 세트별 경기 아이템 */
+  items: ItemPlan;
+  setItems: (v: ItemPlan) => void;
   /** 1~(n-1)세트 엔트리 */
   front: (number | undefined)[];
   setFront: (e: (number | undefined)[]) => void;
@@ -133,6 +163,14 @@ export function EntryScreen({ s, match, front, setFront, onSubmit, submitting, o
   const mapOf = (i: number) => match.maps[i % match.maps.length];
   const filled = Array.from({ length: n }, (_, i) => front[i]);
   const valid = filled.every(x => x !== undefined) && new Set(filled).size === n;
+  const [pickFor, setPickFor] = useState<number | null>(null);
+  const [snipeFor, setSnipeFor] = useState<number | null>(null);
+  const usedCount = (key: string, except?: number) => Object.entries(items).filter(([k, v]) => v.key === key && Number(k) !== except).length;
+  const setItem = (i: number, v?: { key: string; predict?: number }) => {
+    const next = { ...items };
+    if (v) next[i] = v; else delete next[i];
+    setItems(next);
+  };
   const marks = new Map(filled.flatMap((id, i) => (id === undefined ? [] : [[id, `${i + 1}`] as [number, string]])));
 
   const assign = (p: CPlayer) => {
@@ -197,6 +235,16 @@ export function EntryScreen({ s, match, front, setFront, onSubmit, submitting, o
                   >
                     {isAce ? "ACE Card" : p ? nameRace(p) : "Select Player"}
                   </button>
+                  {!isAce && (
+                    <button onClick={() => setPickFor(i)} className="w-full flex items-center justify-center gap-1 text-[10px] py-[2px] border border-dashed border-neutral-600 text-neutral-400">
+                      {items[i] ? (
+                        <>
+                          <span className="w-4 h-4 bg-white inline-flex items-center justify-center overflow-hidden"><LegacyImg dir={itemImg(ITEM_BY_KEY[items[i].key]).dir} name={itemImg(ITEM_BY_KEY[items[i].key]).name} className="max-w-full max-h-full" fallback={null} /></span>
+                          <span className="text-[#ffe45c]">{ITEM_BY_KEY[items[i].key].name}{items[i].predict !== undefined ? ` → ${s.players[items[i].predict!]?.name}` : ""}</span>
+                        </>
+                      ) : "+ 아이템"}
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -213,6 +261,41 @@ export function EntryScreen({ s, match, front, setFront, onSubmit, submitting, o
           </div>
         </div>
       </div>
+      {pickFor !== null && createPortal(
+        <div className="fixed inset-0 app-fixed-x w-full z-[70] bg-black/80 flex items-end text-white" style={LEGACY_FONT} onClick={() => { setPickFor(null); setSnipeFor(null); }}>
+          <div className="w-full bg-[#111] border-t-2 border-neutral-400 p-3 space-y-2" onClick={e => e.stopPropagation()}>
+            {snipeFor === null ? (
+              <>
+                <div className="text-center text-[13px] text-neutral-100">{pickFor + 1}세트 경기 아이템</div>
+                {MATCH_ITEMS.map(it => {
+                  const left = (s.inventory?.[it.key] ?? 0) - usedCount(it.key, pickFor);
+                  return (
+                    <button key={it.key} disabled={left <= 0}
+                      onClick={() => { if (it.key === "sniping") setSnipeFor(pickFor); else { setItem(pickFor, { key: it.key }); setPickFor(null); } }}
+                      className={cn("w-full flex items-center gap-2 border px-2 py-1.5 text-left disabled:opacity-35", items[pickFor]?.key === it.key ? "border-[#ff6b6b]" : "border-neutral-700")}>
+                      <span className="w-9 h-9 bg-white flex items-center justify-center overflow-hidden"><LegacyImg dir={itemImg(it).dir} name={itemImg(it).name} className="max-w-full max-h-full" fallback={null} /></span>
+                      <span className="flex-1 text-[12px]"><b className="text-white">{it.name}</b><br /><span className="text-neutral-400">{it.effect.join(" ")}</span></span>
+                      <span className="text-[11px] text-[#ffe45c]">보유 {Math.max(0, left)}</span>
+                    </button>
+                  );
+                })}
+                <div className="flex gap-2">
+                  <button onClick={() => { setItem(pickFor); setPickFor(null); }} className="flex-1 border border-neutral-600 py-1.5 text-[12px] text-neutral-300">사용 안 함</button>
+                  <button onClick={() => { setPickFor(null); navigateShop(); }} className="flex-1 border border-neutral-600 py-1.5 text-[12px] text-neutral-300">아이템 상점</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-center text-[13px] text-neutral-100">스나이핑 · {snipeFor + 1}세트에 나올 상대 선수 예측</div>
+                <div className="max-h-[50vh] overflow-y-auto">
+                  <RosterList players={theirs} onPick={p => { setItem(snipeFor, { key: "sniping", predict: p.id }); setSnipeFor(null); setPickFor(null); }} selected={items[snipeFor]?.predict} />
+                </div>
+              </>
+            )}
+          </div>
+        </div>,
+        document.body,
+      )}
     </LegacyFrame>
   );
 }
@@ -413,7 +496,7 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose }: {
   const [info] = useState(() => {
     const live = s.live!;
     const m = s.matches.find(x => x.id === live.matchId)!;
-    return { m, leftIsA: m.a === s.myTeam, opp: live.opp, mine: [...live.mine] };
+    return { m, leftIsA: m.a === s.myTeam, opp: live.opp, mine: [...live.mine], items: live.items };
   });
   const { m, leftIsA, opp } = info;
   const [mine, setMine] = useState(info.mine);
@@ -498,7 +581,8 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose }: {
                   <div key={p.id} className="flex flex-col items-center">
                     <PlayerCard p={p} vsRace={o.race} />
                     <LegacyRadar stats={condStats(p)} level={p.level} size={112} />
-                    <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{p.cond * 10} %</div>
+                    <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p) * 10} %</div>
+                    {p.team === s.myTeam && info.items?.[i] && <div className="text-[11px] text-[#ffe45c]">아이템 : {ITEM_BY_KEY[info.items[i].key]?.name}</div>}
                   </div>
                 ))}
               </div>

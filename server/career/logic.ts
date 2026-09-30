@@ -34,12 +34,14 @@ import {
   totalOf,
 } from "@shared/career/rules";
 import {
+  type SetMods,
   CareerError, addExp, clampCond, clampStat, drawMapPool, gainStats, news, pickMaps, playSet, rand, randInt, shuffle,
   type PlayedSet,
 } from "./core";
 export { CareerError };
 import { initialPlayers, initialTeams } from "@shared/career/init";
 import { runMslWeek, type MslReport } from "./msl";
+import { ITEM_BY_KEY, POTION_LIMIT, slotOf } from "@shared/career/items";
 export type { MslReport };
 
 const RACE: Record<string, Race> = { T: "terran", Z: "zerg", P: "protoss" };
@@ -256,7 +258,9 @@ const setsOf = (m: CMatch) => (m.stage === "final" ? FINAL_SETS : PRO_SETS);
 const needOf = (m: CMatch) => (m.stage === "final" ? FINAL_WIN : PRO_WIN);
 
 /** 엔트리(1~(n-1)세트)를 내고 경기 시작. 선수 행동은 이때 반영된다 */
-export function beginMatch(s: CareerState, front: number[]) {
+export type SetItemPlan = Record<number, { key: string; predict?: number }>;
+
+export function beginMatch(s: CareerState, front: number[], items: SetItemPlan = {}) {
   if (s.live) throw new CareerError("이미 진행 중인 경기가 있습니다");
   const m = myPendingMatch(s);
   if (!m) throw new CareerError("이번 주 우리 팀 경기가 없습니다");
@@ -264,9 +268,20 @@ export function beginMatch(s: CareerState, front: number[]) {
   if (front.length !== sets - 1) throw new CareerError(`1~${sets - 1}세트 엔트리를 모두 정해주세요`);
   for (const id of front) if (s.players[id]?.team !== s.myTeam) throw new CareerError("우리 팀 선수만 출전할 수 있습니다");
   if (new Set(front).size !== front.length) throw new CareerError(`1~${sets - 1}세트에는 서로 다른 선수를 배치해야 합니다`);
+  // 경기 아이템 확인 (세트마다 하나, 보유 수량 안에서)
+  const need: Record<string, number> = {};
+  for (const [k, v] of Object.entries(items)) {
+    const i = Number(k);
+    const it = ITEM_BY_KEY[v.key];
+    if (!it || it.kind !== "match") throw new CareerError("경기에 쓸 수 없는 아이템입니다");
+    if (!(i >= 0 && i < sets - 1)) throw new CareerError("아이템은 1~4세트에만 쓸 수 있습니다");
+    if (v.key === "sniping" && (v.predict === undefined || !s.players[v.predict])) throw new CareerError("스나이핑할 상대 선수를 골라주세요");
+    need[v.key] = (need[v.key] ?? 0) + 1;
+  }
+  for (const [k, n] of Object.entries(need)) if ((s.inventory?.[k] ?? 0) < n) throw new CareerError(`${ITEM_BY_KEY[k].name} 이(가) 부족합니다`);
   applyActions(s);
   const oppTeam = m.a === s.myTeam ? m.b : m.a;
-  s.live = { matchId: m.id, mine: [...front], opp: aiEntry(s, oppTeam, sets), sets: [] };
+  s.live = { matchId: m.id, mine: [...front], opp: aiEntry(s, oppTeam, sets), sets: [], items };
   return { matchId: m.id };
 }
 
@@ -291,7 +306,32 @@ export function playLiveSet(s: CareerState, ace?: number): LiveSetResult {
   }
   const meA = m.a === s.myTeam;
   const entryA = meA ? live.mine : live.opp, entryB = meA ? live.opp : live.mine;
-  const set = playSet(s, s.players[entryA[i]], s.players[entryB[i]], m.maps[i % m.maps.length], true, true);
+  // 경기 아이템 (쓸 때 소모)
+  const plan = live.items?.[i];
+  const mod: SetMods = {};
+  let sniped = false;
+  if (plan && (s.inventory?.[plan.key] ?? 0) > 0) {
+    s.inventory![plan.key]--;
+    if (plan.key === "cheer") mod.all = ITEM_BY_KEY.cheer.all;
+    if (plan.key === "gum") mod.gum = true;
+    if (plan.key === "sniping" && plan.predict === live.opp[i]) { mod.mul = 1.1; sniped = true; }
+  }
+  const mods = meA ? { a: mod } : { b: mod };
+  const set = playSet(s, s.players[entryA[i]], s.players[entryB[i]], m.maps[i % m.maps.length], true, true, mods);
+  if (plan) {
+    set.item = plan.key;
+    set.sniped = sniped;
+    const me = s.players[live.mine[i]];
+    const side = meA ? 1 : 2;
+    // 원작 해설로 아이템 장면
+    const extra = plan.key === "cheer" ? `${me.name} 선수를 응원하는 치어풀이 보이네요.` : sniped ? `${me.name} 선수, 상대를 노리고 나온 것 같은데요!` : undefined;
+    if (extra && set.timeline) set.timeline.lines.unshift({ t: 0, side, text: extra });
+    const myWin = (set.winner === "a") === meA;
+    if (plan.key === "ceremony" && myWin) {
+      s.teams[s.myTeam].money += 150;
+      for (const p of rosterOf(s, s.myTeam)) p.cond = clampCond(p.cond + 1);
+    }
+  }
   live.sets.push(set);
   const sa = live.sets.filter(x => x.winner === "a").length, sb = live.sets.length - sa;
   if (sa >= need || sb >= need) {
@@ -366,6 +406,7 @@ export function startNextSeason(s: CareerState) {
       for (const k of shuffle([...STAT_KEYS]).slice(0, 3)) p.stats[k] = clampStat(p.stats[k] - randInt(5, 20));
     }
     p.sWins = 0; p.sLosses = 0;
+    p.potions = 0;
     p.cond = randInt(4, 7);
   }
   for (const t of s.teams) { t.wins = 0; t.losses = 0; t.setWins = 0; t.setLosses = 0; }
@@ -412,6 +453,65 @@ export function releasePlayer(s: CareerState, pid: number) {
   p.action = null;
   news(s, `👋 ${p.name} 선수 방출 (방출 이득 ${gain.toLocaleString()}만원)`);
   return { gain };
+}
+
+// ── 아이템 상점 ─────────────────────────────────────────────────
+
+export interface BuyResult { message: string; delta?: Partial<Record<string, number>> }
+
+/** 아이템 구입. 장비·즉시 사용·포션은 선수(target)에게 바로 쓴다 */
+export function buyItem(s: CareerState, key: string, target?: number): BuyResult {
+  const it = ITEM_BY_KEY[key];
+  if (!it) throw new CareerError("구입 불가능 품목입니다");
+  const me = s.teams[s.myTeam];
+  if (me.money < it.price) throw new CareerError("소지금이 부족합니다");
+  if (it.kind === "match") {
+    me.money -= it.price;
+    s.inventory = { ...s.inventory, [key]: (s.inventory?.[key] ?? 0) + 1 };
+    return { message: "구입하였습니다" };
+  }
+  const p = target !== undefined ? s.players[target] : undefined;
+  if (!p || p.team !== s.myTeam) throw new CareerError("선수를 선택하세요");
+  if (it.kind === "equip") {
+    const slot = slotOf(it)!;
+    if (p.equip?.[slot]?.key === key) throw new CareerError("이미 장착 중입니다");
+    me.money -= it.price;
+    p.equip = { ...p.equip, [slot]: { key, left: it.uses ?? 20 } };
+    news(s, `🛒 ${p.name} 선수 ${it.name} 장착`);
+    return { message: "구입하였습니다" };
+  }
+  if (it.kind === "instant") {
+    if (p.cond >= COND_MAX) throw new CareerError("컨디션이 최대입니다");
+    me.money -= it.price;
+    p.cond = clampCond(p.cond + (it.cond ?? 0));
+    return { message: "맛있게 마셨다" };
+  }
+  // 포션: 능력치 무작위 변화
+  const po = it.potion!;
+  if ((p.potions ?? 0) >= POTION_LIMIT) throw new CareerError("이 선수는 더 사용 할 수 없습니다");
+  if (p.cond - po.condCost < COND_MIN) throw new CareerError("컨디션이 너무 낮습니다");
+  const keys = po.stat ? [po.stat] : [...STAT_KEYS];
+  if (po.min >= 0 && keys.every(k => p.stats[k] >= STAT_MAX_CAREER)) throw new CareerError("이미 최대 수치입니다");
+  me.money -= it.price;
+  p.potions = (p.potions ?? 0) + 1;
+  const delta: Record<string, number> = {};
+  if (key === "p_vit") {
+    p.cond = clampCond(p.cond + randInt(po.min, po.max));
+    for (const k of STAT_KEYS) { p.stats[k] = clampStat(p.stats[k] - (po.allMinus ?? 0)); delta[k] = -(po.allMinus ?? 0); }
+    return { message: "맛있게 마셨다", delta };
+  }
+  p.cond = clampCond(p.cond - po.condCost);
+  let sum = 0;
+  for (const k of keys) {
+    const d = randInt(po.min, po.max);
+    const before = p.stats[k];
+    p.stats[k] = clampStat(before + d);
+    delta[k] = p.stats[k] - before;
+    sum += delta[k];
+  }
+  const avg = sum / keys.length;
+  const message = avg < 0 ? "정신이 몽롱해진다..." : avg < (po.max - po.min) * 0.25 + Math.max(0, po.min) ? "먹은것 같긴한데..." : avg >= po.max * 0.7 ? "호랑이 기운이 솟아났다" : "맛있게 마셨다";
+  return { message, delta };
 }
 
 // ── 트레이드 ───────────────────────────────────────────────────

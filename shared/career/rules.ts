@@ -76,6 +76,10 @@ export interface CPlayer {
   titles?: string[];
   /** 종족별 통산 전적 [승, 패] */
   vs?: Partial<Record<Race, [number, number]>>;
+  /** 장착 장비 (남은 경기 수) */
+  equip?: Partial<Record<"mouse" | "keyboard" | "monitor" | "etc", { key: string; left: number }>>;
+  /** 이번 시즌 마신 포션 수 */
+  potions?: number;
 }
 
 export interface CTeam {
@@ -98,6 +102,10 @@ export interface SetResult {
   winner: "a" | "b";
   duration: number;
   highlights?: string[];
+  /** 이 세트에 쓴 경기 아이템 (우리 선수) */
+  item?: string;
+  /** 스나이핑 적중 */
+  sniped?: boolean;
 }
 
 export interface CMatch {
@@ -133,6 +141,8 @@ export interface LiveMatch {
   opp: number[];
   /** 지금까지 치른 세트 (중계 포함, 경기가 끝나면 지움) */
   sets: Array<SetResult & { timeline?: SetTimeline }>;
+  /** 세트별 경기 아이템 (세트 번호 → 아이템, 스나이핑은 예측한 상대 선수) */
+  items?: Record<number, { key: string; predict?: number }>;
 }
 
 /** 시즌 맵 추첨 개수 (원작 "맵 추첨 결과" 7개, 결승 7세트) */
@@ -203,6 +213,8 @@ export interface CareerState {
   msl?: MslState;
   /** 이번 시즌 맵 추첨 결과 */
   mapPool?: number[];
+  /** 보유 경기 아이템 (츄잉껌·세레모니·스나이핑·치어풀) */
+  inventory?: Record<string, number>;
   /** 진행 중인 우리 경기 (세트마다 하나씩 진행, 2:2 면 ACE 결정전 선수를 그때 고름) */
   live?: LiveMatch;
 }

@@ -10,6 +10,7 @@ import {
   CareerError,
   advanceWeek,
   beginMatch,
+  buyItem,
   playLiveSet,
   migrateCareer,
   newCareer,
@@ -130,8 +131,16 @@ export const careerRouter = router({
 
   /** 우리 경기 시작 (1~(n-1)세트 엔트리) */
   beginMatch: protectedProcedure
-    .input(z.object({ entry: z.array(z.number().int()).min(1).max(8) }))
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => beginMatch(s, input.entry))),
+    .input(z.object({
+      entry: z.array(z.number().int()).min(1).max(8),
+      items: z.record(z.string(), z.object({ key: z.string(), predict: z.number().int().optional() })).optional(),
+    }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => beginMatch(s, input.entry, Object.fromEntries(Object.entries(input.items ?? {}).map(([k, v]) => [Number(k), v]))))),
+
+  /** 아이템 구입 (장비·즉시·포션은 target 선수에게 바로 사용) */
+  buyItem: protectedProcedure
+    .input(z.object({ key: z.string(), target: z.number().int().optional() }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => buyItem(s, input.key, input.target))),
 
   /** 다음 세트 진행 (ACE 결정전이면 ace 선수) */
   playSet: protectedProcedure

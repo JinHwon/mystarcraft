@@ -1,3 +1,4 @@
+import { MSL_STAGE_NAMES } from "@shared/career/rules";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -161,6 +162,8 @@ function Office({ s }: { s: CareerState }) {
         <Tile emoji="🏆" title="마이프로리그" desc={`${rank}위 · 순위표·일정`} onClick={() => navigate("/league")} className="bg-gradient-to-br from-amber-500 to-orange-600 border-amber-300/40" />
         <Tile emoji="👥" title="선수단" desc={`${roster.length}명 · 능력치·컨디션`} onClick={() => navigate("/team")} className="bg-gradient-to-br from-violet-500 to-purple-700 border-violet-300/40" />
         <Tile emoji="🤝" title="이적시장" desc={`무소속 ${rosterOf(s, FREE_AGENT_TEAM).length}명 영입·방출`} onClick={() => navigate("/transfer")} className="bg-gradient-to-br from-sky-500 to-blue-700 border-sky-300/40" />
+        <Tile emoji="🛒" title="아이템 상점" desc="장비·포션·경기 아이템" onClick={() => navigate("/shop")} className="bg-gradient-to-br from-rose-500 to-pink-700 border-rose-300/40" />
+        <Tile emoji="👑" title="마이스타리그" desc={s.msl ? MSL_STAGE_NAMES[s.msl.stage] : "1주차 개막"} onClick={() => navigate("/starleague")} className="bg-gradient-to-br from-indigo-500 to-slate-700 border-indigo-300/40" />
       </div>
 
       {/* 순위 요약 */}
