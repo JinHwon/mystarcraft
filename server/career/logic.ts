@@ -37,7 +37,7 @@ import {
 } from "@shared/career/rules";
 import {
   type SetMods,
-  CareerError, addExp, clampCond, quickSet, clampStat, drawMapPool, gainStats, news, pickMaps, playSet, rand, randInt, shuffle,
+  CareerError, addExp, clampCond, rollWeekBursts, quickSet, clampStat, drawMapPool, gainStats, news, pickMaps, playSet, rand, randInt, shuffle,
   type PlayedSet,
 } from "./core";
 export { CareerError };
@@ -83,6 +83,7 @@ export function newCareer(myTeam: number): CareerState {
   ensureClub(s);
   ensurePotential(s);
   scheduleRegularSeason(s);
+  rollWeekBursts(s);
   news(s, `${s.teams[myTeam].name} 감독으로 부임했습니다. ${s.season}시즌 마이프로리그가 곧 개막합니다!`);
   return s;
 }
@@ -93,6 +94,7 @@ export function migrateCareer(s: CareerState) {
   ensureClub(s);
   ensurePotential(s);
   ensureHeadToHead(s);
+  rollWeekBursts(s);
   // 없어진 행동(베스트) → 훈련
   for (const p of s.players) if ((p.action as string) === "best") p.action = "train";
   // 컨디션 1~10 단위 → % 단위
@@ -372,6 +374,7 @@ function finishWeek(s: CareerState): WeekResult {
   for (const p of [...rosterOf(s, s.myTeam), ...s.players.filter(x => x.team === s.myTeam && x.reserve)]) p.ap = playerAp(p) + WEEKLY_AP;
   pruneHighlights(s);
   s.week++;
+  rollWeekBursts(s);
   s.ap = WEEKLY_AP;
   progressSchedule(s);
   return { mslReports, mslPlans, proReports };
@@ -568,6 +571,7 @@ export function startNextSeason(s: CareerState, opts: { releaseExpiring?: boolea
   // 지난 시즌 경기 기록은 요약만 남기고 정리
   s.matches = [];
   scheduleRegularSeason(s);
+  rollWeekBursts(s);
   news(s, `${s.season}시즌 마이프로리그 개막!`);
 }
 

@@ -10,6 +10,7 @@ import {
   STAT_MAX_CAREER,
   STAT_MIN,
   burstChance,
+  burstOf,
   condMultiplier,
   totalOf,
   type CareerState,
@@ -143,14 +144,22 @@ function wearEquip(s: CareerState, p: CPlayer) {
 }
 
 /** 세트마다 포텐셜 폭발 판정 → 능력치 배율 (1.1~1.2) */
-function rollBurst(p: CPlayer): number | undefined {
-  return rand() < burstChance(gearCond(p)) ? Math.round((1.1 + rand() * 0.1) * 100) / 100 : undefined;
+/** 주가 시작될 때 이번 주 포텐셜이 터질 선수를 정함 (엔트리 화면부터 보임) */
+export function rollWeekBursts(s: CareerState) {
+  const wk = `${s.season}-${s.week}`;
+  if (s.burstWeek === wk) return;
+  s.burstWeek = wk;
+  for (const p of s.players) {
+    if (p.team < 0) continue;
+    if (rand() < burstChance(gearCond(p))) p.burst = { week: wk, mul: Math.round((1.1 + rand() * 0.1) * 100) / 100 };
+    else delete p.burst;
+  }
 }
 const withBurst = (mod: SetMods | undefined, burst: number | undefined): SetMods | undefined => (burst ? { ...mod, mul: (mod?.mul ?? 1) * burst } : mod);
 
 export function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, withHighlights: boolean, withTimeline = false, mods?: { a?: SetMods; b?: SetMods }): PlayedSet {
   const m = mapView(mapId);
-  const burst = { a: rollBurst(a), b: rollBurst(b) };
+  const burst = { a: burstOf(s, a), b: burstOf(s, b) };
   const r = simulateSet(
     { id: a.id + 1, name: a.name, race: a.race, stats: effStats(a, withBurst(mods?.a, burst.a)), fatigue: 100 },
     { id: b.id + 1, name: b.name, race: b.race, stats: effStats(b, withBurst(mods?.b, burst.b)), fatigue: 100 },
@@ -179,7 +188,7 @@ export function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, w
  * 세트 후 처리는 playSet 과 같다
  */
 export function quickSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number): SetResult {
-  const pa = totalOf(effStats(a, withBurst(undefined, rollBurst(a)))), pb = totalOf(effStats(b, withBurst(undefined, rollBurst(b))));
+  const pa = totalOf(effStats(a, withBurst(undefined, burstOf(s, a)))), pb = totalOf(effStats(b, withBurst(undefined, burstOf(s, b))));
   const adv = a.race === b.race ? 0 : (matchupValue(mapId, a.race, b.race) - 50) / 100;
   const pWin = 1 / (1 + Math.exp(-((pa - pb) / 450 + adv * 2.2)));
   const aWin = rand() < pWin;
