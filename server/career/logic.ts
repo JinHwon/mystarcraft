@@ -243,7 +243,8 @@ function recordMatch(s: CareerState, m: CMatch, entryA: number[], entryB: number
 function playMatch(s: CareerState, m: CMatch, myEntry?: number[]): PlayedSet[] {
   const sets = m.stage === "final" ? FINAL_SETS : PRO_SETS;
   const need = m.stage === "final" ? FINAL_WIN : PRO_WIN;
-  const involvesMe = m.a === s.myTeam || m.b === s.myTeam;
+  // 우리 경기와 포스트시즌(준PO·PO·결승)은 중계
+  const involvesMe = m.a === s.myTeam || m.b === s.myTeam || m.stage !== "regular";
   const entryA = m.a === s.myTeam && myEntry ? myEntry : aiEntry(s, m.a, sets);
   const entryB = m.b === s.myTeam && myEntry ? myEntry : aiEntry(s, m.b, sets);
   let sa = 0, sb = 0;
@@ -259,6 +260,9 @@ function playMatch(s: CareerState, m: CMatch, myEntry?: number[]): PlayedSet[] {
   recordMatch(s, m, entryA, entryB, results);
   return results;
 }
+
+/** 포스트시즌 다른 팀 경기 (중계 화면용, 세이브에는 해설을 남기지 않음) */
+export interface ProReport { matchId: number; stage: CMatch["stage"]; a: number; b: number; sa: number; sb: number; sets: PlayedSet[] }
 
 /** 오래된 중계 하이라이트는 지워서 세이브 크기를 줄임 (내 팀 최근 4경기만 유지) */
 function pruneHighlights(s: CareerState) {
@@ -276,6 +280,8 @@ export interface WeekResult {
   /** 우리 경기 세트별 중계 (원작식 중계 화면용) */
   broadcast?: PlayedSet[];
   mslReports: MslReport[];
+  /** 우리 팀이 없는 포스트시즌 경기 중계 */
+  proReports?: ProReport[];
   /** 이번 주에 치른 개인리그 일정 (MSL_PLAN 번호) — 결과 화면용 */
   mslPlans?: number[];
 }
@@ -303,7 +309,14 @@ export function advanceWeek(s: CareerState, myEntry?: number[]): WeekResult {
 
 /** 이번 주 나머지 일정 (다른 팀 경기·스타리그·스폰서) 진행 후 다음 주로 */
 function finishWeek(s: CareerState): WeekResult {
-  for (const m of s.matches.filter(x => !x.done && x.week === s.week)) playMatch(s, m);
+  const proReports: ProReport[] = [];
+  for (const m of s.matches.filter(x => !x.done && x.week === s.week)) {
+    const sets = playMatch(s, m);
+    if (m.stage !== "regular" && m.a !== s.myTeam && m.b !== s.myTeam) {
+      proReports.push({ matchId: m.id, stage: m.stage, a: m.a, b: m.b, sa: m.scoreA ?? 0, sb: m.scoreB ?? 0, sets: sets.map(x => ({ ...x })) });
+      for (const x of sets) { delete x.timeline; delete x.highlights; }
+    }
+  }
   const { reports: mslReports, plans: mslPlans } = s.phase !== "offseason" ? runMslWeek(s) : { reports: [], plans: [] };
   // 다른 팀은 고정 후원금, 우리 팀은 고른 스폰서 (구단 운영 → 스폰서)
   for (const t of proTeams(s)) if (t.id !== s.myTeam) t.money += WEEKLY_SPONSOR;
@@ -312,7 +325,7 @@ function finishWeek(s: CareerState): WeekResult {
   s.week++;
   s.ap = WEEKLY_AP;
   progressSchedule(s);
-  return { mslReports, mslPlans };
+  return { mslReports, mslPlans, proReports };
 }
 
 // ── 우리 경기: 세트마다 진행 ──────────────────────────────────────

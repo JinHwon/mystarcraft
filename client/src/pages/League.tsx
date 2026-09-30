@@ -7,7 +7,7 @@ import { STAGE_NAMES, myPendingMatch, rosterOf, standings } from "@shared/career
 import { useCareer, useCareerPatch, useCareerUpdater } from "@/lib/career";
 import type { CareerDiff } from "@shared/career/diff";
 import { TeamBadge } from "@/components/career/Bits";
-import { EntryScreen, LiveMatch, MapDrawScreen, MslFlow, ScheduleScreen, SeriesViewer, type BroadcastSet, type ItemPlan, type MslReportView, type WeekDone } from "@/components/legacy/LegacyMatch";
+import { EntryScreen, LiveMatch, MapDrawScreen, MslFlow, ProSeriesFlow, ScheduleScreen, SeriesViewer, type BroadcastSet, type ItemPlan, type MslReportView, type WeekDone } from "@/components/legacy/LegacyMatch";
 
 type Tab = "match" | "table" | "schedule";
 
@@ -51,6 +51,8 @@ function MatchTab({ s }: { s: CareerState }) {
   const [legDone, setLegDone] = useState<number | null>(null);
   /** 이번 주 개인리그 관전 중 */
   const [mslFlow, setMslFlow] = useState<WeekDone | null>(null);
+  /** 우리 팀이 없는 포스트시즌 경기 관전 */
+  const [proFlow, setProFlow] = useState<WeekDone | null>(null);
   const [watch, setWatch] = useState<MslReportView | null>(null);
   const [watching, setWatching] = useState(!!s.live);
   const drawKey = `mysc-mapdraw-${s.season}-${s.myTeam}`;
@@ -78,10 +80,12 @@ function MatchTab({ s }: { s: CareerState }) {
   // 주가 끝나면 우리 선수 개인리그 경기부터 관전
   function finishWeekView(w: WeekDone) {
     setWeekDone(w);
-    if (w.mslReports?.length || w.mslPlans?.length) setMslFlow(w);
+    if (w.proReports?.length) setProFlow(w);
+    else if (w.mslReports?.length || w.mslPlans?.length) setMslFlow(w);
   }
 
   if (watch) return <SeriesViewer s={s} report={watch} onClose={() => setWatch(null)} />;
+  if (proFlow) return <ProSeriesFlow s={s} reports={proFlow.proReports ?? []} onDone={() => { const w = proFlow; setProFlow(null); if (w.mslReports?.length || w.mslPlans?.length) setMslFlow(w); }} />;
   if (mslFlow) return <MslFlow s={s} reports={mslFlow.mslReports ?? []} plans={mslFlow.mslPlans} onDone={() => setMslFlow(null)} />;
 
   if (watching && s.live) {

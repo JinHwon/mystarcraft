@@ -581,7 +581,78 @@ function SetList({ s, left, right, maps, total, idx, results, leftIsA, showAce, 
 }
 
 // ── 경기 진행 (세트마다 서버에서 진행) ─────────────────────────────────
-export interface WeekDone { playedMatchId?: number; mslReports?: MslReportView[]; mslPlans?: number[] }
+export interface WeekDone { playedMatchId?: number; mslReports?: MslReportView[]; mslPlans?: number[]; proReports?: ProReportView[] }
+/** 우리 팀이 없는 포스트시즌 경기 (중계) */
+export type ProReportView = { matchId: number; stage: CMatch["stage"]; a: number; b: number; sa: number; sb: number; sets: BroadcastSet[] };
+
+/** 포스트시즌 다른 팀 경기 관전: 경기 전 화면 → 중계 → … → 결과 (서버를 기다리지 않음) */
+export function ProSeriesFlow({ s, reports, onDone }: { s: CareerState; reports: ProReportView[]; onDone: () => void }) {
+  const [k, setK] = useState(0);
+  const [idx, setIdx] = useState(0);
+  const [mode, setMode] = useState<"preview" | "live" | "result">("preview");
+  const [speed, setSpeed] = useSpeed();
+  const r = reports[k];
+  useEffect(() => { if (!r) onDone(); }, [r]);
+  if (!r) return null;
+  const stageName = `마이프로리그 ${STAGE_NAMES[r.stage]}`;
+  const logo = (team: number) => <TeamLogo team={s.teams[team]} className="w-[70px] h-[40px]" />;
+  const score = (n: number): [number, number] => {
+    let a = 0, b = 0;
+    for (const x of r.sets.slice(0, n)) (x.winner === "a" ? a++ : b++);
+    return [a, b];
+  };
+  const nextReport = () => { setK(k + 1); setIdx(0); setMode("preview"); };
+  if (mode === "live") {
+    const set = r.sets[idx];
+    return (
+      <Broadcast key={`${k}-${idx}`} s={s} stageName={stageName} lp={s.players[set.a]} rp={s.players[set.b]} mapId={set.mapId} set={set} leftIsA
+        score={score(idx)} leftLogo={logo(r.a)} rightLogo={logo(r.b)} speed={speed} setSpeed={setSpeed} onClose={nextReport}
+        onDone={() => { if (idx + 1 >= r.sets.length) setMode("result"); else { setIdx(idx + 1); setMode("preview"); } }} />
+    );
+  }
+  const final = mode === "result";
+  const [sl, sr] = score(final ? r.sets.length : idx);
+  const set = r.sets[final ? r.sets.length - 1 : idx];
+  const lp = s.players[set.a], rp = s.players[set.b];
+  const isAce = !final && idx === (r.stage === "final" ? FINAL_SETS : PRO_SETS) - 1;
+  return (
+    <LegacyFrame season={s.season} onBack={nextReport} onNext={final ? nextReport : () => setMode("live")} nextLabel={final ? "확인 ▷▷" : undefined}>
+      <div className="px-3 pt-3 pb-4">
+        <div className="text-center text-[12px] text-[#ffe45c]">{stageName} · 관전 {k + 1}/{reports.length}</div>
+        <div className="flex items-start justify-between mt-1">
+          {logo(r.a)}
+          <div className="flex gap-12 text-[20px] text-neutral-100 pt-2"><span>{sl}</span><span>:</span><span>{sr}</span></div>
+          {logo(r.b)}
+        </div>
+        {final ? (
+          <div className="text-center my-5">
+            <LegacyImg dir="기타" name="Winner" className="mx-auto max-h-20" fallback={<div className="text-[28px] font-black italic text-[#ffe45c] tracking-widest">WINNER</div>} />
+            <div className="mt-2 text-[16px]">{s.teams[r.sa > r.sb ? r.a : r.b].name}</div>
+            <div className="mt-1 text-[12px] text-neutral-400">{r.stage === "final" ? "프로리그 우승!" : "다음 라운드 진출"}</div>
+          </div>
+        ) : (
+          <>
+            <div className="flex justify-center mt-2"><MapInfo mapId={set.mapId} size={60} /></div>
+            <div className="text-center text-[15px] mt-2">&lt; {isAce ? "ACE" : `${idx + 1} Set`} &gt;</div>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {[{ p: lp, o: rp }, { p: rp, o: lp }].map(({ p, o }) => (
+                <div key={p.id} className="flex flex-col items-center">
+                  <PlayerCard p={p} opp={o} />
+                  <LegacyRadar stats={condStats(p)} base={p.stats} level={p.level} size={112} />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+        <div className="mt-3">
+          <SetList s={s} left={r.sets.map(x => x.a)} right={r.sets.map(x => x.b)} maps={r.sets.map(x => x.mapId)} total={r.sets.length}
+            idx={final ? r.sets.length : idx} results={r.sets.slice(0, final ? r.sets.length : idx)} leftIsA showAce />
+        </div>
+        <div className="text-center text-[11px] text-neutral-500 mt-2">Next 로 관전 · ✕ 로 이 경기 건너뛰기</div>
+      </div>
+    </LegacyFrame>
+  );
+}
 export type MslReportView = { stage: string; label: string; a: number; b: number; sa: number; sb: number; winner: number; bestOf: number; sets: BroadcastSet[]; maps?: number[] };
 
 export function LiveMatch({ s, playSet, pending, onFinished, onClose }: {
