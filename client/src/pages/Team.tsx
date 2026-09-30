@@ -45,7 +45,7 @@ export function PlayerSheet({ s, player, onClose, actions }: { s: CareerState; p
               <span>컨디션 <CondBadge cond={player.cond} />{player.team === s.myTeam && <span className="ml-2 text-emerald-300 font-bold">⚡ 행동력 {player.ap ?? 20}</span>}</span>
               <span>이번 시즌 {player.sWins}승 {player.sLosses}패 · 통산 {player.wins}승 {player.losses}패</span>
             </div>
-            <div className="flex justify-center"><StatRadarChart stats={player.stats} grade={legacyGrade(totalOf(player.stats))} gradeColor={s.teams[player.team].color} size={200} maxValue={1000} /></div>
+            <div className="flex justify-center"><StatRadarChart stats={player.stats} grade={legacyGrade(totalOf(gearStats(player)))} gradeColor={s.teams[player.team].color} size={200} maxValue={1000} /></div>
             <StatBars stats={player.stats} />
             {player.titles && player.titles.length > 0 && (
               <div className="text-xs text-amber-300">🏆 {player.titles.join(" · ")}</div>
