@@ -35,7 +35,7 @@ import {
 } from "@shared/career/rules";
 import {
   type SetMods,
-  CareerError, addExp, clampCond, clampStat, drawMapPool, gainStats, news, pickMaps, playSet, rand, randInt, shuffle,
+  CareerError, addExp, clampCond, quickSet, clampStat, drawMapPool, gainStats, news, pickMaps, playSet, rand, randInt, shuffle,
   type PlayedSet,
 } from "./core";
 export { CareerError };
@@ -87,16 +87,27 @@ export function migrateCareer(s: CareerState) {
   ensureClub(s);
 }
 
+/**
+ * 원작처럼 2라운드 풀리그: 한 주에 프로리그 2경기 (1경기: r라운드 대진, 2경기: (10-r)라운드 대진, 홈·원정 바꿈)
+ * 6주차는 같은 상대와 두 번 붙는다 (원작 일정표와 같음)
+ */
 function scheduleRegularSeason(s: CareerState) {
   const ids = shuffle(proTeams(s).map(t => t.id));
   const n = ids.length;
   const list = [...ids];
+  const rounds: Array<Array<[number, number]>> = [];
   for (let r = 0; r < n - 1; r++) {
+    const pairs: Array<[number, number]> = [];
     for (let i = 0; i < n / 2; i++) {
       const a = list[i], b = list[n - 1 - i];
-      s.matches.push({ id: s.nextMatchId++, week: r + 1, stage: "regular", a: r % 2 ? b : a, b: r % 2 ? a : b, maps: pickMaps(PRO_SETS, s.mapPool) });
+      pairs.push(r % 2 ? [b, a] : [a, b]);
     }
+    rounds.push(pairs);
     list.splice(1, 0, list.pop()!);
+  }
+  for (let w = 0; w < REGULAR_WEEKS; w++) {
+    for (const [a, b] of rounds[w]) s.matches.push({ id: s.nextMatchId++, week: w + 1, leg: 1, stage: "regular", a, b, maps: pickMaps(PRO_SETS, s.mapPool) });
+    for (const [a, b] of rounds[REGULAR_WEEKS - 1 - w]) s.matches.push({ id: s.nextMatchId++, week: w + 1, leg: 2, stage: "regular", a: b, b: a, maps: pickMaps(PRO_SETS, s.mapPool) });
   }
 }
 
@@ -117,6 +128,9 @@ export function setAction(s: CareerState, pid: number, action: ActionKey | null)
 
 
 function applyActions(s: CareerState) {
+  const wk = `${s.season}-${s.week}`;
+  if (s.actionsWeek === wk) return; // 한 주에 한 번만 (프로리그가 한 주 2경기)
+  s.actionsWeek = wk;
   const me = s.teams[s.myTeam];
   for (const p of s.players) {
     if (p.team === FREE_AGENT_TEAM) { p.cond = clampCond(p.cond + (rand() < 0.5 ? 1 : -1)); continue; }
@@ -205,7 +219,8 @@ function playMatch(s: CareerState, m: CMatch, myEntry?: number[]): PlayedSet[] {
   for (let i = 0; i < sets && sa < need && sb < need; i++) {
     const pa = s.players[entryA[i]], pb = s.players[entryB[i]];
     if (!pa || !pb) continue;
-    const r = playSet(s, pa, pb, m.maps[i % m.maps.length], involvesMe, involvesMe);
+    // 다른 팀끼리 경기는 빠른 판정 (중계가 필요 없음)
+    const r = involvesMe ? playSet(s, pa, pb, m.maps[i % m.maps.length], true, true) : quickSet(s, pa, pb, m.maps[i % m.maps.length]);
     if (r.winner === "a") sa++; else sb++;
     results.push(r);
   }
@@ -243,14 +258,18 @@ export function advanceWeek(s: CareerState, myEntry?: number[]): WeekResult {
   }
   applyActions(s);
   let broadcast: PlayedSet[] | undefined;
-  if (mine) broadcast = playMatch(s, mine, myEntry);
+  let m = mine;
+  while (m) {
+    broadcast = playMatch(s, m, myEntry);
+    m = myPendingMatch(s);
+  }
   return { ...finishWeek(s), playedMatchId: mine?.id, broadcast };
 }
 
 /** 이번 주 나머지 일정 (다른 팀 경기·스타리그·스폰서) 진행 후 다음 주로 */
 function finishWeek(s: CareerState): WeekResult {
   for (const m of s.matches.filter(x => !x.done && x.week === s.week)) playMatch(s, m);
-  const mslReports = s.phase === "regular" ? runMslWeek(s) : [];
+  const mslReports = s.phase !== "offseason" ? runMslWeek(s) : [];
   for (const t of proTeams(s)) t.money += WEEKLY_SPONSOR;
   book(s, "스폰서", WEEKLY_SPONSOR);
   weeklyClub(s);
@@ -296,6 +315,9 @@ export function beginMatch(s: CareerState, front: number[], items: SetItemPlan =
 
 export interface LiveSetResult {
   set: PlayedSet;
+  /** 이 세트로 경기가 끝남 */
+  matchOver: boolean;
+  playedMatchId?: number;
   /** 경기가 끝났으면 이번 주 나머지 결과 */
   week?: WeekResult;
   /** 다음 세트가 ACE 결정전 (선수를 골라야 함) */
@@ -346,10 +368,12 @@ export function playLiveSet(s: CareerState, ace?: number): LiveSetResult {
   if (sa >= need || sb >= need) {
     recordMatch(s, m, entryA, entryB, live.sets);
     delete s.live;
+    // 이번 주 우리 경기가 더 남았으면 (한 주 2경기) 주를 넘기지 않음
+    if (myPendingMatch(s)) return { set, matchOver: true, playedMatchId: m.id, needAce: false };
     const week = { ...finishWeek(s), playedMatchId: m.id };
-    return { set, week, needAce: false };
+    return { set, matchOver: true, playedMatchId: m.id, week, needAce: false };
   }
-  return { set, needAce: live.sets.length === sets - 1 };
+  return { set, matchOver: false, needAce: live.sets.length === sets - 1 };
 }
 
 /** 정규시즌 → 준PO(3·4위) → PO(2위 vs 준PO 승자) → 결승(1위 vs PO 승자) → 시즌 종료 */

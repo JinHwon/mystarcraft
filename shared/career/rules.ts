@@ -158,6 +158,8 @@ export interface CMatch {
   week: number;
   /** regular | semi(준PO) | po | final */
   stage: "regular" | "semi" | "po" | "final";
+  /** 정규시즌 주 안의 순서 (1경기·2경기) */
+  leg?: 1 | 2;
   a: number;
   b: number;
   maps: number[];
@@ -194,11 +196,30 @@ export interface LiveMatch {
 export const MAP_POOL_SIZE = 7;
 
 // ── 마이스타리그 (개인리그, MSL 방식) ───────────────────────────────
-/** 진행 단계와 치르는 주차: PC방 예선(1) → 듀얼 토너먼트(2) → 조 지명식·32강(3) → 16강(5) → 8강(7) → 4강(9) → 결승(11) */
-export type MslStage = "pc" | "dual" | "group" | "ro16" | "ro8" | "ro4" | "final" | "done";
-export const MSL_WEEK: Record<Exclude<MslStage, "done">, number> = { pc: 1, dual: 2, group: 3, ro16: 5, ro8: 7, ro4: 9, final: 11 };
+/** 진행 단계 */
+export type MslStage = "pc" | "dual" | "nom" | "group" | "ro16" | "ro8" | "ro4" | "final" | "done";
+/**
+ * 주차별 개인리그 일정 (원작 정규 시즌 일정표): PC방 예선 → 듀얼(3주) → 조지명식 → 32강(2주) → 16강(2주) → 8강(2주) → 4강·결승(포스트시즌)
+ */
+export const MSL_PLAN: Array<{ week: number; stage: Exclude<MslStage, "done">; part: number; label: string }> = [
+  { week: 1, stage: "pc", part: 0, label: "PC방 예선전" },
+  { week: 2, stage: "dual", part: 0, label: "듀얼토너먼트" },
+  { week: 3, stage: "dual", part: 1, label: "듀얼토너먼트" },
+  { week: 4, stage: "dual", part: 2, label: "듀얼토너먼트" },
+  { week: 5, stage: "nom", part: 0, label: "조지명식" },
+  { week: 6, stage: "group", part: 0, label: "32강" },
+  { week: 7, stage: "group", part: 1, label: "32강" },
+  { week: 8, stage: "ro16", part: 0, label: "16강" },
+  { week: 9, stage: "ro16", part: 1, label: "16강" },
+  { week: 10, stage: "ro8", part: 0, label: "8강" },
+  { week: 11, stage: "ro8", part: 1, label: "8강" },
+  { week: 12, stage: "ro4", part: 0, label: "4강" },
+  { week: 13, stage: "final", part: 0, label: "결승" },
+];
+/** 단계가 시작하는 주 */
+export const MSL_WEEK: Record<Exclude<MslStage, "done">, number> = { pc: 1, dual: 2, nom: 5, group: 6, ro16: 8, ro8: 10, ro4: 12, final: 13 };
 export const MSL_STAGE_NAMES: Record<MslStage, string> = {
-  pc: "PC방 예선", dual: "듀얼 토너먼트", group: "32강 (조 지명식)", ro16: "16강", ro8: "8강", ro4: "4강", final: "결승", done: "종료",
+  pc: "PC방 예선", dual: "듀얼 토너먼트", nom: "조 지명식", group: "32강", ro16: "16강", ro8: "8강", ro4: "4강", final: "결승", done: "종료",
 };
 /** 최종 성적별 상금 (만원, 소속 팀에 지급) */
 export const MSL_PRIZE: Record<string, number> = { 우승: 3000, 준우승: 1500, "4강": 700, "8강": 400, "16강": 200, "32강": 100 };
@@ -236,6 +257,8 @@ export interface MslState {
   placements: Record<number, string>;
   champion?: number;
   runnerUp?: number;
+  /** 다음에 치를 일정 (MSL_PLAN 번호) */
+  planIdx?: number;
 }
 
 export interface CareerState {
@@ -276,6 +299,8 @@ export interface CareerState {
   gameOver?: { season: number; week: number; reason: string };
   /** 이번 시즌 수입·지출 (항목별, 지출은 음수) */
   ledger?: { season: number; items: Record<string, number> };
+  /** 선수 행동을 반영한 주 (한 주 한 번) */
+  actionsWeek?: string;
   /** 보유 경기 아이템 (츄잉껌·세레모니·스나이핑·치어풀) */
   inventory?: Record<string, number>;
   /** 진행 중인 우리 경기 (세트마다 하나씩 진행, 2:2 면 ACE 결정전 선수를 그때 고름) */

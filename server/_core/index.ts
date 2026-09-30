@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import compression from "compression";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -32,6 +33,8 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   const app = express();
+  // 응답 압축 (커리어 세이브 JSON 이 커서 모바일에서 체감 속도에 큰 차이)
+  app.use(compression());
   // Trust first proxy so req.protocol / x-forwarded-proto work behind reverse proxies
   app.set("trust proxy", 1);
   const server = createServer(app);

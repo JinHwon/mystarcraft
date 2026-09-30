@@ -6,7 +6,7 @@ import { FINAL_SETS, PRO_SETS, type CareerState, type CMatch } from "@shared/car
 import { STAGE_NAMES, myPendingMatch, rosterOf, standings } from "@shared/career/view";
 import { useCareer, useCareerUpdater } from "@/lib/career";
 import { TeamBadge } from "@/components/career/Bits";
-import { EntryScreen, LiveMatch, MapDrawScreen, SeriesViewer, type BroadcastSet, type ItemPlan, type MslReportView, type WeekDone } from "@/components/legacy/LegacyMatch";
+import { EntryScreen, LiveMatch, MapDrawScreen, MslFlow, ScheduleScreen, SeriesViewer, type BroadcastSet, type ItemPlan, type MslReportView, type WeekDone } from "@/components/legacy/LegacyMatch";
 
 type Tab = "match" | "table" | "schedule";
 
@@ -36,6 +36,7 @@ export function MslReports({ s, reports, onWatch }: { s: CareerState; reports: M
 
 function MatchTab({ s }: { s: CareerState }) {
   const pendingState = useRef<CareerState | null>(null);
+  const lastMatch = useRef<number | null>(null);
   const updater = useCareerUpdater();
   const [, navigate] = useLocation();
   const pending = myPendingMatch(s);
@@ -43,6 +44,10 @@ function MatchTab({ s }: { s: CareerState }) {
   const [front, setFront] = useState<(number | undefined)[]>([]);
   const [items, setItems] = useState<ItemPlan>({});
   const [weekDone, setWeekDone] = useState<WeekDone | null>(null);
+  /** 한 주 첫 경기가 끝난 직후 (2경기 준비) */
+  const [legDone, setLegDone] = useState<number | null>(null);
+  /** 이번 주 개인리그 관전 중 */
+  const [mslFlow, setMslFlow] = useState<MslReportView[] | null>(null);
   const [watch, setWatch] = useState<MslReportView | null>(null);
   const [watching, setWatching] = useState(!!s.live);
   const drawKey = `mysc-mapdraw-${s.season}-${s.myTeam}`;
@@ -64,10 +69,17 @@ function MatchTab({ s }: { s: CareerState }) {
   const playSetM = trpc.career.playSet.useMutation({ onError: updater.onError });
   const advance = trpc.career.advance.useMutation({
     ...updater,
-    onSuccess: r => { updater.onSuccess(r); setWeekDone(r.result as WeekDone); window.scrollTo(0, 0); },
+    onSuccess: r => { updater.onSuccess(r); finishWeekView(r.result as WeekDone); window.scrollTo(0, 0); },
   });
 
+  // 주가 끝나면 우리 선수 개인리그 경기부터 관전
+  function finishWeekView(w: WeekDone) {
+    setWeekDone(w);
+    if (w.mslReports?.length) setMslFlow(w.mslReports);
+  }
+
   if (watch) return <SeriesViewer s={s} report={watch} onClose={() => setWatch(null)} />;
+  if (mslFlow) return <MslFlow s={s} reports={mslFlow} onDone={() => setMslFlow(null)} />;
 
   if (watching && s.live) {
     return (
@@ -76,15 +88,43 @@ function MatchTab({ s }: { s: CareerState }) {
         pending={playSetM.isPending}
         playSet={(ace, done) => playSetM.mutate({ ace }, {
           onSuccess: r => {
-            const res = r.result as { set: BroadcastSet; week?: WeekDone; needAce: boolean };
+            const res = r.result as { set: BroadcastSet; matchOver: boolean; playedMatchId?: number; week?: WeekDone; needAce: boolean };
             done(res);
-            // 경기가 끝나 세이브가 다음 주로 넘어가도 관전 화면은 끝까지 유지 (결과 확인 후 반영)
-            if (res.week) pendingState.current = r.state; else updater.onSuccess(r);
+            // 경기가 끝나 세이브에서 진행 중 경기가 사라져도 관전 화면은 끝까지 유지 (결과 확인 후 반영)
+            if (res.matchOver) { pendingState.current = r.state; lastMatch.current = res.playedMatchId ?? null; } else updater.onSuccess(r);
           },
         })}
-        onFinished={w => { if (pendingState.current) updater.onSuccess({ state: pendingState.current }); pendingState.current = null; setWatching(false); setWeekDone(w); window.scrollTo(0, 0); }}
-        onClose={() => { if (pendingState.current) { updater.onSuccess({ state: pendingState.current }); pendingState.current = null; setWeekDone({}); } setWatching(false); }}
+        onFinished={w => {
+          if (pendingState.current) updater.onSuccess({ state: pendingState.current });
+          pendingState.current = null;
+          setWatching(false);
+          if (w) finishWeekView(w); else setLegDone(lastMatch.current);
+          window.scrollTo(0, 0);
+        }}
+        onClose={() => { if (pendingState.current) { updater.onSuccess({ state: pendingState.current }); pendingState.current = null; setLegDone(lastMatch.current); } setWatching(false); }}
       />
+    );
+  }
+
+  if (legDone !== null && !weekDone) {
+    const m = s.matches.find(x => x.id === legDone);
+    const won = m?.winner === s.myTeam;
+    const next = myPendingMatch(s);
+    return (
+      <div className="space-y-3">
+        {m && (
+          <div className={cn("rounded-2xl border p-4 text-center", won ? "bg-emerald-500/15 border-emerald-400/40" : "bg-rose-500/10 border-rose-400/30")}>
+            <div className="text-xs text-muted-foreground">{m.week}주차 프로리그 {m.leg ?? 1}경기</div>
+            <div className="mt-1 flex items-center justify-center gap-2 font-black text-foreground">
+              <span>{s.teams[m.a].name}</span><span className="font-mono text-lg">{m.scoreA}:{m.scoreB}</span><span>{s.teams[m.b].name}</span>
+            </div>
+            <div className="text-sm mt-1">{won ? "🎉 승리!" : "😢 패배"}</div>
+          </div>
+        )}
+        {next && <div className="rounded-2xl bg-card border border-border p-3 text-sm text-center">다음: 프로리그 {next.leg ?? 2}경기 vs <b>{s.teams[next.a === s.myTeam ? next.b : next.a].name}</b></div>}
+        <button onClick={() => { setLegDone(null); if (next) openEntry(); }} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black">⚔️ {next ? "2경기 엔트리 편성" : "확인"}</button>
+        <button onClick={() => setLegDone(null)} className="w-full py-2.5 rounded-2xl bg-card border border-border text-sm font-bold text-foreground">나중에</button>
+      </div>
     );
   }
 
@@ -105,7 +145,7 @@ function MatchTab({ s }: { s: CareerState }) {
         <MslReports s={s} reports={weekDone.mslReports ?? []} onWatch={setWatch} />
         {!m && !weekDone.mslReports?.length && <div className="rounded-2xl bg-card border border-border p-4 text-center text-sm text-muted-foreground">이번 주 일정이 끝났습니다.</div>}
         <button onClick={() => navigate("/starleague")} className="w-full py-2.5 rounded-2xl bg-card border border-border text-sm font-bold text-foreground">🏆 마이스타리그 대진 보기</button>
-        <button onClick={() => setWeekDone(null)} className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-black">확인 · 다음 주로</button>
+        <button onClick={() => { setWeekDone(null); setLegDone(null); }} className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-black">확인 · 다음 주로</button>
       </div>
     );
   }
@@ -208,38 +248,6 @@ function TableTab({ s }: { s: CareerState }) {
   );
 }
 
-function ScheduleTab({ s }: { s: CareerState }) {
-  const groups = new Map<string, CMatch[]>();
-  for (const m of s.matches) {
-    const key = m.stage === "regular" ? `${m.week}주차` : STAGE_NAMES[m.stage];
-    groups.set(key, [...(groups.get(key) ?? []), m]);
-  }
-  return (
-    <div className="space-y-2">
-      {Array.from(groups.entries()).map(([key, ms]) => (
-        <div key={key} className="rounded-2xl bg-card border border-border p-3">
-          <div className="text-xs font-bold text-muted-foreground mb-1.5">{key}</div>
-          <div className="space-y-1">
-            {ms.map(m => {
-              const mine = m.a === s.myTeam || m.b === s.myTeam;
-              const A = s.teams[m.a], B = s.teams[m.b];
-              return (
-                <div key={m.id} className={cn("flex items-center gap-1.5 text-xs rounded-lg px-1.5 py-1", mine && "bg-amber-500/15")}>
-                  <TeamBadge short={A.short} color={A.color} />
-                  <span className={cn("flex-1 truncate", m.winner === m.a ? "text-foreground font-bold" : "text-muted-foreground")}>{A.name}</span>
-                  <span className="font-mono font-bold text-foreground w-10 text-center">{m.done ? `${m.scoreA}:${m.scoreB}` : "vs"}</span>
-                  <span className={cn("flex-1 truncate text-right", m.winner === m.b ? "text-foreground font-bold" : "text-muted-foreground")}>{B.name}</span>
-                  <TeamBadge short={B.short} color={B.color} />
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export default function League() {
   const { state: s, loading } = useCareer();
   const [, navigate] = useLocation();
@@ -259,7 +267,7 @@ export default function League() {
       </div>
       {tab === "match" && <MatchTab s={s} />}
       {tab === "table" && <TableTab s={s} />}
-      {tab === "schedule" && <ScheduleTab s={s} />}
+      {tab === "schedule" && <ScheduleScreen s={s} onClose={() => setTab("match")} />}
     </div>
   );
 }

@@ -6,8 +6,9 @@ import { FREE_AGENT_TEAM } from "@shared/career/originalData";
 import {
   MSL_PRIZE,
   MSL_STAGE_NAMES,
-  MSL_WEEK,
+  MSL_PLAN,
   totalOf,
+  type MslStage,
   type CareerState,
   type MslGroup,
   type MslSeries,
@@ -48,7 +49,8 @@ function series(s: CareerState, a: number, b: number, bestOf: number, label: str
   let sa = 0, sb = 0;
   const sets: PlayedSet[] = [];
   for (let i = 0; sa < need && sb < need; i++) {
-    const r: PlayedSet = playSet(s, s.players[a], s.players[b], maps[i], mine, mine);
+    // 우리 선수 경기만 중계, 나머지는 빠른 판정
+    const r: PlayedSet = mine ? playSet(s, s.players[a], s.players[b], maps[i], true, true) : quickSet(s, s.players[a], s.players[b], maps[i]);
     if (r.winner === "a") sa++; else sb++;
     sets.push(r);
   }
@@ -105,11 +107,13 @@ function runPc(s: CareerState, m: MslState) {
   news(s, `🎮 마이스타리그 PC방 예선 종료 (${m.pcEntrants}명 참가)${mine.length ? ` — 우리 팀 ${mine.map(id => s.players[id].name).join(", ")} 통과!` : ""}`);
 }
 
-function runDual(s: CareerState, m: MslState, report: MslReport[]) {
-  m.duals = m.duals.map(g => playDual(s, g.name, g.players, report, "듀얼 토너먼트"));
-  for (const g of m.duals) for (const id of g.players) if (!g.qualified.includes(id)) m.placements[id] = "듀얼 탈락";
-  const q = m.duals.flatMap(g => g.qualified).filter(id => isMine(s, id));
-  news(s, `🎮 듀얼 토너먼트 종료${q.length ? ` — 우리 팀 ${q.map(id => s.players[id].name).join(", ")} 32강 진출!` : ""}`);
+function runDual(s: CareerState, m: MslState, report: MslReport[], part: number) {
+  const idx = [0, 1, 2].map(k => part * 3 + k).filter(i => i < m.duals.length);
+  for (const i of idx) m.duals[i] = playDual(s, m.duals[i].name, m.duals[i].players, report, "듀얼 토너먼트");
+  const done = idx.map(i => m.duals[i]);
+  for (const g of done) for (const id of g.players) if (!g.qualified.includes(id)) m.placements[id] = "듀얼 탈락";
+  const q = done.flatMap(g => g.qualified).filter(id => isMine(s, id));
+  news(s, `🎮 듀얼 토너먼트 ${done.map(g => g.name).join("·")}조 종료${q.length ? ` — 우리 팀 ${q.map(id => s.players[id].name).join(", ")} 32강 진출!` : ""}`);
 }
 
 /** 조 지명식: 시드 상위 8명이 조 1번, 차례로 원하는 상대를 지명 (약한 선수나 같은 종족을 피하는 경향) */
@@ -136,10 +140,13 @@ function runNomination(s: CareerState, m: MslState) {
   news(s, `🎤 조 지명식: ${s.players[top.by].name} 선수가 ${s.players[top.pick].name} 선수를 지명!${mine.length > 0 && mine[0] !== top ? ` (${s.players[mine[0].by].name} → ${s.players[mine[0].pick].name})` : ""}`);
 }
 
-function runGroups(s: CareerState, m: MslState, report: MslReport[]) {
-  runNomination(s, m);
-  m.groups = m.groups.map(g => playDual(s, g.name, g.players, report, "32강"));
-  for (const g of m.groups) for (const id of g.players) if (!g.qualified.includes(id)) m.placements[id] = "32강";
+function runGroups(s: CareerState, m: MslState, report: MslReport[], part: number) {
+  for (let i = part * 4; i < part * 4 + 4 && i < m.groups.length; i++) m.groups[i] = playDual(s, m.groups[i].name, m.groups[i].players, report, "32강");
+  const done = m.groups.slice(part * 4, part * 4 + 4);
+  for (const g of done) for (const id of g.players) if (!g.qualified.includes(id)) m.placements[id] = "32강";
+  const q = done.flatMap(g => g.qualified).filter(id => isMine(s, id));
+  news(s, `🎮 32강 ${done.map(g => g.name).join("·")}조 종료${q.length ? ` — 우리 팀 ${q.map(id => s.players[id].name).join(", ")} 16강 진출!` : ""}`);
+  if (part < 1) return;
   // 16강 대진: A1-B2, B1-A2, C1-D2, D1-C2 ...
   const ro16: MslSeries[] = [];
   for (let i = 0; i < 8; i += 2) {
@@ -148,23 +155,28 @@ function runGroups(s: CareerState, m: MslState, report: MslReport[]) {
     ro16.push({ a: b.qualified[0], b: a.qualified[1], bestOf: 3, sa: 0, sb: 0, winner: -1, label: "16강", sets: [] });
   }
   m.bracket = [{ round: "ro16", series: ro16 }];
-  const q = m.groups.flatMap(g => g.qualified).filter(id => isMine(s, id));
-  news(s, `🎮 32강 종료${q.length ? ` — 우리 팀 ${q.map(id => s.players[id].name).join(", ")} 16강 진출!` : ""}`);
 }
 
 const NEXT_ROUND = { ro16: "ro8", ro8: "ro4", ro4: "final" } as const;
 const ROUND_LABEL = { ro16: "16강", ro8: "8강", ro4: "4강", final: "결승" } as const;
 const BEST_OF = { ro16: 3, ro8: 3, ro4: 5, final: 5 } as const;
 
-function runKnockout(s: CareerState, m: MslState, round: "ro16" | "ro8" | "ro4" | "final", report: MslReport[]) {
+/** 토너먼트: from~to 번 경기를 치르고, 마지막 파트면 다음 라운드 대진을 만든다 */
+function runKnockout(s: CareerState, m: MslState, round: "ro16" | "ro8" | "ro4" | "final", report: MslReport[], from: number, to: number) {
   const stage = m.bracket.find(b => b.round === round);
   if (!stage) return;
-  stage.series = stage.series.map(x => {
-    const r = series(s, x.a, x.b, BEST_OF[round], ROUND_LABEL[round], report, ROUND_LABEL[round]);
+  for (let i = from; i < Math.min(to, stage.series.length); i++) {
+    const x = stage.series[i];
+    const r = series(s, x.a, x.b, BEST_OF[round], `${ROUND_LABEL[round]} ${i + 1}경기`, report, ROUND_LABEL[round]);
     const loser = r.winner === x.a ? x.b : x.a;
     m.placements[loser] = round === "final" ? "준우승" : ROUND_LABEL[round];
-    return r;
-  });
+    stage.series[i] = r;
+  }
+  if (stage.series.some(x => x.winner < 0)) {
+    const mine = stage.series.slice(from, to).filter(x => isMine(s, x.winner)).map(x => s.players[x.winner].name);
+    news(s, `🎮 마이스타리그 ${ROUND_LABEL[round]} ${from + 1}~${to}경기 종료${mine.length ? ` — 우리 팀 ${mine.join(", ")} 승리!` : ""}`);
+    return;
+  }
   const winners = stage.series.map(x => x.winner);
   if (round === "final") {
     m.champion = winners[0];
@@ -195,20 +207,30 @@ function finishMsl(s: CareerState, m: MslState) {
   news(s, `👑 ${s.season}시즌 마이스타리그 우승: ${champ.name} (${s.teams[champ.team].name})! 준우승 ${s.players[m.runnerUp!].name}`);
 }
 
-/** 이번 주 스타리그 일정 진행 (한 주에 한 단계). 우리 선수 경기 목록을 돌려준다 */
+const NEXT_STAGE: Record<MslStage, MslStage> = { pc: "dual", dual: "nom", nom: "group", group: "ro16", ro16: "ro8", ro8: "ro4", ro4: "final", final: "done", done: "done" };
+
+/** 이번 주 개인리그 일정 진행 (MSL_PLAN). 우리 선수 경기 목록을 돌려준다 */
 export function runMslWeek(s: CareerState): MslReport[] {
   if (!s.msl || s.msl.season !== s.season) s.msl = createMsl(s);
   const m = s.msl;
   const report: MslReport[] = [];
-  if (m.stage === "done" || s.week < MSL_WEEK[m.stage]) return report;
-  switch (m.stage) {
-    case "pc": runPc(s, m); m.stage = "dual"; break;
-    case "dual": runDual(s, m, report); m.stage = "group"; break;
-    case "group": runGroups(s, m, report); m.stage = "ro16"; break;
-    case "ro16": runKnockout(s, m, "ro16", report); m.stage = "ro8"; break;
-    case "ro8": runKnockout(s, m, "ro8", report); m.stage = "ro4"; break;
-    case "ro4": runKnockout(s, m, "ro4", report); m.stage = "final"; break;
-    case "final": runKnockout(s, m, "final", report); m.stage = "done"; break;
+  // 예전 세이브: 단계로 위치 추정
+  if (m.planIdx === undefined) m.planIdx = m.stage === "done" ? MSL_PLAN.length : Math.max(0, MSL_PLAN.findIndex(x => x.stage === m.stage));
+  while (m.planIdx < MSL_PLAN.length && MSL_PLAN[m.planIdx].week <= s.week) {
+    const plan = MSL_PLAN[m.planIdx];
+    const last = !MSL_PLAN[m.planIdx + 1] || MSL_PLAN[m.planIdx + 1].stage !== plan.stage;
+    switch (plan.stage) {
+      case "pc": runPc(s, m); break;
+      case "dual": runDual(s, m, report, plan.part); break;
+      case "nom": runNomination(s, m); break;
+      case "group": runGroups(s, m, report, plan.part); break;
+      case "ro16": runKnockout(s, m, "ro16", report, plan.part * 4, plan.part * 4 + 4); break;
+      case "ro8": runKnockout(s, m, "ro8", report, plan.part * 2, plan.part * 2 + 2); break;
+      case "ro4": runKnockout(s, m, "ro4", report, 0, 2); break;
+      case "final": runKnockout(s, m, "final", report, 0, 1); break;
+    }
+    if (last) m.stage = NEXT_STAGE[plan.stage];
+    m.planIdx++;
   }
   return report;
 }

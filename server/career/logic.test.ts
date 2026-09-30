@@ -3,10 +3,10 @@ import { FINAL_SETS, PRO_SETS } from "@shared/career/rules";
 import { CareerError, advanceWeek, aiEntry, beginMatch, buyItem, myPendingMatch, newCareer, playLiveSet, proposeTrade, releasePlayer, rosterOf, scoutPlayer, setAction, standings, startNextSeason } from "./logic";
 
 describe("커리어 모드", () => {
-  it("원작 데이터로 새 게임을 만든다 (230명, 12팀 풀리그 11주 66경기)", () => {
+  it("원작 데이터로 새 게임을 만든다 (230명, 12팀 2라운드 풀리그 11주 132경기)", () => {
     const s = newCareer(6);
     expect(s.players).toHaveLength(230);
-    expect(s.matches).toHaveLength(66);
+    expect(s.matches).toHaveLength(132);
     expect(rosterOf(s, 6).some(p => p.name === "이제동")).toBe(true);
   });
 
@@ -41,11 +41,11 @@ describe("커리어 모드", () => {
     expect(s.history[0].mslChampion).toBe(s.msl?.champion);
     expect(Object.values(s.msl!.placements).filter(r => r === "16강")).toHaveLength(8);
     const st = standings(s);
-    expect(st.reduce((a, t) => a + t.wins, 0)).toBe(66);
+    expect(st.reduce((a, t) => a + t.wins, 0)).toBe(132);
     expect(s.matches.filter(m => m.stage !== "regular").map(m => m.stage)).toEqual(["semi", "po", "final"]);
     startNextSeason(s);
     expect(s.season).toBe(2);
-    expect(s.matches).toHaveLength(66);
+    expect(s.matches).toHaveLength(132);
   }, 60_000);
 
   it("무소속 선수 영입과 방출", () => {
@@ -109,28 +109,31 @@ describe("원작 해설 중계", () => {
 });
 
 describe("세트별 경기 진행", () => {
-  it("엔트리 4세트로 시작해 한 세트씩 진행, 2:2 면 ACE 선수를 골라야 한다", () => {
+  it("한 주 2경기: 엔트리 4세트로 시작해 한 세트씩, 2:2 면 ACE 선수를 고르고, 두 경기가 끝나야 다음 주", () => {
     let sawAce = false;
-    for (let k = 0; k < 40 && !sawAce; k++) {
+    for (let k = 0; k < 30 && !sawAce; k++) {
       const s = newCareer(k % 12);
-      const front = aiEntry(s, s.myTeam, PRO_SETS).slice(0, 4);
-      beginMatch(s, front);
-      expect(() => advanceWeek(s)).toThrow(CareerError);
       const week = s.week;
-      let r = playLiveSet(s);
-      while (!r.week) {
-        if (r.needAce) {
-          sawAce = true;
-          expect(() => playLiveSet(s)).toThrow(CareerError);
-          r = playLiveSet(s, front[0]);
-        } else r = playLiveSet(s);
+      for (let leg = 1; leg <= 2; leg++) {
+        const front = aiEntry(s, s.myTeam, PRO_SETS).slice(0, 4);
+        beginMatch(s, front);
+        expect(() => advanceWeek(s)).toThrow(CareerError);
+        let r = playLiveSet(s);
+        while (!r.matchOver) {
+          if (r.needAce) {
+            sawAce = true;
+            expect(() => playLiveSet(s)).toThrow(CareerError);
+            r = playLiveSet(s, front[0]);
+          } else r = playLiveSet(s);
+        }
+        expect(r.set.timeline?.lines.length).toBeGreaterThan(5);
+        const m = s.matches.find(x => x.id === r.playedMatchId)!;
+        expect(m.done).toBe(true);
+        expect(m.leg).toBe(leg);
+        expect(Math.max(m.scoreA!, m.scoreB!)).toBe(3);
+        if (leg === 1) { expect(r.week).toBeUndefined(); expect(s.week).toBe(week); }
+        else { expect(r.week).toBeDefined(); expect(s.week).toBe(week + 1); }
       }
-      expect(r.set.timeline?.lines.length).toBeGreaterThan(5);
-      expect(s.live).toBeUndefined();
-      expect(s.week).toBe(week + 1);
-      const m = s.matches.find(x => x.id === r.week!.playedMatchId)!;
-      expect(m.done).toBe(true);
-      expect(Math.max(m.scoreA!, m.scoreB!)).toBe(3);
     }
     expect(sawAce).toBe(true);
   }, 120_000);
