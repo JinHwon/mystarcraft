@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FINAL_SETS, PRO_SETS } from "@shared/career/rules";
-import { CareerError, advanceWeek, aiEntry, beginMatch, myPendingMatch, newCareer, playLiveSet, proposeTrade, releasePlayer, rosterOf, scoutPlayer, setAction, standings, startNextSeason } from "./logic";
+import { CareerError, advanceWeek, aiEntry, beginMatch, buyItem, myPendingMatch, newCareer, playLiveSet, proposeTrade, releasePlayer, rosterOf, scoutPlayer, setAction, standings, startNextSeason } from "./logic";
 
 describe("커리어 모드", () => {
   it("원작 데이터로 새 게임을 만든다 (230명, 12팀 풀리그 11주 66경기)", () => {
@@ -134,4 +134,42 @@ describe("세트별 경기 진행", () => {
     }
     expect(sawAce).toBe(true);
   }, 120_000);
+});
+
+describe("아이템 상점", () => {
+  it("장비는 선수에게 장착되고 경기마다 내구도가 줄며, 경기 능력치에 반영된다", async () => {
+    const { gearStats } = await import("@shared/career/items");
+    const s = newCareer(0);
+    s.teams[0].money = 100_000;
+    const p = rosterOf(s, 0)[0];
+    buyItem(s, "m3", p.id);
+    expect(p.equip?.mouse?.key).toBe("m3");
+    expect(() => buyItem(s, "m3", p.id)).toThrow("이미 장착 중입니다");
+    expect(gearStats(p).control).toBe(Math.min(1100, p.stats.control + 80));
+    const left = p.equip!.mouse!.left;
+    const front = [p.id, ...rosterOf(s, 0).filter(x => x.id !== p.id).slice(0, 3).map(x => x.id)];
+    beginMatch(s, front);
+    playLiveSet(s);
+    expect(p.equip!.mouse!.left).toBe(left - 1);
+  });
+
+  it("포션은 시즌에 3번까지, 경기 아이템은 보유해야 쓸 수 있고 세트를 치를 때 소모된다", () => {
+    const s = newCareer(1);
+    s.teams[1].money = 100_000;
+    const p = rosterOf(s, 1)[0];
+    p.cond = 10;
+    for (let i = 0; i < 3; i++) buyItem(s, "p_att", p.id);
+    expect(() => buyItem(s, "p_att", p.id)).toThrow("이 선수는 더 사용 할 수 없습니다");
+    const front = rosterOf(s, 1).slice(0, 4).map(x => x.id);
+    expect(() => beginMatch(s, front, { 0: { key: "cheer" } })).toThrow(CareerError);
+    buyItem(s, "cheer"); buyItem(s, "sniping");
+    expect(s.inventory).toEqual({ cheer: 1, sniping: 1 });
+    beginMatch(s, front, { 0: { key: "cheer" }, 1: { key: "sniping", predict: 0 } });
+    const r = playLiveSet(s);
+    expect(r.set.item).toBe("cheer");
+    expect(r.set.timeline!.lines[0].text).toContain("치어풀");
+    expect(s.inventory!.cheer).toBe(0);
+    playLiveSet(s);
+    expect(s.inventory!.sniping).toBe(0);
+  });
 });

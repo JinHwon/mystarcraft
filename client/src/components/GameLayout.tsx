@@ -14,6 +14,7 @@ import {
   Zap,
   LayoutGrid,
   Crown,
+  ShoppingBag,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -31,6 +32,7 @@ const NAV: NavItem[] = [
   { path: "/training", label: "선수 행동", tab: "행동", icon: Dumbbell },
   { path: "/league", label: "마이프로리그", tab: "리그", icon: Trophy },
   { path: "/starleague", label: "마이스타리그", icon: Crown },
+  { path: "/shop", label: "아이템 상점", icon: ShoppingBag },
   { path: "/transfer", label: "이적시장", icon: Handshake },
   { path: "/records", label: "기록", icon: ScrollText },
 ];

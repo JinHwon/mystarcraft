@@ -6,7 +6,7 @@ import { FINAL_SETS, PRO_SETS, type CareerState, type CMatch } from "@shared/car
 import { STAGE_NAMES, myPendingMatch, rosterOf, standings } from "@shared/career/view";
 import { useCareer, useCareerUpdater } from "@/lib/career";
 import { TeamBadge } from "@/components/career/Bits";
-import { EntryScreen, LiveMatch, MapDrawScreen, SeriesViewer, type BroadcastSet, type MslReportView, type WeekDone } from "@/components/legacy/LegacyMatch";
+import { EntryScreen, LiveMatch, MapDrawScreen, SeriesViewer, type BroadcastSet, type ItemPlan, type MslReportView, type WeekDone } from "@/components/legacy/LegacyMatch";
 
 type Tab = "match" | "table" | "schedule";
 
@@ -41,6 +41,7 @@ function MatchTab({ s }: { s: CareerState }) {
   const pending = myPendingMatch(s);
   const sets = pending?.stage === "final" ? FINAL_SETS : PRO_SETS;
   const [front, setFront] = useState<(number | undefined)[]>([]);
+  const [items, setItems] = useState<ItemPlan>({});
   const [weekDone, setWeekDone] = useState<WeekDone | null>(null);
   const [watch, setWatch] = useState<MslReportView | null>(null);
   const [watching, setWatching] = useState(!!s.live);
@@ -58,7 +59,7 @@ function MatchTab({ s }: { s: CareerState }) {
 
   const begin = trpc.career.beginMatch.useMutation({
     ...updater,
-    onSuccess: r => { updater.onSuccess(r); setEditing(false); setWatching(true); },
+    onSuccess: r => { updater.onSuccess(r); setEditing(false); setWatching(true); setItems({}); },
   });
   const playSetM = trpc.career.playSet.useMutation({ onError: updater.onError });
   const advance = trpc.career.advance.useMutation({
@@ -147,9 +148,9 @@ function MatchTab({ s }: { s: CareerState }) {
   if (editing) {
     return (
       <EntryScreen
-        s={s} match={pending} front={front} setFront={setFront}
+        s={s} match={pending} front={front} setFront={setFront} items={items} setItems={setItems}
         submitting={begin.isPending}
-        onSubmit={() => begin.mutate({ entry: front as number[] })}
+        onSubmit={() => begin.mutate({ entry: front as number[], items: Object.fromEntries(Object.entries(items).map(([k, v]) => [k, v])) })}
         onShowMaps={() => setShowMaps(true)}
         onBack={() => setEditing(false)}
       />

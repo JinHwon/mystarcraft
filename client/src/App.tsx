@@ -15,6 +15,7 @@ import Lobby from "./pages/Lobby";
 import Transfer from "./pages/Transfer";
 import Records from "./pages/Records";
 import StarLeague from "./pages/StarLeague";
+import Shop from "./pages/Shop";
 import { Redirect } from "wouter";
 import GameLayout from "./components/GameLayout";
 import { UpdateNotification } from "./components/UpdateNotification";
@@ -37,10 +38,11 @@ function Router() {
       <Route path="/transfer" component={withLayout(Transfer)} />
       <Route path="/records" component={withLayout(Records)} />
       <Route path="/starleague" component={withLayout(StarLeague)} />
+      <Route path="/shop" component={withLayout(Shop)} />
       <Route path="/admin" component={withLayout(Admin)} />
       <Route path="/admin/events" component={withLayout(AdminEvents)} />
       {/* 예전(내 선수 육성) 화면 주소는 감독실로 */}
-      {["/create-player", "/profile", "/shop", "/practice", "/game-results", "/ranking", "/events"].map(p => (
+      {["/create-player", "/profile", "/practice", "/game-results", "/ranking", "/events"].map(p => (
         <Route key={p} path={p}><Redirect to="/lobby" /></Route>
       ))}
       <Route path="/404" component={NotFound} />
