@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { STAT_KEYS, STAT_LABELS, type StatKey } from "@shared/gameConstants";
-import { COND_MAX, FINAL_SETS, MATCH_MONEY, MSL_PLAN, PRO_SETS, condMultiplier, totalOf, type CareerState, type CMatch, type CPlayer, type MslGroup, type MslSeries, type PlayerFx, type SetResult, type SetTimeline } from "@shared/career/rules";
+import { COND_MAX, FINAL_SETS, burstOf, MATCH_MONEY, MSL_PLAN, PRO_SETS, condMultiplier, totalOf, type CareerState, type CMatch, type CPlayer, type MslGroup, type MslSeries, type PlayerFx, type SetResult, type SetTimeline } from "@shared/career/rules";
 import { STAGE_NAMES, headToHead, mapView, rosterOf } from "@shared/career/view";
 import { ITEMS, ITEM_BY_KEY, SLOT_NAMES, gearCond, gearStats, itemImg, type EquipSlot } from "@shared/career/items";
 import { trpc } from "@/lib/trpc";
@@ -51,10 +51,10 @@ function VitaButton({ s, pid }: { s: CareerState; pid: number }) {
   );
 }
 
-/** 컨디션이 반영된 능력치 */
-export function condStats(p: CPlayer): Record<StatKey, number> {
+/** 컨디션(+장비, 이번 주 포텐셜 폭발)이 반영된 능력치 */
+export function condStats(p: CPlayer, s?: { season: number; week: number }): Record<StatKey, number> {
   const g = gearStats(p);
-  const k = condMultiplier(gearCond(p));
+  const k = condMultiplier(gearCond(p)) * ((s && burstOf(s, p)) || 1);
   return Object.fromEntries(STAT_KEYS.map(s => [s, Math.round(g[s] * k)])) as Record<StatKey, number>;
 }
 
@@ -108,11 +108,12 @@ export function MapDrawScreen({ s, onNext }: { s: CareerState; onNext: () => voi
 }
 
 // ── 선수 정보 칸 (사진 + 컨디션 반영 능력치) ─────────────────────────────
-export function PlayerPanel({ p, color, empty }: { p?: CPlayer; color: string; empty: string }) {
+export function PlayerPanel({ p, color, empty, s }: { p?: CPlayer; color: string; empty: string; s?: CareerState }) {
   if (!p) {
     return <div className="h-full min-h-[190px] border border-neutral-700 flex items-center justify-center text-[11px] text-neutral-500 text-center px-2">{empty}</div>;
   }
-  const cs = condStats(p);
+  const cs = condStats(p, s);
+  const burst = s ? burstOf(s, p) : undefined;
   return (
     <div className="border border-neutral-700 px-1.5 pt-1.5 pb-1 flex flex-col items-center">
       <div className="flex items-start gap-2 w-full justify-center">
@@ -121,12 +122,13 @@ export function PlayerPanel({ p, color, empty }: { p?: CPlayer; color: string; e
           <div className="text-[13px] font-bold" style={{ color }}>{p.name}</div>
           <div>{R[p.race]} · Lv.{p.level}</div>
           <div>Condition <b className={gearCond(p) >= 70 ? "text-[#bff5c6]" : gearCond(p) <= 30 ? "text-[#ff9a9a]" : "text-white"}>{gearCond(p)}%</b>{gearCond(p) !== p.cond && <span className="text-[9px] text-neutral-500"> (장비)</span>}</div>
-          <div className="text-neutral-400">{totalOf(p.stats).toLocaleString()} → <b className="text-[#ffe45c]">{totalOf(cs).toLocaleString()}</b></div>
+          <div className="text-neutral-400">원래 {totalOf(p.stats).toLocaleString()} → 실전 <b className="text-[#ffe45c]">{totalOf(cs).toLocaleString()}</b></div>
+          {burst && <div className="text-[#ffb84d] font-bold">🔥 포텐셜 폭발! {Math.round(burst * 100)}%</div>}
         </div>
       </div>
       <div className="mt-1"><EquipRow p={p} /></div>
       <LegacyRadar stats={cs} base={p.stats} level={p.level} size={92} />
-      <div className="text-[9px] text-neutral-500 -mt-1">회색 점선 = 원래 · 빨강 = 컨디션·장비 반영</div>
+      <div className="text-[9px] text-neutral-500 -mt-1">회색 점선 = 원래 · 빨강 = 컨디션·장비{burst ? "·포텐셜" : ""} 반영</div>
     </div>
   );
 }
@@ -149,7 +151,8 @@ function SideLabel({ lines, color }: { lines: [string, string]; color: string })
   );
 }
 
-export function RosterList({ players, onPick, selected, marks }: { players: CPlayer[]; onPick: (p: CPlayer) => void; selected?: number; marks?: Map<number, string> }) {
+/** 선수 목록 (s 가 있으면 컨디션·실전 능력치·포텐셜 폭발 표시) */
+export function RosterList({ players, onPick, selected, marks, s }: { players: CPlayer[]; onPick: (p: CPlayer) => void; selected?: number; marks?: Map<number, string>; s?: CareerState }) {
   return (
     <div className="border-2 border-neutral-300 p-0.5">
       {players.map(p => {
@@ -158,12 +161,18 @@ export function RosterList({ players, onPick, selected, marks }: { players: CPla
           <button
             key={p.id}
             onClick={() => onPick(p)}
-            className={cn("w-full flex items-center gap-1 text-[13px] px-1 py-[5px] text-left border-b border-neutral-800 last:border-b-0",
+            className={cn("w-full flex items-center gap-1 px-1 py-[5px] text-left border-b border-neutral-800 last:border-b-0", s ? "text-[12px]" : "text-[13px]",
               mark ? "text-[#ffe45c]" : "text-white", selected === p.id && "bg-[#3a3a5a]")}
           >
-            <span className="truncate flex-1">{p.name}</span>
+            <span className="truncate flex-1">{s && burstOf(s, p) ? "🔥" : ""}{p.name}</span>
             <span className="text-[11px] text-neutral-400">{mark ?? ""}</span>
             <span>({R[p.race]})</span>
+            {s && (
+              <span className="flex flex-col items-end leading-none shrink-0 w-[28px]">
+                <span className={cn("text-[9.5px]", gearCond(p) >= 70 ? "text-[#bff5c6]" : gearCond(p) <= 30 ? "text-[#ff9a9a]" : "text-neutral-300")}>{gearCond(p)}%</span>
+                <span className="text-[8.5px] text-neutral-400">{totalOf(condStats(p, s)).toLocaleString()}</span>
+              </span>
+            )}
           </button>
         );
       })}
@@ -246,15 +255,15 @@ export function EntryScreen({ s, match, front, setFront, items, setItems, onSubm
         </div>
 
         <div className="grid grid-cols-2 gap-2 mt-2.5">
-          <PlayerPanel p={viewMine !== undefined ? s.players[viewMine] : undefined} color="#8fd0ff" empty="우리 선수를 누르면 사진과 능력치가 보입니다" />
-          <PlayerPanel p={viewOpp !== undefined ? s.players[viewOpp] : undefined} color="#ff9a9a" empty="상대 선수를 누르면 사진과 컨디션이 보입니다" />
+          <PlayerPanel s={s} p={viewMine !== undefined ? s.players[viewMine] : undefined} color="#8fd0ff" empty="우리 선수를 누르면 사진과 능력치가 보입니다" />
+          <PlayerPanel s={s} p={viewOpp !== undefined ? s.players[viewOpp] : undefined} color="#ff9a9a" empty="상대 선수를 누르면 사진과 컨디션이 보입니다" />
         </div>
         {viewMine !== undefined && <VitaButton s={s} pid={viewMine} />}
 
         <div className="grid grid-cols-[1fr_minmax(108px,0.9fr)_1fr] gap-1.5 mt-2.5 items-start">
           <div className="space-y-1">
             <LegacyImg dir="기타" name="아군" className="w-full max-h-16 object-contain" fallback={<SideLabel lines={["MY TEAM", "PLAYER"]} color="#3aa0ff" />} />
-            <RosterList players={mine} onPick={assign} selected={viewMine} marks={marks} />
+            <RosterList s={s} players={mine} onPick={assign} selected={viewMine} marks={marks} />
           </div>
 
           <div className="space-y-1.5">
@@ -296,7 +305,7 @@ export function EntryScreen({ s, match, front, setFront, items, setItems, onSubm
 
           <div className="space-y-1">
             <LegacyImg dir="기타" name="적군" className="w-full max-h-16 object-contain" fallback={<SideLabel lines={["OTHER TEAM", "PLAYER"]} color="#ff3a3a" />} />
-            <RosterList players={theirs} onPick={p => setViewOpp(p.id)} selected={viewOpp} />
+            <RosterList s={s} players={theirs} onPick={p => setViewOpp(p.id)} selected={viewOpp} />
           </div>
         </div>
       </div>
@@ -361,14 +370,14 @@ function AceScreen({ s, teamLeft, teamRight, mapId, score, onPick, submitting }:
         </div>
         <div className="flex justify-center mt-2.5"><MapInfo mapId={mapId} size={54} /></div>
         <div className="grid grid-cols-2 gap-2 mt-2.5">
-          <PlayerPanel p={sel !== undefined ? s.players[sel] : undefined} color="#8fd0ff" empty="선수를 고르세요" />
+          <PlayerPanel s={s} p={sel !== undefined ? s.players[sel] : undefined} color="#8fd0ff" empty="선수를 고르세요" />
           <div className="border border-neutral-700 flex flex-col items-center justify-center gap-2 min-h-[190px]">
             <span className="inline-block border border-neutral-300 px-3 py-1 text-[13px]">ACE Card</span>
             <span className="text-[10px] text-neutral-500">상대 ACE 는 경기 시작 때 공개</span>
           </div>
         </div>
         <div className="mt-2.5">
-          <RosterList players={mine} onPick={p => setSel(p.id)} selected={sel} marks={new Map(sel !== undefined ? [[sel, "ACE"]] : [])} />
+          <RosterList s={s} players={mine} onPick={p => setSel(p.id)} selected={sel} marks={new Map(sel !== undefined ? [[sel, "ACE"]] : [])} />
         </div>
       </div>
     </LegacyFrame>
@@ -639,7 +648,7 @@ export function ProSeriesFlow({ s, reports, onDone }: { s: CareerState; reports:
               {[{ p: lp, o: rp }, { p: rp, o: lp }].map(({ p, o }) => (
                 <div key={p.id} className="flex flex-col items-center">
                   <PlayerCard p={p} opp={o} />
-                  <LegacyRadar stats={condStats(p)} base={p.stats} level={p.level} size={112} />
+                  <LegacyRadar stats={condStats(p, s)} base={p.stats} level={p.level} size={112} />
                 </div>
               ))}
             </div>
@@ -794,8 +803,8 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose }: {
                   <div key={p.id} className="flex flex-col items-center">
                     <PlayerCard p={p} opp={o} />
                     <div className="mt-0.5"><EquipRow p={p} size={20} /></div>
-                    <LegacyRadar stats={condStats(p)} base={p.stats} level={p.level} size={112} />
-                    <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p)} %</div>
+                    <LegacyRadar stats={condStats(p, s)} base={p.stats} level={p.level} size={112} />
+                    <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p)} %{burstOf(s, p) ? <span className="text-[#ffb84d] font-bold"> 🔥{Math.round(burstOf(s, p)! * 100)}%</span> : null}</div>
                     {p.team === s.myTeam && info.items?.[i] && <div className="text-[11px] text-[#ffe45c]">아이템 : {ITEM_BY_KEY[info.items[i].key]?.name} (보유 {s.inventory?.[info.items[i].key] ?? 0}개)</div>}
                   </div>
                 ))}
@@ -1013,8 +1022,8 @@ export function MslFlow({ s, reports, plans = [], flat, onDone }: { s: CareerSta
             <div key={p.id} className="flex flex-col items-center">
               <PlayerCard p={p} opp={o} />
               <div className="text-[10px] text-neutral-500">{s.teams[p.team]?.name}</div>
-              <LegacyRadar stats={condStats(p)} base={p.stats} level={p.level} size={112} />
-              <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p)} %</div>
+              <LegacyRadar stats={condStats(p, s)} base={p.stats} level={p.level} size={112} />
+              <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p)} %{burstOf(s, p) ? <span className="text-[#ffb84d] font-bold"> 🔥{Math.round(burstOf(s, p)! * 100)}%</span> : null}</div>
             </div>
           ))}
         </div>

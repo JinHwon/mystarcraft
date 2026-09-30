@@ -50,7 +50,12 @@ export function condMultiplier(cond: number): number {
   return 1 - (COND_MAX - Math.max(COND_MIN, Math.min(COND_MAX, cond))) * 0.002;
 }
 
-/** 포텐셜 폭발 확률 (세트마다, 컨디션이 좋을수록 잘 터짐) — 터지면 그 세트 능력치 110~120% */
+/** 이번 주 포텐셜 폭발 배율 (없으면 undefined) */
+export function burstOf(s: { season: number; week: number }, p: CPlayer): number | undefined {
+  return p.burst && p.burst.week === `${s.season}-${s.week}` ? p.burst.mul : undefined;
+}
+
+/** 포텐셜 폭발 확률 (주마다, 컨디션이 좋을수록 잘 터짐) — 터지면 그 주 경기 능력치 110~120% */
 export function burstChance(cond: number): number {
   return cond >= 90 ? 0.08 : cond >= 70 ? 0.05 : cond >= 50 ? 0.03 : 0.01;
 }
@@ -89,6 +94,8 @@ export interface CPlayer {
   action?: ActionKey | null;
   /** 선수 행동력 (우리 팀) */
   ap?: number;
+  /** 이번 주 포텐셜 폭발 (주 시작 때 정해짐, 그 주 경기 동안 능력치 배율) */
+  burst?: { week: string; mul: number };
   /** 우승 경력 */
   titles?: string[];
   /** 종족별 통산 전적 [승, 패] */
@@ -351,6 +358,8 @@ export interface CareerState {
   sponsor?: import("./sponsor").Sponsor & { season: number };
   /** 이번 시즌 계약한 서브 스폰서 (최대 3곳) */
   sponsors?: Array<import("./sponsor").Sponsor & { season: number }>;
+  /** 포텐셜 폭발을 정한 주 */
+  burstWeek?: string;
   /** 컨디션 단위 (100 = % 단위. 없으면 예전 1~10 단위 세이브) */
   condScale?: 100;
   /** 선수 행동을 반영한 주 (한 주 한 번) */
