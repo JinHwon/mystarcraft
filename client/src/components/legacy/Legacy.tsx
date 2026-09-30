@@ -18,9 +18,20 @@ const MAP_IMG_ALIAS: Record<string, string> = {
   운고로분화구: "운고로", 비잔티움3: "비잔티움2", 네오메두사: "메두사", 카르타고3: "카르타고", 신단장의능선: "단장의능선", 아웃사이더SE: "아웃사이더",
 };
 
-/** 원작 사진 파일 이름: 동명이인은 뒤 선수가 "이름1" (이영호1, 김윤환1, 박성준1) */
+/**
+ * 원작 사진 파일 이름: 동명이인은 한 명이 "이름1" (이영호1, 김윤환1, 박성준1)
+ * 기본은 원작 데이터에서 뒤에 나오는 선수가 "이름1", 원작 파일과 반대인 경우는 이름:종족 으로 직접 지정
+ */
+const PHOTO_OVERRIDE: Record<string, string> = {
+  // 저그 김윤환(STX) 사진이 "김윤환1", 테란 김윤환 사진이 "김윤환"
+  "김윤환:Z": "김윤환1",
+  "김윤환:T": "김윤환",
+};
 function photoName(id: number | undefined, name: string) {
   if (id === undefined) return name;
+  const row = ORIG_PLAYERS[id];
+  const fixed = row && row[1] === name ? PHOTO_OVERRIDE[`${name}:${row[2]}`] : undefined;
+  if (fixed) return fixed;
   const first = ORIG_PLAYERS.findIndex(r => r[1] === name);
   return first >= 0 && first !== id ? `${name}1` : name;
 }
