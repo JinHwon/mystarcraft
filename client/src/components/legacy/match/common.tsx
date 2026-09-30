@@ -129,7 +129,7 @@ export function PlayerPanel({ p, color, empty, s }: { p?: CPlayer; color: string
   return (
     <div className="border border-neutral-700 px-1.5 pt-1.5 pb-1 flex flex-col items-center">
       <div className="flex items-start gap-2 w-full justify-center">
-        <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} size={50} />
+        <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} titles={p.titles} size={50} />
         <div className="text-[11px] leading-[1.45] text-neutral-200 pt-0.5">
           <div className="text-[13px] font-bold" style={{ color }}>{p.name}</div>
           <div>{R[p.race]} · Lv.{p.level}</div>

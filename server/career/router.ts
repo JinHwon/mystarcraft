@@ -31,6 +31,7 @@ import {
   scoutPlayer,
   setAction,
   runMyActions,
+  completeWeek,
   startNextSeason,
 } from "./logic";
 
@@ -331,6 +332,9 @@ export const careerRouter = router({
   runActions: protectedProcedure
     .input(z.object({ playerId: z.number().int().optional() }).optional())
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => runMyActions(s, input?.playerId))),
+
+  /** 조 지명식을 마치고 이번 주 마무리 (남은 지명은 자동) */
+  completeWeek: protectedProcedure.mutation(({ ctx }) => mutate(ctx.user.id, s => completeWeek(s))),
 
   /** 마이스타리그 조 지명식: 우리 조장 차례까지 진행, pick 이 있으면 그 선수를 지명 */
   nominate: protectedProcedure

@@ -37,13 +37,14 @@ import {
 } from "@shared/career/rules";
 import {
   type SetMods,
-  CareerError, addExp, clampCond, rollWeekBursts, quickSet, clampStat, drawMapPool, gainStats, news, pickMaps, playSet, rand, randInt, shuffle,
+  CareerError, addExp, clampCond, rollWeekBursts, quickSet, clampStat, drawMapPool, gainStats, news, pickMaps, playSet, rand, randInt, shuffle, STAGE_GROWTH, withStageGrowth,
   type PlayedSet,
 } from "./core";
 export { CareerError };
 import { initialPlayers, initialTeams } from "@shared/career/init";
 import { eventOn } from "./events";
-import { createMsl, runMslWeek, type MslReport } from "./msl";
+import { aiShopping } from "./aiShop";
+import { createMsl, nominationPending, runMslWeek, type MslReport } from "./msl";
 import { ITEM_BY_KEY, POTION_LIMIT, slotOf } from "@shared/career/items";
 import { ensurePotential, retirements, rookies } from "./generation";
 import { addManagerExp, mainSponsorPay, book, ensureClub, newSeasonClub, pay, seasonEndClub, weeklyClub } from "./club";
@@ -97,6 +98,12 @@ export function migrateCareer(s: CareerState) {
   ensurePotential(s);
   ensureHeadToHead(s);
   rollWeekBursts(s);
+  // 개인리그 준우승 기록 (예전 세이브는 시즌 기록에만 있음)
+  for (const h of s.history) {
+    const p = h.mslRunnerUp !== undefined ? s.players[h.mslRunnerUp] : undefined;
+    const t = `${h.season}시즌 마이스타리그 준우승`;
+    if (p && !(p.titles ?? []).includes(t)) p.titles = [...(p.titles ?? []), t];
+  }
   // 없어진 행동(베스트) → 훈련
   for (const p of s.players) if ((p.action as string) === "best") p.action = "train";
   // 컨디션 1~10 단위 → % 단위
@@ -291,6 +298,9 @@ function recordMatch(s: CareerState, m: CMatch, entryA: number[], entryB: number
   }
 }
 
+/** 포스트시즌은 경기 뒤 능력치가 크게 오름 */
+const stageGrowthOf = (m: CMatch) => (m.stage === "regular" ? 1 : STAGE_GROWTH[m.stage]);
+
 function playMatch(s: CareerState, m: CMatch, myEntry?: number[]): PlayedSet[] {
   const sets = m.stage === "final" ? FINAL_SETS : PRO_SETS;
   const need = m.stage === "final" ? FINAL_WIN : PRO_WIN;
@@ -304,7 +314,7 @@ function playMatch(s: CareerState, m: CMatch, myEntry?: number[]): PlayedSet[] {
     const pa = s.players[entryA[i]], pb = s.players[entryB[i]];
     if (!pa || !pb) continue;
     // 다른 팀끼리 경기는 빠른 판정 (중계가 필요 없음)
-    const r = involvesMe ? playSet(s, pa, pb, m.maps[i % m.maps.length], true, true) : quickSet(s, pa, pb, m.maps[i % m.maps.length]);
+    const r = withStageGrowth(stageGrowthOf(m), () => (involvesMe ? playSet(s, pa, pb, m.maps[i % m.maps.length], true, true) : quickSet(s, pa, pb, m.maps[i % m.maps.length])));
     if (r.winner === "a") sa++; else sb++;
     results.push(r);
   }
@@ -313,7 +323,7 @@ function playMatch(s: CareerState, m: CMatch, myEntry?: number[]): PlayedSet[] {
 }
 
 /** 포스트시즌 다른 팀 경기 (중계 화면용, 세이브에는 해설을 남기지 않음) */
-export interface ProReport { matchId: number; stage: CMatch["stage"]; a: number; b: number; sa: number; sb: number; sets: PlayedSet[] }
+export interface ProReport { matchId: number; stage: CMatch["stage"]; a: number; b: number; sa: number; sb: number; sets: PlayedSet[]; entryA: number[]; entryB: number[]; maps: number[] }
 
 /** 오래된 중계 하이라이트는 지워서 세이브 크기를 줄임 (내 팀 최근 4경기만 유지) */
 function pruneHighlights(s: CareerState) {
@@ -335,10 +345,30 @@ export interface WeekResult {
   proReports?: ProReport[];
   /** 이번 주에 치른 개인리그 일정 (MSL_PLAN 번호) — 결과 화면용 */
   mslPlans?: number[];
+  /** 조 지명식(우리 선수 지명)을 기다리는 중 — 지명 후 completeWeek 로 마무리 */
+  needNomination?: boolean;
+}
+
+/** 이번 주 경기가 끝난 뒤: 조 지명식을 기다려야 하면 멈추고, 아니면 마무리 */
+function endWeek(s: CareerState, playedMatchId?: number): WeekResult {
+  if (nominationPending(s)) {
+    s.weekHold = { playedMatchId };
+    return { mslReports: [], playedMatchId, needNomination: true };
+  }
+  return { ...finishWeek(s), playedMatchId };
+}
+
+/** 조 지명식을 마치고(또는 남은 차례를 자동으로) 이번 주 마무리 */
+export function completeWeek(s: CareerState): WeekResult {
+  if (!s.weekHold) throw new CareerError("마무리할 주가 없습니다");
+  const pm = s.weekHold.playedMatchId;
+  delete s.weekHold;
+  return { ...finishWeek(s), playedMatchId: pm };
 }
 
 export function advanceWeek(s: CareerState, myEntry?: number[]): WeekResult {
   if (s.phase === "offseason") throw new CareerError("시즌이 끝났습니다. 다음 시즌을 시작하세요");
+  if (s.weekHold) throw new CareerError("조 지명식을 먼저 진행하세요");
   if (s.live) throw new CareerError("진행 중인 경기가 있습니다");
   const mine = myPendingMatch(s);
   if (mine) {
@@ -354,7 +384,7 @@ export function advanceWeek(s: CareerState, myEntry?: number[]): WeekResult {
     last = m;
     m = myPendingMatch(s);
   }
-  return { ...finishWeek(s), playedMatchId: last?.id, broadcast };
+  return { ...endWeek(s, last?.id), broadcast };
 }
 
 /** 이번 주 나머지 일정 (다른 팀 경기·스타리그·스폰서) 진행 후 다음 주로 */
@@ -365,7 +395,7 @@ function finishWeek(s: CareerState): WeekResult {
   for (const m of s.matches.filter(x => !x.done && x.week === s.week)) {
     const sets = playMatch(s, m);
     if (m.stage !== "regular" && m.a !== s.myTeam && m.b !== s.myTeam) {
-      proReports.push({ matchId: m.id, stage: m.stage, a: m.a, b: m.b, sa: m.scoreA ?? 0, sb: m.scoreB ?? 0, sets: sets.map(x => ({ ...x })) });
+      proReports.push({ matchId: m.id, stage: m.stage, a: m.a, b: m.b, sa: m.scoreA ?? 0, sb: m.scoreB ?? 0, sets: sets.map(x => ({ ...x })), entryA: m.entryA ?? [], entryB: m.entryB ?? [], maps: m.maps });
       for (const x of sets) { delete x.timeline; delete x.highlights; }
     }
   }
@@ -375,6 +405,8 @@ function finishWeek(s: CareerState): WeekResult {
   weeklyClub(s);
   // 한 주(프로리그 2경기)가 끝나면 모든 선수 컨디션 10% 회복
   for (const p of activePlayers(s)) p.cond = clampCond(p.cond + WEEKLY_COND_RECOVERY);
+  // 다른 구단은 여유 자금으로 주전 선수 아이템 구입
+  if (s.phase !== "offseason") aiShopping(s);
   // 우리 선수 행동력: 매주 20 (최대 40까지 모임)
   for (const p of [...rosterOf(s, s.myTeam), ...s.players.filter(x => x.team === s.myTeam && x.reserve)]) p.ap = playerAp(p) + WEEKLY_AP;
   pruneHighlights(s);
@@ -395,6 +427,7 @@ export type SetItemPlan = Record<number, { key: string; predict?: number }>;
 
 export function beginMatch(s: CareerState, front: number[], items: SetItemPlan = {}) {
   if (s.live) throw new CareerError("이미 진행 중인 경기가 있습니다");
+  if (s.weekHold) throw new CareerError("조 지명식을 먼저 진행하세요");
   const m = myPendingMatch(s);
   if (!m) throw new CareerError("이번 주 우리 팀 경기가 없습니다");
   const sets = setsOf(m);
@@ -452,7 +485,7 @@ export function playLiveSet(s: CareerState, ace?: number): LiveSetResult {
     if (plan.key === "sniping" && plan.predict === live.opp[i]) { mod.mul = 1.1; sniped = true; }
   }
   const mods = meA ? { a: mod } : { b: mod };
-  const set = playSet(s, s.players[entryA[i]], s.players[entryB[i]], m.maps[i % m.maps.length], true, true, mods);
+  const set = withStageGrowth(stageGrowthOf(m), () => playSet(s, s.players[entryA[i]], s.players[entryB[i]], m.maps[i % m.maps.length], true, true, mods));
   if (plan) {
     set.item = plan.key;
     set.sniped = sniped;
@@ -475,7 +508,7 @@ export function playLiveSet(s: CareerState, ace?: number): LiveSetResult {
     delete s.live;
     // 이번 주 우리 경기가 더 남았으면 (한 주 2경기) 주를 넘기지 않음
     if (myPendingMatch(s)) return { set, matchOver: true, playedMatchId: m.id, needAce: false };
-    const week = { ...finishWeek(s), playedMatchId: m.id };
+    const week = endWeek(s, m.id);
     return { set, matchOver: true, playedMatchId: m.id, week, needAce: false };
   }
   return { set, matchOver: false, needAce: live.sets.length === sets - 1 };

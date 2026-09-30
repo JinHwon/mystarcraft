@@ -109,6 +109,18 @@ function fxOf(p: CPlayer, before: { cond: number; stats: Record<StatKey, number>
  * 세트 후 처리: 전적·컨디션(둘 다 지침: 승자 -1, 패자 -2)·경험치·장비 내구도
  * 능력치: 경기 내용에 따라 여러 능력치가 오르내림 (growth.ts, 츄잉껌이면 떨어지는 폭 66% 덜)
  */
+/**
+ * 큰 무대 성장 배율: 프로리그 포스트시즌(준PO·PO·결승)과 개인리그 8강 이상은 경기 뒤 능력치가 크게 오름
+ * (오르는 쪽에만 적용, 떨어지는 폭은 그대로)
+ */
+export const STAGE_GROWTH = { semi: 1.8, po: 2.2, final: 2.6, ro8: 1.6, ro4: 2.0, mslFinal: 2.5 } as const;
+let stageGrowth = 1;
+export function withStageGrowth<T>(mul: number, fn: () => T): T {
+  const prev = stageGrowth;
+  stageGrowth = mul;
+  try { return fn(); } finally { stageGrowth = prev; }
+}
+
 function afterSet(s: CareerState, a: CPlayer, b: CPlayer, aWin: boolean, mods?: { a?: SetMods; b?: SetMods }, content?: [SetContent, SetContent], duration = 0): { a: PlayerFx; b: PlayerFx } {
   const snap = (p: CPlayer) => ({ cond: p.cond, stats: { ...p.stats }, level: p.level });
   const before = { a: snap(a), b: snap(b) };
@@ -126,7 +138,9 @@ function afterSet(s: CareerState, a: CPlayer, b: CPlayer, aWin: boolean, mods?: 
   tire(w, condLoss(w, true, content?.[w === a ? 0 : 1], duration));
   tire(l, condLoss(l, false, content?.[l === a ? 0 : 1], duration));
   addExp(s, w, 30); addExp(s, l, 10);
-  for (const [p, d] of [[a, da], [b, db]] as const) for (const [k, v] of Object.entries(d)) p.stats[k as StatKey] = clampStat(p.stats[k as StatKey] + v!);
+  for (const [p, d] of [[a, da], [b, db]] as const) {
+    for (const [k, v] of Object.entries(d)) p.stats[k as StatKey] = clampStat(p.stats[k as StatKey] + (v! > 0 ? Math.round(v! * stageGrowth) : v!));
+  }
   for (const p of [a, b]) wearEquip(s, p);
   return { a: fxOf(a, before.a, aWin ? 30 : 10), b: fxOf(b, before.b, aWin ? 10 : 30) };
 }

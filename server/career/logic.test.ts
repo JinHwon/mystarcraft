@@ -1,6 +1,90 @@
 import { describe, expect, it } from "vitest";
-import { FINAL_SETS, PRO_SETS, totalOf } from "@shared/career/rules";
-import { CareerError, advanceWeek, aiEntry, beginMatch, buyItem, migrateCareer, useStockItem, myPendingMatch, newCareer, playLiveSet, proposeTrade, releasePlayer, rosterOf, scoutPlayer, setAction, standings, startNextSeason } from "./logic";
+import { FINAL_SETS, PRO_SETS, totalOf, type CareerState } from "@shared/career/rules";
+import { CareerError, advanceWeek as advanceOnly, completeWeek, aiEntry, beginMatch, buyItem, migrateCareer, useStockItem, myPendingMatch, newCareer, playLiveSet, proposeTrade, releasePlayer, rosterOf, scoutPlayer, setAction, standings, startNextSeason } from "./logic";
+
+/** 한 주 진행 (우리 선수가 조장인 조 지명식에서 멈추면 자동 지명으로 마저 진행) */
+function advanceWeek(s: CareerState, entry?: number[]) {
+  const r = advanceOnly(s, entry);
+  return s.weekHold ? { ...completeWeek(s), broadcast: r.broadcast } : r;
+}
+
+describe("다른 구단 아이템 구입", () => {
+  it("여유 자금 안에서 주전에게 컨디션 아이템·장비를 사 주고, 남길 자금은 남긴다", async () => {
+    const { aiShopping, equippedCount } = await import("./aiShop");
+    const s = newCareer(0);
+    const t = s.teams[1];
+    t.money = 5000;
+    for (const p of rosterOf(s, 1)) p.cond = 50;
+    aiShopping(s);
+    expect(t.money).toBeLessThan(5000);
+    expect(t.money).toBeGreaterThanOrEqual(1500);
+    const core = rosterOf(s, 1);
+    expect(core.some(p => p.cond > 50)).toBe(true);
+    expect(core.some(p => equippedCount(p) > 0)).toBe(true);
+    // 우리 팀은 건드리지 않음
+    expect(rosterOf(s, 0).every(p => equippedCount(p) === 0)).toBe(true);
+    // 돈이 없으면 사지 않음
+    const poor = s.teams[2];
+    poor.money = 1000;
+    aiShopping(s);
+    expect(poor.money).toBe(1000);
+  });
+});
+
+describe("큰 무대 성장", () => {
+  it("포스트시즌·개인리그 8강 이상은 오르는 능력치가 크게 늘어난다", async () => {
+    const { withStageGrowth, quickSet } = await import("./core");
+    const gain = (mul: number) => {
+      let sum = 0;
+      for (let k = 0; k < 200; k++) {
+        const s = newCareer(0);
+        const [a, b] = rosterOf(s, 0);
+        const before = totalOf(a.stats) + totalOf(b.stats);
+        withStageGrowth(mul, () => quickSet(s, a, b, s.mapPool![0]));
+        sum += totalOf(a.stats) + totalOf(b.stats) - before;
+      }
+      return sum;
+    };
+    expect(gain(2.2)).toBeGreaterThan(gain(1));
+  });
+});
+
+describe("조 지명식", () => {
+  it("우리 선수가 조장이면 주 마무리 전에 멈추고, 직접 지명한 뒤 마저 진행한다", async () => {
+    const { nominate } = await import("./msl");
+    let checked = false;
+    for (let t = 0; t < 12 && !checked; t++) {
+      const s = newCareer(t);
+      let guard = 0;
+      while (!s.weekHold && s.msl!.groups.length === 0 && guard++ < 20) {
+        const m = myPendingMatch(s);
+        advanceOnly(s, m ? aiEntry(s, s.myTeam, PRO_SETS) : undefined);
+      }
+      // 우리 선수가 조장이 아니면 멈추지 않고 조 편성까지 끝남
+      const mineHead = s.msl!.seeds.slice(0, 8).some(id => s.players[id]?.team === s.myTeam);
+      expect(!!s.weekHold).toBe(mineHead);
+      if (!mineHead) continue;
+      const week = s.week;
+      expect(() => advanceOnly(s)).toThrow(CareerError);
+      // 우리 차례까지 진행 → 직접 지명
+      const first = nominate(s);
+      const d = s.msl!.draft!;
+      expect(first.waiting).not.toBeNull();
+      {
+        const pick = d.pool[d.pool.length - 1];
+        nominate(s, pick);
+        expect(d.groups.some(g => g.includes(pick))).toBe(true);
+      }
+      const r = completeWeek(s);
+      expect(s.weekHold).toBeUndefined();
+      expect(s.week).toBe(week + 1);
+      expect(r.needNomination).toBeUndefined();
+      expect(s.msl!.stage).not.toBe("nom");
+      checked = true;
+    }
+    expect(checked).toBe(true);
+  });
+});
 
 describe("커리어 모드", () => {
   it("원작 데이터로 새 게임을 만든다 (230명, 12팀 2라운드 풀리그 11주 132경기)", () => {

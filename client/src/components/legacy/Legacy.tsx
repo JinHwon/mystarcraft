@@ -74,13 +74,37 @@ export function MapImage({ mapId, size = 72 }: { mapId: number; size?: number })
   );
 }
 
-export function PlayerPhoto({ id, name, size = 64 }: { id?: number; name: string; size?: number }) {
+/** 개인리그 우승·준우승 횟수 (선수 경력 기록에서) */
+export function mslMedals(titles?: string[]) {
+  let gold = 0, silver = 0;
+  for (const t of titles ?? []) {
+    if (!/마이스타리그|스타리그|MSL/.test(t)) continue;
+    if (t.includes("준우승")) silver++; else if (t.includes("우승")) gold++;
+  }
+  return { gold, silver };
+}
+
+/** 개인리그 우승(금배지)·준우승(은배지) 뱃지 — 여러 번이면 개수 표시 */
+export function MslBadges({ titles, size = 16, className }: { titles?: string[]; size?: number; className?: string }) {
+  const { gold, silver } = mslMedals(titles);
+  if (!gold && !silver) return null;
+  const one = (name: string, n: number, label: string) => n > 0 && (
+    <span className="inline-flex items-center" title={`개인리그 ${label} ${n}회`}>
+      <LegacyImg dir="기타" name={name} className="block" style={{ width: size, height: size }} fallback={<span style={{ fontSize: size * 0.8, lineHeight: 1 }}>{name === "금배지" ? "🥇" : "🥈"}</span>} />
+      {n > 1 && <span className="font-bold text-white leading-none" style={{ fontSize: Math.max(8, size * 0.55), textShadow: "0 0 2px #000, 0 0 2px #000" }}>{n}</span>}
+    </span>
+  );
+  return <span className={cn("inline-flex items-center gap-[1px]", className)}>{one("금배지", gold, "우승")}{one("은배지", silver, "준우승")}</span>;
+}
+
+export function PlayerPhoto({ id, name, size = 64, titles }: { id?: number; name: string; size?: number; /** 있으면 개인리그 우승·준우승 뱃지 */ titles?: string[] }) {
   return (
-    <div className="border border-neutral-500 bg-neutral-800 shrink-0" style={{ width: size, height: size * 1.05 }}>
+    <div className="relative border border-neutral-500 bg-neutral-800 shrink-0" style={{ width: size, height: size * 1.05 }}>
       <LegacyImg
         dir="선수" name={photoName(id, name)} className="w-full h-full object-cover"
         fallback={<div className="w-full h-full flex items-end justify-center overflow-hidden text-neutral-500" style={{ fontSize: size * 0.8, lineHeight: 1 }}>👤</div>}
       />
+      <MslBadges titles={titles} size={Math.max(11, Math.round(size * 0.3))} className="absolute left-0 bottom-0 flex-wrap" />
     </div>
   );
 }

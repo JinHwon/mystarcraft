@@ -14,7 +14,8 @@ import { Broadcast, PlayerCard } from "./broadcast";
 import { type MslReportView } from "./proleague";
 
 /** 스타리그 경기 다시 보기 (우리 선수 다전제) */
-export function SeriesViewer({ s, report, onClose }: { s: CareerState; report: MslReportView; onClose: () => void }) {
+/** onClose: 다 봄, onExit: ✕ 로 나감 (없으면 onClose) */
+export function SeriesViewer({ s, report, onClose, onExit }: { s: CareerState; report: MslReportView; onClose: () => void; onExit?: () => void }) {
   const [idx, setIdx] = useState(0);
   /** 세트가 끝나면 라운드별 승자 화면 → Next 로 다음 세트 */
   const [between, setBetween] = useState(false);
@@ -30,13 +31,13 @@ export function SeriesViewer({ s, report, onClose }: { s: CareerState; report: M
   const logo = (p: CPlayer) => <TeamLogo team={s.teams[p.team]} className="w-[70px] h-[40px]" />;
   if (between) {
     const last = idx + 1 >= report.sets.length;
-    return <SeriesBoard s={s} report={report} played={idx + 1} leftIsA={leftIsA} onClose={onClose}
+    return <SeriesBoard s={s} report={report} played={idx + 1} leftIsA={leftIsA} onClose={onExit ?? onClose}
       nextLabel={last ? "확인 ▷▷" : `${idx + 2}세트 ▷▷`} onNext={() => { setBetween(false); if (last) onClose(); else setIdx(idx + 1); }} />;
   }
   return (
     <Broadcast
       key={idx} s={s} stageName="마이스타리그" lp={lp} rp={rp} mapId={set.mapId} set={set} leftIsA={leftIsA} score={score}
-      leftLogo={logo(lp)} rightLogo={logo(rp)} speed={speed} setSpeed={setSpeed} onClose={onClose}
+      leftLogo={logo(lp)} rightLogo={logo(rp)} speed={speed} setSpeed={setSpeed} onClose={onExit ?? onClose}
       onDone={() => setBetween(true)}
     />
   );
@@ -62,7 +63,7 @@ export function SeriesBoard({ s, report, played, leftIsA, onNext, onClose, nextL
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mt-3">
           {[lp, rp].map((p, k) => (
             <div key={p.id} className={cn("flex flex-col items-center", k === 1 && "order-3")}>
-              <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} size={64} />
+              <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} titles={p.titles} size={64} />
               <div className={cn("text-[12.5px] mt-0.5", p.team === s.myTeam && "text-[#8fd0ff]")}>{nameRace(p)}</div>
               <div className="text-[10px] text-neutral-500">{s.teams[p.team]?.name ?? "무소속"}</div>
               {over && (report.winner === p.id) && <div className="text-[13px] font-black text-[#ffe45c]">WINNER</div>}
@@ -97,7 +98,7 @@ export function DualGroupScreen({ s, stage, group, reports, onDone, onClose }: {
 }) {
   const [cursor, setCursor] = useState(0);
   const [watching, setWatching] = useState<MslReportView | null>(null);
-  if (watching) return <SeriesViewer s={s} report={watching} onClose={() => { setWatching(null); setCursor(c => c + 1); }} />;
+  if (watching) return <SeriesViewer s={s} report={watching} onClose={() => { setWatching(null); setCursor(c => c + 1); }} onExit={onClose} />;
   const games = group.games;
   const cur = games[cursor];
   const curReport = cur ? reports.find(r => r.label === cur.label) : undefined;
@@ -129,7 +130,7 @@ export function DualGroupScreen({ s, stage, group, reports, onDone, onClose }: {
             const playing = cur && (cur.a === id || cur.b === id);
             return (
               <div key={id} className={cn("flex items-center gap-2 border p-1.5", playing ? "border-[#ff6b6b]" : "border-neutral-600", st.text === "탈락" && "opacity-50")}>
-                <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} size={46} />
+                <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} titles={p.titles} size={46} />
                 <div className="min-w-0 text-[12px] leading-tight">
                   <div className={cn("truncate", p.team === s.myTeam ? "text-[#8fd0ff]" : "text-white")}>{nameRace(p)}</div>
                   <div className="text-[10px] text-neutral-400 truncate">{s.teams[p.team]?.name ?? "무소속"}</div>
@@ -171,7 +172,14 @@ export const groupOf = (s: CareerState, stage: string, name: string) => {
 };
 
 /** 이번 주 개인리그: 우리 선수 경기를 차례로 (듀얼·32강은 조 화면, 16강부터는 경기 전 화면 → 중계) → 이번 주 결과 */
-export function MslFlow({ s, reports, plans = [], flat, onDone }: { s: CareerState; reports: MslReportView[]; plans?: number[]; flat?: boolean; onDone: () => void }) {
+/**
+ * onDone: 다 봄, onClose: ✕ 로 나감 (나중에 이어 보기, 없으면 onDone)
+ * start·onProgress: 이어 볼 위치
+ */
+export function MslFlow({ s, reports, plans = [], flat, onDone, onClose, start = 0, onProgress }: {
+  s: CareerState; reports: MslReportView[]; plans?: number[]; flat?: boolean; onDone: () => void; onClose?: () => void; start?: number; onProgress?: (i: number) => void;
+}) {
+  const exit = onClose ?? onDone;
   const steps = useMemo(() => {
     const out: MslStep[] = [];
     for (const r of reports) {
@@ -183,24 +191,25 @@ export function MslFlow({ s, reports, plans = [], flat, onDone }: { s: CareerSta
     for (const k of plans) out.push({ kind: "plan", planIdx: k });
     return out;
   }, [reports, plans]);
-  const [i, setI] = useState(0);
+  const [i, setIRaw] = useState(start);
+  const setI = (n: number) => { setIRaw(n); onProgress?.(n); };
   const [watching, setWatching] = useState(false);
   const step = steps[i];
   useEffect(() => { if (!step) onDone(); }, [step]);
   if (!step) return null;
-  if (step.kind === "plan") return <MslStageResult s={s} planIdx={step.planIdx} onNext={() => setI(i + 1)} onClose={onDone} />;
+  if (step.kind === "plan") return <MslStageResult s={s} planIdx={step.planIdx} onNext={() => setI(i + 1)} onClose={exit} />;
   const group = step.kind === "group" ? groupOf(s, step.stage, step.name) : undefined;
-  if (step.kind === "group" && group?.games.length) return <DualGroupScreen key={i} s={s} stage={step.stage} group={group} reports={step.reports} onDone={() => setI(i + 1)} onClose={onDone} />;
+  if (step.kind === "group" && group?.games.length) return <DualGroupScreen key={i} s={s} stage={step.stage} group={group} reports={step.reports} onDone={() => setI(i + 1)} onClose={exit} />;
   // 조 기록이 없으면 (예전 세이브) 우리 경기만 하나씩
-  if (step.kind === "group") return <MslFlow key={i} s={s} reports={step.reports} flat onDone={() => setI(i + 1)} />;
+  if (step.kind === "group") return <MslFlow key={i} s={s} reports={step.reports} flat onDone={() => setI(i + 1)} onClose={exit} />;
   const r = step.r;
   const next = () => { setWatching(false); setI(i + 1); };
-  if (watching) return <SeriesViewer s={s} report={r} onClose={next} />;
+  if (watching) return <SeriesViewer s={s} report={r} onClose={next} onExit={exit} />;
   const mineLeft = s.players[r.a]?.team === s.myTeam || s.players[r.b]?.team !== s.myTeam;
   const lp = s.players[mineLeft ? r.a : r.b], rp = s.players[mineLeft ? r.b : r.a];
   const logo = r.stage === "듀얼 토너먼트" ? "DT" : r.stage === "PC방 예선" ? "PC방" : "MySL";
   return (
-    <LegacyFrame season={s.season} onBack={onDone} onNext={() => setWatching(true)}>
+    <LegacyFrame season={s.season} onBack={exit} onNext={() => setWatching(true)}>
       <div className="px-3 pt-3 pb-4">
         <div className="flex flex-col items-center gap-1">
           <LegacyImg dir="로고" name={logo} className="max-h-14 object-contain" fallback={<div className="text-[18px] italic font-black text-[#c9a0ff]">MySL</div>} />
@@ -513,7 +522,8 @@ export function ScheduleScreen({ s, onClose }: { s: CareerState; onClose: () => 
 }
 
 /** 마이스타리그 조 지명식: 우리 조장 차례에 직접 지명 (다른 조장은 자동) */
-export function NominationScreen({ s, onClose }: { s: CareerState; onClose: () => void }) {
+/** onClose: ✕ (나중에 계속), onDone: 지명이 끝나고 확인 (없으면 onClose) */
+export function NominationScreen({ s, onClose, onDone }: { s: CareerState; onClose: () => void; onDone?: () => void }) {
   const patch = useCareerPatch();
   const [sel, setSel] = useState<number | undefined>();
   const [err, setErr] = useState<string | null>(null);
@@ -535,7 +545,7 @@ export function NominationScreen({ s, onClose }: { s: CareerState; onClose: () =
   const pool = [...d.pool].sort((a, b) => totalOf(s.players[b].stats) - totalOf(s.players[a].stats));
   const G = ["A", "B", "C", "D", "E", "F", "G", "H"];
   const next = () => {
-    if (done) { onClose(); return; }
+    if (done) { (onDone ?? onClose)(); return; }
     if (myTurn && sel !== undefined) nom.mutate({ pick: sel });
     else if (!myTurn) nom.mutate(undefined);
   };
@@ -565,7 +575,7 @@ export function NominationScreen({ s, onClose }: { s: CareerState; onClose: () =
                 const p = s.players[id];
                 return (
                   <button key={id} onClick={() => setSel(id)} className={cn("w-full flex items-center gap-2 px-1.5 py-1 text-left border-b border-neutral-800 last:border-b-0", sel === id ? "bg-[#3a3a5a]" : "")}>
-                    <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} size={30} />
+                    <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} titles={p.titles} size={30} />
                     <span className={cn("flex-1 truncate text-[12.5px]", p.team === s.myTeam ? "text-[#8fd0ff]" : sel === id ? "text-[#ffe45c]" : "text-white")}>{nameRace(p)}</span>
                     <span className="text-[10.5px] text-neutral-400 truncate max-w-[30%]">{s.teams[p.team]?.short ?? "무소속"}</span>
                     <span className="text-[11px] text-neutral-200 w-12 text-right">{totalOf(p.stats).toLocaleString()}</span>

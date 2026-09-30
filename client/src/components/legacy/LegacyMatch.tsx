@@ -8,5 +8,5 @@ export type { ItemPlan } from "./match/entry";
 export { Broadcast } from "./match/broadcast";
 export type { BroadcastSet } from "./match/broadcast";
 export { LiveMatch, ProSeriesFlow } from "./match/proleague";
-export type { MslReportView, ProReportView, WeekDone } from "./match/proleague";
+export type { HeldFinish, MslReportView, ProReportView, WeekDone } from "./match/proleague";
 export { MslFlow, MslStageResult, NominationScreen, ScheduleScreen, SeriesViewer } from "./match/msl";

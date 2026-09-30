@@ -14,7 +14,7 @@ function PlayerRow({ s, p, rank, right, onOpen }: { s: CareerState; p: CPlayer; 
   return (
     <button onClick={() => onOpen(p.id)} className="w-full flex items-center gap-2 py-1.5 text-left border-b border-border/60 last:border-b-0">
       <span className="w-4 text-muted-foreground font-bold text-sm">{rank}</span>
-      <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} size={38} />
+      <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} titles={p.titles} size={38} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <RaceBadge race={p.race} />

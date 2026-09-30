@@ -431,6 +431,8 @@ export interface CareerState {
   sponsor?: import("./sponsor").Sponsor & { season: number };
   /** 이번 시즌 계약한 서브 스폰서 (최대 3곳) */
   sponsors?: Array<import("./sponsor").Sponsor & { season: number }>;
+  /** 프로리그 경기는 끝났지만 조 지명식(우리 선수 지명)을 기다리며 주 마무리를 멈춤 */
+  weekHold?: { playedMatchId?: number };
   /** 포텐셜 폭발을 정한 주 */
   burstWeek?: string;
   /** 컨디션 단위 (100 = % 단위. 없으면 예전 1~10 단위 세이브) */
