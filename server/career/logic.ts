@@ -179,7 +179,7 @@ function actOne(s: CareerState, p: CPlayer, action: ActionKey | null | undefined
   }
 }
 
-/** 다른 팀·무소속 선수의 한 주 행동 (한 주 한 번, 경기 시작 때) */
+/** 다른 팀·무소속 선수의 한 주 행동 (한 주 한 번, 주가 끝날 때) */
 function applyActions(s: CareerState) {
   const wk = `${s.season}-${s.week}`;
   if (s.actionsWeek === wk) return; // 한 주에 한 번만 (프로리그가 한 주 2경기)
@@ -340,7 +340,6 @@ export function advanceWeek(s: CareerState, myEntry?: number[]): WeekResult {
     if (rosterOf(s, s.myTeam).length < MIN_ROSTER) throw new CareerError(`선수가 최소 ${MIN_ROSTER}명 있어야 경기를 치를 수 있습니다`);
     validateEntry(s, myEntry, sets);
   }
-  applyActions(s);
   let broadcast: PlayedSet[] | undefined;
   let m = mine, last = mine;
   while (m) {
@@ -353,6 +352,8 @@ export function advanceWeek(s: CareerState, myEntry?: number[]): WeekResult {
 
 /** 이번 주 나머지 일정 (다른 팀 경기·스타리그·스폰서) 진행 후 다음 주로 */
 function finishWeek(s: CareerState): WeekResult {
+  // 다른 팀 선수의 주간 훈련·휴식 (경기 시작 요청을 가볍게 하려고 주 마무리 때 한꺼번에)
+  applyActions(s);
   const proReports: ProReport[] = [];
   for (const m of s.matches.filter(x => !x.done && x.week === s.week)) {
     const sets = playMatch(s, m);
@@ -403,7 +404,6 @@ export function beginMatch(s: CareerState, front: number[], items: SetItemPlan =
     need[v.key] = (need[v.key] ?? 0) + 1;
   }
   for (const [k, n] of Object.entries(need)) if ((s.inventory?.[k] ?? 0) < n) throw new CareerError(`${ITEM_BY_KEY[k].name} 이(가) 부족합니다`);
-  applyActions(s);
   const oppTeam = m.a === s.myTeam ? m.b : m.a;
   s.live = { matchId: m.id, mine: [...front], opp: aiEntry(s, oppTeam, sets), sets: [], items };
   return { matchId: m.id };
