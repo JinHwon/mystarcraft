@@ -302,7 +302,9 @@ export interface CareerState {
   tries?: Record<string, number>;
   triesWeek?: string;
   /** 감독 */
-  manager?: { reputation: number; moves?: number };
+  manager?: { reputation: number; moves?: number; level?: number; exp?: number };
+  /** 메인 스폰서 (모기업) 계약 */
+  mainSponsor?: import("./mainSponsor").MainSponsorContract;
   /** 다른 팀의 감독 제의 */
   jobOffers?: number[];
   /** 적자 주 수 (3주 연속이면 구단 해체) */

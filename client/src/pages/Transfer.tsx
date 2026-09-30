@@ -13,7 +13,7 @@ import { useCareer, useCareerUpdater } from "@/lib/career";
 import { LegacyFrame, LegacyImg, TeamLogo } from "@/components/legacy/Legacy";
 import { PlayerPanel, condStats } from "@/components/legacy/LegacyMatch";
 import { ContractEditor, ContractText, FeeStepper, Reply } from "@/components/legacy/Club";
-import { playerDemand, potentialStars } from "@shared/career/contract";
+import { playerDemand, potentialStars, scoutPrice } from "@shared/career/contract";
 
 const R = { terran: "T", zerg: "Z", protoss: "P" } as const;
 type Mode = "bid" | "trade" | "scout" | "fire";
@@ -195,7 +195,7 @@ function ScoutTab({ s }: { s: CareerState }) {
   });
   const reserveFee = (x: CPlayer) => Math.max(20, Math.round((askingPrice(x, s.season) * 0.3) / 10) * 10);
   const p = sel !== undefined ? s.players[sel] : undefined;
-  const price = p ? askingPrice(p, s.season) : 0;
+  const price = p ? scoutPrice(s, p) : 0;
   const full = rosterOf(s, s.myTeam).length >= MAX_ROSTER;
   return (
     <div className="space-y-2">
@@ -208,7 +208,7 @@ function ScoutTab({ s }: { s: CareerState }) {
         ))}
       </div>
       <PlayerPanel p={p} color="#ffe45c" empty="영입할 선수를 고르세요" />
-      <PickList players={list} picked={sel !== undefined ? [sel] : []} onToggle={x => setSel(x.id)} right={x => `${ageOf(x, s.season)}세 ${potentialStars(x)} · ${askingPrice(x, s.season).toLocaleString()}만`} height="max-h-[280px]" />
+      <PickList players={list} picked={sel !== undefined ? [sel] : []} onToggle={x => setSel(x.id)} right={x => `${ageOf(x, s.season)}세 ${potentialStars(x)} · ${scoutPrice(s, x).toLocaleString()}만`} height="max-h-[280px]" />
       <div className="flex justify-between text-[12px] border border-neutral-600 px-2 py-1">
         <span className="text-neutral-400">요구 금액 :</span><span className="text-[#ffb8c8]">{p ? `${price.toLocaleString()} 만원` : "-"}</span>
       </div>

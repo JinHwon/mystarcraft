@@ -14,7 +14,7 @@ import {
   type MslSeries,
   type MslState,
 } from "@shared/career/rules";
-import { book } from "./club";
+import { addManagerExp, book, mainSponsorPay } from "./club";
 import { activePlayers } from "@shared/career/view";
 import { news, pickMaps, playSet, quickSet, rand, shuffle, type PlayedSet } from "./core";
 
@@ -56,6 +56,7 @@ function series(s: CareerState, a: number, b: number, bestOf: number, label: str
     sets.push(r);
   }
   const result: MslSeries = { a, b, bestOf, sa, sb, winner: sa > sb ? a : b, label, sets };
+  if (mine && isMine(s, result.winner)) addManagerExp(s, 5);
   if (mine) {
     report.push({ ...result, stage, sets: sets.map(x => ({ ...x })) });
     for (const x of sets) { delete x.highlights; delete x.timeline; } // 세이브에는 중계를 남기지 않음
@@ -203,6 +204,9 @@ function finishMsl(s: CareerState, m: MslState) {
     const p = s.players[Number(id)];
     if (prize && p && p.team !== FREE_AGENT_TEAM) { s.teams[p.team].money += prize; if (p.team === s.myTeam) book(s, "개인리그 상금", prize); }
   }
+  // 메인 스폰서 개인리그 수당 · 감독 경험치
+  if (s.players[m.champion!]?.team === s.myTeam) { mainSponsorPay(s, "mslTitle", "메인 스폰서 개인리그 우승 수당"); addManagerExp(s, 120); }
+  if (s.players[m.runnerUp!]?.team === s.myTeam) { mainSponsorPay(s, "mslRunnerUp", "메인 스폰서 개인리그 준우승 수당"); addManagerExp(s, 60); }
   const champ = s.players[m.champion!];
   champ.titles = [...(champ.titles ?? []), `${s.season}시즌 마이스타리그 우승`];
   news(s, `👑 ${s.season}시즌 마이스타리그 우승: ${champ.name} (${s.teams[champ.team].name})! 준우승 ${s.players[m.runnerUp!].name}`);

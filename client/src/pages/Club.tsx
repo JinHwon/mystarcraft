@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { DEBT_LIMIT_WEEKS, OPERATING_COST, totalOf, type CareerState, type Contract } from "@shared/career/rules";
 import { jobThreshold, playerDemand, teamWages } from "@shared/career/contract";
 import { questLabel, questProgress, questRange, questReward, sponsorOffers } from "@shared/career/sponsor";
+import { MAIN_SPONSORS, TERM_NAMES, levelPerks, managerExpNeed, managerLevel, sponsorBudget, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
 import { proTeams, rosterOf, teamPower } from "@shared/career/view";
 import { useCareer } from "@/lib/career";
 import { LegacyFrame, TeamLogo } from "@/components/legacy/Legacy";
@@ -46,11 +47,11 @@ function MoneyTab({ s }: { s: CareerState }) {
       {(s.debtWeeks ?? 0) > 0 && <Reply text={`⚠️ 적자 ${s.debtWeeks}주째! ${DEBT_LIMIT_WEEKS - (s.debtWeeks ?? 0)}주 안에 흑자로 돌리지 못하면 구단이 해체됩니다`} />}
       <div className="border border-neutral-600 p-2 space-y-0.5">
         <div className="text-[#ffe45c] mb-1">매주 고정 수입·지출</div>
-        <div className="flex justify-between"><span className="text-neutral-400">스폰서 후원금{spon ? ` (${s.sponsor!.name})` : " (스폰서 없음)"}</span><span className="text-[#bff5c6]">+{spon}</span></div>
+        <div className="flex justify-between"><span className="text-neutral-400">서브 스폰서 후원금{spon ? ` (${s.sponsor!.name})` : " (없음)"}</span><span className="text-[#bff5c6]">+{spon}</span></div>
         <div className="flex justify-between"><span className="text-neutral-400">연봉 (정규시즌, 총 {wages.toLocaleString()}만 ÷ 11주)</span><span className="text-[#ffb8c8]">-{Math.round(wages / 11)}</span></div>
         <div className="flex justify-between"><span className="text-neutral-400">구단 운영비</span><span className="text-[#ffb8c8]">-{OPERATING_COST}</span></div>
         <div className="flex justify-between border-t border-neutral-700 pt-0.5"><span>합계 (경기 수당 제외)</span><span className={weekly >= 0 ? "text-[#bff5c6]" : "text-[#ffb8c8]"}>{weekly >= 0 ? "+" : ""}{weekly}</span></div>
-        <div className="text-[10.5px] text-neutral-500">경기 수당(주 2경기): 승리 +120, 패배 +30 · 스폰서 퀘스트·상금·보너스·이적료는 따로</div>
+        <div className="text-[10.5px] text-neutral-500">경기 수당(주 2경기)은 메인 스폰서 계약: 승리 +{s.mainSponsor?.win ?? 0}, 패배 +{s.mainSponsor?.loss ?? 0} · 퀘스트·상금·보너스·이적료는 따로</div>
       </div>
       <div className="border border-neutral-600 p-2 space-y-0.5">
         <div className="text-[#ffe45c] mb-1">{s.season}시즌 장부</div>
@@ -144,9 +145,22 @@ function ManagerTab({ s }: { s: CareerState }) {
   const { reply, done, fail } = useMut();
   const accept = trpc.career.acceptJob.useMutation({ onSuccess: r => { done(r); navigate("/lobby"); }, onError: fail });
   const rep = s.manager?.reputation ?? 50;
+  const lv = managerLevel(s), exp = s.manager?.exp ?? 0, need = managerExpNeed(lv);
+  const perks = levelPerks(lv);
   const ranked = proTeams(s).sort((a, b) => teamPower(s, b.id) - teamPower(s, a.id));
   return (
     <div className="space-y-2 text-[12.5px]">
+      <div className="border border-[#f8e070]/70 p-2 space-y-1">
+        <div className="flex justify-between items-baseline"><span className="text-[15px] text-[#ffe45c]">감독 Lv.{lv}</span><span className="text-neutral-400">경험치 {exp} / {need}</span></div>
+        <div className="h-2 bg-neutral-800"><div className="h-full bg-[#8fd0ff]" style={{ width: `${(exp / need) * 100}%` }} /></div>
+        <div className="text-[10.5px] text-neutral-500">프로리그 승리 +30 · 패배 +10 · 개인리그 우리 선수 승리 +5 · 시즌 성적·개인리그 우승 보너스</div>
+        <div className="grid grid-cols-2 gap-x-2 text-[11.5px] pt-1">
+          <span className="text-neutral-400">스폰서 예산</span><span className="text-right text-[#bff5c6]">+{Math.round((perks.sponsor - 1) * 100)}%</span>
+          <span className="text-neutral-400">선수 요구 연봉</span><span className="text-right text-[#bff5c6]">-{Math.round((1 - perks.salary) * 100)}%</span>
+          <span className="text-neutral-400">다른 팀 이적료</span><span className="text-right text-[#bff5c6]">-{Math.round((1 - perks.fee) * 100)}%</span>
+          <span className="text-neutral-400">무소속 영입 금액</span><span className="text-right text-[#bff5c6]">-{Math.round((1 - perks.scout) * 100)}%</span>
+        </div>
+      </div>
       <div className="border border-neutral-600 p-2">
         <div className="flex justify-between"><span className="text-neutral-400">감독 평판</span><span className="text-[#ffe45c]">{rep} / 100</span></div>
         <div className="h-2 bg-neutral-800 mt-1"><div className="h-full bg-[#f8e070]" style={{ width: `${rep}%` }} /></div>
@@ -179,6 +193,60 @@ function ManagerTab({ s }: { s: CareerState }) {
 
 const TABS: Array<[Tab, string]> = [["sponsor", "스폰서"], ["money", "재정"], ["contracts", "계약"], ["offers", "제안"], ["manager", "감독"]];
 
+function MainSponsorCard({ s }: { s: CareerState }) {
+  const { reply, done, fail } = useMut();
+  const sp = s.mainSponsor;
+  const name = MAIN_SPONSORS[s.myTeam]?.name ?? "모기업";
+  const [terms, setTerms] = useState<MainSponsorTerms | null>(null);
+  const [years, setYears] = useState(1);
+  const neg = trpc.career.mainSponsor.useMutation({
+    onSuccess: r => {
+      done(r);
+      const res = r.result as { result: string; counter?: MainSponsorTerms };
+      if (res.counter) setTerms(res.counter);
+      if (res.result === "signed") setTerms(null);
+    },
+    onError: fail,
+  });
+  if (!sp) return null;
+  const cur: MainSponsorTerms = { win: sp.win, loss: sp.loss, proTitle: sp.proTitle, proRunnerUp: sp.proRunnerUp, mslTitle: sp.mslTitle, mslRunnerUp: sp.mslRunnerUp };
+  const edit = terms ?? cur;
+  const budget = sponsorBudget(s);
+  const value = termsValue(edit);
+  const open = canNegotiate(s);
+  return (
+    <div className="border-2 border-[#f8e070]/70 p-2 space-y-1.5 text-[12px]">
+      <div className="flex items-center gap-2">
+        <TeamLogo team={s.teams[s.myTeam]} className="w-[52px] h-[30px]" />
+        <div className="flex-1"><div className="text-[15px] text-[#ffe45c]">메인 스폰서 · {name}</div><div className="text-[10.5px] text-neutral-400">필수 스폰서 · 남은 계약 {sp.years}시즌 · 감독 Lv.{managerLevel(s)} 예산 {budget.toLocaleString()}만</div></div>
+      </div>
+      {(Object.keys(TERM_NAMES) as Array<keyof MainSponsorTerms>).map(k => (
+        <div key={k} className="flex items-center justify-between gap-1">
+          <span className="text-neutral-300">{TERM_NAMES[k]}</span>
+          {open ? <FeeStepper value={edit[k]} onChange={v => setTerms({ ...edit, [k]: v })} steps={k === "win" || k === "loss" ? [10, 50] : [100]} />
+            : <span className="text-[#bff5c6]">{sp[k].toLocaleString()}만</span>}
+        </div>
+      ))}
+      {open ? (
+        <>
+          <div className="flex items-center justify-between"><span className="text-neutral-300">계약 기간</span>
+            <div className="flex gap-1">{[1, 2, 3].map(y => <button key={y} onClick={() => setYears(y)} className={cn("border px-2", years === y ? "border-white text-white" : "border-neutral-700 text-neutral-400")}>{y}년</button>)}</div>
+          </div>
+          <div className="text-[11px] text-neutral-400">한 시즌 기대 지급액 <b className={value <= budget ? "text-[#bff5c6]" : "text-[#ffb8c8]"}>{value.toLocaleString()}</b> / 스폰서 예산 {budget.toLocaleString()} — 승리 수당을 올리면 우승 수당을 줄이는 식으로 나누세요</div>
+          <div className="h-1.5 bg-neutral-800"><div className="h-full" style={{ width: `${Math.min(100, (value / budget) * 100)}%`, background: value <= budget ? "#8fe07a" : "#ff6b6b" }} /></div>
+          {reply && <Reply {...reply} />}
+          <button disabled={neg.isPending} onClick={() => neg.mutate({ terms: edit, years })} className="w-full py-1.5 text-[13px] font-bold text-black border border-neutral-500" style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}>{name}에 계약 제안</button>
+        </>
+      ) : <div className="text-[10.5px] text-neutral-500">재협상은 비시즌이나 시즌 첫 경기 전에 할 수 있습니다. 감독 레벨이 오르면 예산이 커집니다.</div>}
+    </div>
+  );
+}
+
+function canNegotiate(s: CareerState) {
+  if (s.phase === "offseason") return true;
+  return s.week === 1 && !s.live && !s.matches.some(m => m.done && (m.a === s.myTeam || m.b === s.myTeam));
+}
+
 function SponsorTab({ s }: { s: CareerState }) {
   const { reply, done, fail } = useMut();
   const choose = trpc.career.chooseSponsor.useMutation({ onSuccess: done, onError: fail });
@@ -188,6 +256,8 @@ function SponsorTab({ s }: { s: CareerState }) {
   if (sp) {
     return (
       <div className="space-y-2 text-[12.5px]">
+        <MainSponsorCard s={s} />
+        <div className="text-[#ffe45c] text-[13px] pt-1">서브 스폰서 (퀘스트)</div>
         <div className="border border-neutral-600 p-2">
           <div className="text-[15px] text-[#ffe45c]">{sp.name}</div>
           <div className="text-neutral-400">후원금 주 {sp.weekly}만원 · {s.season}시즌</div>
@@ -208,7 +278,9 @@ function SponsorTab({ s }: { s: CareerState }) {
   }
   return (
     <div className="space-y-2 text-[12.5px]">
-      <div className="text-center text-[11.5px] text-neutral-300">이번 시즌 스폰서를 고르세요. 퀘스트 목표를 올리면 보상이 커지고, 낮추면 줄어듭니다.<br />스폰서가 없으면 후원금이 없습니다.</div>
+      <MainSponsorCard s={s} />
+      <div className="text-[#ffe45c] text-[13px] pt-1">서브 스폰서 (퀘스트)</div>
+      <div className="text-center text-[11.5px] text-neutral-300">이번 시즌 서브 스폰서를 고르세요. 퀘스트 목표를 올리면 보상이 커지고, 낮추면 줄어듭니다.<br />스폰서가 없으면 후원금이 없습니다.</div>
       {reply && <Reply {...reply} />}
       {offers.map((o, k) => (
         <div key={k} className="border border-neutral-600 p-2 space-y-1.5">

@@ -43,8 +43,8 @@ import { initialPlayers, initialTeams } from "@shared/career/init";
 import { runMslWeek, type MslReport } from "./msl";
 import { ITEM_BY_KEY, POTION_LIMIT, slotOf } from "@shared/career/items";
 import { ensurePotential, retirements, rookies } from "./generation";
-import { book, ensureClub, newSeasonClub, pay, seasonEndClub, weeklyClub } from "./club";
-import { cheerChance, defaultContract } from "@shared/career/contract";
+import { addManagerExp, mainSponsorPay, book, ensureClub, newSeasonClub, pay, seasonEndClub, weeklyClub } from "./club";
+import { cheerChance, defaultContract, scoutPrice } from "@shared/career/contract";
 export type { MslReport };
 
 const RACE: Record<string, Race> = { T: "terran", Z: "zerg", P: "protoss" };
@@ -205,9 +205,15 @@ function recordMatch(s: CareerState, m: CMatch, entryA: number[], entryB: number
     ta.setWins += sa; ta.setLosses += sb; tb.setWins += sb; tb.setLosses += sa;
     if (m.winner === m.a) { ta.wins++; tb.losses++; } else { tb.wins++; ta.losses++; }
   }
-  s.teams[m.winner].money += MATCH_MONEY.win;
-  s.teams[m.winner === m.a ? m.b : m.a].money += MATCH_MONEY.lose;
-  if (m.a === s.myTeam || m.b === s.myTeam) book(s, "경기 수당", m.winner === s.myTeam ? MATCH_MONEY.win : MATCH_MONEY.lose);
+  // 다른 팀은 리그 기본 수당, 우리 팀은 메인 스폰서 계약 수당
+  const loserTeam = m.winner === m.a ? m.b : m.a;
+  if (m.winner !== s.myTeam) s.teams[m.winner].money += MATCH_MONEY.win;
+  if (loserTeam !== s.myTeam) s.teams[loserTeam].money += MATCH_MONEY.lose;
+  if (m.a === s.myTeam || m.b === s.myTeam) {
+    const won = m.winner === s.myTeam;
+    mainSponsorPay(s, won ? "win" : "loss", won ? "스폰서 승리 수당" : "스폰서 패배 수당");
+    addManagerExp(s, won ? 30 : 10);
+  }
   // 출전 기록 (사기·출전 보장 조건)
   for (const id of new Set(results.flatMap(r => [r.a, r.b]))) s.players[id].sApps = (s.players[id].sApps ?? 0) + 1;
   if (m.a === s.myTeam || m.b === s.myTeam) {
@@ -492,7 +498,7 @@ export function scoutPlayer(s: CareerState, pid: number) {
   const p = s.players[pid];
   if (!p || p.team !== FREE_AGENT_TEAM) throw new CareerError("무소속 선수만 영입할 수 있습니다");
   if (rosterOf(s, s.myTeam).length >= MAX_ROSTER) throw new CareerError(`선수단은 최대 ${MAX_ROSTER}명입니다`);
-  const price = askingPrice(p, s.season);
+  const price = scoutPrice(s, p);
   const me = s.teams[s.myTeam];
   if (me.money < price) throw new CareerError(`자금이 부족합니다 (요구 금액 ${price.toLocaleString()}만원)`);
   pay(s, "영입", -price);

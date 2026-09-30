@@ -4,6 +4,7 @@
 import { FREE_AGENT_TEAM } from "./originalData";
 import { ageOf, askingPrice, totalOf, type BonusKey, type CareerState, type Contract, type CPlayer } from "./rules";
 import { rosterOf } from "./view";
+import { levelPerks, managerLevel } from "./mainSponsor";
 
 /** 결정적 난수 (0~1): 같은 선수·시즌이면 같은 값 */
 export function seeded(...keys: number[]): number {
@@ -44,7 +45,8 @@ export function playerDemand(s: CareerState, p: CPlayer, forTeam: number): Contr
   const moving = p.team !== forTeam;
   const r = seeded(p.id, s.season, forTeam);
   const mul = moving ? 1.15 + r * 0.15 : p.wantsOut ? 1.3 : 1 + r * 0.1;
-  const salary = round10(base * mul);
+  // 감독 레벨이 높으면 우리 팀에서 뛰고 싶어해 연봉 요구가 낮아짐
+  const salary = round10(base * mul * (forTeam === s.myTeam ? levelPerks(managerLevel(s)).salary : 1));
   const age = ageOf(p, s.season);
   const years = age <= 22 ? 5 : age >= 28 ? 1 : 3;
   // 새 팀에서의 예상 순위
@@ -89,7 +91,7 @@ export function sellMinimum(s: CareerState, p: CPlayer): number {
   const v = askingPrice(p, s.season);
   const roster = rosterOf(s, p.team).sort((a, b) => totalOf(b.stats) - totalOf(a.stats));
   const ace = roster[0]?.id === p.id;
-  const mul = (ace ? 1.4 : 1.1) * (p.wantsOut ? 0.8 : 1) * (0.95 + seeded(p.id, s.season, 7) * 0.15);
+  const mul = (ace ? 1.4 : 1.1) * (p.wantsOut ? 0.8 : 1) * (0.95 + seeded(p.id, s.season, 7) * 0.15) * levelPerks(managerLevel(s)).fee;
   return round10(v * mul);
 }
 
@@ -112,4 +114,9 @@ export function cheerChance(p: CPlayer): number {
 export function potentialStars(p: CPlayer): string {
   const n = Math.max(1, Math.min(5, Math.round(((p.potential ?? totalOf(p.stats)) - 4600) / 450)));
   return "★".repeat(n) + "☆".repeat(5 - n);
+}
+
+/** 무소속 영입 금액 (감독 레벨이 높으면 할인) */
+export function scoutPrice(s: CareerState, p: CPlayer): number {
+  return Math.max(50, round10(askingPrice(p, s.season) * levelPerks(managerLevel(s)).scout));
 }

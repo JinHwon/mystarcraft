@@ -281,3 +281,42 @@ describe("세대 교체·2부·스폰서", () => {
     expect(s.players.slice(count).every(p => p.team === 12 && p.potential! > 0)).toBe(true);
   });
 });
+
+describe("메인 스폰서·감독 레벨", () => {
+  it("메인 스폰서 수당이 경기마다 지급되고, 예산 안의 조건이면 계약, 넘으면 역제안·거절", async () => {
+    const { negotiateMainSponsor } = await import("./club");
+    const { sponsorBudget, termsValue } = await import("@shared/career/mainSponsor");
+    const s = newCareer(0);
+    expect(s.mainSponsor?.team).toBe(0);
+    const t = { ...s.mainSponsor! };
+    const terms = { win: t.win, loss: t.loss, proTitle: t.proTitle, proRunnerUp: t.proRunnerUp, mslTitle: t.mslTitle, mslRunnerUp: t.mslRunnerUp };
+    expect(termsValue(terms)).toBeLessThanOrEqual(sponsorBudget(s));
+    expect(negotiateMainSponsor(s, { ...terms, win: terms.win * 10 }, 2).result).toBe("rejected");
+    const r = negotiateMainSponsor(s, { ...terms, win: Math.round(terms.win * 1.25) }, 2);
+    expect(r.result).toBe("countered");
+    expect(negotiateMainSponsor(s, { ...terms, win: terms.win + 10, loss: Math.max(0, terms.loss - 20) }, 2).result).toBe("signed");
+    const win = s.mainSponsor!.win, loss = s.mainSponsor!.loss;
+    const before = s.ledger?.items ?? {};
+    void before;
+    const m = myPendingMatch(s);
+    advanceWeek(s, m ? aiEntry(s, 0, PRO_SETS) : undefined);
+    const items = s.ledger!.items;
+    expect((items["스폰서 승리 수당"] ?? 0) + (items["스폰서 패배 수당"] ?? 0)).toBeGreaterThanOrEqual(Math.min(win, loss) * 2);
+    expect(() => negotiateMainSponsor(s, terms, 1)).toThrow(CareerError);
+  });
+
+  it("경기를 하면 감독 경험치가 쌓여 레벨이 오르고, 레벨이 높으면 선수 요구 연봉·이적료가 내려간다", async () => {
+    const { addManagerExp } = await import("./club");
+    const { playerDemand, sellMinimum } = await import("@shared/career/contract");
+    const s = newCareer(0);
+    const p = rosterOf(s, 1)[0];
+    const d1 = playerDemand(s, p, 0).salary, f1 = sellMinimum(s, p);
+    const m = myPendingMatch(s);
+    advanceWeek(s, m ? aiEntry(s, 0, PRO_SETS) : undefined);
+    expect((s.manager?.exp ?? 0) + (s.manager!.level! - 1) * 100).toBeGreaterThan(0);
+    addManagerExp(s, 5000);
+    expect(s.manager!.level!).toBeGreaterThan(5);
+    expect(playerDemand(s, p, 0).salary).toBeLessThan(d1);
+    expect(sellMinimum(s, p)).toBeLessThan(f1);
+  });
+});
