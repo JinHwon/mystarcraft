@@ -72,7 +72,7 @@ function ShopScreen({ s }: { s: CareerState }) {
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
   const [cat, setCat] = useState<ItemCat>("소모품");
-  const list = ITEMS.filter(i => i.cat === cat);
+  const list = ITEMS.filter(i => i.cat === cat && !i.notForSale);
   const [key, setKey] = useState(list[0].key);
   const item = ITEMS.find(i => i.key === key) ?? list[0];
   const [target, setTarget] = useState<number | undefined>();
@@ -93,7 +93,7 @@ function ShopScreen({ s }: { s: CareerState }) {
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       const n = Number(e.key);
-      if (n >= 1 && n <= 6) { const c = ITEM_CATS[n - 1]; setCat(c); setKey(ITEMS.find(i => i.cat === c)!.key); setMsg(null); }
+      if (n >= 1 && n <= 6) { const c = ITEM_CATS[n - 1]; setCat(c); setKey(ITEMS.find(i => i.cat === c && !i.notForSale)!.key); setMsg(null); }
       if (e.key === "b" || e.key === "B") doBuy();
     };
     window.addEventListener("keydown", h);
@@ -108,7 +108,7 @@ function ShopScreen({ s }: { s: CareerState }) {
         <div className="text-center text-[16px] tracking-[0.3em] text-neutral-100">아이템 상점</div>
         <div className="grid grid-cols-3 gap-1">
           {ITEM_CATS.map((c, i) => (
-            <button key={c} onClick={() => { setCat(c); setKey(ITEMS.find(x => x.cat === c)!.key); setMsg(null); }}
+            <button key={c} onClick={() => { setCat(c); setKey(ITEMS.find(x => x.cat === c && !x.notForSale)!.key); setMsg(null); }}
               className={cn("text-[12px] py-1 border", cat === c ? "text-black border-white" : "text-neutral-200 border-neutral-600")}
               style={cat === c ? { background: "linear-gradient(#ffffff,#cfcfcf)" } : undefined}>
               {c} ({i + 1})
@@ -142,7 +142,7 @@ function ShopScreen({ s }: { s: CareerState }) {
             <TargetList s={s} item={item} sel={target} onSel={setTarget} />
           </>
         ) : (
-          <div className="text-center text-[11px] text-neutral-400">경기 아이템은 엔트리 편성 때 세트마다 하나씩 쓸 수 있습니다</div>
+          <div className="text-center text-[11px] text-neutral-400">경기 아이템은 엔트리 편성 때 세트마다 하나씩 쓸 수 있습니다<br />치어풀은 팔지 않습니다 — 선수 행동 "이벤트"(팬미팅)에서 인기가 많은 선수일수록 잘 받아옵니다 (보유 {s.inventory?.cheer ?? 0}개)</div>
         )}
       </div>
     </LegacyFrame>

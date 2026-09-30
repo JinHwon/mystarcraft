@@ -11,7 +11,7 @@ import { LegacyFrame, LegacyImg, PlayerPhoto } from "@/components/legacy/Legacy"
 const R = { terran: "T", zerg: "Z", protoss: "P" } as const;
 type Tab = "pc" | "dual" | "nom" | "group" | "ro16" | "ro8" | "ro4" | "final";
 const TABS: Array<[Tab, string]> = [["pc", "PC방"], ["dual", "듀얼"], ["nom", "지명식"], ["group", "32강"], ["ro16", "16강"], ["ro8", "8강"], ["ro4", "4강"], ["final", "결승"]];
-const ORDER: MslStage[] = ["pc", "dual", "group", "ro16", "ro8", "ro4", "final", "done"];
+const ORDER: MslStage[] = ["pc", "dual", "nom", "group", "ro16", "ro8", "ro4", "final", "done"];
 const GAME_LABELS = ["< 1 경기 >", "< 2 경기 >", "< 승자전 >", "< 패자전 >", "< 최종전 >"];
 
 /** 단계가 끝났는지 */
@@ -119,7 +119,7 @@ function StarLeagueScreen({ s }: { s: CareerState }) {
   const m = s.msl;
   const defaultTab = (): Tab => {
     if (!m) return "pc";
-    const map: Record<MslStage, Tab> = { pc: "pc", dual: "pc", group: "dual", ro16: "group", ro8: "ro16", ro4: "ro8", final: "ro4", done: "final" };
+    const map: Record<MslStage, Tab> = { pc: "pc", dual: "dual", nom: "nom", group: "group", ro16: "ro16", ro8: "ro8", ro4: "ro4", final: "final", done: "final" };
     return map[m.stage];
   };
   const [tab, setTab] = useState<Tab>(defaultTab);
@@ -143,7 +143,7 @@ function StarLeagueScreen({ s }: { s: CareerState }) {
     body = (
       <>
         <Title>마이스타리그 조 지명식</Title>
-        <Status m={m} st="group" week={MSL_WEEK.group} />
+        <Status m={m} st="nom" week={MSL_WEEK.nom} />
         <div className="border border-neutral-600 p-2 mb-2">
           <div className="text-[13px] text-[#ffe45c] mb-1">시드 선수 →</div>
           <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[12px]">{m.seeds.map(id => <Name key={id} s={s} id={id} />)}</div>
@@ -187,7 +187,7 @@ function StarLeagueScreen({ s }: { s: CareerState }) {
         {round === "final" && m.champion !== undefined && (
           <div className="flex flex-col items-center mt-4 gap-1">
             <LegacyImg dir="기타" name="금배지" className="max-h-10" fallback={null} />
-            <PlayerPhoto id={m.champion} name={s.players[m.champion].name} size={72} />
+            <PlayerPhoto id={s.players[m.champion].photoOf ?? m.champion} name={s.players[m.champion].name} size={72} />
             <div className="text-[15px] text-[#ffe45c]">{s.players[m.champion].name}</div>
             <div className="text-[14px] tracking-[0.2em]">우승을 축하합니다</div>
             <div className="text-[11px] text-neutral-400">준우승 {s.players[m.runnerUp!]?.name}</div>

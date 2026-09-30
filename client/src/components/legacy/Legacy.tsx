@@ -126,7 +126,8 @@ export function MapInfo({ mapId, size = 64, hint, responsive }: { mapId: number;
 // ── 레이더 (원작 배치: 센스를 위로 시계 방향) ─────────────────────────
 const RADAR_ORDER: StatKey[] = ["sense", "control", "attack", "harass", "strategy", "supply", "defense", "scout"];
 
-export function LegacyRadar({ stats, level, size = 150 }: { stats: Record<StatKey, number>; level: number; size?: number }) {
+/** base 가 있으면 원래 능력치(회색)와 컨디션·장비 반영 능력치(빨강)를 겹쳐 그리고, 숫자는 원래 값과 변화량 */
+export function LegacyRadar({ stats, level, size = 150, base }: { stats: Record<StatKey, number>; level: number; size?: number; base?: Record<StatKey, number> }) {
   const pad = 34;
   const full = size + pad * 2;
   const c = full / 2;
@@ -136,19 +137,26 @@ export function LegacyRadar({ stats, level, size = 150 }: { stats: Record<StatKe
     return [c + Math.cos(a) * r * k, c + Math.sin(a) * r * k] as const;
   };
   const outline = RADAR_ORDER.map((_, i) => pt(i, 1).join(",")).join(" ");
-  const poly = RADAR_ORDER.map((k, i) => pt(i, Math.max(0.05, Math.min(1, stats[k] / 1000))).join(",")).join(" ");
+  const polyOf = (v: Record<StatKey, number>) => RADAR_ORDER.map((k, i) => pt(i, Math.max(0.05, Math.min(1.1, v[k] / 1000))).join(",")).join(" ");
+  const poly = polyOf(stats);
   const grade = legacyGrade(totalOf(stats));
   const high = /^[SAB]/.test(grade);
   return (
     <svg width={full} height={full} viewBox={`0 0 ${full} ${full}`} className="block max-w-full h-auto">
       <polygon points={outline} fill="none" stroke="#9a9a9a" strokeWidth={1.2} />
+      {base && <polygon points={polyOf(base)} fill="rgba(200,200,200,0.12)" stroke="#8a8a8a" strokeWidth={1} strokeDasharray="3 2" />}
       <polygon points={poly} fill="none" stroke="#ff4d4d" strokeWidth={1.4} />
       {RADAR_ORDER.map((k, i) => {
         const [x, y] = pt(i, 1.28);
         return (
           <g key={k}>
             <text x={x} y={y - 3} textAnchor="middle" fontSize={10} fill="#e5e5e5">{STAT_LABELS[k]}</text>
-            <text x={x} y={y + 9} textAnchor="middle" fontSize={10} fill="#e5e5e5">{Math.round(stats[k])}</text>
+            {base ? (
+              <text x={x} y={y + 9} textAnchor="middle" fontSize={10} fill="#e5e5e5">
+                {Math.round(base[k])}
+                {Math.round(stats[k]) !== Math.round(base[k]) && <tspan fill={stats[k] > base[k] ? "#8fe07a" : "#ff8a8a"} fontSize={8.5}>{stats[k] > base[k] ? "+" : ""}{Math.round(stats[k] - base[k])}</tspan>}
+              </text>
+            ) : <text x={x} y={y + 9} textAnchor="middle" fontSize={10} fill="#e5e5e5">{Math.round(stats[k])}</text>}
           </g>
         );
       })}

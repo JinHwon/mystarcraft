@@ -21,7 +21,7 @@ export function baseSalary(p: CPlayer, season: number): number {
 
 export function defaultContract(p: CPlayer, season: number): Contract {
   const age = ageOf(p, season);
-  return { salary: baseSalary(p, season), years: age <= 22 ? 3 : age >= 28 ? 1 : 2 };
+  return { salary: baseSalary(p, season), years: age <= 22 ? 5 : age >= 28 ? 2 : 3 };
 }
 
 /** 팀 안 능력치 순위 (0 = 최고) */
@@ -46,7 +46,7 @@ export function playerDemand(s: CareerState, p: CPlayer, forTeam: number): Contr
   const mul = moving ? 1.15 + r * 0.15 : p.wantsOut ? 1.3 : 1 + r * 0.1;
   const salary = round10(base * mul);
   const age = ageOf(p, s.season);
-  const years = age <= 22 ? 3 : age >= 28 ? 1 : 2;
+  const years = age <= 22 ? 5 : age >= 28 ? 1 : 3;
   // 새 팀에서의 예상 순위
   const others = rosterOf(s, forTeam).filter(x => x.id !== p.id);
   const rank = others.filter(x => totalOf(x.stats) > totalOf(p.stats)).length;
@@ -70,7 +70,9 @@ export function contractScore(offer: Contract, demand: Contract): { score: numbe
   const credit = (c: Contract) => Object.entries(c.bonus ?? {}).reduce((sum, [k, v]) => sum + (v ?? 0) * BONUS_WEIGHT[k as BonusKey], 0);
   let need = demand.salary + credit(demand);
   if ((offer.minApps ?? 0) < (demand.minApps ?? 0)) need += ((demand.minApps ?? 0) - (offer.minApps ?? 0)) * demand.salary * 0.05;
-  need += Math.abs(offer.years - demand.years) * demand.salary * 0.06;
+  // 짧게 묶으면 불안해하고, 길게 묶으면(장기 계약) 대부분 반기지만 노장은 부담
+  const diff = offer.years - demand.years;
+  need += diff < 0 ? -diff * demand.salary * 0.08 : Math.min(0.3, diff * 0.02) * demand.salary * (demand.years <= 1 ? 2 : 1);
   return { score: offer.salary + credit(offer), need };
 }
 
@@ -94,4 +96,20 @@ export function sellMinimum(s: CareerState, p: CPlayer): number {
 /** 감독 평판에 따라 제의할 수 있는 팀 (강팀일수록 높은 평판 필요) */
 export function jobThreshold(powerRank: number): number {
   return 85 - powerRank * 6;
+}
+
+/** 인기 (0~100): 능력치·통산 승수·레벨·우승 경력 */
+export function popularity(p: CPlayer): number {
+  const v = (totalOf(p.stats) - 4200) / 30 + p.wins * 0.4 + p.level * 2 + (p.titles?.length ?? 0) * 12;
+  return Math.max(0, Math.min(100, Math.round(v)));
+}
+/** 이벤트(팬미팅)에서 치어풀을 받을 확률: 5% ~ 45% (인기 없어도 0은 아님) */
+export function cheerChance(p: CPlayer): number {
+  return 0.05 + (popularity(p) / 100) * 0.4;
+}
+
+/** 잠재력 별점 (스카우트 눈대중) */
+export function potentialStars(p: CPlayer): string {
+  const n = Math.max(1, Math.min(5, Math.round(((p.potential ?? totalOf(p.stats)) - 4600) / 450)));
+  return "★".repeat(n) + "☆".repeat(5 - n);
 }

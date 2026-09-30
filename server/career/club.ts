@@ -10,6 +10,7 @@ import {
   OPERATING_COST,
   START_MONEY,
   WAGE_WEEKS,
+  ageOf,
   askingPrice,
   totalOf,
   type BonusKey,
@@ -19,8 +20,9 @@ import {
   BONUS_NAMES,
 } from "@shared/career/rules";
 import { contractScore, defaultContract, expectedShare, jobThreshold, playerDemand, sellMinimum, squadRank, weeklyWage } from "@shared/career/contract";
-import { proTeams, rosterOf, teamPower } from "@shared/career/view";
-import { CareerError, clampCond, news, rand, randInt } from "./core";
+import { activePlayers, proTeams, reserveOf, rosterOf, teamPower } from "@shared/career/view";
+import { CareerError, addExp, clampCond, gainStats, news, rand, randInt } from "./core";
+import { questLabel, questProgress, questRange, questReward, sponsorOffers } from "@shared/career/sponsor";
 
 const round10 = (v: number) => Math.round(v / 10) * 10;
 
@@ -39,7 +41,7 @@ export function pay(s: CareerState, category: string, delta: number) {
 
 /** 예전 세이브 보정: 계약·평판 */
 export function ensureClub(s: CareerState) {
-  for (const p of s.players) {
+  for (const p of activePlayers(s)) {
     if (p.team !== FREE_AGENT_TEAM && !p.contract) p.contract = defaultContract(p, s.season);
     if (p.morale === undefined) p.morale = 70;
   }
@@ -58,10 +60,39 @@ function useTry(s: CareerState, key: string, limit = 3): number {
 
 function moveTo(s: CareerState, p: CPlayer, team: number, contract?: Contract) {
   p.team = team;
+  p.reserve = false;
   p.action = null;
   p.morale = 70;
   p.wantsOut = false;
   if (contract) p.contract = contract;
+}
+
+// ── 스폰서 ───────────────────────────────────────────────────────
+export function chooseSponsor(s: CareerState, index: number, targets: number[]) {
+  if (s.sponsor?.season === s.season) throw new CareerError("이번 시즌 스폰서는 이미 정했습니다");
+  const offer = sponsorOffers(s)[index];
+  if (!offer) throw new CareerError("스폰서를 선택하세요");
+  const quests = offer.quests.map((q, i) => {
+    const [lo, hi] = questRange(q);
+    const target = Math.max(lo, Math.min(hi, Math.round(targets[i] ?? q.target)));
+    return { ...q, target };
+  });
+  s.sponsor = { ...offer, quests, season: s.season };
+  news(s, `🤝 ${offer.name}와(과) 스폰서 계약! 주 ${offer.weekly}만원 + 퀘스트 보상`);
+  return { name: offer.name };
+}
+
+/** 스폰서 퀘스트 달성 확인 → 보상 지급 */
+export function checkSponsor(s: CareerState) {
+  const sp = s.sponsor;
+  if (!sp || sp.season !== s.season) return;
+  for (const q of sp.quests) {
+    if (q.done || !questProgress(s, q).done) continue;
+    q.done = true;
+    const reward = questReward(q);
+    pay(s, "스폰서 보상", reward);
+    news(s, `🎁 스폰서 퀘스트 달성! "${questLabel(s, q)}" — ${sp.name}에서 ${reward.toLocaleString()}만원`);
+  }
 }
 
 // ── 한 주 (finishWeek 에서) ─────────────────────────────────────────
@@ -70,10 +101,14 @@ export function weeklyClub(s: CareerState) {
   const mine = rosterOf(s, s.myTeam);
   // 연봉 (정규시즌 동안 나눠 지급) + 운영비
   if (s.phase === "regular") {
-    const wages = mine.reduce((sum, p) => sum + weeklyWage(p), 0);
+    const wages = [...mine, ...reserveOf(s, s.myTeam)].reduce((sum, p) => sum + weeklyWage(p), 0);
     pay(s, "연봉", -wages);
   }
-  pay(s, "운영비", -OPERATING_COST);
+  pay(s, "운영비", -OPERATING_COST - (reserveOf(s, s.myTeam).length ? 20 : 0));
+  weeklyReserve(s);
+  // 스폰서 후원금·퀘스트
+  if (s.sponsor?.season === s.season) pay(s, "스폰서", s.sponsor.weekly);
+  checkSponsor(s);
 
   // 출전 기회에 따른 사기
   const played = s.matches.filter(m => m.done && m.stage === "regular" && (m.a === s.myTeam || m.b === s.myTeam)).length;
@@ -130,9 +165,10 @@ export function weeklyClub(s: CareerState) {
 
 // ── 시즌 끝 (finishSeason 에서) ────────────────────────────────────
 export function seasonEndClub(s: CareerState, myResult: string, champion: number) {
+  checkSponsor(s);
   const mine = rosterOf(s, s.myTeam);
   // 다승 랭킹 (이번 시즌 전체 선수)
-  const ranking = [...s.players].filter(p => p.team !== FREE_AGENT_TEAM).sort((a, b) => b.sWins - a.sWins || a.sLosses - b.sLosses);
+  const ranking = activePlayers(s).filter(p => p.team !== FREE_AGENT_TEAM).sort((a, b) => b.sWins - a.sWins || a.sLosses - b.sLosses);
   const mostWins = ranking[0];
   const top10 = new Set(ranking.slice(0, 10).map(p => p.id));
   const msl = s.msl?.season === s.season ? s.msl : undefined;
@@ -175,7 +211,7 @@ export function seasonEndClub(s: CareerState, myResult: string, champion: number
 
 // ── 새 시즌 (startNextSeason 에서) ──────────────────────────────────
 export function newSeasonClub(s: CareerState) {
-  for (const p of s.players) {
+  for (const p of activePlayers(s)) {
     p.sApps = 0;
     if (p.team === FREE_AGENT_TEAM) { delete p.contract; continue; }
     const c = p.contract ?? defaultContract(p, s.season);
@@ -184,6 +220,7 @@ export function newSeasonClub(s: CareerState) {
       if (p.team === s.myTeam) {
         news(s, `📄 ${p.name} 선수 계약 만료 → 자유계약 선수가 되었습니다`);
         p.team = FREE_AGENT_TEAM;
+        p.reserve = false;
         p.action = null;
         delete p.contract;
         continue;
@@ -195,7 +232,7 @@ export function newSeasonClub(s: CareerState) {
     p.contract = c;
   }
   // 다른 팀 선수 중 일부는 이적 희망 (싸게 데려올 기회)
-  for (const p of s.players) {
+  for (const p of activePlayers(s)) {
     if (p.team === s.myTeam || p.team === FREE_AGENT_TEAM) continue;
     p.wantsOut = rand() < 0.06;
   }
@@ -268,7 +305,7 @@ export function bidPlayer(s: CareerState, pid: number, fee: number) {
 const seeded2 = (a: number, b: number) => ((a * 9301 + b * 49297) % 233280) / 233280;
 
 // ── 계약 협상 (영입 합의 후, 또는 우리 선수 재계약) ─────────────────────
-export function negotiateContract(s: CareerState, pid: number, offer: Contract) {
+export function negotiateContract(s: CareerState, pid: number, offer: Contract, opts: { promote?: boolean } = {}) {
   const p = s.players[pid];
   if (!p) throw new CareerError("선수를 찾을 수 없습니다");
   const incoming = p.team !== s.myTeam;
@@ -276,7 +313,7 @@ export function negotiateContract(s: CareerState, pid: number, offer: Contract) 
   if (incoming && (!deal || deal.season !== s.season || deal.week !== s.week || deal.team !== p.team)) {
     throw new CareerError("먼저 구단과 이적료를 합의해야 합니다");
   }
-  if (!(offer.salary > 0) || !(offer.years >= 1 && offer.years <= 5)) throw new CareerError("연봉과 계약 기간을 확인하세요");
+  if (!(offer.salary > 0) || !(offer.years >= 1 && offer.years <= 20)) throw new CareerError("연봉과 계약 기간을 확인하세요");
   useTry(s, `contract-${pid}`);
   const demand = playerDemand(s, p, s.myTeam);
   const { score, need } = contractScore(offer, demand);
@@ -295,6 +332,14 @@ export function negotiateContract(s: CareerState, pid: number, offer: Contract) 
       news(s, `✍️ ${p.name} 선수 영입! (이적료 ${deal!.fee.toLocaleString()}만원, 연봉 ${c.salary.toLocaleString()}만원)`);
       return { result: "signed" as const, message: `${p.name}: "잘 부탁드립니다!" (계약 성사)` };
     }
+    if (p.reserve && opts.promote) {
+      if (rosterOf(s, s.myTeam).length >= MAX_ROSTER) throw new CareerError(`1부 선수단은 최대 ${MAX_ROSTER}명입니다`);
+      p.reserve = false;
+      p.contract = c;
+      p.morale = Math.min(100, (p.morale ?? 60) + 20);
+      news(s, `⬆️ ${p.name} 선수 1부 승격! (연봉 ${c.salary.toLocaleString()}만원, ${offer.years}년)`);
+      return { result: "signed" as const, message: `${p.name}: "1부에서 꼭 보여드리겠습니다!" (승격 계약 성사)` };
+    }
     p.contract = c;
     p.wantsOut = false;
     p.morale = Math.min(100, (p.morale ?? 60) + 15);
@@ -303,6 +348,50 @@ export function negotiateContract(s: CareerState, pid: number, offer: Contract) 
   }
   if (score >= need * 0.8) return { result: "countered" as const, message: `${p.name}: "조금만 더 신경 써 주시면 좋겠습니다" (보류)`, demand };
   return { result: "rejected" as const, message: `${p.name}: "그 조건으로는 어렵습니다" (거절)`, demand };
+}
+
+// ── 2부 팀 ─────────────────────────────────────────────────────
+export const MAX_RESERVE = 10;
+const reserveSalary = (p: CPlayer, season: number) => Math.max(10, round10(askingPrice(p, season) * 0.03));
+export const reserveSignFee = (p: CPlayer, season: number) => Math.max(20, round10(askingPrice(p, season) * 0.3));
+
+/** 무소속 선수를 2부로 영입 (계약금 = 시세의 30%, 연봉은 싸게) */
+export function signReserve(s: CareerState, pid: number) {
+  const p = s.players[pid];
+  if (!p || p.team !== FREE_AGENT_TEAM) throw new CareerError("무소속 선수만 2부로 영입할 수 있습니다");
+  if (reserveOf(s, s.myTeam).length >= MAX_RESERVE) throw new CareerError(`2부 팀은 최대 ${MAX_RESERVE}명입니다`);
+  const fee = reserveSignFee(p, s.season);
+  if (s.teams[s.myTeam].money < fee) throw new CareerError("소지금이 부족합니다");
+  pay(s, "2부 영입", -fee);
+  moveTo(s, p, s.myTeam, { salary: reserveSalary(p, s.season), years: 3 });
+  p.reserve = true;
+  news(s, `🌱 ${p.name} 선수 2부 팀 입단 (계약금 ${fee.toLocaleString()}만원)`);
+  return { fee };
+}
+
+/** 1부 선수를 2부로 (주전급이면 사기가 크게 떨어짐) */
+export function demotePlayer(s: CareerState, pid: number) {
+  const p = s.players[pid];
+  if (!p || p.team !== s.myTeam || p.reserve) throw new CareerError("우리 1부 선수가 아닙니다");
+  if (s.live) throw new CareerError("경기 중에는 바꿀 수 없습니다");
+  if (rosterOf(s, s.myTeam).length <= MIN_ROSTER) throw new CareerError(`1부는 최소 ${MIN_ROSTER}명이 필요합니다`);
+  if (reserveOf(s, s.myTeam).length >= MAX_RESERVE) throw new CareerError(`2부 팀은 최대 ${MAX_RESERVE}명입니다`);
+  const rank = squadRank(s, p);
+  p.reserve = true;
+  p.action = null;
+  p.morale = Math.max(0, (p.morale ?? 70) - (rank < 5 ? 30 : 10));
+  news(s, `⬇️ ${p.name} 선수 2부로 내려갑니다`);
+  return { ok: true };
+}
+
+/** 2부 주간: 경기·훈련으로 성장 (어릴수록 빨리) */
+export function weeklyReserve(s: CareerState) {
+  for (const p of reserveOf(s, s.myTeam)) {
+    const age = ageOf(p, s.season);
+    gainStats(p, 2, age <= 20 ? 3 : 2, age <= 20 ? 8 : 5);
+    addExp(s, p, 15);
+    p.cond = clampCond(p.cond + (rand() < 0.5 ? 1 : 0));
+  }
 }
 
 // ── 감독 이동 ───────────────────────────────────────────────────

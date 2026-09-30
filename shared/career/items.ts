@@ -30,6 +30,8 @@ export interface ItemDef {
    * potion: 포션 (즉시 사용, 능력치 무작위 변화)
    */
   kind: "equip" | "match" | "instant" | "potion";
+  /** 상점에서 팔지 않음 (치어풀: 이벤트 행동에서 팬에게 받음) */
+  notForSale?: boolean;
   uses?: number;
   bonus?: Partial<Record<StatKey, number>>;
   /** 모든 능력치 보너스 */
@@ -49,7 +51,7 @@ export const ITEMS: ItemDef[] = [
   { key: "gum", cat: "소모품", img: "1", name: "츄잉껌", desc: ["긴장하지 말고 껌을 씹으며", "맘 편하게 경기해보자."], effect: ["패했을 경우", "능력치 감소 －66%"], price: 50, kind: "match" },
   { key: "ceremony", cat: "소모품", img: "2", name: "세레모니", desc: ["이번 경기를 승리한다면", "이런 춤을 춰보는건 어때?"], effect: ["소지금 ＋150만원", "승리시 전원 컨디션 ＋1"], price: 80, kind: "match" },
   { key: "sniping", cat: "소모품", img: "3", name: "스나이핑", desc: ["상대의 카드는 뻔하다", "그렇다면 승리는 뻔한거지."], effect: ["상대 선수 예측시", "이길 확률 ↑"], price: 100, kind: "match" },
-  { key: "cheer", cat: "소모품", img: "4", name: "치어풀", desc: ["팬들에게 선물 받은거다", "대세는 패승승승!"], effect: ["한경기 동안", "전체 능력치 ＋75"], price: 150, kind: "match", all: 75 },
+  { key: "cheer", cat: "소모품", img: "4", name: "치어풀", desc: ["팬들에게 선물 받은거다", "대세는 패승승승!"], effect: ["한경기 동안", "전체 능력치 ＋75"], price: 0, kind: "match", all: 75, notForSale: true },
   // ── 마우스 ──
   { key: "m0", cat: "마우스", img: "0", name: "미키마우스", desc: ["장난감인줄 알았더니", "꽤나 쓸만한 마우스군."], effect: ["컨트롤＋30, 공격력＋15", "견제＋15"], price: 150, kind: "equip", uses: 15, bonus: st(30, 15, 15) },
   { key: "m1", cat: "마우스", img: "1", name: "M-BLACK", desc: ["가볍고 날렵하며", "정확도도 뛰어나다."], effect: ["컨트롤＋60, 공격력＋30", "견제＋30"], price: 400, kind: "equip", uses: 30, bonus: st(60, 30, 30) },

@@ -5,7 +5,14 @@ import { ORIG_MAPS, FREE_AGENT_TEAM } from "./originalData";
 import type { CareerState, CMatch, Race } from "./rules";
 import { TRADE_ACE_PREMIUM, TRADE_PREMIUM, totalOf, tradeValue } from "./rules";
 
-export const rosterOf = (s: CareerState, team: number) => s.players.filter(p => p.team === team);
+/** 1부 선수단 (2부는 reserveOf) */
+export const rosterOf = (s: CareerState, team: number) => s.players.filter(p => p.team === team && !p.reserve);
+/** 2부 선수단 (우리 구단만) */
+export const reserveOf = (s: CareerState, team: number) => s.players.filter(p => p.team === team && p.reserve);
+/** 은퇴하지 않은 선수 전체 (무소속 포함) */
+export const activePlayers = (s: CareerState) => s.players.filter(p => p.team >= 0);
+/** 은퇴 선수의 팀 번호 */
+export const RETIRED = -1;
 export const proTeams = (s: CareerState) => s.teams.filter(t => t.id !== FREE_AGENT_TEAM);
 
 export function standings(s: CareerState) {
