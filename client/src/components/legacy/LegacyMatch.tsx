@@ -91,7 +91,8 @@ export function PlayerPanel({ p, color, empty }: { p?: CPlayer; color: string; e
         </div>
       </div>
       <div className="mt-1"><EquipRow p={p} /></div>
-      <LegacyRadar stats={cs} level={p.level} size={92} />
+      <LegacyRadar stats={cs} base={p.stats} level={p.level} size={92} />
+      <div className="text-[9px] text-neutral-500 -mt-1">회색 점선 = 원래 · 빨강 = 컨디션·장비 반영</div>
     </div>
   );
 }
@@ -583,7 +584,7 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose }: {
                 {[{ p: lp, o: rp }, { p: rp, o: lp }].map(({ p, o }) => (
                   <div key={p.id} className="flex flex-col items-center">
                     <PlayerCard p={p} vsRace={o.race} />
-                    <LegacyRadar stats={condStats(p)} level={p.level} size={112} />
+                    <LegacyRadar stats={condStats(p)} base={p.stats} level={p.level} size={112} />
                     <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p) * 10} %</div>
                     {p.team === s.myTeam && info.items?.[i] && <div className="text-[11px] text-[#ffe45c]">아이템 : {ITEM_BY_KEY[info.items[i].key]?.name}</div>}
                   </div>
@@ -647,7 +648,7 @@ export function MslFlow({ s, reports, onDone }: { s: CareerState; reports: MslRe
             <div key={p.id} className="flex flex-col items-center">
               <PlayerCard p={p} vsRace={o.race} />
               <div className="text-[10px] text-neutral-500">{s.teams[p.team]?.name}</div>
-              <LegacyRadar stats={condStats(p)} level={p.level} size={112} />
+              <LegacyRadar stats={condStats(p)} base={p.stats} level={p.level} size={112} />
               <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p) * 10} %</div>
             </div>
           ))}

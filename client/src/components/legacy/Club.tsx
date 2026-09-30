@@ -50,7 +50,7 @@ export function ContractEditor({ player, demand, onSubmit, pending, submitLabel 
       <div className="flex items-center justify-between"><span>연봉 (만원/시즌)</span><FeeStepper value={c.salary} onChange={v => setC({ ...c, salary: Math.max(10, v) })} steps={[10, 50]} /></div>
       <div className="flex items-center justify-between">
         <span>계약 기간</span>
-        <div className="flex gap-1">{[1, 2, 3, 4].map(y => <button key={y} onClick={() => setC({ ...c, years: y })} className={cn("border px-2", c.years === y ? "border-white text-white" : "border-neutral-700 text-neutral-400")}>{y}년</button>)}</div>
+        <div className="flex gap-1 flex-wrap justify-end">{[1, 2, 3, 5, 10, 20].map(y => <button key={y} onClick={() => setC({ ...c, years: y })} className={cn("border px-2", c.years === y ? "border-white text-white" : "border-neutral-700 text-neutral-400")}>{y}년</button>)}</div>
       </div>
       <div className="flex items-center justify-between">
         <span>출전 보장 (시즌 경기 수)</span>

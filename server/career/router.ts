@@ -164,7 +164,7 @@ export const careerRouter = router({
     .input(z.object({
       playerId: z.number().int(),
       salary: z.number().int().min(1).max(100_000),
-      years: z.number().int().min(1).max(5),
+      years: z.number().int().min(1).max(20),
       minApps: z.number().int().min(0).max(11).optional(),
       bonus: z.object({
         proTitle: z.number().int().min(0).max(100_000).optional(),

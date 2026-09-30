@@ -43,7 +43,7 @@ import { initialPlayers, initialTeams } from "@shared/career/init";
 import { runMslWeek, type MslReport } from "./msl";
 import { ITEM_BY_KEY, POTION_LIMIT, slotOf } from "@shared/career/items";
 import { book, ensureClub, newSeasonClub, pay, seasonEndClub, weeklyClub } from "./club";
-import { defaultContract } from "@shared/career/contract";
+import { cheerChance, defaultContract } from "@shared/career/contract";
 export type { MslReport };
 
 const RACE: Record<string, Race> = { T: "terran", Z: "zerg", P: "protoss" };
@@ -142,7 +142,14 @@ function applyActions(s: CareerState) {
       case "rest": p.cond = clampCond(p.cond + 2); break;
       case "event": {
         const earn = 30 + p.level * 12 + randInt(0, 40);
-        if (p.team === s.myTeam) pay(s, "이벤트", earn);
+        if (p.team === s.myTeam) {
+          pay(s, "이벤트", earn);
+          // 팬미팅: 인기가 많을수록 치어풀을 받을 확률이 높음
+          if (rand() < cheerChance(p)) {
+            s.inventory = { ...s.inventory, cheer: (s.inventory?.cheer ?? 0) + 1 };
+            news(s, `📣 ${p.name} 선수가 팬미팅에서 치어풀을 선물 받았습니다!`);
+          }
+        }
         p.cond = clampCond(p.cond + 1);
         break;
       }
@@ -258,12 +265,13 @@ export function advanceWeek(s: CareerState, myEntry?: number[]): WeekResult {
   }
   applyActions(s);
   let broadcast: PlayedSet[] | undefined;
-  let m = mine;
+  let m = mine, last = mine;
   while (m) {
     broadcast = playMatch(s, m, myEntry);
+    last = m;
     m = myPendingMatch(s);
   }
-  return { ...finishWeek(s), playedMatchId: mine?.id, broadcast };
+  return { ...finishWeek(s), playedMatchId: last?.id, broadcast };
 }
 
 /** 이번 주 나머지 일정 (다른 팀 경기·스타리그·스폰서) 진행 후 다음 주로 */
@@ -501,7 +509,7 @@ export interface BuyResult { message: string; delta?: Partial<Record<string, num
 /** 아이템 구입. 장비·즉시 사용·포션은 선수(target)에게 바로 쓴다 */
 export function buyItem(s: CareerState, key: string, target?: number): BuyResult {
   const it = ITEM_BY_KEY[key];
-  if (!it) throw new CareerError("구입 불가능 품목입니다");
+  if (!it || it.notForSale) throw new CareerError("구입 불가능 품목입니다");
   const me = s.teams[s.myTeam];
   if (me.money < it.price) throw new CareerError("소지금이 부족합니다");
   if (it.kind === "match") {

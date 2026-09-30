@@ -52,7 +52,7 @@ export interface ActionDef { key: ActionKey; name: string; emoji: string; ap: nu
 export const ACTIONS: ActionDef[] = [
   { key: "train", name: "훈련", emoji: "🏋️", ap: 1, money: 0, desc: "연습을 열심히 합니다. 능력치를 향상시킵니다. (컨디션 -1)" },
   { key: "rest", name: "휴식", emoji: "😴", ap: 0, money: 0, desc: "휴식을 취합니다. 쉬면서 컨디션을 회복합니다. (컨디션 +2)" },
-  { key: "event", name: "이벤트", emoji: "🎤", ap: 1, money: 0, desc: "팬미팅을 합니다. 팀 자금을 벌고 기분이 좋아집니다. (자금 +, 컨디션 +1)" },
+  { key: "event", name: "이벤트", emoji: "🎤", ap: 1, money: 0, desc: "팬미팅을 합니다. 팀 자금을 벌고 기분이 좋아집니다. 인기가 많을수록 팬에게 치어풀을 받을 확률이 높습니다. (자금 +, 컨디션 +1)" },
   { key: "best", name: "베스트", emoji: "🔥", ap: 3, money: 100, desc: "코치진과 집중 특별 훈련. 능력치가 크게 오르지만 지칩니다. (컨디션 -2)" },
 ];
 /** 주당 행동력 */

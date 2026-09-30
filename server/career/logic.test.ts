@@ -165,7 +165,9 @@ describe("아이템 상점", () => {
     expect(() => buyItem(s, "p_att", p.id)).toThrow("이 선수는 더 사용 할 수 없습니다");
     const front = rosterOf(s, 1).slice(0, 4).map(x => x.id);
     expect(() => beginMatch(s, front, { 0: { key: "cheer" } })).toThrow(CareerError);
-    buyItem(s, "cheer"); buyItem(s, "sniping");
+    expect(() => buyItem(s, "cheer")).toThrow("구입 불가능 품목입니다");
+    s.inventory = { cheer: 1 };
+    buyItem(s, "sniping");
     expect(s.inventory).toEqual({ cheer: 1, sniping: 1 });
     beginMatch(s, front, { 0: { key: "cheer" }, 1: { key: "sniping", predict: 0 } });
     const r = playLiveSet(s);

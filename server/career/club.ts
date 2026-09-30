@@ -276,7 +276,7 @@ export function negotiateContract(s: CareerState, pid: number, offer: Contract) 
   if (incoming && (!deal || deal.season !== s.season || deal.week !== s.week || deal.team !== p.team)) {
     throw new CareerError("먼저 구단과 이적료를 합의해야 합니다");
   }
-  if (!(offer.salary > 0) || !(offer.years >= 1 && offer.years <= 5)) throw new CareerError("연봉과 계약 기간을 확인하세요");
+  if (!(offer.salary > 0) || !(offer.years >= 1 && offer.years <= 20)) throw new CareerError("연봉과 계약 기간을 확인하세요");
   useTry(s, `contract-${pid}`);
   const demand = playerDemand(s, p, s.myTeam);
   const { score, need } = contractScore(offer, demand);
