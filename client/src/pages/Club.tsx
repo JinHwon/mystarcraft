@@ -104,8 +104,24 @@ function ContractsTab({ s }: { s: CareerState }) {
 }
 
 function OffersTab({ s }: { s: CareerState }) {
-  const { reply, done, fail } = useMut();
-  const respond = trpc.career.respondOffer.useMutation({ onSuccess: done, onError: fail });
+  const { reply, setReply, done, fail } = useMut();
+  const utils = trpc.useUtils();
+  // 누른 버튼 (응답 전까지 "처리 중" 표시)
+  const [busy, setBusy] = useState<string | null>(null);
+  const respond = trpc.career.respondOffer.useMutation({
+    onSuccess: r => { setBusy(null); done(r); },
+    onError: e => { setBusy(null); utils.career.get.invalidate(); fail(e); },
+  });
+  const act = (offerId: number, action: "accept" | "reject" | "counter", fee?: number) => {
+    setBusy(`${offerId}:${action}`);
+    // 반대는 결과가 정해져 있으므로 바로 목록에서 뺌 (서버 응답은 뒤에서)
+    if (action === "reject") {
+      utils.career.get.setData(undefined, old => (old?.state ? { state: { ...old.state, offers: (old.state.offers ?? []).filter(x => x.id !== offerId) } } : old));
+      setReply({ text: "거절했습니다", ok: false });
+    }
+    respond.mutate({ offerId, action, fee });
+  };
+  const label = (id: number, action: string, text: string) => (busy === `${id}:${action}` ? "처리 중…" : text);
   const [fees, setFees] = useState<Record<number, number>>({});
   const offers = s.offers ?? [];
   return (
@@ -131,9 +147,9 @@ function OffersTab({ s }: { s: CareerState }) {
               <FeeStepper value={fee} onChange={v => setFees({ ...fees, [o.id]: v })} />
             </div>
             <div className="grid grid-cols-3 gap-1">
-              <button disabled={respond.isPending} onClick={() => respond.mutate({ offerId: o.id, action: "accept" })} className="border border-[#8fe07a] text-[#bff5c6] py-1">합의</button>
-              <button disabled={respond.isPending} onClick={() => respond.mutate({ offerId: o.id, action: "counter", fee })} className="border border-[#f8e070] text-[#ffe45c] py-1">역제안</button>
-              <button disabled={respond.isPending} onClick={() => respond.mutate({ offerId: o.id, action: "reject" })} className="border border-[#ff6b6b] text-[#ffb8c8] py-1">반대</button>
+              <button disabled={respond.isPending} onClick={() => act(o.id, "accept")} className="border border-[#8fe07a] text-[#bff5c6] py-1">{label(o.id, "accept", "합의")}</button>
+              <button disabled={respond.isPending} onClick={() => act(o.id, "counter", fee)} className="border border-[#f8e070] text-[#ffe45c] py-1">{label(o.id, "counter", "역제안")}</button>
+              <button disabled={respond.isPending} onClick={() => act(o.id, "reject")} className="border border-[#ff6b6b] text-[#ffb8c8] py-1">{label(o.id, "reject", "반대")}</button>
             </div>
           </div>
         );
@@ -307,7 +323,7 @@ function SponsorTab({ s }: { s: CareerState }) {
                   </div>
                 );
               })}
-              <button disabled={choose.isPending} onClick={() => choose.mutate({ index: k, targets: targets[k] ?? o.quests.map(q => q.target) })} className="w-full py-1.5 text-[13px] font-bold text-black border border-neutral-500" style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}>이 스폰서와 계약 ({mine.length + 1}/{MAX_SPONSORS})</button>
+              <button disabled={choose.isPending} onClick={() => choose.mutate({ index: k, targets: targets[k] ?? o.quests.map(q => q.target) })} className="w-full py-1.5 text-[13px] font-bold text-black border border-neutral-500" style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}>{choose.isPending && choose.variables?.index === k ? "계약 중…" : `이 스폰서와 계약 (${mine.length + 1}/${MAX_SPONSORS})`}</button>
             </div>
           ))}
         </>

@@ -155,7 +155,7 @@ export default function Team() {
                 <RaceBadge race={p.race} />
                 <span className="font-bold text-foreground truncate">{p.name}</span>
                 <span className="text-[10px] text-muted-foreground">Lv.{p.level} · {ageOf(p, s.season)}세</span>
-                {squad === "reserve" && <span className="text-[10px] text-amber-300">잠재력 {potentialStars(p)}</span>}
+                {squad === "reserve" && <span className="text-[10px] text-amber-300">재능 {potentialStars(p)}</span>}
                 {p.wantsOut && <span className="text-[10px] text-rose-300 font-bold">이적희망</span>}
               </div>
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground">

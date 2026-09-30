@@ -118,7 +118,8 @@ describe("원작 해설 중계", () => {
     const lines = set.timeline!.lines;
     expect(lines.length).toBeGreaterThan(10);
     // 모든 줄이 원작 문장 (앞의 "이름 선수" 만 붙음)
-    for (const l of lines) {
+    // 포텐셜 폭발 해설은 우리가 붙이는 문장이라 제외
+    for (const l of lines.filter(x => !x.text.includes("포텐셜이 터졌어요"))) {
       const body = l.text.replace(new RegExp(`^(${names.join("|")})( 선수)?(, |\\.\\. | )?`), "").replace(/^선수[, ]*/, "").trim();
       expect([...all].some(x => x.endsWith(body) || body.endsWith(x))).toBe(true);
     }
