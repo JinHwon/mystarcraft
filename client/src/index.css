@@ -259,3 +259,10 @@
     }
   }
 }
+
+/* 원작식 화면(LegacyFrame)은 글자 선택을 막아 두었지만, 입력 칸은 입력·선택이 되어야 한다 (iOS Safari 는 막으면 입력 불가) */
+.select-none input,
+.select-none textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}

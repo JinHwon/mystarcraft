@@ -5,18 +5,45 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { BONUS_NAMES, type BonusKey, type Contract, type CPlayer } from "@shared/career/rules";
 
-export function FeeStepper({ value, onChange, steps = [100, 500], max }: { value: number; onChange: (v: number) => void; steps?: number[]; max?: number }) {
+/**
+ * 금액 입력 (만원): ± 버튼 또는 직접 입력
+ * - 입력하는 동안은 적은 그대로 두고(글자마다 10 단위로 반올림하면 숫자를 칠 수가 없음),
+ *   값은 바로 부모에 알리고 칸을 벗어나거나 Enter 를 누르면 10 단위로 맞춘다
+ * - 원작식 화면(LegacyFrame)은 글자 선택을 막아 두어서, 입력 칸만 선택·입력되게 select-text
+ */
+export function FeeStepper({ value, onChange, steps = [100, 500], max, label = "금액" }: { value: number; onChange: (v: number) => void; steps?: number[]; max?: number; label?: string }) {
   const clamp = (v: number) => Math.max(0, Math.min(max ?? Infinity, Math.round(v / 10) * 10));
+  const [text, setText] = useState(String(value));
+  const [editing, setEditing] = useState(false);
+  // 버튼이나 부모가 값을 바꾸면 칸에도 반영 (입력 중에는 건드리지 않음)
+  useEffect(() => { if (!editing) setText(String(value)); }, [value, editing]);
+  const commit = () => {
+    setEditing(false);
+    const v = clamp(Number(text) || 0);
+    setText(String(v));
+    if (v !== value) onChange(v);
+  };
   return (
     <div className="flex items-center gap-1">
-      {[...steps].reverse().map(d => <button key={-d} onClick={() => onChange(clamp(value - d))} className="border border-neutral-600 px-1.5 text-[11px]">-{d}</button>)}
+      {[...steps].reverse().map(d => <button type="button" key={-d} onClick={() => onChange(clamp(value - d))} className="border border-neutral-600 px-1.5 text-[11px]" aria-label={`${label} ${d} 내리기`}>-{d}</button>)}
       <input
-        value={value}
-        onChange={e => onChange(clamp(Number(e.target.value.replace(/[^0-9]/g, "")) || 0))}
+        type="text"
+        value={text}
+        onFocus={e => { setEditing(true); e.currentTarget.select(); }}
+        onChange={e => {
+          const digits = e.target.value.replace(/[^0-9]/g, "").slice(0, 8);
+          setText(digits);
+          const n = Number(digits);
+          if (digits !== "" && n <= (max ?? Infinity)) onChange(n);
+        }}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
         inputMode="numeric"
-        className="w-20 bg-black border border-neutral-500 text-center text-[#ffe45c] text-[13px] py-0.5"
+        aria-label={`${label} (만원)`}
+        className="w-20 bg-black border border-neutral-500 text-center text-[#ffe45c] text-[13px] py-0.5 select-text"
+        style={{ WebkitUserSelect: "text", userSelect: "text" }}
       />
-      {steps.map(d => <button key={d} onClick={() => onChange(clamp(value + d))} className="border border-neutral-600 px-1.5 text-[11px]">+{d}</button>)}
+      {steps.map(d => <button type="button" key={d} onClick={() => onChange(clamp(value + d))} className="border border-neutral-600 px-1.5 text-[11px]" aria-label={`${label} ${d} 올리기`}>+{d}</button>)}
     </div>
   );
 }
