@@ -31,6 +31,13 @@ describe("커리어 모드", () => {
     expect(second.results.map(x => x.id)).toEqual([r[1].id]);
     expect(second.skipped).toContain(r[0].id);
     expect(() => runMyActions(s)).toThrow(CareerError);
+    // 선수 한 명만 실행, 행동력은 선수마다 따로 쌓임 (최대치 없음)
+    r[1].ap = 10; r[2].ap = 70;
+    setAction(s, r[2].id, "train");
+    const one = runMyActions(s, r[2].id);
+    expect(one.results.map(x => x.id)).toEqual([r[2].id]);
+    expect(r[2].ap).toBe(50);
+    expect(r[1].ap).toBe(10);
   });
 
   it("정규시즌 → 포스트시즌 → 시즌 종료 → 다음 시즌까지 진행된다", () => {

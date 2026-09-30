@@ -11,7 +11,6 @@ import {
   CMatch,
   COND_MAX,
   WEEKLY_COND_RECOVERY,
-  AP_CAP,
   actionOf,
   COND_MIN,
   CPlayer,
@@ -199,9 +198,10 @@ export interface ActionResult { id: number; action: ActionKey; ap: number; cond:
  * 우리 선수 행동 바로 진행: 행동을 정한 선수마다 행동력이 남아 있으면 한 번 실행하고 행동력을 쓴다
  * 고른 행동은 바꾸거나 초기화할 때까지 유지 (행동력이 남으면 또 진행 가능)
  */
-export function runMyActions(s: CareerState): { results: ActionResult[]; skipped: number[] } {
+export function runMyActions(s: CareerState, only?: number): { results: ActionResult[]; skipped: number[] } {
   if (s.live) throw new CareerError("경기 중에는 행동을 진행할 수 없습니다");
-  const roster = rosterOf(s, s.myTeam);
+  // only: 그 선수만 (선수 카드의 진행 버튼)
+  const roster = rosterOf(s, s.myTeam).filter(p => only === undefined || p.id === only);
   if (!roster.some(p => p.action)) throw new CareerError("행동을 정한 선수가 없습니다");
   const results: ActionResult[] = [];
   const skipped: number[] = [];
@@ -368,7 +368,7 @@ function finishWeek(s: CareerState): WeekResult {
   // 한 주(프로리그 2경기)가 끝나면 모든 선수 컨디션 10% 회복
   for (const p of activePlayers(s)) p.cond = clampCond(p.cond + WEEKLY_COND_RECOVERY);
   // 우리 선수 행동력: 매주 20 (최대 40까지 모임)
-  for (const p of [...rosterOf(s, s.myTeam), ...s.players.filter(x => x.team === s.myTeam && x.reserve)]) p.ap = Math.min(AP_CAP, playerAp(p) + WEEKLY_AP);
+  for (const p of [...rosterOf(s, s.myTeam), ...s.players.filter(x => x.team === s.myTeam && x.reserve)]) p.ap = playerAp(p) + WEEKLY_AP;
   pruneHighlights(s);
   s.week++;
   s.ap = WEEKLY_AP;
@@ -544,6 +544,8 @@ export function startNextSeason(s: CareerState, opts: { releaseExpiring?: boolea
     else if (age <= 24) gainStats(p, 2, 3, 12);
     p.sWins = 0; p.sLosses = 0;
     p.potions = 0;
+    // 선수 행동력은 시즌마다 새로 (쌓인 건 시즌 동안만)
+    if (p.team === s.myTeam) p.ap = WEEKLY_AP;
     p.cond = randInt(50, 90);
   }
   for (const t of s.teams) { t.wins = 0; t.losses = 0; t.setWins = 0; t.setLosses = 0; }
