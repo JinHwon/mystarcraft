@@ -1008,9 +1008,9 @@ function scouting(gs: GameState, p: BwPlayer) {
 
 /** 종족전 밸런스 보정 (같은 능력치에서 종족전 승률이 50%에 가깝도록 시뮬레이션으로 산출) */
 export const RACE_BALANCE: Record<string, number> = {
-  terran_protoss: 1.053, protoss_terran: 0.951,
-  terran_zerg: 1.008, zerg_terran: 0.994,
-  protoss_zerg: 0.937, zerg_protoss: 1.065,
+  terran_protoss: 1.0, protoss_terran: 0.989,
+  terran_zerg: 0.96, zerg_terran: 1.04,
+  protoss_zerg: 0.87, zerg_protoss: 1.13,
 };
 
 interface Fighter { key: string; count: number; hp: number; size: "small" | "medium" | "large"; air: boolean; gDps: number; aDps: number; dmg: "normal" | "explosive" | "concussive"; splash: number; cloaked: boolean; bio: boolean; isStatic?: boolean; isWorker?: boolean; race: Race; }
@@ -1199,12 +1199,20 @@ function lossText(lost: Record<string, number>): string {
   return parts.join(", ");
 }
 
-function mapAdvantage(gs: GameState, p: BwPlayer): number {
+const MAP_K = 0.5;
+const SKILL_K = 0.5;
+const avgSkill = (p: BwPlayer) => (Object.values(p.sk) as number[]).reduce((a, b) => a + b, 0) / 8;
+
+/**
+ * 교전 힘 배율: 맵 종족 유불리 × 전체 능력치 차이 (종족전 보정은 RACE_BALANCE)
+ * - 맵: 원작 표 60:40 이면 유리 종족 교전 힘 약 +5%
+ * - 능력치: 평균 능력치 100 차이(약 한 등급 반)마다 교전 힘 약 +10%
+ */
+function mapAdvantage(gs: GameState, p: BwPlayer, enemy: BwPlayer): number {
   const adv = gs.mapRaceAdvantage?.[p.race];
-  if (typeof adv !== "number" || adv <= 0) return 1;
-  // 맵 테이블 값(예: 0.9 ~ 1.1)을 완만하게 반영
-  // 교전 결과는 배율에 민감하므로 아주 완만하게 반영 (유리 종족 약 60~65%)
-  return adv > 3 ? 1 + (adv - 50) / 2000 : 1 + (adv - 1) * 0.1;
+  const map = typeof adv !== "number" || adv <= 0 ? 1 : adv > 3 ? 1 + (adv - 50) / 100 * MAP_K : 1 + (adv - 1) * MAP_K;
+  const edge = clamp(1 + SKILL_K * (avgSkill(p) - avgSkill(enemy)), 0.6, 1.6);
+  return map * edge;
 }
 
 /**
@@ -1230,8 +1238,8 @@ function battle(gs: GameState, attacker: BwPlayer, defender: BwPlayer, targetIdx
   emit(gs, { k: "attack", side: attacker.side as Side, units: { ...attackUnits }, vs: { ...defendUnits }, target: targetIdx, early: workerPull > 0 });
   say(gs, `${attacker.name} 선수 공격! ${composition(attackUnits)} 병력이 ${where}으로 진격합니다. (상대 ${composition(defendUnits, 3)})`);
 
-  const sa = sideStrength(attacker, aF, defender, dF, false, !field, mapAdvantage(gs, attacker));
-  const sd = sideStrength(defender, dF, attacker, aF, !field, false, mapAdvantage(gs, defender));
+  const sa = sideStrength(attacker, aF, defender, dF, false, !field, mapAdvantage(gs, attacker, defender));
+  const sd = sideStrength(defender, dF, attacker, aF, !field, false, mapAdvantage(gs, defender, attacker));
 
   // 역전의 한타: 병력이 밀리는 쪽이 위치 선정·컨트롤로 싸움을 뒤집는 경우 (센스·전략·컨트롤이 높을수록 자주)
   const aUnder = sa.strength < sd.strength;

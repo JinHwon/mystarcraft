@@ -338,3 +338,32 @@ export function runMslWeek(s: CareerState): { reports: MslReport[]; plans: numbe
 }
 
 export { MSL_STAGE_NAMES };
+
+/**
+ * 이번 주 개인리그에 나가는 우리 선수 (PC방 예선·조 지명식 제외)
+ * 프로리그 경기가 끝난 뒤 바로 개인리그를 치르지 않고, 컨디션 회복·아이템을 챙길 수 있게 멈출 때 쓴다
+ */
+export function mslPlayersThisWeek(s: CareerState): number[] {
+  const m = s.msl;
+  if (!m || m.season !== s.season || s.phase === "offseason" || m.planIdx === undefined) return [];
+  const ids = new Set<number>();
+  for (let i = m.planIdx; i < MSL_PLAN.length && MSL_PLAN[i].week <= s.week; i++) {
+    const { stage, part } = MSL_PLAN[i];
+    if (stage === "dual") for (let g = part * 3; g < part * 3 + 3 && g < m.duals.length; g++) m.duals[g].players.forEach(id => ids.add(id));
+    else if (stage === "group") for (let g = part * 4; g < part * 4 + 4 && g < m.groups.length; g++) m.groups[g].players.forEach(id => ids.add(id));
+    else if (stage === "ro16" || stage === "ro8" || stage === "ro4" || stage === "final") {
+      const per = stage === "ro16" ? 4 : stage === "ro8" ? 2 : stage === "ro4" ? 2 : 1;
+      const series = m.bracket.find(b => b.round === stage)?.series ?? [];
+      for (const x of series.slice(part * per, part * per + per)) if (x.winner < 0) [x.a, x.b].forEach(id => ids.add(id));
+    }
+  }
+  return [...ids].filter(id => id >= 0 && isMine(s, id));
+}
+
+/** 이번 주에 치를 개인리그 경기가 있는지 (PC방 예선·조 지명식 제외) */
+export function mslDueThisWeek(s: CareerState): boolean {
+  const m = s.msl;
+  if (!m || m.season !== s.season || s.phase === "offseason" || m.planIdx === undefined) return false;
+  const plan = MSL_PLAN[m.planIdx];
+  return !!plan && plan.week <= s.week && plan.stage !== "pc" && plan.stage !== "nom";
+}

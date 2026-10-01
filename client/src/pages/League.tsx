@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { saveEntryDraft, takeEntryReturn } from "@/components/legacy/match/common";
+import { VitaButton, saveEntryDraft, takeEntryReturn } from "@/components/legacy/match/common";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { FINAL_SETS, PRO_SETS, type CareerState, type CMatch } from "@shared/career/rules";
@@ -110,10 +110,11 @@ function MatchTab({ s }: { s: CareerState }) {
 
   // 주가 끝나면 다른 팀 포스트시즌 → 개인리그 경기 → 결과 요약 순으로 관전
   function finishWeekView(w: WeekDone) {
-    if (w.needNomination) { setWv(null); return; } // 조 지명식부터 (s.weekHold)
+    // 조 지명식·개인리그 준비부터 (s.weekHold). 다른 팀 포스트시즌 경기가 있으면 그것부터 보고 개인리그 준비로
+    if (w.needNomination || (w.needMsl && !w.proReports?.length)) { setWv(null); return; }
     setWv({ w, stage: w.proReports?.length ? "pro" : w.mslReports?.length || w.mslPlans?.length ? "msl" : "summary" });
   }
-  const afterPro = (w: WeekDone) => setWv({ w, stage: w.mslReports?.length || w.mslPlans?.length ? "msl" : "summary" });
+  const afterPro = (w: WeekDone) => (w.needMsl ? setWv(null) : setWv({ w, stage: w.mslReports?.length || w.mslPlans?.length ? "msl" : "summary" }));
   /** 우리 경기 관전 끝 (끝까지 봤거나 건너뜀) */
   const finishLive = (h: HeldLive) => {
     if (!h.applied) patch(h.diff);
@@ -177,6 +178,41 @@ function MatchTab({ s }: { s: CareerState }) {
     return <MslFlow s={s} reports={wv.w.mslReports ?? []} all={all} plans={wv.w.mslPlans} start={wv.msl}
       onProgress={i => { if (heldWeek) heldWeek = { ...heldWeek, msl: i }; }}
       onClose={close} onDone={() => setWv({ w: wv.w, stage: "summary" })} />;
+  }
+
+  // 프로리그를 마치고 개인리그 전: 컨디션 회복·아이템을 챙긴 뒤 확인을 눌러 진행
+  if (s.weekHold?.msl) {
+    const ids = s.weekHold.msl.filter(id => s.players[id]?.team === s.myTeam);
+    return (
+      <div className="space-y-3">
+        <div className="rounded-2xl bg-sky-500/15 border border-sky-400/40 p-4 text-center space-y-1">
+          <div className="text-3xl">🎮</div>
+          <div className="font-black text-foreground">이번 주 마이스타리그 경기 전</div>
+          <div className="text-xs text-muted-foreground">{ids.length ? "프로리그로 지친 선수의 컨디션을 회복하거나 장비를 챙긴 뒤 진행하세요. 컨디션이 낮으면 경기력이 떨어집니다." : "프로리그 일정을 마쳤습니다. 이어서 이번 주 개인리그 경기를 진행합니다."}</div>
+        </div>
+        {ids.length > 0 && <div className="rounded-2xl bg-black border border-border p-3 space-y-2">
+          {ids.map(id => {
+            const p = s.players[id];
+            return (
+              <div key={id}>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-bold text-white">{p.name}</span>
+                  <span className={cn("font-black", p.cond >= 90 ? "text-emerald-400" : p.cond >= 70 ? "text-amber-300" : "text-rose-400")}>컨디션 {p.cond}%</span>
+                </div>
+                <VitaButton s={s} pid={id} />
+              </div>
+            );
+          })}
+        </div>}
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={() => navigate("/shop")} className="py-2.5 rounded-2xl bg-card border border-border text-sm font-bold text-foreground">🛒 아이템 상점</button>
+          <button onClick={() => navigate("/team")} className="py-2.5 rounded-2xl bg-card border border-border text-sm font-bold text-foreground">👥 선수단</button>
+        </div>
+        <button onClick={() => complete.mutate()} disabled={complete.isPending} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 text-white font-black">
+          {complete.isPending ? "진행 중..." : "▶ 개인리그 진행"}
+        </button>
+      </div>
+    );
   }
 
   // 주 마무리 전 조 지명식: 우리 선수가 조장이면 차례가 올 때 직접 지명

@@ -13,7 +13,7 @@ import { AceScreen } from "./entry";
 import { Broadcast, PlayerCard, SetList, type BroadcastSet } from "./broadcast";
 
 // ── 경기 진행 (세트마다 서버에서 진행) ─────────────────────────────────
-export interface WeekDone { playedMatchId?: number; mslReports?: MslReportView[]; mslPlans?: number[]; proReports?: ProReportView[]; needNomination?: boolean }
+export interface WeekDone { playedMatchId?: number; mslReports?: MslReportView[]; mslPlans?: number[]; proReports?: ProReportView[]; needNomination?: boolean; needMsl?: number[] }
 /** 우리 팀이 없는 포스트시즌 경기 (중계). entryA·entryB·maps 가 있으면 치르지 않은 세트까지 보여줌 */
 export type ProReportView = { matchId: number; stage: CMatch["stage"]; a: number; b: number; sa: number; sb: number; sets: BroadcastSet[]; entryA?: number[]; entryB?: number[]; maps?: number[]; pre?: Record<number, PlayerSnap> };
 

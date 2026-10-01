@@ -50,7 +50,9 @@ export function news(s: CareerState, text: string) {
 }
 
 export function gainStats(p: CPlayer, picks: number, min: number, max: number): string[] {
-  const keys = shuffle([...STAT_KEYS]).slice(0, picks);
+  // 하나는 가장 낮은 능력치 (패배로 떨어진 능력치를 훈련으로 되살릴 수 있게), 나머지는 무작위
+  const weakest = [...STAT_KEYS].sort((a, b) => p.stats[a] - p.stats[b])[0];
+  const keys = [weakest, ...shuffle(STAT_KEYS.filter(k => k !== weakest)).slice(0, Math.max(0, picks - 1))];
   return keys.map(k => {
     // 능력치가 높을수록 조금 덜 오름 (선수별 성장 한계는 없음, 재능은 속도만)
     const room = Math.max(0.4, 1 - (p.stats[k] - 600) / 900);
@@ -75,6 +77,8 @@ export interface SetMods {
   all?: number;
   /** 능력치 배율 (스나이핑 적중) */
   mul?: number;
+  /** 능력치별 추가 (작전 메모) */
+  bonus?: Partial<Record<StatKey, number>>;
   /** 패배 시 능력치 감소 완화 (츄잉껌) */
   gum?: boolean;
 }
@@ -83,7 +87,7 @@ export interface SetMods {
 export function effStats(p: CPlayer, mod?: SetMods): Record<StatKey, number> {
   const g = gearStats(p, mod?.all ?? 0);
   const k = condMultiplier(gearCond(p)) * (mod?.mul ?? 1);
-  return Object.fromEntries(STAT_KEYS.map(s => [s, g[s] * k])) as Record<StatKey, number>;
+  return Object.fromEntries(STAT_KEYS.map(s => [s, (g[s] + (mod?.bonus?.[s] ?? 0)) * k])) as Record<StatKey, number>;
 }
 
 /**

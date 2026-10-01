@@ -5,10 +5,13 @@
  */
 import { FREE_AGENT_TEAM } from "@shared/career/originalData";
 import { COND_MAX, condMultiplier, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
-import { ITEMS, ITEM_BY_KEY, POTION_LIMIT, gearCond, slotOf, type EquipSlot } from "@shared/career/items";
+import { ITEMS, ITEM_BY_KEY, gearCond, slotOf, type EquipSlot } from "@shared/career/items";
 import { rosterOf } from "@shared/career/view";
 import { STAT_KEYS } from "@shared/gameConstants";
 import { clampCond, clampStat, rand, randInt } from "./core";
+
+/** AI 구단은 시즌마다 선수 한 명당 포션을 이 정도만 (사용자는 제한 없음) */
+const AI_POTION_LIMIT = 3;
 
 /** 이만큼은 남겨 둠 (이적 자금) */
 const AI_RESERVE = 1500;
@@ -62,7 +65,7 @@ export function aiShopping(s: CareerState) {
     const magic = ITEM_BY_KEY.p_spc;
     const po = magic.potion!;
     for (const p of core) {
-      if (budget < magic.price * 2 || (p.potions ?? 0) >= POTION_LIMIT || gearCond(p) < 60 || rand() > 0.35) continue;
+      if (budget < magic.price * 2 || (p.potions ?? 0) >= AI_POTION_LIMIT || gearCond(p) < 60 || rand() > 0.35) continue;
       spend(magic.price);
       p.potions = (p.potions ?? 0) + 1;
       p.cond = clampCond(p.cond - po.condCost);

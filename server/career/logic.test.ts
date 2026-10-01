@@ -5,7 +5,9 @@ import { CareerError, advanceWeek as advanceOnly, completeWeek, aiEntry, beginMa
 /** 한 주 진행 (우리 선수가 조장인 조 지명식에서 멈추면 자동 지명으로 마저 진행) */
 function advanceWeek(s: CareerState, entry?: number[]) {
   const r = advanceOnly(s, entry);
-  return s.weekHold ? { ...completeWeek(s), broadcast: r.broadcast } : r;
+  if (!s.weekHold) return r;
+  const c = completeWeek(s);
+  return { ...c, broadcast: r.broadcast, proReports: [...(r.proReports ?? []), ...(c.proReports ?? [])] };
 }
 
 describe("다른 구단 아이템 구입", () => {
@@ -284,6 +286,8 @@ describe("조 지명식", () => {
       while (!s.weekHold && s.msl!.groups.length === 0 && guard++ < 20) {
         const m = myPendingMatch(s);
         advanceOnly(s, m ? aiEntry(s, s.myTeam, PRO_SETS) : undefined);
+        // 개인리그 준비 대기는 바로 진행
+        if (s.weekHold?.msl) completeWeek(s);
       }
       // 우리 선수가 조장이 아니면 멈추지 않고 조 편성까지 끝남
       const mineHead = s.msl!.seeds.slice(0, 8).some(id => s.players[id]?.team === s.myTeam);
@@ -497,13 +501,13 @@ describe("아이템 상점", () => {
     expect(p.h2h?.[oppId]?.reduce((a, b) => a + b, 0)).toBe(1);
   });
 
-  it("포션은 시즌에 3번까지, 경기 아이템은 보유해야 쓸 수 있고 세트를 치를 때 소모된다", () => {
+  it("포션은 횟수 제한 없이, 경기 아이템은 보유해야 쓸 수 있고 세트를 치를 때 소모된다", () => {
     const s = newCareer(1);
     s.teams[1].money = 100_000;
     const p = rosterOf(s, 1)[0];
     p.cond = 100;
-    for (let i = 0; i < 3; i++) buyItem(s, "p_att", p.id);
-    expect(() => buyItem(s, "p_att", p.id)).toThrow("이 선수는 더 사용 할 수 없습니다");
+    for (let i = 0; i < 5; i++) buyItem(s, "p_att", p.id);
+    expect(p.potions).toBe(5);
     const front = rosterOf(s, 1).slice(0, 4).map(x => x.id);
     expect(() => beginMatch(s, front, { 0: { key: "cheer" } })).toThrow(CareerError);
     expect(() => buyItem(s, "cheer")).toThrow("구입 불가능 품목입니다");
@@ -862,5 +866,80 @@ describe("가계부·다른 구단 이적·치어풀", () => {
     const sum = (x: Record<string, number>) => Object.values(x).reduce((a, b) => a + b, 0);
     for (const k of Object.keys(base) as Array<keyof typeof base>) expect(cheer[k]).toBeGreaterThanOrEqual(base[k]);
     expect(sum(cheer)).toBeGreaterThan(sum(base) + 300);
+  });
+});
+
+describe("개인리그 전 준비·능력치 변동", () => {
+  it("우리 경기를 치른 주에 우리 선수가 개인리그에 나가면, 개인리그 전에 멈췄다가 확인하면 진행한다", async () => {
+    const { mslPlayersThisWeek } = await import("./msl");
+    let checked = false;
+    for (let t = 0; t < 12 && !checked; t++) {
+      const s = newCareer(t);
+      for (let g = 0; g < 9 && !checked; g++) {
+        const m = myPendingMatch(s);
+        const r = advanceOnly(s, m ? aiEntry(s, s.myTeam, PRO_SETS) : undefined);
+        if (s.weekHold?.msl?.length) {
+          checked = true;
+          expect(r.needMsl).toEqual(s.weekHold.msl);
+          expect(mslPlayersThisWeek(s)).toEqual(s.weekHold.msl);
+          const week = s.week;
+          expect(() => advanceOnly(s)).toThrow("이번 주 개인리그를 먼저 진행하세요");
+          // 대기 중에도 비타비타는 먹일 수 있음
+          const pid = s.weekHold.msl[0];
+          s.inventory = { vitavita: 1 };
+          s.players[pid].cond = 80;
+          useStockItem(s, "vitavita", pid);
+          expect(s.players[pid].cond).toBe(83);
+          const c = completeWeek(s);
+          expect(c.mslReports.length + (c.mslPlans?.length ?? 0)).toBeGreaterThan(0);
+          expect(s.week).toBe(week + 1);
+        } else if (s.weekHold) completeWeek(s);
+      }
+    }
+    expect(checked).toBe(true);
+  });
+
+  it("실제 능력치가 더 높은 상대에게 지면 거의 안 떨어지고, 츄잉껌이면 더 덜 떨어진다", async () => {
+    const { setDeltas, lossScale } = await import("./growth");
+    expect(lossScale(500)).toBeCloseTo(0.1);
+    expect(lossScale(0)).toBe(1);
+    expect(lossScale(-700)).toBe(2);
+    const s = newCareer(0);
+    const [me, opp] = rosterOf(s, 1);
+    const mk = (base: number) => ({ ...me, sWins: 0, sLosses: 0, stats: Object.fromEntries(Object.keys(me.stats).map(k => [k, base])) as typeof me.stats, equip: {} });
+    const sum = (d: Record<string, number | undefined>) => Object.values(d).reduce((a: number, v) => a + (v ?? 0), 0);
+    const avgLoss = (p: typeof me, o: typeof me, gum = false) => {
+      let total = 0;
+      for (let i = 0; i < 300; i++) total += sum(setDeltas(p, o, false, undefined, 600, gum));
+      return total / 300;
+    };
+    const weak = mk(650), strong = { ...mk(750), id: opp.id };
+    const vsStrong = avgLoss(weak, strong), vsEqual = avgLoss(weak, { ...mk(650), id: opp.id }), vsStrongGum = avgLoss(weak, strong, true);
+    expect(vsStrong).toBeGreaterThan(vsEqual * 0.25);
+    expect(Math.abs(vsStrong)).toBeLessThan(3);
+    expect(Math.abs(vsStrongGum)).toBeLessThanOrEqual(Math.abs(vsStrong));
+    // 장비를 껴서 등급이 높아 보여도 최상위 등급 패널티는 실제 능력치 기준
+    const { topGradeLossMul } = await import("./growth");
+    const geared = { ...mk(650), equip: { etc: { key: "e3", left: 10 }, mouse: { key: "m2", left: 10 } } };
+    expect(topGradeLossMul(geared as typeof me, mk(600))).toBe(1);
+  });
+
+  it("평균보다 많이 낮은 능력치는 잘 오르고 덜 떨어지며, 훈련은 가장 낮은 능력치를 꼭 올린다", async () => {
+    const { catchUp } = await import("./growth");
+    const { gainStats } = await import("./core");
+    const s = newCareer(0);
+    const p = rosterOf(s, 1)[0];
+    for (const k of Object.keys(p.stats) as (keyof typeof p.stats)[]) p.stats[k] = 700;
+    p.stats.defense = 560;
+    const cu = catchUp(p, "defense");
+    expect(cu.up).toBeGreaterThan(1.9);
+    expect(cu.down).toBeLessThan(0.6);
+    expect(catchUp(p, "attack").up).toBe(1);
+    for (let i = 0; i < 5; i++) {
+      const before = p.stats.defense;
+      const keys = gainStats(p, 2, 2, 6);
+      expect(keys[0]).toBe("defense");
+      expect(p.stats.defense).toBeGreaterThan(before);
+    }
   });
 });
