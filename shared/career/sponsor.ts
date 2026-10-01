@@ -4,7 +4,7 @@
  */
 import { FREE_AGENT_TEAM } from "./originalData";
 import { totalOf, type CareerState } from "./rules";
-import { rosterOf, standings } from "./view";
+import { myDiv, rosterOf, standings } from "./view";
 import { seeded } from "./contract";
 import { levelPerks, managerLevel } from "./mainSponsor";
 
@@ -72,8 +72,10 @@ export function questProgress(s: CareerState, q: SponsorQuest): { now: number; d
   }
 }
 
-/** 한 시즌에 계약할 수 있는 서브 스폰서 수 */
+/** 한 시즌에 계약할 수 있는 서브 스폰서 수 (1부) */
 export const MAX_SPONSORS = 3;
+/** 우리 팀이 계약할 수 있는 서브 스폰서 수: 2부는 1곳 */
+export const maxSponsors = (s: CareerState) => (myDiv(s) === 2 ? 1 : MAX_SPONSORS);
 
 /**
  * 이번 시즌 스폰서 제의 수 (1~10): 지난 시즌 순위가 좋을수록, 감독 명성·레벨이 높을수록 많이 온다
@@ -92,7 +94,8 @@ export function sponsorOfferCount(s: CareerState): { count: number; basis: strin
   const rep = s.manager?.reputation ?? 50;
   const lv = managerLevel(s);
   const raw = 10 - (rank - 1) * (8 / Math.max(1, teams - 1)) + (rep - 50) / 20 + (lv - 1) * 0.3;
-  return { count: Math.max(1, Math.min(10, Math.round(raw))), basis };
+  // 2부는 제의가 적게 옴
+  return { count: Math.max(1, Math.min(myDiv(s) === 2 ? 4 : 10, Math.round(raw))), basis };
 }
 
 const teamPowerOf = (s: CareerState, team: number) => rosterOf(s, team).map(p => totalOf(p.stats)).sort((a, b) => b - a).slice(0, 6).reduce((a, b) => a + b, 0);
@@ -123,8 +126,10 @@ export function sponsorOffers(s: CareerState): Sponsor[] {
     const quests = pool.map((q, i) => ({ q, o: r(10 + i) })).sort((a, b) => a.o - b.o).slice(0, nq).map(x => x.q);
     const perk = levelPerks(managerLevel(s)).sponsor;
     const style = Math.floor(r(0) * 3); // 0 후원금형 · 1 균형형 · 2 퀘스트형
-    const weekly = Math.round([42, 30, 20][style] * (0.85 + r(21) * 0.3) * perk);
-    const mul = [0.45, 0.65, 0.9][style] * perk;
+    // 2부 스폰서는 규모가 작음
+    const scale = myDiv(s) === 2 ? 0.7 : 1;
+    const weekly = Math.round([42, 30, 20][style] * (0.85 + r(21) * 0.3) * perk * scale);
+    const mul = [0.45, 0.65, 0.9][style] * perk * scale;
     out.push({ name, weekly, quests: quests.map(q => ({ ...q, baseReward: Math.round((q.baseReward * mul) / 10) * 10 })) });
   }
   return out;

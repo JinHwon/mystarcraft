@@ -5,6 +5,8 @@ import { STAT_KEYS, StatKey } from "@shared/gameConstants";
 import { ORIG_MAPS } from "@shared/career/originalData";
 import {
   COND_MAX,
+  ageOf,
+  youthGrowth,
   COND_MIN,
   MAP_POOL_SIZE,
   STAT_MAX_CAREER,
@@ -113,12 +115,15 @@ function fxOf(p: CPlayer, before: { cond: number; stats: Record<StatKey, number>
  * 큰 무대 성장 배율: 프로리그 포스트시즌(준PO·PO·결승)과 개인리그 8강 이상은 경기 뒤 능력치가 크게 오름
  * (오르는 쪽에만 적용, 떨어지는 폭은 그대로)
  */
-export const STAGE_GROWTH = { semi: 1.8, po: 2.2, final: 2.6, ro8: 1.6, ro4: 2.0, mslFinal: 2.5 } as const;
+export const STAGE_GROWTH = { semi: 1.8, po: 2.2, final: 2.6, promo: 2.0, ro8: 1.6, ro4: 2.0, mslFinal: 2.5 } as const;
 let stageGrowth = 1;
-export function withStageGrowth<T>(mul: number, fn: () => T): T {
-  const prev = stageGrowth;
+/** 2부 리그 경기: 오르는 폭에 나이별 배율 (어릴수록 크게), 어린 선수는 져도 덜 떨어짐 */
+let youthMode = false;
+export function withStageGrowth<T>(mul: number, fn: () => T, youth = false): T {
+  const prev = stageGrowth, prevYouth = youthMode;
   stageGrowth = mul;
-  try { return fn(); } finally { stageGrowth = prev; }
+  youthMode = youth;
+  try { return fn(); } finally { stageGrowth = prev; youthMode = prevYouth; }
 }
 
 function afterSet(s: CareerState, a: CPlayer, b: CPlayer, aWin: boolean, mods?: { a?: SetMods; b?: SetMods }, content?: [SetContent, SetContent], duration = 0): { a: PlayerFx; b: PlayerFx } {
@@ -139,7 +144,10 @@ function afterSet(s: CareerState, a: CPlayer, b: CPlayer, aWin: boolean, mods?: 
   tire(l, condLoss(l, false, content?.[l === a ? 0 : 1], duration));
   addExp(s, w, 30); addExp(s, l, 10);
   for (const [p, d] of [[a, da], [b, db]] as const) {
-    for (const [k, v] of Object.entries(d)) p.stats[k as StatKey] = clampStat(p.stats[k as StatKey] + (v! > 0 ? Math.round(v! * stageGrowth) : v!));
+    const age = ageOf(p, s.season);
+    const up = stageGrowth * (youthMode ? youthGrowth(age) : 1);
+    const down = youthMode && age <= 21 ? (age <= 19 ? 0.5 : 0.7) : 1;
+    for (const [k, v] of Object.entries(d)) p.stats[k as StatKey] = clampStat(p.stats[k as StatKey] + (v! > 0 ? Math.round(v! * up) : Math.round(v! * down)));
   }
   for (const p of [a, b]) wearEquip(s, p);
   return { a: fxOf(a, before.a, aWin ? 30 : 10), b: fxOf(b, before.b, aWin ? 10 : 30) };

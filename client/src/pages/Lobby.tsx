@@ -1,4 +1,4 @@
-import { MAX_SPONSORS, activeSponsors } from "@shared/career/sponsor";
+import { activeSponsors, maxSponsors } from "@shared/career/sponsor";
 import { EVENT_INFO, type CareerEventType } from "@shared/career/events";
 import { DEBT_LIMIT_WEEKS, MSL_STAGE_NAMES } from "@shared/career/rules";
 import { useEffect, useMemo, useState } from "react";
@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ORIG_TEAMS, FREE_AGENT_TEAM } from "@shared/career/originalData";
 import { WEEKLY_AP, actionOf, totalOf, type CareerState } from "@shared/career/rules";
-import { myPendingMatch, rosterOf, standings, teamPower, STAGE_NAMES } from "@shared/career/view";
+import { leagueName, myDiv, myPendingMatch, rosterOf, standings, teamPower, STAGE_NAMES } from "@shared/career/view";
 import { useCareer, useCareerUpdater } from "@/lib/career";
 import { RaceBadge, TeamBadge } from "@/components/career/Bits";
 import { previewWorld } from "@shared/career/init";
@@ -33,7 +33,7 @@ function TeamSelect({ onCancel }: { onCancel?: () => void }) {
   const [picked, setPicked] = useState<number | null>(null);
   const start = trpc.career.newGame.useMutation({
     ...updater,
-    onSuccess: r => { updater.onSuccess(r); toast.success(`${ORIG_TEAMS[r.state.myTeam].name} 감독 부임!`); navigate("/lobby"); },
+    onSuccess: r => { updater.onSuccess(r); toast.success(`${r.state.teams[r.state.myTeam]?.name ?? ""} 감독 부임!`); navigate("/lobby"); },
   });
 
   return (
@@ -41,8 +41,9 @@ function TeamSelect({ onCancel }: { onCancel?: () => void }) {
       <div className="text-center pt-2">
         <div className="text-4xl">🎮</div>
         <h1 className="text-2xl font-black text-foreground mt-1">감독을 맡을 팀을 고르세요</h1>
-        <p className="text-sm text-muted-foreground">2010 시즌 12개 프로게임단 · 선수 230명</p>
+        <p className="text-sm text-muted-foreground">2010 시즌 12개 프로게임단 · 선수 230명 · 2부 리그 B팀 12개</p>
       </div>
+      <div className="text-sm font-bold text-foreground">🏆 1부 리그</div>
       <div className="grid grid-cols-2 gap-2.5">
         {ORIG_TEAMS.filter(t => t.id !== FREE_AGENT_TEAM).map(t => {
           const roster = rosterOf(preview, t.id);
@@ -63,12 +64,23 @@ function TeamSelect({ onCancel }: { onCancel?: () => void }) {
           );
         })}
       </div>
+      <div className="text-sm font-bold text-foreground pt-1">🌱 2부 리그 (B팀) — 도전 모드</div>
+      <p className="text-[11px] text-muted-foreground -mt-2">신예·유망주로 꾸린 팀으로 시작 (자금 1,500만원, 서브 스폰서 1곳). 2부 1·2위는 승강전에서 이기면 1부로 올라갑니다. 키운 선수를 1부 구단에 팔면 육성 지원금을 더 받습니다.</p>
+      <div className="grid grid-cols-3 gap-1.5">
+        {preview.teams.filter(t => t.div === 2).map(t => (
+          <button key={t.id} onClick={() => setPicked(t.id)}
+            className={cn("text-left rounded-xl border-2 px-2 py-1.5 transition-all active:scale-[0.98]", picked === t.id ? "border-amber-400 bg-amber-500/15" : "border-border bg-card")}>
+            <div className="flex items-center gap-1"><TeamBadge short={t.short} color={t.color} /></div>
+            <div className="text-[11px] font-bold text-foreground truncate mt-0.5">{t.name}</div>
+          </button>
+        ))}
+      </div>
       <button
         disabled={picked === null || start.isPending}
         onClick={() => picked !== null && start.mutate({ teamId: picked })}
         className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black text-base disabled:opacity-40 active:scale-[0.99]"
       >
-        {picked === null ? "팀을 선택하세요" : `${ORIG_TEAMS[picked].name} 감독으로 시작`}
+        {picked === null ? "팀을 선택하세요" : `${preview.teams[picked]?.name} 감독으로 시작`}
       </button>
       {onCancel && <button onClick={onCancel} className="w-full py-2 text-sm text-muted-foreground">취소</button>}
     </div>
@@ -124,7 +136,7 @@ function Office({ s }: { s: CareerState }) {
   const wantOut = roster.filter(p => p.wantsOut);
   const alerts: Array<[string, string]> = [];
   if ((s.debtWeeks ?? 0) > 0 || me.money < 0) alerts.push(["⚠️", `운영 자금 적자 ${s.debtWeeks ?? 0}주째 — ${DEBT_LIMIT_WEEKS}주 연속이면 구단 해체`]);
-  if (activeSponsors(s).length < MAX_SPONSORS && s.phase !== "offseason") alerts.push(["🤝", activeSponsors(s).length ? `서브 스폰서를 ${MAX_SPONSORS - activeSponsors(s).length}곳 더 계약할 수 있습니다` : "이번 시즌 서브 스폰서를 아직 정하지 않았습니다 (후원금 없음)"]);
+  if (activeSponsors(s).length < maxSponsors(s) && s.phase !== "offseason") alerts.push(["🤝", activeSponsors(s).length ? `서브 스폰서를 ${maxSponsors(s) - activeSponsors(s).length}곳 더 계약할 수 있습니다` : "이번 시즌 서브 스폰서를 아직 정하지 않았습니다 (후원금 없음)"]);
   if (s.phase !== "offseason" && s.week === 1 && !s.matches.some(m => m.done && (m.a === s.myTeam || m.b === s.myTeam))) alerts.push(["🏢", "첫 경기 전: 메인 스폰서와 승리·패배·우승 수당을 재협상할 수 있습니다"]);
   if (s.offers?.length) alerts.push(["📨", `받은 영입 제안 ${s.offers.length}건`]);
   if (s.jobOffers?.length) alerts.push(["🤵", `감독 제의 ${s.jobOffers.length}건 (${s.jobOffers.map(o => s.teams[o.team].name).join(", ")})`]);
@@ -155,7 +167,7 @@ function Office({ s }: { s: CareerState }) {
           <div className="flex-1 min-w-0">
             <div className="text-xs text-white/70">{s.season}시즌 · {phaseText}</div>
             <div className="text-xl font-black text-white truncate">{me.name}</div>
-            <div className="text-xs text-white/80">{me.wins}승 {me.losses}패 · 세트 {me.setWins}:{me.setLosses} · <b>{rank}위</b></div>
+            <div className="text-xs text-white/80">{me.wins}승 {me.losses}패 · 세트 {me.setWins}:{me.setLosses} · <b>{myDiv(s) === 2 ? "2부 " : ""}{rank}위</b></div>
             <div className="text-[11px] text-yellow-200/90 font-bold">🎓 감독 Lv.{s.manager?.level ?? 1} · 평판 {s.manager?.reputation ?? 50}</div>
           </div>
         </div>
@@ -183,7 +195,7 @@ function Office({ s }: { s: CareerState }) {
           {expiring.length > 0 ? (
             <div className="rounded-xl bg-black/20 p-2.5 text-left space-y-1.5">
               <div className="text-xs font-bold text-amber-200">📄 계약 만료 선수 {expiring.length}명 — 재계약·트레이드·이적·방출로 정리하세요</div>
-              <div className="text-xs text-foreground">{expiring.map(p => `${p.name}${p.reserve ? "(2부)" : ""}`).join(", ")}</div>
+              <div className="text-xs text-foreground">{expiring.map(p => p.name).join(", ")}</div>
               <div className="grid grid-cols-2 gap-1.5">
                 <button onClick={() => navigate("/club")} className="py-2 rounded-lg bg-primary text-primary-foreground text-xs font-bold">재계약하러 가기</button>
                 <button onClick={() => navigate("/transfer")} className="py-2 rounded-lg bg-card border border-border text-xs font-bold">트레이드·방출</button>
@@ -214,7 +226,7 @@ function Office({ s }: { s: CareerState }) {
       {/* 메뉴 타일 */}
       <div className="grid grid-cols-2 gap-2.5">
         <Tile emoji="🏋️" title="선수 행동" desc="훈련·휴식·이벤트" badge={`행동 가능 ${readyAp}명`} onClick={() => navigate("/training")} className="bg-gradient-to-br from-emerald-500 to-teal-700 border-emerald-300/40" />
-        <Tile emoji="🏆" title="마이프로리그" desc={`${rank}위 · 순위표·일정`} onClick={() => navigate("/league")} className="bg-gradient-to-br from-amber-500 to-orange-600 border-amber-300/40" />
+        <Tile emoji="🏆" title={leagueName(myDiv(s))} desc={`${myDiv(s) === 2 ? "2부 " : ""}${rank}위 · 순위표·일정`} onClick={() => navigate("/league")} className="bg-gradient-to-br from-amber-500 to-orange-600 border-amber-300/40" />
         <Tile emoji="👥" title="선수단" desc={`${roster.length}명 · 능력치·컨디션`} onClick={() => navigate("/team")} className="bg-gradient-to-br from-violet-500 to-purple-700 border-violet-300/40" />
         <Tile emoji="🤝" title="이적시장" desc={`무소속 ${rosterOf(s, FREE_AGENT_TEAM).length}명 영입·방출`} onClick={() => navigate("/transfer")} className="bg-gradient-to-br from-sky-500 to-blue-700 border-sky-300/40" />
         <Tile emoji="🏢" title="구단 운영" desc={`연봉·계약·제안${s.offers?.length ? ` · 제안 ${s.offers.length}` : ""}`} onClick={() => navigate("/club")} className="bg-gradient-to-br from-teal-500 to-cyan-800 border-teal-300/40" />
@@ -225,7 +237,7 @@ function Office({ s }: { s: CareerState }) {
 
       {/* 순위 요약 */}
       <button onClick={() => navigate("/league")} className="w-full text-left rounded-2xl bg-card border border-border p-3.5">
-        <div className="font-bold text-foreground text-sm mb-2">📊 순위</div>
+        <div className="font-bold text-foreground text-sm mb-2">📊 {myDiv(s) === 2 ? "2부 리그 " : ""}순위</div>
         <div className="space-y-0.5">
           {st.slice(0, 4).map((t, i) => (
             <div key={t.id} className={cn("flex items-center gap-2 text-sm rounded-lg px-1.5 py-0.5", t.id === s.myTeam && "bg-amber-500/15")}>

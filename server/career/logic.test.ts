@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FINAL_SETS, PRO_SETS, totalOf, type CareerState } from "@shared/career/rules";
+import { FINAL_SETS, PRO_SETS, totalOf, type CareerState, type CMatch } from "@shared/career/rules";
 import { CareerError, advanceWeek as advanceOnly, completeWeek, aiEntry, beginMatch, buyItem, migrateCareer, useStockItem, myPendingMatch, newCareer, playLiveSet, proposeTrade, releasePlayer, rosterOf, scoutPlayer, setAction, standings, startNextSeason } from "./logic";
 
 /** 한 주 진행 (우리 선수가 조장인 조 지명식에서 멈추면 자동 지명으로 마저 진행) */
@@ -58,33 +58,125 @@ describe("등급", () => {
   });
 });
 
-describe("2부 리그", () => {
-  it("정규시즌 매주 2경기, 우리 2부 선수는 항상 참가, 어릴수록 크게 성장, 끝나면 우승자", async () => {
-    const { ageOf } = await import("@shared/career/rules");
+describe("2부 리그 (B팀)", () => {
+  it("구단마다 B팀이 2부 리그에서 같은 일정으로 경기하고, 2부 팀은 8명 이상", () => {
     const s = newCareer(0);
-    const young = s.players.filter(p => p.team === 12).sort((a, b) => ageOf(a, s.season) - ageOf(b, s.season))[0];
-    young.team = 0; young.reserve = true;
-    const before = totalOf(young.stats);
+    const b = s.teams.filter(t => t.div === 2);
+    expect(b).toHaveLength(12);
+    expect(b.every(t => t.name.endsWith(" B") && t.parent !== undefined && s.teams[t.parent].div === 1)).toBe(true);
+    expect(b.every(t => rosterOf(s, t.id).length >= 9)).toBe(true);
+    expect(s.matches.filter(m => m.div === 2)).toHaveLength(132);
+    expect(s.matches.filter(m => m.div === 1)).toHaveLength(132);
+    // 2부 경기는 1부 감독이면 자동 진행
+    const m = myPendingMatch(s);
+    advanceWeek(s, aiEntry(s, 0, PRO_SETS));
+    void m;
+    expect(s.matches.filter(x => x.div === 2 && x.week === 1).every(x => x.done)).toBe(true);
+    expect(standings(s, 2).reduce((a, t) => a + t.wins, 0)).toBe(12);
+  });
+
+  it("시즌이 끝나면 1부 11·12위와 2부 2·1위가 승강전, 이긴 2부 팀은 다음 시즌 1부", () => {
+    const s = newCareer(4);
     let guard = 0;
-    while (s.phase === "regular" && guard++ < 20) {
-      const m = myPendingMatch(s);
-      advanceWeek(s, m ? aiEntry(s, 0, PRO_SETS) : undefined);
-      if (guard === 1) {
-        const L = s.reserveLeague!;
-        expect(L.field).toContain(young.id);
-        expect(L.field.length).toBeGreaterThanOrEqual(16);
-        expect(L.last.length).toBe(Math.floor(L.field.length / 2) * 2); // 한 주 2경기
-        // 다른 구단 2부 선수도 참가
-        expect(L.field.some(id => s.players[id].reserve && s.players[id].team !== 0 && s.players[id].team !== 12)).toBe(true);
+    let promo: CMatch[] = [];
+    while (s.phase !== "offseason" && guard++ < 30) {
+      if (s.phase === "postseason" && !promo.length) {
+        const st1 = standings(s, 1), st2 = standings(s, 2);
+        promo = s.matches.filter(x => x.stage === "promo");
+        expect(promo.map(x => [x.a, x.b])).toEqual([[st1[10].id, st2[1].id], [st1[11].id, st2[0].id]]);
       }
+      const m = myPendingMatch(s);
+      advanceWeek(s, m ? aiEntry(s, s.myTeam, m.stage === "final" ? FINAL_SETS : PRO_SETS) : undefined);
     }
-    const L = s.reserveLeague!;
-    const [w, l] = L.table[young.id];
-    expect(w + l).toBeGreaterThanOrEqual(20); // 홀수 인원이면 가끔 쉼
-    expect(L.champion).toBeDefined();
-    expect(s.players[L.champion!].titles?.some(t => t.includes("2부리그 우승"))).toBe(true);
-    // 16세 유망주는 한 시즌에 크게 성장
-    expect(totalOf(young.stats) - before).toBeGreaterThan(150);
+    expect(promo).toHaveLength(2);
+    const moves = s.promo!.moves;
+    expect(s.history[0].promo).toEqual(moves);
+    startNextSeason(s, { releaseExpiring: true });
+    for (const mv of moves) { expect(s.teams[mv.up].div).toBe(1); expect(s.teams[mv.down].div).toBe(2); }
+    expect(s.teams.filter(t => t.div === 1)).toHaveLength(12);
+    expect(s.teams.filter(t => t.div === 2)).toHaveLength(12);
+    expect(s.matches.filter(x => x.div === 1)).toHaveLength(132);
+    expect(s.matches.filter(x => x.div === 2)).toHaveLength(132);
+    expect(s.teams.filter(t => t.div === 2).every(t => rosterOf(s, t.id).length >= 8)).toBe(true);
+  }, 60_000);
+
+  it("2부 팀 감독: 2부 경기를 직접 하고, 스폰서 1곳, 최소 8명, 1부로 팔면 육성 지원금", async () => {
+    const { chooseSponsor, respondOffer } = await import("./club");
+    const { sponsorOffers } = await import("@shared/career/sponsor");
+    const s = newCareer(13); // KT 롤스터 B
+    expect(s.teams[13].div).toBe(2);
+    const m = myPendingMatch(s)!;
+    expect(m.div).toBe(2);
+    const offers = sponsorOffers(s);
+    chooseSponsor(s, offers[0].name, offers[0].quests.map(q => q.target));
+    if (offers[1]) expect(() => chooseSponsor(s, offers[1].name, offers[1].quests.map(q => q.target))).toThrow(CareerError);
+    // 8명 아래로는 방출 불가
+    while (rosterOf(s, 13).length > 8) releasePlayer(s, rosterOf(s, 13)[0].id);
+    expect(() => releasePlayer(s, rosterOf(s, 13)[0].id)).toThrow(CareerError);
+    // 1부 구단이 사 가면 이적료 + 같은 금액 육성 지원금
+    const p = rosterOf(s, 13)[0];
+    const sc = s; sc.teams[0].money = 50_000;
+    s.offers = [{ id: 999, player: p.id, team: 0, fee: 500, max: 600, season: s.season, week: s.week, tries: 0, status: "pending" }];
+    // 9명으로 늘려서 팔 수 있게
+    const fa = s.players.find(x => x.team === 12)!;
+    fa.team = 13;
+    const before = s.teams[13].money;
+    respondOffer(s, 999, "accept");
+    expect(s.teams[13].money - before).toBe(1000);
+    expect(p.team).toBe(0);
+  });
+
+  it("예전 세이브: B팀이 생기고, 구단 2부 육성 선수는 그 구단 B팀으로, 시즌 중이면 남은 주 2부 일정", () => {
+    const s = newCareer(0);
+    // B팀이 없던 예전 세이브 흉내
+    for (const p of s.players) if (p.team > 12) { p.team = 12; delete p.contract; }
+    s.teams = s.teams.slice(0, 13);
+    for (const t of s.teams) delete t.div;
+    s.matches = s.matches.filter(m => m.div !== 2);
+    for (const m of s.matches) delete m.div;
+    const kid = rosterOf(s, 0)[0];
+    kid.reserve = true;
+    s.week = 3;
+    migrateCareer(s);
+    expect(s.teams.filter(t => t.div === 2)).toHaveLength(12);
+    expect(kid.team).toBe(13);
+    expect(kid.reserve).toBe(false);
+    expect(s.matches.filter(m => m.div === 2)).toHaveLength(9 * 12);
+    expect(s.teams.filter(t => t.div === 2).every(t => rosterOf(s, t.id).length >= 9)).toBe(true);
+    // 두 번 해도 그대로
+    migrateCareer(s);
+    expect(s.teams).toHaveLength(25);
+  });
+
+  it("1부 감독은 선수를 우리 B팀으로 보내고, 다시 데려올 때는 시세의 절반", async () => {
+    const { sendToB } = await import("./divisions");
+    const { bidPlayer } = await import("./club");
+    const { sellMinimum } = await import("@shared/career/contract");
+    const s = newCareer(0);
+    s.teams[0].money = 100_000;
+    const p = rosterOf(s, 0).sort((a, b) => totalOf(a.stats) - totalOf(b.stats))[0];
+    sendToB(s, p.id);
+    expect(p.team).toBe(13);
+    const half = Math.round(sellMinimum(s, p) * 0.5 / 10) * 10;
+    expect(bidPlayer(s, p.id, half).result).toBe("agreed");
+  });
+
+  it("2부 경기는 어린 선수일수록 크게 성장", async () => {
+    const { withStageGrowth, quickSet } = await import("./core");
+    const gain = (age: number) => {
+      let sum = 0;
+      for (let k = 0; k < 200; k++) {
+        const s = newCareer(0);
+        const [a, b] = rosterOf(s, 13);
+        a.birth = 2011 - age; // 1시즌 한국 나이
+        a.stats = { ...b.stats };
+        const before = totalOf(a.stats);
+        withStageGrowth(1, () => quickSet(s, a, b, s.mapPool![0]), true);
+        sum += totalOf(a.stats) - before;
+      }
+      return sum;
+    };
+    expect(gain(17)).toBeGreaterThan(gain(28));
   });
 });
 
@@ -169,10 +261,12 @@ describe("조 지명식", () => {
 });
 
 describe("커리어 모드", () => {
-  it("원작 데이터로 새 게임을 만든다 (230명, 12팀 2라운드 풀리그 11주 132경기)", () => {
+  it("원작 데이터로 새 게임을 만든다 (원작 230명 + 2부 신예, 1부·2부 12팀씩 2라운드 풀리그 11주 132경기)", () => {
     const s = newCareer(6);
-    expect(s.players).toHaveLength(230);
-    expect(s.matches).toHaveLength(132);
+    expect(s.players.length).toBeGreaterThanOrEqual(230);
+    expect(s.players.slice(0, 230).every((p, i) => p.id === i)).toBe(true);
+    expect(s.matches).toHaveLength(264);
+    expect(s.players.filter(p => p.team === 12).length).toBeGreaterThanOrEqual(15);
     expect(rosterOf(s, 6).some(p => p.name === "이제동")).toBe(true);
   });
 
@@ -224,12 +318,13 @@ describe("커리어 모드", () => {
     expect(Object.values(s.msl!.placements).filter(r => r === "16강")).toHaveLength(8);
     const st = standings(s);
     expect(st.reduce((a, t) => a + t.wins, 0)).toBe(132);
-    expect(s.matches.filter(m => m.stage !== "regular").map(m => m.stage)).toEqual(["semi", "po", "final"]);
+    expect(s.matches.filter(m => ["semi", "po", "final"].includes(m.stage)).map(m => m.stage)).toEqual(["semi", "po", "final"]);
+    expect(s.matches.filter(m => m.stage === "promo")).toHaveLength(2);
     rosterOf(s, s.myTeam)[0].contract!.years = 1;
     expect(() => startNextSeason(s)).toThrow(CareerError);
     startNextSeason(s, { releaseExpiring: true });
     expect(s.season).toBe(2);
-    expect(s.matches).toHaveLength(132);
+    expect(s.matches).toHaveLength(264);
   }, 60_000);
 
   it("무소속 선수 영입과 방출", () => {
@@ -474,27 +569,6 @@ describe("구단 운영", () => {
 });
 
 describe("세대 교체·2부·스폰서", () => {
-  it("2부 영입 → 성장 → 1부 승격 계약", async () => {
-    const { signReserve, negotiateContract } = await import("./club");
-    const { playerDemand } = await import("@shared/career/contract");
-    const { reserveOf } = await import("@shared/career/view");
-    const s = newCareer(0);
-    s.teams[0].money = 50_000;
-    const fa = s.players.filter(p => p.team === 12).sort((a, b) => a.birth - b.birth).at(-1)!;
-    signReserve(s, fa.id);
-    expect(reserveOf(s, 0).map(p => p.id)).toContain(fa.id);
-    expect(rosterOf(s, 0).some(p => p.id === fa.id)).toBe(false);
-    const before = Object.values(fa.stats).reduce((a, b) => a + b, 0);
-    for (let i = 0; i < 3; i++) { const m = myPendingMatch(s); advanceWeek(s, m ? aiEntry(s, 0, PRO_SETS) : undefined); }
-    // 2부 훈련으로 크지만, 개인리그 예선에서 지면 떨어질 수도 있음
-    const after = Object.values(fa.stats).reduce((a, b) => a + b, 0);
-    expect(after >= before || fa.losses > 0).toBe(true);
-    const r = negotiateContract(s, fa.id, playerDemand(s, fa, 0), { promote: true });
-    expect(r.result).toBe("signed");
-    expect(fa.reserve).toBe(false);
-    expect(rosterOf(s, 0).some(p => p.id === fa.id)).toBe(true);
-  });
-
   it("스폰서 퀘스트 목표를 올리면 보상이 커지고, 달성하면 지급된다", async () => {
     const { chooseSponsor } = await import("./club");
     const { sponsorOffers, questReward } = await import("@shared/career/sponsor");
@@ -531,7 +605,9 @@ describe("세대 교체·2부·스폰서", () => {
     startNextSeason(s, { releaseExpiring: true });
     expect(s.players.slice(0, 20).every(p => p.team === -1 && p.retired === 2)).toBe(true);
     expect(s.players.length).toBeGreaterThan(count);
-    expect(s.players.slice(count).every(p => p.team === 12 && p.potential! > 0)).toBe(true);
+    // 신인은 무소속으로 나오고, 선수가 모자란 구단(2부 B팀 등)이 데려가기도 함
+    expect(s.players.slice(count).every(p => p.team >= 0 && p.potential! > 0)).toBe(true);
+    expect(s.players.slice(count).some(p => p.team === 12)).toBe(true);
   });
 });
 

@@ -6,7 +6,7 @@ import { getActiveEvents, getDb } from "../db";
 import { careers, users } from "../../drizzle/schema";
 import { ITEM_BY_KEY } from "@shared/career/items";
 import { askingPrice } from "@shared/career/rules";
-import { reserveOf, rosterOf as rosterOfView, teamPower } from "@shared/career/view";
+import { rosterOf as rosterOfView, teamPower } from "@shared/career/view";
 import { managerExpNeed } from "@shared/career/mainSponsor";
 import type { CareerEventType } from "@shared/career/events";
 import { setActiveEvents } from "./events";
@@ -15,7 +15,8 @@ import { diffOf, jsonOf, snapshot, type Snapshot } from "./diff";
 import { nominate } from "./msl";
 import { ACTIONS, type ActionKey } from "@shared/career/rules";
 import { negotiateMainSponsor } from "./club";
-import { acceptJob, bidPlayer, chooseSponsor, demotePlayer, listPlayer, negotiateContract, respondJob, respondOffer, signReserve, unlistPlayer } from "./club";
+import { acceptJob, bidPlayer, chooseSponsor, listPlayer, negotiateContract, respondJob, respondOffer, unlistPlayer } from "./club";
+import { sendToB } from "./divisions";
 import {
   CareerError,
   advanceWeek,
@@ -190,10 +191,10 @@ function mutateLite<T>(userId: number, fn: (s: CareerState) => T) {
 /** 커리어 한 줄 요약 (랭킹·관리자 화면) */
 function summaryOf(s: CareerState) {
   const me = s.teams[s.myTeam];
-  const players = [...rosterOfView(s, s.myTeam), ...reserveOf(s, s.myTeam)];
+  const players = rosterOfView(s, s.myTeam);
   const playerValue = players.reduce((sum, p) => sum + askingPrice(p, s.season), 0);
   return {
-    team: { id: s.myTeam, name: me.name, short: me.short, color: me.color },
+    team: { id: s.myTeam, name: me.name, short: me.short, color: me.color, div: me.div ?? 1 },
     level: s.manager?.level ?? 1,
     exp: s.manager?.exp ?? 0,
     expNeed: managerExpNeed(s.manager?.level ?? 1),
@@ -458,13 +459,10 @@ export const careerRouter = router({
     .input(z.object({ playerId: z.number().int() }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => unlistPlayer(s, input.playerId))),
 
-  /** 2부: 무소속 선수 영입 / 1부 → 2부 (승격은 contract 로 계약) */
-  signReserve: protectedProcedure
+  /** 우리 선수를 우리 구단 B팀(2부)으로 (다시 데려올 때는 영입 요청, 시세의 절반) */
+  sendToB: protectedProcedure
     .input(z.object({ playerId: z.number().int() }))
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => signReserve(s, input.playerId))),
-  demote: protectedProcedure
-    .input(z.object({ playerId: z.number().int() }))
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => demotePlayer(s, input.playerId))),
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => sendToB(s, input.playerId))),
 
   /** 메인 스폰서(모기업) 계약 협상 */
   mainSponsor: protectedProcedure

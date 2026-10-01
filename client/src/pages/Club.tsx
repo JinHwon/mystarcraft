@@ -7,8 +7,8 @@ import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { DEBT_LIMIT_WEEKS, OPERATING_COST, askingPrice, totalOf, type CareerState, type Contract } from "@shared/career/rules";
 import { jobThreshold, playerDemand, teamWages } from "@shared/career/contract";
-import { MAX_SPONSORS, activeSponsors, questLabel, questProgress, questRange, questReward, sponsorOfferCount, sponsorOffers, type SponsorQuest } from "@shared/career/sponsor";
-import { MAIN_SPONSORS, TERM_NAMES, levelPerks, managerExpNeed, managerLevel, sponsorBudget, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
+import { activeSponsors, maxSponsors, questLabel, questProgress, questRange, questReward, sponsorOfferCount, sponsorOffers, type SponsorQuest } from "@shared/career/sponsor";
+import { TERM_NAMES, levelPerks, mainSponsorName, managerExpNeed, managerLevel, sponsorBudget, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
 import { proTeams, rosterOf, teamPower } from "@shared/career/view";
 import { useCareer, useCareerPatch } from "@/lib/career";
 import type { CareerDiff } from "@shared/career/diff";
@@ -70,7 +70,7 @@ function MoneyTab({ s }: { s: CareerState }) {
 function ContractsTab({ s }: { s: CareerState }) {
   const { reply, setReply, done, fail } = useMut();
   const [sel, setSel] = useState<number | undefined>();
-  const roster = useMemo(() => s.players.filter(p => p.team === s.myTeam).sort((a, b) => Number(!!a.reserve) - Number(!!b.reserve) || totalOf(b.stats) - totalOf(a.stats)), [s]);
+  const roster = useMemo(() => s.players.filter(p => p.team === s.myTeam).sort((a, b) => totalOf(b.stats) - totalOf(a.stats)), [s]);
   const played = s.matches.filter(m => m.done && m.stage === "regular" && (m.a === s.myTeam || m.b === s.myTeam)).length;
   const contract = trpc.career.contract.useMutation({ onSuccess: done, onError: fail });
   const p = sel !== undefined ? s.players[sel] : undefined;
@@ -81,7 +81,7 @@ function ContractsTab({ s }: { s: CareerState }) {
         {roster.map(x => (
           <button key={x.id} onClick={() => { setSel(x.id); setReply(null); }} className={cn("w-full text-left px-1 py-1 border-b border-neutral-800 last:border-b-0", sel === x.id && "bg-[#3a3a5a]")}>
             <div className="flex items-center gap-1 text-[12.5px]">
-              <span className="flex-1 truncate">{x.name} ({R[x.race]}){x.reserve ? <span className="text-[10px] text-[#8fe07a]"> 2부</span> : null}</span>
+              <span className="flex-1 truncate">{x.name} ({R[x.race]})</span>
               <span className="text-[10.5px] text-neutral-400">출전 {x.sApps ?? 0}{x.contract?.minApps ? `/${x.contract.minApps}` : ""}</span>
               <MoraleBar p={x} />
             </div>
@@ -284,7 +284,7 @@ function ManagerTab({ s }: { s: CareerState }) {
       <div className="border border-neutral-600 p-2">
         <div className="flex justify-between"><span className="text-neutral-400">감독 평판</span><span className="text-[#ffe45c]">{rep} / 100</span></div>
         <div className="h-2 bg-neutral-800 mt-1"><div className="h-full bg-[#f8e070]" style={{ width: `${rep}%` }} /></div>
-        <div className="text-[10.5px] text-neutral-500 mt-1">시즌 성적(우승 +20 · 준우승 +12 · 플레이오프 +7 · 준PO +4 · 탈락 -6)과 개인리그 우승 선수로 오르내립니다. 평판이 높으면 시즌이 끝날 때 더 강한 팀에서 감독 제의가 옵니다. 옮기면 지금 구단 자금은 두고 가고, 새 구단이 영입 계약금을 운영 자금에 보태 줍니다. 감독 레벨·경험치·평판은 그대로입니다.</div>
+        <div className="text-[10.5px] text-neutral-500 mt-1">시즌 성적(우승 +20 · 준우승 +12 · 플레이오프 +7 · 준PO +4 · 탈락 -6 · 강등 -15 · 2부 승격 +10)과 개인리그 우승 선수로 오르내립니다. 평판이 높으면 시즌이 끝날 때 더 강한 팀에서 감독 제의가 옵니다. 옮기면 지금 구단 자금은 두고 가고, 새 구단이 영입 계약금을 운영 자금에 보태 줍니다. 감독 레벨·경험치·평판은 그대로입니다.</div>
       </div>
       {reply && <Reply {...reply} />}
       <div className="border border-neutral-600 p-2">
@@ -320,7 +320,7 @@ function ManagerTab({ s }: { s: CareerState }) {
         <div className="text-[#ffe45c] mb-1">팀별 제의에 필요한 평판</div>
         {ranked.map((t, i) => (
           <div key={t.id} className={cn("flex justify-between text-[11.5px]", t.id === s.myTeam && "text-[#8fd0ff]")}>
-            <span>{i + 1}. {t.name}</span><span className={rep >= jobThreshold(i) ? "text-[#bff5c6]" : "text-neutral-500"}>{jobThreshold(i)}</span>
+            <span>{i + 1}. {t.name}{t.div === 2 ? <span className="text-neutral-500"> (2부)</span> : null}</span><span className={rep >= jobThreshold(i) ? "text-[#bff5c6]" : "text-neutral-500"}>{jobThreshold(i)}</span>
           </div>
         ))}
       </div>
@@ -333,7 +333,7 @@ const TABS: Array<[Tab, string]> = [["sponsor", "스폰서"], ["money", "재정"
 function MainSponsorCard({ s }: { s: CareerState }) {
   const { reply, done, fail } = useMut();
   const sp = s.mainSponsor;
-  const name = MAIN_SPONSORS[s.myTeam]?.name ?? "모기업";
+  const name = mainSponsorName(s);
   const [terms, setTerms] = useState<MainSponsorTerms | null>(null);
   const [years, setYears] = useState(1);
   const neg = trpc.career.mainSponsor.useMutation({
@@ -404,14 +404,15 @@ function SponsorTab({ s }: { s: CareerState }) {
   const [targets, setTargets] = useState<Record<string, number[]>>({});
   const mine = activeSponsors(s);
   const { count, basis } = sponsorOfferCount(s);
-  const full = mine.length >= MAX_SPONSORS;
+  const max = maxSponsors(s);
+  const full = mine.length >= max;
   const left = offers.filter(o => !mine.some(x => x.name === o.name));
   return (
     <div className="space-y-2 text-[12.5px]">
       <MainSponsorCard s={s} />
       <div className="flex items-baseline justify-between pt-1">
         <span className="text-[#ffe45c] text-[13px]">서브 스폰서 (퀘스트)</span>
-        <span className="text-[11px] text-neutral-400">계약 {mine.length}/{MAX_SPONSORS} · 후원금 주 {mine.reduce((a, x) => a + x.weekly, 0)}만</span>
+        <span className="text-[11px] text-neutral-400">계약 {mine.length}/{max} · 후원금 주 {mine.reduce((a, x) => a + x.weekly, 0)}만</span>
       </div>
       {mine.map(sp => (
         <div key={sp.name} className="border border-[#8fe07a]/70 p-2 space-y-1.5">
@@ -423,7 +424,7 @@ function SponsorTab({ s }: { s: CareerState }) {
       {!full && (
         <>
           <div className="text-center text-[11.5px] text-neutral-300">
-            이번 시즌 스폰서 제의 <b className="text-[#ffe45c]">{count}곳</b> ({basis}·감독 명성·레벨 기준) — 최대 {MAX_SPONSORS}곳과 계약할 수 있습니다.<br />
+            이번 시즌 스폰서 제의 <b className="text-[#ffe45c]">{count}곳</b> ({basis}·감독 명성·레벨 기준) — 최대 {max}곳과 계약할 수 있습니다{max === 1 ? " (2부 팀)" : ""}.<br />
             퀘스트 목표를 올리면 보상이 커지고, 낮추면 줄어듭니다.
           </div>
           {left.map(o => (
@@ -443,7 +444,7 @@ function SponsorTab({ s }: { s: CareerState }) {
                   </div>
                 );
               })}
-              <button disabled={choose.isPending} onClick={() => choose.mutate({ name: o.name, targets: targets[o.name] ?? o.quests.map(q => q.target) })} className="w-full py-1.5 text-[13px] font-bold text-black border border-neutral-500" style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}>{choose.isPending && choose.variables?.name === o.name ? "계약 중…" : `이 스폰서와 계약 (${mine.length + 1}/${MAX_SPONSORS})`}</button>
+              <button disabled={choose.isPending} onClick={() => choose.mutate({ name: o.name, targets: targets[o.name] ?? o.quests.map(q => q.target) })} className="w-full py-1.5 text-[13px] font-bold text-black border border-neutral-500" style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}>{choose.isPending && choose.variables?.name === o.name ? "계약 중…" : `이 스폰서와 계약 (${mine.length + 1}/${max})`}</button>
             </div>
           ))}
         </>

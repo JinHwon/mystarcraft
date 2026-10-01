@@ -35,7 +35,25 @@ export const DEBT_LIMIT_WEEKS = 3;
 export const START_MONEY = 3000;
 export const WEEKLY_SPONSOR = 100;
 export const MATCH_MONEY = { win: 120, lose: 30 };
-export const POSTSEASON_PRIZE: Record<string, number> = { 우승: 1500, 준우승: 800, 플레이오프: 400, 준플레이오프: 250 };
+export const POSTSEASON_PRIZE: Record<string, number> = { 우승: 1500, 준우승: 800, 플레이오프: 400, 준플레이오프: 250, 승격: 600, "2부 우승": 400 };
+
+// ── 2부 리그 (구단마다 B팀, 1부 11·12위 ↔ 2부 1·2위 승강전) ─────────────────
+/** B팀 번호 = 1부 구단 번호 + B_TEAM_OFFSET (무소속 12번 다음부터) */
+export const B_TEAM_OFFSET = 13;
+/** 2부 팀 최소 인원 (리그 규정) */
+export const B_MIN_ROSTER = 8;
+/** 2부 팀 기본 인원 (새로 채울 때) */
+export const B_ROSTER_TARGET = 9;
+/** 2부 팀 최대 인원 */
+export const B_MAX_ROSTER = 14;
+export const B_START_MONEY = 1500;
+export const B_WEEKLY_SPONSOR = 60;
+export const B_MATCH_MONEY = { win: 60, lose: 15 };
+export const B_OPERATING_COST = 35;
+/** 2부 팀이 1부 팀에 선수를 팔면 리그가 이적료만큼 더 주는 육성 지원금 비율 */
+export const B_DEVELOPMENT_BONUS = 1;
+/** 1부에서 승강전에 나가는 순위 (12팀 중 11·12위) */
+export const PROMO_SLOTS = 2;
 
 // ── 컨디션 (원작: 작은 정수 단계, 의욕/짜증) ─────────────────────────
 /** 컨디션은 원작처럼 % (1 단위로 움직임) */
@@ -122,7 +140,7 @@ export interface CPlayer {
   photoOf?: number;
   /** 이미 어린 선수로 다시 등장함 */
   reborn?: boolean;
-  /** 2부 팀 소속 (우리 구단) */
+  /** (예전 세이브) 구단 안의 2부 육성 선수 — 이제는 B팀 소속으로 옮김 */
   reserve?: boolean;
   /** 신인으로 등장한 시즌 */
   rookie?: number;
@@ -235,6 +253,10 @@ export interface CTeam {
   losses: number;
   setWins: number;
   setLosses: number;
+  /** 소속 리그 (없으면 1부) */
+  div?: 1 | 2;
+  /** B팀이면 모구단 번호 */
+  parent?: number;
 }
 
 /** 세트 뒤 선수 변화 (중계 끝에 보여줌) */
@@ -269,8 +291,10 @@ export interface SetResult {
 export interface CMatch {
   id: number;
   week: number;
-  /** regular | semi(준PO) | po | final */
-  stage: "regular" | "semi" | "po" | "final";
+  /** regular | semi(준PO) | po | final | promo(승강전: 1부 11·12위 vs 2부 2·1위) */
+  stage: "regular" | "semi" | "po" | "final" | "promo";
+  /** 리그 (없으면 1부, 승강전은 1부 팀이 a) */
+  div?: 1 | 2;
   /** 정규시즌 주 안의 순서 (1경기·2경기) */
   leg?: 1 | 2;
   a: number;
@@ -393,11 +417,14 @@ export interface CareerState {
   /** 소식 (최근 순) */
   news: Array<{ season: number; week: number; text: string }>;
   /** 지난 시즌 기록 */
-  history: Array<{ season: number; champion: number; myRank: number; myResult: string; mslChampion?: number; mslRunnerUp?: number; /** 그 시즌 우리(감독) 팀 */ team?: number }>;
+  history: Array<{
+    season: number; champion: number; myRank: number; myResult: string; mslChampion?: number; mslRunnerUp?: number; /** 그 시즌 우리(감독) 팀 */ team?: number;
+    /** 그 시즌 우리 팀 리그 */ div?: 1 | 2; /** 2부 1위 */ champion2?: number; /** 승강전 결과 (올라간 팀 → 내려간 팀) */ promo?: Array<{ up: number; down: number }>;
+  }>;
   /** 이번 시즌 마이스타리그 */
   msl?: MslState;
-  /** 2부 리그 (2부 선수·무소속 유망주 개인리그, 정규시즌 매주 2경기) */
-  reserveLeague?: ReserveLeague;
+  /** 이번 시즌 승강전 결과 (다음 시즌 시작 때 리그를 바꿈) */
+  promo?: { season: number; moves: Array<{ up: number; down: number }> };
   /** 이번 시즌 맵 추첨 결과 */
   mapPool?: number[];
   /** 받은 영입 제안 */
@@ -449,18 +476,7 @@ export interface CareerState {
   live?: LiveMatch;
 }
 
-/** 2부 리그: 선수별 승패, 이번 주 경기, 우승자 */
-export interface ReserveLeague {
-  season: number;
-  /** 참가 선수 (우리 2부 선수 + 무소속 유망주) */
-  field: number[];
-  table: Record<number, [number, number]>;
-  /** 가장 최근 주의 경기 */
-  last: Array<{ week: number; a: number; b: number; winner: number; mapId: number; gain: Record<number, number> }>;
-  champion?: number;
-}
-
-/** 2부 리그 나이별 성장 배율: 어릴수록 크게 (오르는 쪽) */
+/** 2부 리그 경기 나이별 성장 배율: 어릴수록 크게 (오르는 쪽) */
 export function youthGrowth(age: number) {
   return age <= 17 ? 2.2 : age <= 19 ? 1.8 : age <= 21 ? 1.4 : age <= 23 ? 1 : age <= 25 ? 0.7 : 0.5;
 }

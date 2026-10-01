@@ -4,7 +4,7 @@ import { saveEntryDraft, takeEntryReturn } from "@/components/legacy/match/commo
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { FINAL_SETS, PRO_SETS, type CareerState, type CMatch } from "@shared/career/rules";
-import { STAGE_NAMES, myPendingMatch, rosterOf, standings } from "@shared/career/view";
+import { DIV_NAMES, STAGE_NAMES, divTeams, leagueName, myDiv, myPendingMatch, rosterOf, standings } from "@shared/career/view";
 import { useCareer, useCareerPatch, useCareerUpdater } from "@/lib/career";
 import type { CareerDiff } from "@shared/career/diff";
 import { TeamBadge } from "@/components/career/Bits";
@@ -310,9 +310,21 @@ function MatchTab({ s }: { s: CareerState }) {
 }
 
 function TableTab({ s }: { s: CareerState }) {
-  const st = standings(s);
+  const [div, setDiv] = useState<1 | 2>(myDiv(s));
+  const st = standings(s, div);
   const [, navigate] = useLocation();
+  const hasB = divTeams(s, 2).length > 0;
+  // 승강전 구역: 1부 11·12위, 2부 1·2위
+  const promo = (i: number) => (div === 1 ? i >= st.length - 2 : i < 2);
   return (
+    <div className="space-y-2">
+    {hasB && (
+      <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-card border border-border">
+        {([1, 2] as const).map(d => (
+          <button key={d} onClick={() => setDiv(d)} className={cn("py-1.5 rounded-lg text-sm font-bold", div === d ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{DIV_NAMES[d]} 리그</button>
+        ))}
+      </div>
+    )}
     <div className="rounded-2xl bg-card border border-border overflow-hidden">
       <table className="w-full text-sm">
         <thead className="text-[11px] text-muted-foreground">
@@ -320,8 +332,8 @@ function TableTab({ s }: { s: CareerState }) {
         </thead>
         <tbody>
           {st.map((t, i) => (
-            <tr key={t.id} onClick={() => navigate(`/teams?id=${t.id}`)} className={cn("border-b border-border/60 cursor-pointer active:bg-muted/40", t.id === s.myTeam && "bg-amber-500/15", i === 3 && "border-b-2 border-b-amber-400/40")}>
-              <td className="py-2 pl-3 font-bold text-muted-foreground">{i + 1}</td>
+            <tr key={t.id} onClick={() => navigate(`/teams?id=${t.id}`)} className={cn("border-b border-border/60 cursor-pointer active:bg-muted/40", t.id === s.myTeam && "bg-amber-500/15", div === 1 && i === 3 && "border-b-2 border-b-amber-400/40", hasB && promo(i) && t.id !== s.myTeam && "bg-rose-500/10")}>
+              <td className={cn("py-2 pl-3 font-bold", hasB && promo(i) ? "text-rose-300" : "text-muted-foreground")}>{i + 1}</td>
               <td className="py-2"><span className="flex items-center gap-1.5"><TeamBadge short={t.short} color={t.color} /><span className={cn("truncate", t.id === s.myTeam ? "text-amber-200 font-bold" : "text-foreground")}>{t.name}</span><span className="text-muted-foreground text-xs">›</span></span></td>
               <td className="text-center font-bold text-foreground">{t.wins}</td>
               <td className="text-center text-muted-foreground">{t.losses}</td>
@@ -330,7 +342,12 @@ function TableTab({ s }: { s: CareerState }) {
           ))}
         </tbody>
       </table>
-      <p className="text-[10px] text-muted-foreground px-3 py-2">구단을 누르면 구단 정보와 선수단을 볼 수 있습니다 · 4위까지 포스트시즌 진출 · 준플레이오프(3위 vs 4위) → 플레이오프(2위) → 결승(1위, 7전 4선승)</p>
+      <p className="text-[10px] text-muted-foreground px-3 py-2">
+        구단을 누르면 구단 정보와 선수단을 볼 수 있습니다 ·{" "}
+        {div === 1 ? "4위까지 포스트시즌 진출 · 준플레이오프(3위 vs 4위) → 플레이오프(2위) → 결승(1위, 7전 4선승)" : "2부는 포스트시즌 없이 정규시즌 순위로"}
+        {hasB && <> · <span className="text-rose-300">승강전</span>: 1부 11위 vs 2부 2위, 1부 12위 vs 2부 1위 (이긴 팀이 다음 시즌 1부)</>}
+      </p>
+    </div>
     </div>
   );
 }
@@ -344,7 +361,7 @@ export default function League() {
   return (
     <div className="p-4 space-y-3">
       <div className="text-center">
-        <div className="text-lg font-black text-foreground">🏆 {s.season}시즌 마이프로리그</div>
+        <div className="text-lg font-black text-foreground">🏆 {s.season}시즌 {leagueName(myDiv(s))}</div>
         <div className="text-xs text-muted-foreground">{s.phase === "regular" ? `정규시즌 ${s.week}주차 / 11` : s.phase === "postseason" ? "포스트시즌" : "시즌 종료"}</div>
       </div>
       <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-card border border-border">
