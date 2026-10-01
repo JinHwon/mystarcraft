@@ -123,7 +123,7 @@ export default function Admin() {
               <span className="font-bold text-foreground truncate">{r.name}</span>
               <span className="text-[10px] text-muted-foreground">#{r.userId}</span>
               {r.role === "admin" && <span className="text-[10px] text-amber-300 font-bold">관리자</span>}
-              <span className="ml-auto text-[10px] text-muted-foreground">{r.lastSignedIn ? new Date(r.lastSignedIn).toLocaleDateString("ko-KR") : ""}</span>
+              <span className="ml-auto text-[10px] text-muted-foreground text-right">{r.lastSignedIn ? `접속 ${new Date(r.lastSignedIn).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}{r.summary?.lastLeagueAt ? <><br />진행 {new Date(r.summary.lastLeagueAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</> : null}</span>
             </div>
             {r.summary ? (
               <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-1">

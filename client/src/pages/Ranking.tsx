@@ -22,6 +22,19 @@ const SORTS: Array<{ key: string; label: string; value: (r: Row) => number; show
   { key: "power", label: "전력", value: r => r.power, show: r => r.power.toLocaleString() },
 ];
 
+/** "3분 전"·"2시간 전"·"5일 전" */
+function ago(ms: number | null | undefined): string {
+  if (!ms) return "기록 없음";
+  const m = Math.max(0, Math.floor((Date.now() - ms) / 60_000));
+  if (m < 1) return "방금";
+  if (m < 60) return `${m}분 전`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}시간 전`;
+  const d = Math.floor(h / 24);
+  return d < 30 ? `${d}일 전` : `${Math.floor(d / 30)}달 전`;
+}
+const when = (ms: number | null | undefined) => (ms ? new Date(ms).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "-");
+
 export default function Ranking() {
   const q = trpc.career.ranking.useQuery(undefined, { staleTime: 60_000 });
   const [sort, setSort] = useState("level");
@@ -61,6 +74,7 @@ export default function Ranking() {
                     <span className="truncate">{r.team.name}</span>
                     <span>· Lv.{r.level}</span>
                   </div>
+                  <div className="text-[10.5px] text-muted-foreground mt-0.5">접속 {ago(r.lastSignedIn)} · 리그 진행 {ago(r.lastLeagueAt)}</div>
                 </div>
                 <span className="font-black text-foreground text-sm">{cur.show(r)}</span>
               </div>
@@ -76,6 +90,8 @@ export default function Ranking() {
                     ["팀 전력", r.power.toLocaleString()],
                     ["이번 시즌", `${r.record.wins}승 ${r.record.losses}패`],
                     ["우승", `프로 ${r.proTitles} · 개인 ${r.mslTitles}`],
+                    ["마지막 접속", when(r.lastSignedIn)],
+                    ["마지막 리그 진행", when(r.lastLeagueAt)],
                   ].map(([k, v]) => (
                     <div key={k} className="rounded-xl bg-muted/60 py-1.5"><div className="text-[10px] text-muted-foreground">{k}</div><div className="text-xs font-bold text-foreground">{v}</div></div>
                   ))}
