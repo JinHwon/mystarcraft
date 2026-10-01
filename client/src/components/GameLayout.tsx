@@ -27,6 +27,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { ACTIONS } from "@shared/career/rules";
 import { rosterOf } from "@shared/career/view";
 import { useCareer } from "@/lib/career";
+import { Notifications } from "@/components/Notifications";
 
 interface NavItem { path: string; label: string; tab?: string; icon: LucideIcon }
 
@@ -93,11 +94,12 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
               <div className="font-bold text-base text-foreground truncate leading-tight">{title}</div>
               {s && <div className="text-[10px] text-muted-foreground leading-tight">{s.season}시즌 · {s.phase === "regular" ? `${s.week}주차` : s.phase === "postseason" ? "포스트시즌" : "시즌 종료"}</div>}
             </div>
-            {team && (
-              <div className="flex items-center gap-1.5">
+            {team && s && (
+              <div className="flex items-center gap-1">
                 <span className="flex items-center gap-1 rounded-full bg-yellow-500/15 border border-yellow-500/30 text-yellow-300 font-bold px-2 py-0.5 text-[11px]">
                   <Coins className="w-3.5 h-3.5" />{team.money.toLocaleString()}만
                 </span>
+                <Notifications s={s} />
               </div>
             )}
           </div>
