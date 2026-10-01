@@ -362,6 +362,22 @@ export const MSL_STAGE_NAMES: Record<MslStage, string> = {
 export const MSL_PRIZE: Record<string, number> = { 우승: 1500, 준우승: 800, "4강": 400, "8강": 250, "16강": 150, "32강": 80 };
 
 /** 다전제 한 경기 (스타리그는 선수 대 선수) */
+/** 관전용: 경기 직전 선수 상태 (아직 안 본 경기 결과가 미리 드러나지 않게) */
+export interface PlayerSnap {
+  cond: number;
+  stats: Record<StatKey, number>;
+  titles?: string[];
+  /** 그 주 포텐셜 폭발 배율 */
+  burst?: number;
+}
+export function snapOf(p: CPlayer, s?: { season: number; week: number }): PlayerSnap {
+  const out: PlayerSnap = { cond: p.cond, stats: { ...p.stats } };
+  if (p.titles?.length) out.titles = [...p.titles];
+  const b = s ? burstOf(s, p) : undefined;
+  if (b) out.burst = b;
+  return out;
+}
+
 export interface MslSeries {
   a: number;
   b: number;

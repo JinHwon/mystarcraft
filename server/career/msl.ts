@@ -7,7 +7,9 @@ import {
   MSL_PRIZE,
   MSL_STAGE_NAMES,
   MSL_PLAN,
+  snapOf,
   totalOf,
+  type PlayerSnap,
   type MslStage,
   type CareerState,
   type MslGroup,
@@ -25,7 +27,8 @@ const byStrength = (s: CareerState, ids: number[]) => [...ids].sort((a, b) => st
 const isMine = (s: CareerState, id: number) => s.players[id]?.team === s.myTeam;
 
 /** 이번 주에 치른, 우리 선수가 나온 경기 (하이라이트 포함, 화면 표시용) */
-export type MslReport = Omit<MslSeries, "sets"> & { stage: string; sets: PlayedSet[]; maps: number[] };
+/** 중계용 다전제 (pre: 시작 직전 두 선수 상태 — 관전 화면이 세트마다 컨디션·능력치를 보여줌) */
+export type MslReport = Omit<MslSeries, "sets"> & { stage: string; sets: PlayedSet[]; maps: number[]; pre?: Record<number, PlayerSnap> };
 
 // ── 시즌 시작 ──────────────────────────────────────────────────
 
@@ -50,6 +53,7 @@ function series(s: CareerState, a: number, b: number, bestOf: number, label: str
   const involved = !quiet && (isMine(s, a) || isMine(s, b));
   const mine = involved || (!quiet && featured);
   const maps = pickMaps(bestOf, s.mapPool);
+  const pre = mine ? { [a]: snapOf(s.players[a], s), [b]: snapOf(s.players[b], s) } : undefined;
   let sa = 0, sb = 0;
   const sets: PlayedSet[] = [];
   for (let i = 0; sa < need && sb < need; i++) {
@@ -61,7 +65,7 @@ function series(s: CareerState, a: number, b: number, bestOf: number, label: str
   const result: MslSeries = { a, b, bestOf, sa, sb, winner: sa > sb ? a : b, label, sets };
   if (involved && isMine(s, result.winner)) addManagerExp(s, 5);
   if (mine) {
-    report.push({ ...result, stage, maps, sets: sets.map(x => ({ ...x })) });
+    report.push({ ...result, stage, maps, sets: sets.map(x => ({ ...x })), pre });
     for (const x of sets) { delete x.highlights; delete x.timeline; } // 세이브에는 중계를 남기지 않음
   }
   return result;

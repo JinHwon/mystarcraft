@@ -164,12 +164,14 @@ function MatchTab({ s }: { s: CareerState }) {
     if (wv.closed) return resumeCard(wv.stage === "pro" ? "포스트시즌 경기를 끝까지 보지 않았습니다" : "개인리그 경기를 끝까지 보지 않았습니다",
       () => setWv({ ...wv, closed: false }), () => setWv({ w: wv.w, stage: "summary" }));
     const close = () => setWv({ ...(heldWeek ?? wv), closed: true });
+    // 이번 주 관전 경기 전체 (포스트시즌 → 개인리그): 선수 상태를 보고 있는 경기 직전으로
+    const all = [...(wv.w.proReports ?? []), ...(wv.w.mslReports ?? [])];
     if (wv.stage === "pro") {
-      return <ProSeriesFlow s={s} reports={wv.w.proReports ?? []} start={wv.pro}
+      return <ProSeriesFlow s={s} reports={wv.w.proReports ?? []} all={all} start={wv.pro}
         onProgress={p => { if (heldWeek) heldWeek = { ...heldWeek, pro: p }; }}
         onClose={close} onDone={() => afterPro(wv.w)} />;
     }
-    return <MslFlow s={s} reports={wv.w.mslReports ?? []} plans={wv.w.mslPlans} start={wv.msl}
+    return <MslFlow s={s} reports={wv.w.mslReports ?? []} all={all} plans={wv.w.mslPlans} start={wv.msl}
       onProgress={i => { if (heldWeek) heldWeek = { ...heldWeek, msl: i }; }}
       onClose={close} onDone={() => setWv({ w: wv.w, stage: "summary" })} />;
   }

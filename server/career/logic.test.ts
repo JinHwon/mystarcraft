@@ -180,6 +180,64 @@ describe("2부 리그 (B팀)", () => {
   });
 });
 
+describe("관전 화면용 경기 직전 상태·수입원·새 시즌 컨디션", () => {
+  it("개인리그·포스트시즌 중계에 경기 직전 선수 상태(pre)가 오고, 세트 결과(fx)를 더하면 지금 상태가 된다", () => {
+    const s = newCareer(4);
+    let checked = 0;
+    for (let w = 0; w < 16 && s.phase !== "offseason"; w++) {
+      const m = myPendingMatch(s);
+      const r = advanceWeek(s, m ? aiEntry(s, s.myTeam, m.stage === "final" ? FINAL_SETS : PRO_SETS) : undefined);
+      for (const rep of [...(r.mslReports ?? []), ...(r.proReports ?? [])]) {
+        expect(rep.pre).toBeDefined();
+        for (const set of rep.sets) {
+          expect(rep.pre![set.a]).toBeDefined();
+          expect(set.fx).toBeDefined();
+        }
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+  }, 60_000);
+
+  it("관전 위치의 선수 상태: 결승을 보기 전엔 우승 기록이 없고, 경기 전 컨디션이 보인다", async () => {
+    const { viewStateAt } = await import("../../client/src/components/legacy/match/viewState");
+    const s = newCareer(4);
+    let final: ReturnType<typeof advanceWeek> | undefined;
+    for (let w = 0; w < 16 && s.phase !== "offseason" && !final; w++) {
+      const m = myPendingMatch(s);
+      const r = advanceWeek(s, m ? aiEntry(s, s.myTeam, m.stage === "final" ? FINAL_SETS : PRO_SETS) : undefined);
+      if (r.mslReports.some(x => x.stage === "결승")) final = r;
+    }
+    expect(final).toBeDefined();
+    const all = [...(final!.proReports ?? []), ...final!.mslReports];
+    const k = all.findIndex(x => (x as { stage: string }).stage === "결승");
+    const champ = s.msl!.champion!;
+    const title = `${s.season}시즌 마이스타리그 우승`;
+    expect(s.players[champ].titles).toContain(title);
+    const before = viewStateAt(s, all, k, 0);
+    expect(before.players[champ].titles ?? []).not.toContain(title);
+    expect(before.players[champ].cond).toBe(all[k].pre![champ].cond);
+    // 다 보면 지금 세이브 그대로
+    expect(viewStateAt(s, all, all.length).players[champ].titles).toContain(title);
+  }, 60_000);
+
+  it("홈 경기 관중 수입·굿즈 판매가 가계부에 들어오고, 정규시즌이 끝나면 순위 상금, 새 시즌엔 중계권 분배금", () => {
+    const s = newCareer(0);
+    while (s.phase === "regular") { const m = myPendingMatch(s); advanceWeek(s, m ? aiEntry(s, 0, PRO_SETS) : undefined); if (s.weekHold) completeWeek(s); }
+    const items = s.ledger!.items;
+    expect(items["관중 수입"]).toBeGreaterThan(0);
+    expect(items["굿즈 판매"]).toBeGreaterThan(0);
+    const rank = standings(s, 1).findIndex(t => t.id === 0);
+    if (rank < 10) expect(items["정규시즌 순위 상금"]).toBeGreaterThan(0);
+    s.phase = "offseason";
+    for (const p of rosterOf(s, 0)) p.cond = 40;
+    startNextSeason(s, { releaseExpiring: true });
+    expect(s.ledger!.items["중계권 분배금"]).toBe(500);
+    // 새 시즌은 모든 선수 컨디션 100%
+    expect(s.players.filter(p => p.team >= 0).every(p => p.cond === 100)).toBe(true);
+  }, 60_000);
+});
+
 describe("비타비타 여러 개", () => {
   it("컨디션이 가득 차거나 가진 수량이 떨어질 때까지 한 번에 먹인다", () => {
     const s = newCareer(0);
