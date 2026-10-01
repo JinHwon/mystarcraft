@@ -202,8 +202,10 @@ export function PlayerCard({ p, opp }: { p: CPlayer; opp: CPlayer }) {
   );
 }
 
-export function SetList({ s, left, right, maps, total, idx, results, leftIsA, showAce, onView, view }: {
+export function SetList({ s, left, right, maps, total, idx, results, leftIsA, showAce, onView, view, hideOppAce = true }: {
   s: CareerState; left: number[]; right: number[]; maps: number[]; total: number; idx: number; results: BroadcastSet[]; leftIsA: boolean; showAce: boolean;
+  /** 오른쪽(상대) ACE 는 치를 때까지 숨김 — 우리 경기. 관전(다른 팀 경기)이면 false: 양쪽 다 showAce 를 따름 */
+  hideOppAce?: boolean;
   /** 맵을 누르면 그 세트 선수를 보여줌 (보여줄 수 있는지는 부르는 쪽에서 판단) */
   onView?: (i: number) => void;
   view?: number;
@@ -214,7 +216,7 @@ export function SetList({ s, left, right, maps, total, idx, results, leftIsA, sh
         const ace = i === total - 1;
         const r = results[i];
         const leftWon = r ? (r.winner === "a") === leftIsA : undefined;
-        const hideL = ace && !r && !showAce, hideR = ace && !r;
+        const hideL = ace && !r && !showAce, hideR = ace && !r && (hideOppAce || !showAce);
         const lp = left[i] !== undefined ? s.players[left[i]] : undefined, rp = s.players[right[i]];
         const cell = (p: CPlayer | undefined, won: boolean | undefined, hide: boolean) =>
           hide || !p ? <span className="inline-block border border-neutral-300 px-2 py-[1px]">ACE Card</span>

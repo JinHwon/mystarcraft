@@ -35,7 +35,9 @@ import {
   ageOf,
   askingPrice,
   condMultiplier,
+  snapOf,
   totalOf,
+  type PlayerSnap,
 } from "@shared/career/rules";
 import {
   type SetMods,
@@ -46,12 +48,13 @@ export { CareerError };
 import { initialPlayers, initialTeams } from "@shared/career/init";
 import { eventOn } from "./events";
 import { aiShopping } from "./aiShop";
+import { broadcastRights, gateIncome, regularSeasonPrize, weeklyGoods } from "./income";
 import { applyPromo, ensureDivisions, fillBRosters, promoMoves, rosterLimits, scheduleDivision, schedulePromo } from "./divisions";
 import { createMsl, nominationPending, runMslWeek, type MslReport } from "./msl";
 import { ITEM_BY_KEY, POTION_LIMIT, slotOf } from "@shared/career/items";
 import { ensurePotential, retirements, rookies } from "./generation";
 import { addManagerExp, mainSponsorPay, book, ensureClub, newSeasonClub, pay, seasonEndClub, weeklyClub } from "./club";
-import { cheerChance, defaultContract, scoutPrice } from "@shared/career/contract";
+import { cheerChance, defaultContract, popularity, scoutPrice } from "@shared/career/contract";
 export type { MslReport };
 
 const RACE: Record<string, Race> = { T: "terran", Z: "zerg", P: "protoss" };
@@ -68,7 +71,7 @@ export { rosterOf, proTeams, standings, myPendingMatch };
 export function newCareer(myTeam: number): CareerState {
   const teams = initialTeams();
   if (!teams[myTeam] || myTeam === FREE_AGENT_TEAM) throw new CareerError("팀을 선택해주세요");
-  const players = initialPlayers(() => randInt(50, 90));
+  const players = initialPlayers(() => COND_MAX);
   const s: CareerState = {
     version: 1,
     myTeam,
@@ -161,7 +164,8 @@ function actOne(s: CareerState, p: CPlayer, action: ActionKey | null | undefined
     case "train": gainStats(p, 2, 2 * boost, 6 * boost); p.cond = clampCond(p.cond - randInt(3, 5)); break;
     case "rest": p.cond = clampCond(p.cond + 5); break;
     case "event": {
-      const earn = 30 + p.level * 12 + randInt(0, 40);
+      // 인기 많은 선수일수록 팬미팅 수익이 큼
+      const earn = 30 + p.level * 12 + Math.round(popularity(p) * 1.5) + randInt(0, 40);
       if (mine) {
         pay(s, "이벤트", earn, `${p.name} 팬미팅`);
         // 팬미팅: 인기가 많을수록 치어풀을 받을 확률이 높음
@@ -268,6 +272,8 @@ function recordMatch(s: CareerState, m: CMatch, entryA: number[], entryB: number
     ta.setWins += sa; ta.setLosses += sb; tb.setWins += sb; tb.setLosses += sa;
     if (m.winner === m.a) { ta.wins++; tb.losses++; } else { tb.wins++; ta.losses++; }
   }
+  // 홈 팀 관중 수입
+  gateIncome(s, m);
   // 다른 팀은 리그 기본 수당, 우리 팀은 메인 스폰서 계약 수당
   const loserTeam = m.winner === m.a ? m.b : m.a;
   const money = (team: number) => (divOf(s, team) === 2 ? B_MATCH_MONEY : MATCH_MONEY);
@@ -318,7 +324,7 @@ function playMatch(s: CareerState, m: CMatch, myEntry?: number[]): PlayedSet[] {
 }
 
 /** 포스트시즌 다른 팀 경기 (중계 화면용, 세이브에는 해설을 남기지 않음) */
-export interface ProReport { matchId: number; stage: CMatch["stage"]; a: number; b: number; sa: number; sb: number; sets: PlayedSet[]; entryA: number[]; entryB: number[]; maps: number[] }
+export interface ProReport { matchId: number; stage: CMatch["stage"]; a: number; b: number; sa: number; sb: number; sets: PlayedSet[]; entryA: number[]; entryB: number[]; maps: number[]; pre?: Record<number, PlayerSnap> }
 
 /** 오래된 중계 하이라이트는 지워서 세이브 크기를 줄임 (내 팀 최근 4경기만 유지) */
 function pruneHighlights(s: CareerState) {
@@ -388,9 +394,12 @@ function finishWeek(s: CareerState): WeekResult {
   applyActions(s);
   const proReports: ProReport[] = [];
   for (const m of s.matches.filter(x => !x.done && x.week === s.week)) {
+    const watched = m.stage !== "regular" && m.a !== s.myTeam && m.b !== s.myTeam;
+    // 관전 화면용: 경기 직전 양 팀 선수 상태
+    const pre = watched ? Object.fromEntries([...rosterOf(s, m.a), ...rosterOf(s, m.b)].map(p => [p.id, snapOf(p, s)])) : undefined;
     const sets = playMatch(s, m);
-    if (m.stage !== "regular" && m.a !== s.myTeam && m.b !== s.myTeam) {
-      proReports.push({ matchId: m.id, stage: m.stage, a: m.a, b: m.b, sa: m.scoreA ?? 0, sb: m.scoreB ?? 0, sets: sets.map(x => ({ ...x })), entryA: m.entryA ?? [], entryB: m.entryB ?? [], maps: m.maps });
+    if (watched) {
+      proReports.push({ matchId: m.id, stage: m.stage, a: m.a, b: m.b, sa: m.scoreA ?? 0, sb: m.scoreB ?? 0, sets: sets.map(x => ({ ...x })), entryA: m.entryA ?? [], entryB: m.entryB ?? [], maps: m.maps, pre });
       for (const x of sets) { delete x.timeline; delete x.highlights; }
     }
   }
@@ -398,6 +407,8 @@ function finishWeek(s: CareerState): WeekResult {
   // 다른 팀은 고정 후원금 (2부는 적게), 우리 팀은 고른 스폰서 (구단 운영 → 스폰서)
   for (const t of proTeams(s)) if (t.id !== s.myTeam) t.money += t.div === 2 ? B_WEEKLY_SPONSOR : WEEKLY_SPONSOR;
   weeklyClub(s);
+  // 굿즈 판매 (모든 구단)
+  if (s.phase !== "offseason") weeklyGoods(s);
   // 2부 팀 최소 인원 (이적·은퇴로 모자라면 리그가 채움)
   fillBRosters(s);
   // 한 주(프로리그 2경기)가 끝나면 모든 선수 컨디션 10% 회복
@@ -523,6 +534,7 @@ function progressSchedule(s: CareerState) {
     const st = standings(s, 1);
     s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "semi", div: 1, a: st[2].id, b: st[3].id, maps: pickMaps(PRO_SETS, s.mapPool) });
     schedulePromo(s);
+    regularSeasonPrize(s);
     const mine = standings(s);
     const myRank = mine.findIndex(t => t.id === s.myTeam) + 1;
     const n = mine.length;
@@ -613,7 +625,8 @@ export function startNextSeason(s: CareerState, opts: { releaseExpiring?: boolea
     p.potions = 0;
     // 선수 행동력은 시즌마다 새로 (쌓인 건 시즌 동안만)
     if (p.team === s.myTeam) p.ap = WEEKLY_AP;
-    p.cond = randInt(50, 90);
+    // 새 시즌은 모두 컨디션 100%로 시작
+    p.cond = COND_MAX;
   }
   for (const t of s.teams) { t.wins = 0; t.losses = 0; t.setWins = 0; t.setLosses = 0; }
   // 승강전 결과대로 1부·2부를 바꿈
@@ -623,6 +636,8 @@ export function startNextSeason(s: CareerState, opts: { releaseExpiring?: boolea
   rookies(s, gone.length);
   ensurePotential(s);
   newSeasonClub(s);
+  // 리그 중계권 분배금 (새 시즌 가계부에)
+  broadcastRights(s);
   // AI 1부 팀: 선수가 부족하면 자유계약 선수 영입 (2부 팀은 아래 fillBRosters 가 유망주로)
   for (const t of divTeams(s, 1)) {
     if (t.id === s.myTeam) continue;

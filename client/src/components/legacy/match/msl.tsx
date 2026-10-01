@@ -12,14 +12,17 @@ import { GrayBox, LegacyFrame, LegacyImg, LegacyRadar, PlayerPhoto, TeamLogo } f
 import { R, condStats, nameRace, useSpeed } from "./common";
 import { Broadcast, PlayerCard } from "./broadcast";
 import { type MslReportView } from "./proleague";
+import { viewStateAt, type SnapReport } from "./viewState";
 
 /** 스타리그 경기 다시 보기 (우리 선수 다전제) */
 /** onClose: 다 봄, onExit: ✕ 로 나감 (없으면 onClose) */
-export function SeriesViewer({ s, report, onClose, onExit }: { s: CareerState; report: MslReportView; onClose: () => void; onExit?: () => void }) {
+/** stateAt: j세트 직전 선수 상태 (관전 중 아직 안 본 결과가 드러나지 않게) */
+export function SeriesViewer({ s: latest, report, onClose, onExit, stateAt }: { s: CareerState; report: MslReportView; onClose: () => void; onExit?: () => void; stateAt?: (j: number) => CareerState }) {
   const [idx, setIdx] = useState(0);
   /** 세트가 끝나면 라운드별 승자 화면 → Next 로 다음 세트 */
   const [between, setBetween] = useState(false);
   const [speed, setSpeed] = useSpeed();
+  const s = stateAt ? stateAt(between ? idx + 1 : idx) : latest;
   const mineLeft = s.players[report.a]?.team === s.myTeam || s.players[report.b]?.team !== s.myTeam;
   const leftIsA = mineLeft;
   const set = report.sets[idx];
@@ -31,7 +34,7 @@ export function SeriesViewer({ s, report, onClose, onExit }: { s: CareerState; r
   const logo = (p: CPlayer) => <TeamLogo team={s.teams[p.team]} className="w-[70px] h-[40px]" />;
   if (between) {
     const last = idx + 1 >= report.sets.length;
-    return <SeriesBoard s={s} report={report} played={idx + 1} leftIsA={leftIsA} onClose={onExit ?? onClose}
+    return <SeriesBoard s={s} start={stateAt?.(0)} report={report} played={idx + 1} leftIsA={leftIsA} onClose={onExit ?? onClose}
       nextLabel={last ? "확인 ▷▷" : `${idx + 2}세트 ▷▷`} onNext={() => { setBetween(false); if (last) onClose(); else setIdx(idx + 1); }} />;
   }
   return (
@@ -44,8 +47,10 @@ export function SeriesViewer({ s, report, onClose, onExit }: { s: CareerState; r
 }
 
 /** 다전제 라운드별 결과 (정해진 판수만큼 모두 표시, 치르지 않은 판은 "-") */
-export function SeriesBoard({ s, report, played, leftIsA, onNext, onClose, nextLabel }: {
+export function SeriesBoard({ s, start, report, played, leftIsA, onNext, onClose, nextLabel }: {
   s: CareerState; report: MslReportView; played: number; leftIsA: boolean; onNext: () => void; onClose: () => void; nextLabel: string;
+  /** 다전제 시작 때 선수 상태 (있으면 컨디션·능력치 변화 표시) */
+  start?: CareerState;
 }) {
   const lp = s.players[leftIsA ? report.a : report.b], rp = s.players[leftIsA ? report.b : report.a];
   let sl = 0, sr = 0;
@@ -66,6 +71,7 @@ export function SeriesBoard({ s, report, played, leftIsA, onNext, onClose, nextL
               <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} titles={p.titles} size={64} />
               <div className={cn("text-[12.5px] mt-0.5", p.team === s.myTeam && "text-[#8fd0ff]")}>{nameRace(p)}</div>
               <div className="text-[10px] text-neutral-500">{s.teams[p.team]?.name ?? "무소속"}</div>
+              <StateLine p={p} before={start?.players[p.id]} />
               {over && (report.winner === p.id) && <div className="text-[13px] font-black text-[#ffe45c]">WINNER</div>}
             </div>
           ))}
@@ -92,14 +98,30 @@ export function SeriesBoard({ s, report, played, leftIsA, onNext, onClose, nextL
   );
 }
 
+/** 컨디션·능력치 합 (before 가 있으면 변화량) */
+function StateLine({ p, before }: { p: CPlayer; before?: CPlayer }) {
+  const total = totalOf(p.stats), dc = before ? gearCond(p) - gearCond(before) : 0, dt = before ? total - totalOf(before.stats) : 0;
+  const d = (v: number) => (v ? <span className={v > 0 ? "text-[#8fe07a]" : "text-[#ff8a8a]"}> ({v > 0 ? "+" : ""}{v})</span> : null);
+  return (
+    <div className="text-[10.5px] text-neutral-300 leading-tight text-center">
+      컨디션 {gearCond(p)}%{d(dc)}<br />능력치 {total.toLocaleString()}{d(dt)}
+    </div>
+  );
+}
+
 /** 원작 듀얼 토너먼트 화면: 조 4명 → 1경기·2경기 → 승자전·패자전 → 최종전을 차례로 (우리 선수 경기는 중계) */
-export function DualGroupScreen({ s, stage, group, reports, onDone, onClose }: {
+export function DualGroupScreen({ s: latest, stage, group, reports, onDone, onClose, stateAt }: {
   s: CareerState; stage: string; group: MslGroup; reports: MslReportView[]; onDone: () => void; onClose: () => void;
+  /** 그 경기 j세트 직전 선수 상태 (r 이 없으면 이 조 경기를 다 본 뒤) */
+  stateAt?: (r: MslReportView | null, j: number) => CareerState;
 }) {
   const [cursor, setCursor] = useState(0);
   const [watching, setWatching] = useState<MslReportView | null>(null);
-  if (watching) return <SeriesViewer s={s} report={watching} onClose={() => { setWatching(null); setCursor(c => c + 1); }} onExit={onClose} />;
+  if (watching) return <SeriesViewer s={latest} report={watching} stateAt={stateAt ? j => stateAt(watching, j) : undefined} onClose={() => { setWatching(null); setCursor(c => c + 1); }} onExit={onClose} />;
   const games = group.games;
+  // 지금 보는 위치의 선수 상태: 아직 안 본 우리 경기 직전 (다 봤으면 이 조 경기 뒤)
+  const upcoming = games.slice(cursor).map(g => reports.find(r => r.label === g.label)).find(Boolean) ?? null;
+  const s = stateAt ? stateAt(upcoming, 0) : latest;
   const cur = games[cursor];
   const curReport = cur ? reports.find(r => r.label === cur.label) : undefined;
   const finished = cursor >= games.length;
@@ -135,6 +157,7 @@ export function DualGroupScreen({ s, stage, group, reports, onDone, onClose }: {
                   <div className={cn("truncate", p.team === s.myTeam ? "text-[#8fd0ff]" : "text-white")}>{nameRace(p)}</div>
                   <div className="text-[10px] text-neutral-400 truncate">{s.teams[p.team]?.name ?? "무소속"}</div>
                   <div className="text-[10px] text-neutral-400">{`Lv.${p.level} · 컨디션 ${gearCond(p)}%`}</div>
+                  <div className="text-[10px] text-neutral-400">{`능력치 ${totalOf(p.stats).toLocaleString()}`}</div>
                   {st.text && <div className={cn("text-[11px]", st.c)}>{st.text}</div>}
                 </div>
               </div>
@@ -176,10 +199,20 @@ export const groupOf = (s: CareerState, stage: string, name: string) => {
  * onDone: 다 봄, onClose: ✕ 로 나감 (나중에 이어 보기, 없으면 onDone)
  * start·onProgress: 이어 볼 위치
  */
-export function MslFlow({ s, reports, plans = [], flat, onDone, onClose, start = 0, onProgress }: {
+export function MslFlow({ s, reports, plans = [], flat, onDone, onClose, start = 0, onProgress, all }: {
   s: CareerState; reports: MslReportView[]; plans?: number[]; flat?: boolean; onDone: () => void; onClose?: () => void; start?: number; onProgress?: (i: number) => void;
+  /** 이번 주 관전 경기 전체 (포스트시즌 → 개인리그 순) — 선수 상태를 그 경기 직전으로 보여줄 때 씀 */
+  all?: SnapReport[];
 }) {
   const exit = onClose ?? onDone;
+  const list = all ?? reports;
+  /** r 의 j세트 직전 (r 이 없으면 이번 주 개인리그 끝) */
+  const at = (r: MslReportView | null, j = 0) => {
+    const k = r ? list.indexOf(r) : -1;
+    return k < 0 ? (r ? s : viewStateAt(s, list, list.length)) : viewStateAt(s, list, k, j);
+  };
+  // 조 화면: r 이 없으면 그 조 마지막 경기 뒤
+  const groupAt = (reps: MslReportView[]) => (r: MslReportView | null, j: number) => (r ? at(r, j) : viewStateAt(s, list, Math.max(...reps.map(x => list.indexOf(x))) + 1));
   const steps = useMemo(() => {
     const out: MslStep[] = [];
     for (const r of reports) {
@@ -199,14 +232,15 @@ export function MslFlow({ s, reports, plans = [], flat, onDone, onClose, start =
   if (!step) return null;
   if (step.kind === "plan") return <MslStageResult s={s} planIdx={step.planIdx} onNext={() => setI(i + 1)} onClose={exit} />;
   const group = step.kind === "group" ? groupOf(s, step.stage, step.name) : undefined;
-  if (step.kind === "group" && group?.games.length) return <DualGroupScreen key={i} s={s} stage={step.stage} group={group} reports={step.reports} onDone={() => setI(i + 1)} onClose={exit} />;
+  if (step.kind === "group" && group?.games.length) return <DualGroupScreen key={i} s={s} stage={step.stage} group={group} reports={step.reports} stateAt={groupAt(step.reports)} onDone={() => setI(i + 1)} onClose={exit} />;
   // 조 기록이 없으면 (예전 세이브) 우리 경기만 하나씩
-  if (step.kind === "group") return <MslFlow key={i} s={s} reports={step.reports} flat onDone={() => setI(i + 1)} onClose={exit} />;
+  if (step.kind === "group") return <MslFlow key={i} s={s} reports={step.reports} all={list} flat onDone={() => setI(i + 1)} onClose={exit} />;
   const r = step.r;
   const next = () => { setWatching(false); setI(i + 1); };
-  if (watching) return <SeriesViewer s={s} report={r} onClose={next} onExit={exit} />;
-  const mineLeft = s.players[r.a]?.team === s.myTeam || s.players[r.b]?.team !== s.myTeam;
-  const lp = s.players[mineLeft ? r.a : r.b], rp = s.players[mineLeft ? r.b : r.a];
+  if (watching) return <SeriesViewer s={s} report={r} stateAt={j => at(r, j)} onClose={next} onExit={exit} />;
+  const sv = at(r, 0);
+  const mineLeft = sv.players[r.a]?.team === sv.myTeam || sv.players[r.b]?.team !== sv.myTeam;
+  const lp = sv.players[mineLeft ? r.a : r.b], rp = sv.players[mineLeft ? r.b : r.a];
   const logo = r.stage === "듀얼 토너먼트" ? "DT" : r.stage === "PC방 예선" ? "PC방" : "MySL";
   return (
     <LegacyFrame season={s.season} onBack={exit} onNext={() => setWatching(true)}>
@@ -221,9 +255,9 @@ export function MslFlow({ s, reports, plans = [], flat, onDone, onClose, start =
           {[{ p: lp, o: rp }, { p: rp, o: lp }].map(({ p, o }) => (
             <div key={p.id} className="flex flex-col items-center">
               <PlayerCard p={p} opp={o} />
-              <div className="text-[10px] text-neutral-500">{s.teams[p.team]?.name}</div>
-              <LegacyRadar stats={condStats(p, s)} base={p.stats} gear={gearStats(p)} level={p.level} size={112} />
-              <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p)} %{burstOf(s, p) ? <span className="text-[#ffb84d] font-bold"> 🔥{Math.round(burstOf(s, p)! * 100)}%</span> : null}</div>
+              <div className="text-[10px] text-neutral-500">{sv.teams[p.team]?.name}</div>
+              <LegacyRadar stats={condStats(p, sv)} base={p.stats} gear={gearStats(p)} level={p.level} size={112} />
+              <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p)} %{burstOf(sv, p) ? <span className="text-[#ffb84d] font-bold"> 🔥{Math.round(burstOf(sv, p)! * 100)}%</span> : null}</div>
             </div>
           ))}
         </div>

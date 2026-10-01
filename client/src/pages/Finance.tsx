@@ -4,7 +4,9 @@
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { OPERATING_COST, type CareerState, type CashEntry } from "@shared/career/rules";
+import { B_OPERATING_COST, OPERATING_COST, type CareerState, type CashEntry } from "@shared/career/rules";
+import { BROADCAST_RIGHTS, RANK_PRIZE, fanPower, gateAmount, goodsAmount } from "@shared/career/income";
+import { myDiv } from "@shared/career/view";
 import { teamWages } from "@shared/career/contract";
 import { activeSponsors } from "@shared/career/sponsor";
 import { useCareer } from "@/lib/career";
@@ -20,7 +22,10 @@ function Summary({ s, entries }: { s: CareerState; entries: CashEntry[] }) {
   const expense = entries.filter(e => e.amount < 0).reduce((a, e) => a + e.amount, 0);
   const wages = teamWages(s, s.myTeam);
   const sponsor = activeSponsors(s).reduce((a, x) => a + x.weekly, 0);
-  const weekly = sponsor - Math.round(wages / 11) - OPERATING_COST;
+  const div = myDiv(s);
+  const op = div === 2 ? B_OPERATING_COST : OPERATING_COST;
+  const goods = goodsAmount(s, s.myTeam);
+  const weekly = sponsor + goods - Math.round(wages / 11) - op;
   return (
     <div className="rounded-2xl bg-card border border-border p-3.5 space-y-2">
       <div className="flex items-baseline justify-between">
@@ -33,7 +38,14 @@ function Summary({ s, entries }: { s: CareerState; entries: CashEntry[] }) {
         <div className="rounded-xl bg-muted/60 py-1.5"><div className="text-[10px] text-muted-foreground">손익</div><div className={cn("font-bold", tone(income + expense))}>{won(income + expense)}</div></div>
       </div>
       <div className="text-[11px] text-muted-foreground">
-        매주 고정: 스폰서 +{sponsor} · 연봉 -{Math.round(wages / 11)} (정규시즌) · 운영비 -{OPERATING_COST} → <b className={tone(weekly)}>{won(weekly)}만원</b> (경기 수당 제외)
+        매주 고정: 스폰서 +{sponsor} · 굿즈 +{goods} · 연봉 -{Math.round(wages / 11)} (정규시즌) · 운영비 -{op} → <b className={tone(weekly)}>{won(weekly)}만원</b> (경기 수당·관중 수입 제외)
+      </div>
+      <div className="rounded-xl bg-muted/40 p-2 text-[11px] text-muted-foreground space-y-0.5">
+        <div className="font-bold text-foreground">💡 구단 수입원 (팬 인기 {Math.round(fanPower(s, s.myTeam))}/100 — 인기 선수가 많을수록 ↑)</div>
+        <div>· 관중 수입: 홈 경기마다 약 {gateAmount(s, s.myTeam)}만원 (포스트시즌·승강전 2배, 결승 3배)</div>
+        <div>· 굿즈 판매: 매주 약 {goods}만원</div>
+        <div>· 중계권 분배금: 시즌 시작 때 {BROADCAST_RIGHTS[div]}만원 · 정규시즌 순위 상금: 1위 {RANK_PRIZE[div][0]}만원 ~</div>
+        <div>· 스폰서 수당·퀘스트, 선수 이벤트(팬미팅), 개인리그 상금, 선수 판매{div === 2 ? " (1부 구단에 팔면 육성 지원금 추가)" : ""}</div>
       </div>
     </div>
   );

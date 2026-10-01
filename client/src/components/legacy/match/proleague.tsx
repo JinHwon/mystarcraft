@@ -3,8 +3,9 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { FINAL_SETS, burstOf, MATCH_MONEY, PRO_SETS, type CareerState, type CMatch } from "@shared/career/rules";
+import { FINAL_SETS, burstOf, MATCH_MONEY, PRO_SETS, type CareerState, type CMatch, type PlayerSnap } from "@shared/career/rules";
 import { STAGE_NAMES } from "@shared/career/view";
+import { viewStateAt, type SnapReport } from "./viewState";
 import { ITEM_BY_KEY, gearCond, gearStats } from "@shared/career/items";
 import { LegacyFrame, LegacyImg, LegacyRadar, MapInfo, TeamLogo } from "../Legacy";
 import { EquipRow, condStats, setItemAll, useSpeed } from "./common";
@@ -14,16 +15,18 @@ import { Broadcast, PlayerCard, SetList, type BroadcastSet } from "./broadcast";
 // ── 경기 진행 (세트마다 서버에서 진행) ─────────────────────────────────
 export interface WeekDone { playedMatchId?: number; mslReports?: MslReportView[]; mslPlans?: number[]; proReports?: ProReportView[]; needNomination?: boolean }
 /** 우리 팀이 없는 포스트시즌 경기 (중계). entryA·entryB·maps 가 있으면 치르지 않은 세트까지 보여줌 */
-export type ProReportView = { matchId: number; stage: CMatch["stage"]; a: number; b: number; sa: number; sb: number; sets: BroadcastSet[]; entryA?: number[]; entryB?: number[]; maps?: number[] };
+export type ProReportView = { matchId: number; stage: CMatch["stage"]; a: number; b: number; sa: number; sb: number; sets: BroadcastSet[]; entryA?: number[]; entryB?: number[]; maps?: number[]; pre?: Record<number, PlayerSnap> };
 
 /**
  * 포스트시즌 다른 팀 경기 관전: 경기 전 화면 → 중계 → … → 결과 (서버를 기다리지 않음)
  * - 세트 목록의 맵을 누르면 치른·치를 세트의 선수를 볼 수 있음 (ACE 결정전 선수는 2:2·3:3 이 되어야 공개)
  * - onClose(✕): 나중에 이어 보기, start·onProgress: 이어 볼 위치
  */
-export function ProSeriesFlow({ s, reports, onDone, onClose, start, onProgress }: {
+export function ProSeriesFlow({ s: latest, reports, onDone, onClose, start, onProgress, all }: {
   s: CareerState; reports: ProReportView[]; onDone: () => void; onClose?: () => void;
   start?: { k: number; idx: number }; onProgress?: (p: { k: number; idx: number }) => void;
+  /** 이번 주 관전 경기 전체 (포스트시즌 → 개인리그 순) — 선수 상태를 그 세트 직전으로 보여줄 때 씀 */
+  all?: SnapReport[];
 }) {
   const [k, setK] = useState(start?.k ?? 0);
   const [idx, setIdx] = useState(start?.idx ?? 0);
@@ -37,6 +40,9 @@ export function ProSeriesFlow({ s, reports, onDone, onClose, start, onProgress }
   const exit = onClose ?? onDone;
   const total = r.stage === "final" ? FINAL_SETS : PRO_SETS;
   const played = r.sets.length;
+  // 보고 있는 세트 직전 선수 상태 (결과 화면은 경기 뒤)
+  const list = all ?? reports;
+  const s = viewStateAt(latest, list, list.indexOf(r) < 0 ? list.length : list.indexOf(r), mode === "result" ? played : idx);
   const left = r.entryA?.length ? r.entryA : r.sets.map(x => x.a);
   const right = r.entryB?.length ? r.entryB : r.sets.map(x => x.b);
   const maps = r.maps?.length ? r.maps : r.sets.map(x => x.mapId);
@@ -104,7 +110,7 @@ export function ProSeriesFlow({ s, reports, onDone, onClose, start, onProgress }
         ) : <div className="text-center text-[12px] text-neutral-400 my-6">이 세트 선수 정보가 없습니다</div>}
         <div className="mt-3">
           <SetList s={s} left={left} right={right} maps={maps} total={Math.max(total, played)}
-            idx={final ? played : idx} results={r.sets.slice(0, final ? played : idx)} leftIsA showAce={aceOpen}
+            idx={final ? played : idx} results={r.sets.slice(0, final ? played : idx)} leftIsA showAce={aceOpen} hideOppAce={false}
             view={view ?? undefined} onView={j => { if (canView(j)) setView(j === cur && !final ? null : j); }} />
         </div>
         <div className="text-center text-[11px] text-neutral-500 mt-2">맵을 누르면 그 세트 선수 · Next 로 관전 · ✕ 로 나가기 (다시 들어오면 이어서)</div>
@@ -112,7 +118,7 @@ export function ProSeriesFlow({ s, reports, onDone, onClose, start, onProgress }
     </LegacyFrame>
   );
 }
-export type MslReportView = { stage: string; label: string; a: number; b: number; sa: number; sb: number; winner: number; bestOf: number; sets: BroadcastSet[]; maps?: number[] };
+export type MslReportView = { stage: string; label: string; a: number; b: number; sa: number; sb: number; winner: number; bestOf: number; sets: BroadcastSet[]; maps?: number[]; pre?: Record<number, PlayerSnap> };
 
 /** 마지막 세트까지 서버에서 끝났지만 아직 다 보지 못하고 나간 경기 (다시 들어오면 이어서) */
 export type HeldFinish = { matchId: number; set: BroadcastSet; week: WeekDone | null; ace?: number };
