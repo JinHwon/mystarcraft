@@ -260,6 +260,21 @@ export const careerRouter = router({
     };
   }),
 
+  /** 감독 랭킹: 그 감독이 진행 중인 세이브의 선수단 (읽기 전용) */
+  managerRoster: protectedProcedure
+    .input(z.object({ userId: z.number().int() }))
+    .query(async ({ input }) => {
+      const s = await load(input.userId);
+      if (!s) throw new TRPCError({ code: "NOT_FOUND", message: "진행 중인 커리어가 없습니다" });
+      const players = rosterOfView(s, s.myTeam).map(p => ({
+        id: p.id, name: p.name, race: p.race, team: p.team, level: p.level, exp: p.exp, birth: p.birth, gender: p.gender,
+        stats: p.stats, cond: p.cond, titles: p.titles, photoOf: p.photoOf, potential: p.potential,
+        wins: p.wins, losses: p.losses, sWins: p.sWins, sLosses: p.sLosses, sApps: p.sApps,
+        equip: p.equip, potions: p.potions, contract: p.contract, morale: p.morale, wantsOut: p.wantsOut, action: null,
+      }));
+      return { season: s.season, week: s.week, myTeam: s.myTeam, teams: s.teams, players };
+    }),
+
   /** 관리자: 사용자 목록 + 커리어 요약 */
   adminUsers: adminProcedure.query(async () => (await allSummaries(true)).map(r => ({ ...r, lastSignedIn: r.lastSignedIn ? String(r.lastSignedIn) : null }))),
 
