@@ -23,7 +23,8 @@ export function careerAlerts(s: CareerState): CareerAlert[] {
   if ((s.debtWeeks ?? 0) > 0 || me.money < 0) {
     out.push({ key: `debt-${s.season}-${s.week}`, icon: "⚠️", text: `운영 자금 적자 ${s.debtWeeks ?? 0}주째 — ${DEBT_LIMIT_WEEKS}주 연속이면 구단 해체`, to: "/finance", urgent: true });
   }
-  if (s.weekHold) out.push({ key: `nom-${s.season}`, icon: "🎤", text: "마이스타리그 조 지명식 — 우리 선수가 지명할 차례입니다", to: "/league", urgent: true });
+  if (s.weekHold?.msl) out.push({ key: `msl-${s.season}-${s.week}`, icon: "🎮", text: "이번 주 개인리그 경기 전 — 컨디션·아이템을 챙기고 진행하세요", to: "/league", urgent: true });
+  else if (s.weekHold) out.push({ key: `nom-${s.season}`, icon: "🎤", text: "마이스타리그 조 지명식 — 우리 선수가 지명할 차례입니다", to: "/league", urgent: true });
   for (const o of s.offers ?? []) {
     const p = s.players[o.player];
     out.push({ key: `offer-${o.id}-${o.fee}`, icon: "📨", text: `${s.teams[o.team]?.name}: ${p?.name} 선수 영입 제안 ${o.fee.toLocaleString()}만원`, to: "/club?tab=offers", urgent: true });

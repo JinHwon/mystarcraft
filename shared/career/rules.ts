@@ -479,7 +479,8 @@ export interface CareerState {
   /** 이번 시즌 계약한 서브 스폰서 (최대 3곳) */
   sponsors?: Array<import("./sponsor").Sponsor & { season: number }>;
   /** 프로리그 경기는 끝났지만 조 지명식(우리 선수 지명)을 기다리며 주 마무리를 멈춤 */
-  weekHold?: { playedMatchId?: number };
+  /** 주 마무리 대기: 조 지명식 (msl 없음) 또는 개인리그 경기 전 준비 (msl: 이번 주 개인리그에 나가는 우리 선수) */
+  weekHold?: { playedMatchId?: number; msl?: number[] };
   /** 포텐셜 폭발을 정한 주 */
   burstWeek?: string;
   /** 컨디션 단위 (100 = % 단위. 없으면 예전 1~10 단위 세이브) */

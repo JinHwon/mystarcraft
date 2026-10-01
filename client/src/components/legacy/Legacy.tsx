@@ -36,7 +36,8 @@ function photoName(id: number | undefined, name: string) {
   return first >= 0 && first !== id ? `${name}1` : name;
 }
 
-export const legacySrc = (dir: string, name: string) => `/legacy/${encodeURIComponent(dir)}/${encodeURIComponent(name)}.gif`;
+/** 원작 그림은 .gif (name 에 확장자가 있으면 그대로: 새로 그린 .svg 아이템 등) */
+export const legacySrc = (dir: string, name: string) => `/legacy/${encodeURIComponent(dir)}/${encodeURIComponent(name)}${/\.(svg|png)$/.test(name) ? "" : ".gif"}`;
 
 /** 원작 이미지. 불러오기에 실패하면 잠시 뒤 한 번 더 시도 (배포 중 서버 재시작 등 일시적 실패), 그래도 안 되면 대체 그림 */
 export function LegacyImg({ dir, name, className, style, fallback }: { dir: string; name: string; className?: string; style?: CSSProperties; fallback: ReactNode }) {

@@ -1,4 +1,4 @@
-import { ITEM_BY_KEY, POTION_LIMIT, SLOT_NAMES, gearStats, type EquipSlot } from "@shared/career/items";
+import { ITEM_BY_KEY, SLOT_NAMES, gearStats, type EquipSlot } from "@shared/career/items";
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -56,7 +56,7 @@ export function PlayerSheet({ s, player, onClose, actions }: { s: CareerState; p
               <div>인기 {popularity(player)} · 사기 {player.morale ?? 70}{player.wantsOut ? " · 😤 이적 희망" : ""}</div>
             </div>
             <div className="rounded-xl bg-muted/50 p-2.5 text-xs">
-              <div className="font-bold mb-1">🛠️ 장착 장비 · 포션 {player.potions ?? 0}/{POTION_LIMIT}</div>
+              <div className="font-bold mb-1">🛠️ 장착 장비 · 이번 시즌 포션 {player.potions ?? 0}회</div>
               <div className="grid grid-cols-2 gap-1">
                 {(Object.keys(SLOT_NAMES) as EquipSlot[]).map(slot => {
                   const e = player.equip?.[slot];

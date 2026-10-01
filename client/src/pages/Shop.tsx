@@ -6,7 +6,7 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { STAT_LABELS, type StatKey } from "@shared/gameConstants";
-import { ITEMS, ITEM_CATS, POTION_LIMIT, SLOT_NAMES, itemImg, slotOf, type ItemCat, type ItemDef, type EquipSlot } from "@shared/career/items";
+import { ITEMS, ITEM_CATS, SLOT_NAMES, itemImg, slotOf, type ItemCat, type ItemDef, type EquipSlot } from "@shared/career/items";
 import { totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
 import { rosterOf } from "@shared/career/view";
 import { useCareer, useCareerPatch } from "@/lib/career";
@@ -52,7 +52,7 @@ function TargetList({ s, item, sel, onSel }: { s: CareerState; item: ItemDef; se
   const players = useMemo(() => rosterOf(s, s.myTeam).sort((a, b) => totalOf(b.stats) - totalOf(a.stats)), [s]);
   const right = (p: CPlayer) => {
     if (slot) { const e = p.equip?.[slot]; return e ? `${ITEMS.find(i => i.key === e.key)?.name ?? ""} (${e.left})` : "-"; }
-    if (item.kind === "potion") return `포션 ${p.potions ?? 0}/${POTION_LIMIT}`;
+    if (item.kind === "potion") return `포션 ${p.potions ?? 0}회`;
     return `컨디션 ${p.cond}%`;
   };
   return (
