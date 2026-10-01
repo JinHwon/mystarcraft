@@ -30,6 +30,8 @@ import {
   STAT_MIN,
   WEEKLY_AP,
   WEEKLY_SPONSOR,
+  B_MATCH_MONEY,
+  B_WEEKLY_SPONSOR,
   ageOf,
   askingPrice,
   condMultiplier,
@@ -44,7 +46,7 @@ export { CareerError };
 import { initialPlayers, initialTeams } from "@shared/career/init";
 import { eventOn } from "./events";
 import { aiShopping } from "./aiShop";
-import { runReserveWeek } from "./reserveLeague";
+import { applyPromo, ensureDivisions, fillBRosters, promoMoves, rosterLimits, scheduleDivision, schedulePromo } from "./divisions";
 import { createMsl, nominationPending, runMslWeek, type MslReport } from "./msl";
 import { ITEM_BY_KEY, POTION_LIMIT, slotOf } from "@shared/career/items";
 import { ensurePotential, retirements, rookies } from "./generation";
@@ -58,13 +60,14 @@ const REGULAR_WEEKS = 11;
 
 
 
-import { rosterOf, proTeams, standings, myPendingMatch, evaluateTrade, activePlayers } from "@shared/career/view";
+import { rosterOf, proTeams, standings, myPendingMatch, evaluateTrade, activePlayers, divOf, divTeams, leagueName, myDiv } from "@shared/career/view";
 export { rosterOf, proTeams, standings, myPendingMatch };
 
 // ── 새 게임 ─────────────────────────────────────────────────────
 
 export function newCareer(myTeam: number): CareerState {
-  if (myTeam < 0 || myTeam >= FREE_AGENT_TEAM) throw new CareerError("팀을 선택해주세요");
+  const teams = initialTeams();
+  if (!teams[myTeam] || myTeam === FREE_AGENT_TEAM) throw new CareerError("팀을 선택해주세요");
   const players = initialPlayers(() => randInt(50, 90));
   const s: CareerState = {
     version: 1,
@@ -74,7 +77,7 @@ export function newCareer(myTeam: number): CareerState {
     phase: "regular",
     ap: WEEKLY_AP,
     players,
-    teams: initialTeams(),
+    teams,
     matches: [],
     nextMatchId: 1,
     news: [],
@@ -82,19 +85,22 @@ export function newCareer(myTeam: number): CareerState {
     mapPool: drawMapPool(),
     condScale: 100,
   };
+  // 2부 B팀 선수 채우기 (무소속 유망주 + 신예)
+  fillBRosters(s, true);
   ensureClub(s);
   ensurePotential(s);
   scheduleRegularSeason(s);
   // 개인리그 시드를 미리 정해 두어 일정표에서 볼 수 있게
   s.msl = createMsl(s);
   rollWeekBursts(s);
-  news(s, `${s.teams[myTeam].name} 감독으로 부임했습니다. ${s.season}시즌 마이프로리그가 곧 개막합니다!`);
+  news(s, `${s.teams[myTeam].name} 감독으로 부임했습니다. ${s.season}시즌 ${leagueName(myDiv(s))}가 곧 개막합니다!`);
   return s;
 }
 
 /** 예전 세이브 보정 */
 export function migrateCareer(s: CareerState) {
   if (!s.mapPool?.length) s.mapPool = drawMapPool();
+  ensureDivisions(s);
   ensureClub(s);
   ensurePotential(s);
   ensureHeadToHead(s);
@@ -124,26 +130,11 @@ function ensureHeadToHead(s: CareerState) {
 
 /**
  * 원작처럼 2라운드 풀리그: 한 주에 프로리그 2경기 (1경기: r라운드 대진, 2경기: (10-r)라운드 대진, 홈·원정 바꿈)
- * 6주차는 같은 상대와 두 번 붙는다 (원작 일정표와 같음)
+ * 6주차는 같은 상대와 두 번 붙는다 (원작 일정표와 같음). 1부·2부 같은 일정
  */
 function scheduleRegularSeason(s: CareerState) {
-  const ids = shuffle(proTeams(s).map(t => t.id));
-  const n = ids.length;
-  const list = [...ids];
-  const rounds: Array<Array<[number, number]>> = [];
-  for (let r = 0; r < n - 1; r++) {
-    const pairs: Array<[number, number]> = [];
-    for (let i = 0; i < n / 2; i++) {
-      const a = list[i], b = list[n - 1 - i];
-      pairs.push(r % 2 ? [b, a] : [a, b]);
-    }
-    rounds.push(pairs);
-    list.splice(1, 0, list.pop()!);
-  }
-  for (let w = 0; w < REGULAR_WEEKS; w++) {
-    for (const [a, b] of rounds[w]) s.matches.push({ id: s.nextMatchId++, week: w + 1, leg: 1, stage: "regular", a, b, maps: pickMaps(PRO_SETS, s.mapPool) });
-    for (const [a, b] of rounds[REGULAR_WEEKS - 1 - w]) s.matches.push({ id: s.nextMatchId++, week: w + 1, leg: 2, stage: "regular", a: b, b: a, maps: pickMaps(PRO_SETS, s.mapPool) });
-  }
+  scheduleDivision(s, 1);
+  scheduleDivision(s, 2);
 }
 
 // ── 순위 ───────────────────────────────────────────────────────
@@ -279,13 +270,14 @@ function recordMatch(s: CareerState, m: CMatch, entryA: number[], entryB: number
   }
   // 다른 팀은 리그 기본 수당, 우리 팀은 메인 스폰서 계약 수당
   const loserTeam = m.winner === m.a ? m.b : m.a;
-  if (m.winner !== s.myTeam) s.teams[m.winner].money += MATCH_MONEY.win;
-  if (loserTeam !== s.myTeam) s.teams[loserTeam].money += MATCH_MONEY.lose;
+  const money = (team: number) => (divOf(s, team) === 2 ? B_MATCH_MONEY : MATCH_MONEY);
+  if (m.winner !== s.myTeam) s.teams[m.winner].money += money(m.winner).win;
+  if (loserTeam !== s.myTeam) s.teams[loserTeam].money += money(loserTeam).lose;
   if (m.a === s.myTeam || m.b === s.myTeam) {
     const won = m.winner === s.myTeam;
     const oppTeam = s.teams[m.a === s.myTeam ? m.b : m.a];
     const [my, their] = m.a === s.myTeam ? [sa, sb] : [sb, sa];
-    const stageName = m.stage === "regular" ? `${m.week}주차 ${m.leg ?? 1}경기` : ({ semi: "준플레이오프", po: "플레이오프", final: "결승" } as const)[m.stage];
+    const stageName = m.stage === "regular" ? `${m.week}주차 ${m.leg ?? 1}경기` : ({ semi: "준플레이오프", po: "플레이오프", final: "결승", promo: "승강전" } as const)[m.stage];
     mainSponsorPay(s, won ? "win" : "loss", won ? "스폰서 승리 수당" : "스폰서 패배 수당", `${stageName} vs ${oppTeam.name} ${my}:${their}`);
     addManagerExp(s, won ? 30 : 10);
   }
@@ -294,13 +286,15 @@ function recordMatch(s: CareerState, m: CMatch, entryA: number[], entryB: number
   if (m.a === s.myTeam || m.b === s.myTeam) {
     const won = m.winner === s.myTeam;
     const opp = s.teams[m.a === s.myTeam ? m.b : m.a];
-    const stageName = { regular: `${m.week}주차`, semi: "준플레이오프", po: "플레이오프", final: "결승" }[m.stage];
+    const stageName = { regular: `${m.week}주차`, semi: "준플레이오프", po: "플레이오프", final: "결승", promo: "승강전" }[m.stage];
     news(s, `${won ? "🎉" : "😢"} ${stageName} vs ${opp.name} ${Math.max(sa, sb)}:${Math.min(sa, sb)} ${won ? "승리" : "패배"}`);
   }
 }
 
-/** 포스트시즌은 경기 뒤 능력치가 크게 오름 */
+/** 포스트시즌·승강전은 경기 뒤 능력치가 크게 오름 */
 const stageGrowthOf = (m: CMatch) => (m.stage === "regular" ? 1 : STAGE_GROWTH[m.stage]);
+/** 2부 정규 경기는 어린 선수일수록 크게 성장 */
+const youthOf = (m: CMatch) => m.stage === "regular" && m.div === 2;
 
 function playMatch(s: CareerState, m: CMatch, myEntry?: number[]): PlayedSet[] {
   const sets = m.stage === "final" ? FINAL_SETS : PRO_SETS;
@@ -315,7 +309,7 @@ function playMatch(s: CareerState, m: CMatch, myEntry?: number[]): PlayedSet[] {
     const pa = s.players[entryA[i]], pb = s.players[entryB[i]];
     if (!pa || !pb) continue;
     // 다른 팀끼리 경기는 빠른 판정 (중계가 필요 없음)
-    const r = withStageGrowth(stageGrowthOf(m), () => (involvesMe ? playSet(s, pa, pb, m.maps[i % m.maps.length], true, true) : quickSet(s, pa, pb, m.maps[i % m.maps.length])));
+    const r = withStageGrowth(stageGrowthOf(m), () => (involvesMe ? playSet(s, pa, pb, m.maps[i % m.maps.length], true, true) : quickSet(s, pa, pb, m.maps[i % m.maps.length])), youthOf(m));
     if (r.winner === "a") sa++; else sb++;
     results.push(r);
   }
@@ -401,17 +395,17 @@ function finishWeek(s: CareerState): WeekResult {
     }
   }
   const { reports: mslReports, plans: mslPlans } = s.phase !== "offseason" ? runMslWeek(s) : { reports: [], plans: [] };
-  // 2부 리그 (정규시즌 매주 2경기, 마지막 주에 우승자)
-  if (s.phase === "regular") runReserveWeek(s, s.week >= REGULAR_WEEKS);
-  // 다른 팀은 고정 후원금, 우리 팀은 고른 스폰서 (구단 운영 → 스폰서)
-  for (const t of proTeams(s)) if (t.id !== s.myTeam) t.money += WEEKLY_SPONSOR;
+  // 다른 팀은 고정 후원금 (2부는 적게), 우리 팀은 고른 스폰서 (구단 운영 → 스폰서)
+  for (const t of proTeams(s)) if (t.id !== s.myTeam) t.money += t.div === 2 ? B_WEEKLY_SPONSOR : WEEKLY_SPONSOR;
   weeklyClub(s);
+  // 2부 팀 최소 인원 (이적·은퇴로 모자라면 리그가 채움)
+  fillBRosters(s);
   // 한 주(프로리그 2경기)가 끝나면 모든 선수 컨디션 10% 회복
   for (const p of activePlayers(s)) p.cond = clampCond(p.cond + WEEKLY_COND_RECOVERY);
   // 다른 구단은 여유 자금으로 주전 선수 아이템 구입
   if (s.phase !== "offseason") aiShopping(s);
   // 우리 선수 행동력: 매주 20 (최대 40까지 모임)
-  for (const p of [...rosterOf(s, s.myTeam), ...s.players.filter(x => x.team === s.myTeam && x.reserve)]) p.ap = playerAp(p) + WEEKLY_AP;
+  for (const p of rosterOf(s, s.myTeam)) p.ap = playerAp(p) + WEEKLY_AP;
   pruneHighlights(s);
   s.week++;
   rollWeekBursts(s);
@@ -488,7 +482,7 @@ export function playLiveSet(s: CareerState, ace?: number): LiveSetResult {
     if (plan.key === "sniping" && plan.predict === live.opp[i]) { mod.mul = 1.1; sniped = true; }
   }
   const mods = meA ? { a: mod } : { b: mod };
-  const set = withStageGrowth(stageGrowthOf(m), () => playSet(s, s.players[entryA[i]], s.players[entryB[i]], m.maps[i % m.maps.length], true, true, mods));
+  const set = withStageGrowth(stageGrowthOf(m), () => playSet(s, s.players[entryA[i]], s.players[entryB[i]], m.maps[i % m.maps.length], true, true, mods), youthOf(m));
   if (plan) {
     set.item = plan.key;
     set.sniped = sniped;
@@ -517,31 +511,54 @@ export function playLiveSet(s: CareerState, ace?: number): LiveSetResult {
   return { set, matchOver: false, needAce: live.sets.length === sets - 1 };
 }
 
-/** 정규시즌 → 준PO(3·4위) → PO(2위 vs 준PO 승자) → 결승(1위 vs PO 승자) → 시즌 종료 */
+const PLAYOFF: ReadonlyArray<CMatch["stage"]> = ["semi", "po", "final"];
+
+/**
+ * 정규시즌 → 준PO(3·4위) → PO(2위 vs 준PO 승자) → 결승(1위 vs PO 승자) → 시즌 종료 (1부)
+ * 준PO 주에 승강전 (1부 11·12위 vs 2부 2·1위)도 함께
+ */
 function progressSchedule(s: CareerState) {
   if (s.phase === "regular" && s.week > REGULAR_WEEKS) {
     s.phase = "postseason";
-    const st = standings(s);
-    s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "semi", a: st[2].id, b: st[3].id, maps: pickMaps(PRO_SETS, s.mapPool) });
-    const myRank = st.findIndex(t => t.id === s.myTeam) + 1;
-    news(s, `정규시즌 종료! 1위 ${st[0].name}. 우리 팀 ${myRank}위${myRank <= 4 ? " — 포스트시즌 진출!" : " — 포스트시즌 진출 실패"}`);
+    const st = standings(s, 1);
+    s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "semi", div: 1, a: st[2].id, b: st[3].id, maps: pickMaps(PRO_SETS, s.mapPool) });
+    schedulePromo(s);
+    const mine = standings(s);
+    const myRank = mine.findIndex(t => t.id === s.myTeam) + 1;
+    const n = mine.length;
+    const note = myDiv(s) === 2
+      ? (myRank <= 2 ? " — 승강전 진출! 이기면 1부 승격" : "")
+      : myRank <= 4 ? " — 포스트시즌 진출!" : myRank > n - 2 ? " — 승강전으로 1부 잔류를 다툽니다" : " — 포스트시즌 진출 실패";
+    news(s, `정규시즌 종료! 1부 1위 ${st[0].name}${divTeams(s, 2).length ? ` · 2부 1위 ${standings(s, 2)[0]?.name}` : ""}. 우리 팀 ${myDiv(s) === 2 ? "2부 " : ""}${myRank}위${note}`);
     return;
   }
   if (s.phase !== "postseason") return;
-  const last = s.matches.filter(m => m.stage !== "regular" && m.done).sort((a, b) => b.id - a.id)[0];
+  const last = s.matches.filter(m => PLAYOFF.includes(m.stage) && m.done).sort((a, b) => b.id - a.id)[0];
   if (!last || s.matches.some(m => !m.done)) return;
-  const st = standings(s);
+  const st = standings(s, 1);
   if (last.stage === "semi") {
-    s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "po", a: st[1].id, b: last.winner!, maps: pickMaps(PRO_SETS, s.mapPool) });
+    s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "po", div: 1, a: st[1].id, b: last.winner!, maps: pickMaps(PRO_SETS, s.mapPool) });
   } else if (last.stage === "po") {
-    s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "final", a: st[0].id, b: last.winner!, maps: pickMaps(FINAL_SETS, s.mapPool) });
+    s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "final", div: 1, a: st[0].id, b: last.winner!, maps: pickMaps(FINAL_SETS, s.mapPool) });
   } else if (last.stage === "final") {
     finishSeason(s, last);
   }
 }
 
+/**
+ * 우리 팀 시즌 성적 (상금·평판·감독 경험치 기준)
+ * 1부: 우승·준우승·플레이오프·준플레이오프·포스트시즌 진출 실패, 승강전에 나갔으면 잔류·강등
+ * 2부: 승격(승강전 승리), 2부 우승(1위), 2부 n위
+ */
 function myPostseasonResult(s: CareerState): string {
-  const post = s.matches.filter(m => m.stage !== "regular" && (m.a === s.myTeam || m.b === s.myTeam));
+  const promo = s.matches.find(m => m.stage === "promo" && (m.a === s.myTeam || m.b === s.myTeam));
+  if (myDiv(s) === 2) {
+    if (promo?.winner === s.myTeam) return "승격";
+    const rank = standings(s, 2).findIndex(t => t.id === s.myTeam) + 1;
+    return rank === 1 ? "2부 우승" : `2부 ${rank}위`;
+  }
+  if (promo) return promo.winner === s.myTeam ? "잔류" : "강등";
+  const post = s.matches.filter(m => PLAYOFF.includes(m.stage) && (m.a === s.myTeam || m.b === s.myTeam));
   if (!post.length) return "포스트시즌 진출 실패";
   const final = post.find(m => m.stage === "final");
   if (final) return final.winner === s.myTeam ? "우승" : "준우승";
@@ -557,9 +574,15 @@ function finishSeason(s: CareerState, final: CMatch) {
   pay(s, "상금", prize, `프로리그 ${result}`);
   const myRank = standings(s).findIndex(t => t.id === s.myTeam) + 1;
   const msl = s.msl?.season === s.season ? s.msl : undefined;
-  s.history.unshift({ season: s.season, champion, myRank, myResult: result, mslChampion: msl?.champion, mslRunnerUp: msl?.runnerUp, team: s.myTeam });
+  // 2부 1위·승강전 결과 (다음 시즌 시작 때 리그를 바꿈)
+  const champion2 = s.matches.some(m => m.div === 2 && m.done) ? standings(s, 2)[0]?.id : undefined;
+  const moves = promoMoves(s);
+  s.promo = { season: s.season, moves };
+  s.history.unshift({ season: s.season, champion, myRank, myResult: result, mslChampion: msl?.champion, mslRunnerUp: msl?.runnerUp, team: s.myTeam, div: myDiv(s), champion2, promo: moves });
   for (const p of rosterOf(s, champion)) p.titles = [...(p.titles ?? []), `${s.season}시즌 프로리그 우승`];
-  news(s, `🏆 ${s.season}시즌 마이프로리그 우승: ${s.teams[champion].name}! 우리 팀 최종 성적: ${result}${prize ? ` (상금 ${prize.toLocaleString()}만원)` : ""}`);
+  if (champion2 !== undefined) for (const p of rosterOf(s, champion2)) p.titles = [...(p.titles ?? []), `${s.season}시즌 2부 리그 1위`];
+  news(s, `🏆 ${s.season}시즌 마이프로리그 우승: ${s.teams[champion].name}!${champion2 !== undefined ? ` 2부 1위: ${s.teams[champion2].name}.` : ""} 우리 팀 최종 성적: ${result}${prize ? ` (상금 ${prize.toLocaleString()}만원)` : ""}`);
+  for (const m of moves) news(s, `🔁 다음 시즌: ${s.teams[m.up].name} 1부 승격, ${s.teams[m.down].name} 2부 강등`);
   seasonEndClub(s, result, champion);
 }
 
@@ -593,13 +616,15 @@ export function startNextSeason(s: CareerState, opts: { releaseExpiring?: boolea
     p.cond = randInt(50, 90);
   }
   for (const t of s.teams) { t.wins = 0; t.losses = 0; t.setWins = 0; t.setLosses = 0; }
+  // 승강전 결과대로 1부·2부를 바꿈
+  applyPromo(s);
   // 세대 교체: 은퇴 → 신인 등장
   const gone = retirements(s);
   rookies(s, gone.length);
   ensurePotential(s);
   newSeasonClub(s);
-  // AI 팀: 선수가 부족하면 자유계약 선수 영입
-  for (const t of proTeams(s)) {
+  // AI 1부 팀: 선수가 부족하면 자유계약 선수 영입 (2부 팀은 아래 fillBRosters 가 유망주로)
+  for (const t of divTeams(s, 1)) {
     if (t.id === s.myTeam) continue;
     while (rosterOf(s, t.id).length < 10) {
       const fa = rosterOf(s, FREE_AGENT_TEAM).sort((a, b) => totalOf(b.stats) - totalOf(a.stats))[0];
@@ -609,13 +634,14 @@ export function startNextSeason(s: CareerState, opts: { releaseExpiring?: boolea
       news(s, `📰 ${t.name}, 자유계약 선수 ${fa.name} 영입`);
     }
   }
+  fillBRosters(s);
   // 지난 시즌 경기 기록은 요약만 남기고 정리
   s.matches = [];
   scheduleRegularSeason(s);
   // 개인리그 시드를 미리 정해 두어 일정표에서 볼 수 있게 (지난 대회 성적은 createMsl 이 참고)
   s.msl = createMsl(s);
   rollWeekBursts(s);
-  news(s, `${s.season}시즌 마이프로리그 개막!`);
+  news(s, `${s.season}시즌 ${leagueName(myDiv(s))} 개막!`);
 }
 
 // ── 이적 ──────────────────────────────────────────────────────
@@ -623,7 +649,8 @@ export function startNextSeason(s: CareerState, opts: { releaseExpiring?: boolea
 export function scoutPlayer(s: CareerState, pid: number) {
   const p = s.players[pid];
   if (!p || p.team !== FREE_AGENT_TEAM) throw new CareerError("무소속 선수만 영입할 수 있습니다");
-  if (rosterOf(s, s.myTeam).length >= MAX_ROSTER) throw new CareerError(`선수단은 최대 ${MAX_ROSTER}명입니다`);
+  const { max } = rosterLimits(s, s.myTeam);
+  if (rosterOf(s, s.myTeam).length >= max) throw new CareerError(`선수단은 최대 ${max}명입니다`);
   const price = scoutPrice(s, p);
   const me = s.teams[s.myTeam];
   if (me.money < price) throw new CareerError(`자금이 부족합니다 (요구 금액 ${price.toLocaleString()}만원)`);
@@ -642,6 +669,7 @@ export function releasePlayer(s: CareerState, pid: number) {
   if (!p || p.team !== s.myTeam) throw new CareerError("우리 팀 선수가 아닙니다");
   if (s.live) throw new CareerError("경기 중에는 방출할 수 없습니다");
   if (myPendingMatch(s) && rosterOf(s, s.myTeam).length <= MIN_ROSTER) throw new CareerError(`경기를 치르려면 최소 ${MIN_ROSTER}명이 필요합니다`);
+  if (myDiv(s) === 2 && rosterOf(s, s.myTeam).length <= rosterLimits(s, s.myTeam).min) throw new CareerError(`2부 팀은 최소 ${rosterLimits(s, s.myTeam).min}명이 있어야 합니다 (리그 규정)`);
   const gain = Math.round(askingPrice(p, s.season) * 0.2 / 10) * 10;
   pay(s, "방출", gain, p.name);
   delete p.contract;
@@ -746,10 +774,11 @@ export function proposeTrade(s: CareerState, teamId: number, myIds: number[], th
   if (me.money < cash) throw new CareerError("자금이 부족합니다");
   const myAfter = rosterOf(s, s.myTeam).length - myIds.length + theirIds.length;
   const theirAfter = rosterOf(s, teamId).length - theirIds.length + myIds.length;
-  if (myAfter > MAX_ROSTER) throw new CareerError(`선수단은 최대 ${MAX_ROSTER}명입니다`);
-  if (myAfter < MIN_ROSTER) throw new CareerError(`선수가 최소 ${MIN_ROSTER}명 있어야 합니다`);
-  if (theirAfter > MAX_ROSTER) throw new CareerError(`${s.teams[teamId].name} 선수단이 가득 찹니다`);
-  if (theirAfter < AI_MIN_ROSTER) throw new CareerError(`${s.teams[teamId].name}은(는) 선수가 너무 적어져서 거절합니다`);
+  const mine = rosterLimits(s, s.myTeam), theirs = rosterLimits(s, teamId);
+  if (myAfter > mine.max) throw new CareerError(`선수단은 최대 ${mine.max}명입니다`);
+  if (myAfter < mine.min) throw new CareerError(`선수가 최소 ${mine.min}명 있어야 합니다`);
+  if (theirAfter > theirs.max) throw new CareerError(`${s.teams[teamId].name} 선수단이 가득 찹니다`);
+  if (theirAfter < Math.max(AI_MIN_ROSTER, theirs.min)) throw new CareerError(`${s.teams[teamId].name}은(는) 선수가 너무 적어져서 거절합니다`);
   const ev = evaluateTrade(s, teamId, myIds, theirIds, cash);
   if (ev.get < ev.need) {
     throw new CareerError(`${s.teams[teamId].name}: "조건이 부족합니다" (제시 ${ev.get.toLocaleString()} / 요구 ${ev.need.toLocaleString()})`);

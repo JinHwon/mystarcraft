@@ -38,7 +38,9 @@ export default function Records() {
   const [open, setOpen] = useState<number | null>(null);
   if (loading) return <div className="p-6 text-muted-foreground">불러오는 중...</div>;
   if (!s) { navigate("/lobby"); return null; }
-  const leaders = [...s.players].filter(p => p.team !== 12 && p.sWins + p.sLosses > 0)
+  // 다승 순위는 우리 리그 선수만 (2부 경기 승수는 따로)
+  const div = s.teams[s.myTeam]?.div ?? 1;
+  const leaders = [...s.players].filter(p => p.team >= 0 && p.team !== 12 && (s.teams[p.team]?.div ?? 1) === div && p.sWins + p.sLosses > 0)
     .sort((a, b) => b.sWins - a.sWins || a.sLosses - b.sLosses).slice(0, 10);
   const best = [...s.players].filter(p => p.team >= 0).sort((a, b) => totalOf(b.stats) - totalOf(a.stats)).slice(0, 10);
 
@@ -48,16 +50,24 @@ export default function Records() {
         <div className="font-bold text-foreground text-sm mb-2">🏆 지난 시즌</div>
         {s.history.length === 0 && <div className="text-xs text-muted-foreground">아직 끝난 시즌이 없습니다</div>}
         {s.history.map(h => (
-          <div key={h.season} className="flex items-center gap-2 text-sm py-1">
-            <span className="text-muted-foreground w-14">{h.season}시즌</span>
-            <span className="flex-1 text-foreground">우승 <b>{s.teams[h.champion].name}</b></span>
-            <span className="text-xs text-amber-300">{h.team !== undefined && h.team !== s.myTeam ? s.teams[h.team].short : "우리 팀"} {h.myResult} ({h.myRank}위)</span>
+          <div key={h.season} className="text-sm py-1 border-b border-border/50 last:border-b-0">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground w-14">{h.season}시즌</span>
+              <span className="flex-1 text-foreground">우승 <b>{s.teams[h.champion].name}</b></span>
+              <span className="text-xs text-amber-300">{h.team !== undefined && h.team !== s.myTeam ? s.teams[h.team].short : "우리 팀"} {h.myResult} ({h.div === 2 ? "2부 " : ""}{h.myRank}위)</span>
+            </div>
+            {(h.champion2 !== undefined || h.promo?.length) && (
+              <div className="pl-16 text-[11px] text-muted-foreground">
+                {h.champion2 !== undefined && <>2부 1위 {s.teams[h.champion2]?.name}</>}
+                {h.promo?.length ? <> · 승강: {h.promo.map(m => `⬆️${s.teams[m.up]?.name} ⬇️${s.teams[m.down]?.name}`).join(", ")}</> : h.champion2 !== undefined ? " · 승강전 1부 팀 모두 잔류" : null}
+              </div>
+            )}
           </div>
         ))}
       </div>
 
       <div className="rounded-2xl bg-card border border-border p-3.5">
-        <div className="font-bold text-foreground text-sm mb-2">🔥 이번 시즌 다승 순위</div>
+        <div className="font-bold text-foreground text-sm mb-2">🔥 이번 시즌 다승 순위{div === 2 ? " (2부)" : ""}</div>
         {leaders.length === 0 && <div className="text-xs text-muted-foreground">아직 경기가 없습니다</div>}
         {leaders.map((p, i) => <PlayerRow key={p.id} s={s} p={p} rank={i + 1} right={`${p.sWins}승 ${p.sLosses}패`} onOpen={setOpen} />)}
       </div>

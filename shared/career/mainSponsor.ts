@@ -32,6 +32,12 @@ export const MAIN_SPONSORS: Record<number, { name: string; size: number }> = {
   8: { name: "하이트", size: 1.0 }, 9: { name: "eSTRO", size: 0.9 }, 10: { name: "공군", size: 0.8 }, 11: { name: "위메이드", size: 1.0 },
 };
 
+/** 메인 스폰서(모기업) 이름: B팀은 모구단 모기업 */
+export function mainSponsorName(s: CareerState, team = s.myTeam): string {
+  const t = s.teams[team];
+  return MAIN_SPONSORS[t?.div === 2 ? t.parent ?? -1 : team]?.name ?? "모기업";
+}
+
 /** 한 시즌 기대치 (지급액 계산용): 22경기 중 승·패 절반, 우승 확률 등 */
 const EXPECT: Record<keyof MainSponsorTerms, number> = { win: 11, loss: 11, proTitle: 0.1, proRunnerUp: 0.1, mslTitle: 0.08, mslRunnerUp: 0.08 };
 
@@ -59,7 +65,9 @@ export const levelPerks = (level: number) => ({
 
 /** 메인 스폰서 예산 (이 안이면 계약 수락) */
 export function sponsorBudget(s: CareerState, team = s.myTeam): number {
-  const size = MAIN_SPONSORS[team]?.size ?? 1;
+  // B팀(2부)은 모구단 모기업이 작게 후원
+  const t = s.teams[team];
+  const size = t?.div === 2 ? (MAIN_SPONSORS[t.parent ?? -1]?.size ?? 1) * 0.5 : MAIN_SPONSORS[team]?.size ?? 1;
   return Math.round(termsValue(DEFAULT_TERMS) * size * levelPerks(managerLevel(s)).sponsor);
 }
 
@@ -74,7 +82,8 @@ export function defaultOffer(s: CareerState, team = s.myTeam): MainSponsorTerms 
  * 감독 레벨·명성이 높을수록, 모기업이 클수록 많이 준다
  */
 export function jobSigningFee(s: CareerState, team: number): number {
-  const size = MAIN_SPONSORS[team]?.size ?? 1;
+  const t = s.teams[team];
+  const size = t?.div === 2 ? 0.5 : MAIN_SPONSORS[team]?.size ?? 1;
   const rep = s.manager?.reputation ?? 50;
   return Math.round(((400 + managerLevel(s) * 150 + rep * 10) * size) / 10) * 10;
 }

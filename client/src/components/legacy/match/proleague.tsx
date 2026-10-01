@@ -161,7 +161,7 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose, held, onHo
   const [week, setWeek] = useState<WeekDone | null>(heldHere?.week ?? null);
   const [over, setOver] = useState(!!heldHere);
   const [speed, setSpeed] = useSpeed();
-  const stageName = m.stage === "regular" ? "마이프로리그" : `마이프로리그 ${STAGE_NAMES[m.stage]}`;
+  const stageName = m.stage === "regular" ? (m.div === 2 ? "마이프로리그 2부" : "마이프로리그") : `마이프로리그 ${STAGE_NAMES[m.stage]}`;
   const leftTeam = leftIsA ? m.a : m.b, rightTeam = leftIsA ? m.b : m.a;
   const score = (k: number): [number, number] => {
     let l = 0, r = 0;

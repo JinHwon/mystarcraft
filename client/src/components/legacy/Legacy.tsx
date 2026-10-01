@@ -109,13 +109,17 @@ export function PlayerPhoto({ id, name, size = 64, titles }: { id?: number; name
   );
 }
 
-export function TeamLogo({ team, className }: { team: { name: string; short: string; color: string }; className?: string }) {
+/** 구단 로고. B팀(2부)은 모구단 로고에 B 표시 */
+export function TeamLogo({ team, className }: { team: { name: string; short: string; color: string; parent?: number }; className?: string }) {
+  const isB = team.parent !== undefined;
+  const logo = isB ? team.short.replace(/B$/, "") : team.short;
   return (
-    <div className={cn("bg-white rounded-md flex items-center justify-center overflow-hidden", className)}>
+    <div className={cn("relative bg-white rounded-md flex items-center justify-center overflow-hidden", className)}>
       <LegacyImg
-        dir="로고" name={team.short} className="max-w-full max-h-full object-contain"
-        fallback={<span className="font-black italic tracking-tight" style={{ color: team.color, fontSize: 18 }}>{team.short}</span>}
+        dir="로고" name={logo} className={cn("max-w-full max-h-full object-contain", isB && "opacity-80")}
+        fallback={<span className="font-black italic tracking-tight" style={{ color: team.color, fontSize: 18 }}>{logo}</span>}
       />
+      {isB && <span className="absolute right-0 bottom-0 px-[3px] leading-[1.1] text-[10px] font-black text-white rounded-tl" style={{ background: team.color }}>B</span>}
     </div>
   );
 }

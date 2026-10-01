@@ -74,6 +74,15 @@ function makeRookie(s: CareerState, base: Partial<CPlayer> & { name: string; rac
   return p;
 }
 
+/** 2부 팀을 채울 신예 (소식 없이, 무소속으로 만듦) */
+export function prospects(s: CareerState, n: number): CPlayer[] {
+  const races: Race[] = ["terran", "zerg", "protoss"];
+  return Array.from({ length: n }, () => {
+    const stats = Object.fromEntries(STAT_KEYS.map(k => [k, randInt(420, 640)])) as Record<StatKey, number>;
+    return makeRookie(s, { name: newName(s), race: races[randInt(0, 2)], stats, potential: randInt(4800, 7000) });
+  });
+}
+
 /** 원작 초기 능력치 */
 function originalStats(id: number): Record<StatKey, number> | undefined {
   const row = ORIG_PLAYERS[id];

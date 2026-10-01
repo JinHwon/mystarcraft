@@ -97,7 +97,7 @@ export function sellMinimum(s: CareerState, p: CPlayer): number {
 
 /** 감독 평판에 따라 제의할 수 있는 팀 (강팀일수록 높은 평판 필요) */
 export function jobThreshold(powerRank: number): number {
-  return 85 - powerRank * 6;
+  return Math.max(0, 85 - powerRank * 6);
 }
 
 /** 인기 (0~100): 능력치·통산 승수·레벨·우승 경력 */

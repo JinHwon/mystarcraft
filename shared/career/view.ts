@@ -3,20 +3,34 @@
  */
 import { ORIG_MAPS, FREE_AGENT_TEAM } from "./originalData";
 import type { CareerState, CMatch, CPlayer, Race } from "./rules";
-import { TRADE_ACE_PREMIUM, TRADE_PREMIUM, totalOf, tradeValue } from "./rules";
+import { B_TEAM_OFFSET, TRADE_ACE_PREMIUM, TRADE_PREMIUM, totalOf, tradeValue } from "./rules";
 
-/** 1부 선수단 (2부는 reserveOf) */
+/** 선수단 */
 export const rosterOf = (s: CareerState, team: number) => s.players.filter(p => p.team === team && !p.reserve);
-/** 2부 선수단 (우리 구단만) */
-export const reserveOf = (s: CareerState, team: number) => s.players.filter(p => p.team === team && p.reserve);
 /** 은퇴하지 않은 선수 전체 (무소속 포함) */
 export const activePlayers = (s: CareerState) => s.players.filter(p => p.team >= 0);
 /** 은퇴 선수의 팀 번호 */
 export const RETIRED = -1;
+/** 리그 팀 전체 (1부·2부) */
 export const proTeams = (s: CareerState) => s.teams.filter(t => t.id !== FREE_AGENT_TEAM);
+/** 팀의 리그 (1부·2부) */
+export const divOf = (s: CareerState, team: number): 1 | 2 => s.teams[team]?.div ?? 1;
+/** 1부 구단의 B팀 번호 (없으면 undefined) */
+export const bTeamIdOf = (s: CareerState, team: number) => {
+  const id = team + B_TEAM_OFFSET;
+  return s.teams[id]?.parent === team ? id : undefined;
+};
+/** 우리 팀 리그 */
+export const myDiv = (s: CareerState) => divOf(s, s.myTeam);
+/** 한 리그의 팀 */
+export const divTeams = (s: CareerState, div: 1 | 2) => proTeams(s).filter(t => (t.div ?? 1) === div);
+export const DIV_NAMES = { 1: "1부", 2: "2부" } as const;
+/** 우리 리그 이름 (1부는 마이프로리그, 2부는 마이프로리그 2부) */
+export const leagueName = (div: 1 | 2) => (div === 1 ? "마이프로리그" : "마이프로리그 2부");
 
-export function standings(s: CareerState) {
-  return [...proTeams(s)].sort((x, y) =>
+/** 리그 순위 (div 를 안 주면 우리 팀 리그) */
+export function standings(s: CareerState, div: 1 | 2 = myDiv(s)) {
+  return divTeams(s, div).sort((x, y) =>
     y.wins - x.wins || (y.setWins - y.setLosses) - (x.setWins - x.setLosses) || y.setWins - x.setWins || x.id - y.id);
 }
 
@@ -31,7 +45,7 @@ export function teamPower(s: CareerState, team: number): number {
 }
 
 export const STAGE_NAMES: Record<CMatch["stage"], string> = {
-  regular: "정규시즌", semi: "준플레이오프", po: "플레이오프", final: "결승",
+  regular: "정규시즌", semi: "준플레이오프", po: "플레이오프", final: "결승", promo: "승강전",
 };
 
 export interface MapView {

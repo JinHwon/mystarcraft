@@ -7,8 +7,8 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { FREE_AGENT_TEAM } from "@shared/career/originalData";
-import { MAX_ROSTER, ageOf, askingPrice, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
-import { evaluateTrade, proTeams, rosterOf } from "@shared/career/view";
+import { B_MAX_ROSTER, MAX_ROSTER, ageOf, askingPrice, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
+import { bTeamIdOf, evaluateTrade, myDiv, proTeams, rosterOf } from "@shared/career/view";
 import { useCareer, useCareerPatch, useCareerUpdater } from "@/lib/career";
 import type { CareerDiff } from "@shared/career/diff";
 import { LegacyFrame, LegacyImg, TeamLogo } from "@/components/legacy/Legacy";
@@ -52,7 +52,7 @@ function Money({ s }: { s: CareerState }) {
 /** 다른 팀 선수 영입 요청: 이적료 협상(합의·보류·거절) → 선수 계약 협상 */
 function BidTab({ s }: { s: CareerState }) {
   const patch = useCareerPatch();
-  const teams = proTeams(s).filter(t => t.id !== s.myTeam);
+  const teams = proTeams(s).filter(t => t.id !== s.myTeam).sort((a, b) => (a.div ?? 1) - (b.div ?? 1) || a.id - b.id);
   const [teamId, setTeamId] = useState(teams[0]?.id ?? 0);
   const [sel, setSel] = useState<number | undefined>();
   const [fee, setFee] = useState(0);
@@ -71,7 +71,10 @@ function BidTab({ s }: { s: CareerState }) {
   const onFail = (e: { message: string }) => setReply({ text: e.message, ok: false });
   const bid = trpc.career.bid.useMutation({ onSuccess: onDone, onError: onFail });
   const contract = trpc.career.contract.useMutation({ onSuccess: onDone, onError: onFail });
-  const pick = (x: CPlayer) => { setSel(x.id); setFee(askingPrice(x, s.season)); setReply(null); };
+  // 우리 구단 B팀 선수는 시세의 절반에 데려올 수 있음
+  const myB = bTeamIdOf(s, s.myTeam);
+  const priceOf = (x: CPlayer) => Math.round((askingPrice(x, s.season) * (x.team === myB ? 0.5 : 1)) / 10) * 10;
+  const pick = (x: CPlayer) => { setSel(x.id); setFee(priceOf(x)); setReply(null); };
   return (
     <div className="space-y-2">
       <div className="text-center text-[12px] text-neutral-300">영입할 선수를 고르고 이적료를 제시하세요</div>
@@ -83,7 +86,7 @@ function BidTab({ s }: { s: CareerState }) {
         ))}
       </div>
       <PickList players={theirs} picked={sel !== undefined ? [sel] : []} onToggle={pick} height="max-h-[200px]"
-        right={x => `${x.wantsOut ? "이적희망 · " : ""}${askingPrice(x, s.season).toLocaleString()}만`} />
+        right={x => `${x.wantsOut ? "이적희망 · " : ""}${priceOf(x).toLocaleString()}만${x.team === myB ? " (B팀 50%)" : ""}`} />
       {p && (
         <>
           <PlayerPanel p={p} color="#ff9a9a" empty="" />
@@ -112,7 +115,7 @@ function BidTab({ s }: { s: CareerState }) {
 
 function TradeTab({ s }: { s: CareerState }) {
   const updater = useCareerUpdater();
-  const teams = proTeams(s).filter(t => t.id !== s.myTeam);
+  const teams = proTeams(s).filter(t => t.id !== s.myTeam).sort((a, b) => (a.div ?? 1) - (b.div ?? 1) || a.id - b.id);
   const [teamId, setTeamId] = useState(teams[0]?.id ?? 0);
   const [give, setGive] = useState<number[]>([]);
   const [take, setTake] = useState<number[]>([]);
@@ -190,14 +193,10 @@ function ScoutTab({ s }: { s: CareerState }) {
     ...updater,
     onSuccess: r => { updater.onSuccess(r); toast.success(`영입 완료! (${r.result.price.toLocaleString()}만원)`); setSel(undefined); },
   });
-  const signReserve = trpc.career.signReserve.useMutation({
-    ...updater,
-    onSuccess: r => { updater.onSuccess(r); toast.success(`2부 입단! (계약금 ${r.result.fee.toLocaleString()}만원)`); setSel(undefined); },
-  });
-  const reserveFee = (x: CPlayer) => Math.max(20, Math.round((askingPrice(x, s.season) * 0.3) / 10) * 10);
   const p = sel !== undefined ? s.players[sel] : undefined;
   const price = p ? scoutPrice(s, p) : 0;
-  const full = rosterOf(s, s.myTeam).length >= MAX_ROSTER;
+  const max = myDiv(s) === 2 ? B_MAX_ROSTER : MAX_ROSTER;
+  const full = rosterOf(s, s.myTeam).length >= max;
   return (
     <div className="space-y-2">
       <div className="text-center text-[12px] text-neutral-300">무소속 선수 선택 <span className="text-neutral-500">({list.length}명)</span></div>
@@ -219,14 +218,7 @@ function ScoutTab({ s }: { s: CareerState }) {
         onClick={() => p && scout.mutate({ playerId: p.id })}
         className="w-full py-2 text-[14px] font-bold text-black border border-neutral-500 disabled:opacity-40"
         style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}
-      >{full ? `선수단이 가득 찼습니다 (${MAX_ROSTER}명)` : "1부로 영입"}</button>
-      {p && (
-        <button
-          disabled={signReserve.isPending || s.teams[s.myTeam].money < reserveFee(p)}
-          onClick={() => signReserve.mutate({ playerId: p.id })}
-          className="w-full py-2 text-[13px] font-bold text-[#bff5c6] border border-[#8fe07a] disabled:opacity-40"
-        >🌱 2부로 영입 (계약금 {reserveFee(p).toLocaleString()}만원 · 싼 연봉으로 육성)</button>
-      )}
+      >{full ? `선수단이 가득 찼습니다 (${max}명)` : "영입"}</button>
     </div>
   );
 }

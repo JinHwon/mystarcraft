@@ -3,7 +3,8 @@
  */
 import type { StatKey } from "../gameConstants";
 import { ORIG_PLAYERS, ORIG_TEAMS } from "./originalData";
-import { ORIG_STAT_ORDER, START_MONEY, WEEKLY_AP, type CareerState, type CPlayer, type Race } from "./rules";
+import { B_START_MONEY, B_TEAM_OFFSET, ORIG_STAT_ORDER, START_MONEY, WEEKLY_AP, type CareerState, type CPlayer, type CTeam, type Race } from "./rules";
+import { FREE_AGENT_TEAM } from "./originalData";
 
 const RACE: Record<string, Race> = { T: "terran", Z: "zerg", P: "protoss" };
 
@@ -20,8 +21,18 @@ export function initialPlayers(randCond: () => number = () => 5): CPlayer[] {
   });
 }
 
+/** 1부 구단의 B팀 (2부 리그) — 이름 뒤에 B */
+export function bTeamOf(parent: { id: number; name: string; short: string; color: string }): CTeam {
+  return {
+    id: parent.id + B_TEAM_OFFSET, name: `${parent.name} B`, short: `${parent.short}B`, color: parent.color,
+    money: B_START_MONEY, wins: 0, losses: 0, setWins: 0, setLosses: 0, div: 2, parent: parent.id,
+  };
+}
+
+/** 1부 12팀 + 무소속 + 2부 B팀 12팀 */
 export function initialTeams(): CareerState["teams"] {
-  return ORIG_TEAMS.map(t => ({ ...t, money: START_MONEY, wins: 0, losses: 0, setWins: 0, setLosses: 0 }));
+  const first = ORIG_TEAMS.map(t => ({ ...t, money: START_MONEY, wins: 0, losses: 0, setWins: 0, setLosses: 0, ...(t.id === FREE_AGENT_TEAM ? {} : { div: 1 as const }) }));
+  return [...first, ...ORIG_TEAMS.filter(t => t.id !== FREE_AGENT_TEAM).map(bTeamOf)];
 }
 
 /** 팀 선택 화면용 미리보기 (일정 없음) */
