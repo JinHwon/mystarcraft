@@ -1,6 +1,6 @@
-import { activeSponsors, maxSponsors } from "@shared/career/sponsor";
+
 import { EVENT_INFO, type CareerEventType } from "@shared/career/events";
-import { DEBT_LIMIT_WEEKS, MSL_STAGE_NAMES } from "@shared/career/rules";
+import { MSL_STAGE_NAMES } from "@shared/career/rules";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -12,6 +12,7 @@ import { leagueName, myDiv, myPendingMatch, rosterOf, standings, teamPower, STAG
 import { useCareer, useCareerUpdater } from "@/lib/career";
 import { RaceBadge, TeamBadge } from "@/components/career/Bits";
 import { previewWorld } from "@shared/career/init";
+import { careerAlerts } from "@/lib/alerts";
 
 /** 홈 화면에 앱 설치 (지원 브라우저에서만) */
 function useInstallPrompt() {
@@ -133,16 +134,9 @@ function Office({ s }: { s: CareerState }) {
     );
   }
 
-  const wantOut = roster.filter(p => p.wantsOut);
-  const alerts: Array<[string, string]> = [];
-  if ((s.debtWeeks ?? 0) > 0 || me.money < 0) alerts.push(["⚠️", `운영 자금 적자 ${s.debtWeeks ?? 0}주째 — ${DEBT_LIMIT_WEEKS}주 연속이면 구단 해체`]);
-  if (activeSponsors(s).length < maxSponsors(s) && s.phase !== "offseason") alerts.push(["🤝", activeSponsors(s).length ? `서브 스폰서를 ${maxSponsors(s) - activeSponsors(s).length}곳 더 계약할 수 있습니다` : "이번 시즌 서브 스폰서를 아직 정하지 않았습니다 (후원금 없음)"]);
-  if (s.phase !== "offseason" && s.week === 1 && !s.matches.some(m => m.done && (m.a === s.myTeam || m.b === s.myTeam))) alerts.push(["🏢", "첫 경기 전: 메인 스폰서와 승리·패배·우승 수당을 재협상할 수 있습니다"]);
-  if (s.offers?.length) alerts.push(["📨", `받은 영입 제안 ${s.offers.length}건`]);
-  if (s.jobOffers?.length) alerts.push(["🤵", `감독 제의 ${s.jobOffers.length}건 (${s.jobOffers.map(o => s.teams[o.team].name).join(", ")})`]);
-  if (wantOut.length) alerts.push(["😤", `이적 희망: ${wantOut.map(p => p.name).join(", ")}`]);
+  // 알림 (상단 🔔 과 같은 목록)
+  const alerts = careerAlerts(s);
   const expiring = s.players.filter(p => p.team === s.myTeam && (p.contract?.years ?? 9) <= 1);
-  if (s.phase === "offseason" && expiring.length) alerts.push(["📄", `계약 만료 예정 (재계약 안 하면 떠남): ${expiring.map(p => p.name).join(", ")}`]);
 
   return (
     <div className="p-4 space-y-4">
@@ -155,10 +149,13 @@ function Office({ s }: { s: CareerState }) {
         </div>
       )}
       {alerts.length > 0 && (
-        <button onClick={() => navigate("/club")} className="w-full text-left rounded-2xl bg-amber-500/10 border border-amber-400/40 p-3 space-y-1">
-          {alerts.map(([icon, text], i) => <div key={i} className="text-xs text-foreground">{icon} {text}</div>)}
-          <div className="text-[11px] text-amber-300 font-bold">구단 운영에서 확인 ›</div>
-        </button>
+        <div className="rounded-2xl bg-amber-500/10 border border-amber-400/40 p-2 space-y-0.5">
+          {alerts.map(a => (
+            <button key={a.key} onClick={() => navigate(a.to)} className="w-full text-left text-xs text-foreground px-1 py-1 rounded-lg active:bg-amber-500/10 flex">
+              <span className="flex-1">{a.icon} {a.text}</span><span className="text-amber-300 font-bold">›</span>
+            </button>
+          ))}
+        </div>
       )}
       {/* 팀 카드 */}
       <div className="rounded-2xl p-4 border border-white/10 shadow-xl" style={{ background: `linear-gradient(135deg, ${me.color}55, oklch(0.32 0.05 258) 60%)` }}>

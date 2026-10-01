@@ -1,8 +1,8 @@
 /**
  * 구단 운영: 재정 · 계약(재계약) · 받은 영입 제안 · 감독
  */
-import { useMemo, useState } from "react";
-import { useLocation } from "wouter";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { DEBT_LIMIT_WEEKS, OPERATING_COST, askingPrice, totalOf, type CareerState, type Contract } from "@shared/career/rules";
@@ -464,7 +464,11 @@ export default function Club() {
 
 function ClubScreen({ s }: { s: CareerState }) {
   const [, navigate] = useLocation();
-  const [tab, setTab] = useState<Tab>(() => (activeSponsors(s).length === 0 ? "sponsor" : "money"));
+  // ?tab=offers 처럼 알림에서 바로 그 탭으로
+  const search = useSearch();
+  const asked = new URLSearchParams(search).get("tab") as Tab | null;
+  const [tab, setTab] = useState<Tab>(() => (asked && TABS.some(([k]) => k === asked) ? asked : activeSponsors(s).length === 0 ? "sponsor" : "money"));
+  useEffect(() => { if (asked && TABS.some(([k]) => k === asked)) setTab(asked); }, [search]);
   return (
     <LegacyFrame season={s.season} onBack={() => navigate("/lobby")} onNext={() => navigate("/lobby")} nextLabel="◁◁ 감독실">
       <div className="px-3 pt-2 pb-4">
