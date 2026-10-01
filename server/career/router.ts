@@ -1,3 +1,4 @@
+import { maskName } from "./maskName";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { eq, inArray } from "drizzle-orm";
@@ -259,7 +260,7 @@ export const careerRouter = router({
     const rows = await allSummaries();
     return {
       me: ctx.user.id,
-      rows: rows.filter(r => r.summary).map(r => ({ userId: r.userId, name: r.name, lastSignedIn: r.lastSignedIn ? new Date(r.lastSignedIn).getTime() : null, ...r.summary! })),
+      rows: rows.filter(r => r.summary).map(r => ({ userId: r.userId, name: r.userId === ctx.user.id ? r.name : maskName(r.name), lastSignedIn: r.lastSignedIn ? new Date(r.lastSignedIn).getTime() : null, ...r.summary! })),
     };
   }),
 
