@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { FINAL_SETS, PRO_SETS, type CareerState, type CMatch } from "@shared/career/rules";
 import { DIV_NAMES, STAGE_NAMES, divTeams, leagueName, myDiv, myPendingMatch, rosterOf, standings } from "@shared/career/view";
 import { useCareer, useCareerPatch, useCareerUpdater } from "@/lib/career";
+import { USER_CHANGE_EVENT } from "@/lib/session";
 import type { CareerDiff } from "@shared/career/diff";
 import { TeamBadge } from "@/components/career/Bits";
 import { EntryScreen, LiveMatch, MapDrawScreen, MslFlow, NominationScreen, ProSeriesFlow, ScheduleScreen, SeriesViewer, type BroadcastSet, type HeldFinish, type ItemPlan, type MslReportView, type WeekDone } from "@/components/legacy/LegacyMatch";
@@ -45,6 +46,8 @@ type HeldLive = { finish: HeldFinish; diff: CareerDiff; s: CareerState; applied:
 type WeekView = { w: WeekDone; stage: "pro" | "msl" | "summary"; pro?: { k: number; idx: number }; msl?: number; closed?: boolean };
 let heldLive: HeldLive | null = null;
 let heldWeek: WeekView | null = null;
+// 다른 사용자로 바뀌면 보던 관전을 버림
+window.addEventListener(USER_CHANGE_EVENT, () => { heldLive = null; heldWeek = null; });
 
 function MatchTab({ s }: { s: CareerState }) {
   const updater = useCareerUpdater();

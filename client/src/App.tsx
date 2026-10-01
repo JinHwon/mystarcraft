@@ -6,7 +6,9 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { resetUserSession } from "./lib/session";
 import { Redirect } from "wouter";
 import { useAuth } from "./_core/hooks/useAuth";
 import GameLayout from "./components/GameLayout";
@@ -103,12 +105,27 @@ function Router() {
   );
 }
 
+/** 로그인 사용자가 바뀌면 (세션 만료 뒤 다른 아이디 등) 이전 사용자의 화면 데이터를 지움 */
+function UserWatcher() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const last = useRef<number | null>(null);
+  useEffect(() => {
+    const id = user?.id ?? null;
+    if (id === null) return;
+    if (last.current !== null && last.current !== id) resetUserSession(queryClient);
+    last.current = id;
+  }, [user?.id]);
+  return null;
+}
+
 function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <UpdateNotification />
+          <UserWatcher />
           <Toaster position="top-center" />
           <div className="app-frame">
             <Router />
