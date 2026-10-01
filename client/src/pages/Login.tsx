@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { resetUserSession } from "@/lib/session";
 import { useLocation } from "wouter";
 import { Sword, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,6 +14,7 @@ type Mode = "login" | "register";
 
 export default function Login() {
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
   const utils = trpc.useUtils();
   const [mode, setMode] = useState<Mode>("login");
   const [username, setUsername] = useState("");
@@ -40,6 +43,8 @@ export default function Login() {
         setError(data?.error ?? "요청에 실패했습니다");
         return;
       }
+      // 새로 로그인한 사용자의 구단을 불러오도록 이전 화면 데이터를 지움
+      resetUserSession(queryClient);
       await utils.auth.me.invalidate();
       navigate("/");
     } catch {
