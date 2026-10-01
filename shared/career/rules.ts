@@ -439,6 +439,8 @@ export interface CareerState {
   }>;
   /** 이번 시즌 마이스타리그 */
   msl?: MslState;
+  /** 마지막으로 리그를 진행한 때 (경기·주 진행·다음 시즌, ms) — 감독 랭킹 표시용 */
+  lastLeagueAt?: number;
   /** 이번 시즌 승강전 결과 (다음 시즌 시작 때 리그를 바꿈) */
   promo?: { season: number; moves: Array<{ up: number; down: number }> };
   /** 이번 시즌 맵 추첨 결과 */

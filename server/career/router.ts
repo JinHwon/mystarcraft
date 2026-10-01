@@ -212,6 +212,7 @@ function summaryOf(s: CareerState) {
     proTitles: s.history.filter(h => h.champion === (h.team ?? s.myTeam)).length,
     mslTitles: s.players.reduce((n, p) => n + (p.team === s.myTeam ? (p.titles ?? []).filter(x => x.includes("스타리그") || x.includes("MSL")).length : 0), 0),
     gameOver: s.gameOver?.reason,
+    lastLeagueAt: s.lastLeagueAt ?? null,
   };
 }
 export type CareerSummary = ReturnType<typeof summaryOf>;
@@ -249,6 +250,8 @@ async function allSummaries(force = false) {
 if (process.env.NODE_ENV !== "test") setTimeout(() => { void allSummaries().catch(() => {}); }, 5000).unref();
 
 const actionKeys = ACTIONS.map(a => a.key) as [string, ...string[]];
+/** 리그를 진행한 요청: 진행 시각을 남김 (감독 랭킹의 "마지막 리그 진행") */
+const league = <T,>(s: CareerState, result: T): T => { s.lastLeagueAt = Date.now(); return result; };
 
 export const careerRouter = router({
   /** 감독 랭킹 (커리어가 있는 사용자) */
@@ -256,7 +259,7 @@ export const careerRouter = router({
     const rows = await allSummaries();
     return {
       me: ctx.user.id,
-      rows: rows.filter(r => r.summary).map(r => ({ userId: r.userId, name: r.name, ...r.summary! })),
+      rows: rows.filter(r => r.summary).map(r => ({ userId: r.userId, name: r.name, lastSignedIn: r.lastSignedIn ? new Date(r.lastSignedIn).getTime() : null, ...r.summary! })),
     };
   }),
 
@@ -350,7 +353,7 @@ export const careerRouter = router({
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => runMyActions(s, input?.playerId))),
 
   /** 조 지명식을 마치고 이번 주 마무리 (남은 지명은 자동) */
-  completeWeek: protectedProcedure.mutation(({ ctx }) => mutate(ctx.user.id, s => completeWeek(s))),
+  completeWeek: protectedProcedure.mutation(({ ctx }) => mutate(ctx.user.id, s => league(s, completeWeek(s)))),
 
   /** 마이스타리그 조 지명식: 우리 조장 차례까지 진행, pick 이 있으면 그 선수를 지명 */
   nominate: protectedProcedure
@@ -375,11 +378,11 @@ export const careerRouter = router({
 
   advance: protectedProcedure
     .input(z.object({ entry: z.array(z.number().int()).optional() }))
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => advanceWeek(s, input.entry))),
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => league(s, advanceWeek(s, input.entry)))),
 
   nextSeason: protectedProcedure
     .input(z.object({ releaseExpiring: z.boolean().optional() }).optional())
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => startNextSeason(s, { releaseExpiring: input?.releaseExpiring }))),
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => league(s, startNextSeason(s, { releaseExpiring: input?.releaseExpiring })))),
 
   scout: protectedProcedure
     .input(z.object({ playerId: z.number().int() }))
@@ -404,7 +407,7 @@ export const careerRouter = router({
       entry: z.array(z.number().int()).min(1).max(8),
       items: z.record(z.string(), z.object({ key: z.string(), predict: z.number().int().optional() })).optional(),
     }))
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => beginMatch(s, input.entry, Object.fromEntries(Object.entries(input.items ?? {}).map(([k, v]) => [Number(k), v]))))),
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => league(s, beginMatch(s, input.entry, Object.fromEntries(Object.entries(input.items ?? {}).map(([k, v]) => [Number(k), v])))))),
 
   /** 아이템 구입 (장비·즉시·포션은 target 선수에게 바로 사용) */
   buyItem: protectedProcedure
@@ -419,7 +422,7 @@ export const careerRouter = router({
   /** 다음 세트 진행 (ACE 결정전이면 ace 선수) */
   playSet: protectedProcedure
     .input(z.object({ ace: z.number().int().optional() }))
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => playLiveSet(s, input.ace))),
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => league(s, playLiveSet(s, input.ace)))),
 
   /** 받은 영입 제안: 수락·거절·역제안(금액) */
   respondOffer: protectedProcedure

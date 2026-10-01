@@ -14,7 +14,7 @@ import { ENV } from "./env";
 export type SessionPayload = { openId: string; name: string };
 
 /** lastSignedIn 을 다시 기록하기까지의 간격 (요청마다 DB 에 쓰지 않도록) */
-const TOUCH_INTERVAL_MS = 60 * 60 * 1000;
+const TOUCH_INTERVAL_MS = 10 * 60 * 1000;
 
 const secretKey = () => new TextEncoder().encode(ENV.cookieSecret);
 
