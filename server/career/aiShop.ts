@@ -8,7 +8,7 @@ import { COND_MAX, condMultiplier, totalOf, type CareerState, type CPlayer } fro
 import { ITEMS, ITEM_BY_KEY, gearCond, slotOf, type EquipSlot } from "@shared/career/items";
 import { rosterOf } from "@shared/career/view";
 import { STAT_KEYS } from "@shared/gameConstants";
-import { clampCond, clampStat, rand, randInt } from "./core";
+import { clampCond, clampStat, freeMoney, rand, randInt } from "./core";
 
 /** AI 구단은 시즌마다 선수 한 명당 포션을 이 정도만 (사용자는 제한 없음) */
 const AI_POTION_LIMIT = 3;
@@ -23,7 +23,8 @@ const EQUIPS = ITEMS.filter(i => i.kind === "equip" && !i.notForSale);
 export function aiShopping(s: CareerState) {
   for (const t of s.teams) {
     if (t.id === s.myTeam || t.id === FREE_AGENT_TEAM) continue;
-    let budget = Math.floor(Math.max(0, t.money - AI_RESERVE) * WEEKLY_SHARE);
+    // 우리 선수에게 낸 이적 제안 금액은 남겨 둠
+    let budget = Math.floor(Math.max(0, freeMoney(s, t.id) - AI_RESERVE) * WEEKLY_SHARE);
     if (budget < 40) continue;
     const spend = (n: number) => { t.money -= n; budget -= n; };
     // 주전 (컨디션 반영 능력치 순 6명)

@@ -37,7 +37,7 @@ import {
 import { contractScore, defaultContract, expectedShare, isStar, jobThreshold, playerDemand, sellMinimum, squadRank, weeklyWage } from "@shared/career/contract";
 import { activePlayers, divOf, myDiv, proTeams, rosterOf, teamPower } from "@shared/career/view";
 import { developmentBonus, myBTeam, rosterLimits } from "./divisions";
-import { CareerError, addExp, clampCond, gainStats, news, rand, randInt } from "./core";
+import { CareerError, addExp, clampCond, freeMoney, gainStats, news, rand, randInt } from "./core";
 import { activeSponsors, maxSponsors, questLabel, questProgress, questRange, questReward, sponsorOffers } from "@shared/career/sponsor";
 import { SPONSOR_COUNTER, SPONSOR_STRETCH, defaultOffer, mainSponsorName, managerExpNeed, sponsorBudget, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
 
@@ -140,8 +140,10 @@ function makeOffer(s: CareerState, p: CPlayer, teamId: number, listing?: Transfe
   } else {
     fee = round10(value * (0.7 + rand() * 0.25));
   }
-  fee = Math.max(10, Math.min(fee, round10(team.money)));
-  const max = Math.max(fee, round10(Math.min(team.money, value * (1.1 + rand() * 0.2))));
+  // 구단이 실제로 낼 수 있는 돈 안에서 (다른 제안에 묶인 돈 제외)
+  const can = Math.max(10, round10(freeMoney(s, teamId)));
+  fee = Math.max(10, Math.min(fee, can));
+  const max = Math.max(fee, round10(Math.min(can, value * (1.1 + rand() * 0.2))));
   s.offers = [...(s.offers ?? []), {
     id: (s.nextOfferId = (s.nextOfferId ?? 1) + 1), player: p.id, team: teamId, fee, max,
     season: s.season, week: s.week, tries: 0, status: "pending", listed: !!listing, ...(byPlayer ? { byPlayer: true } : {}),
@@ -153,7 +155,7 @@ function makeOffer(s: CareerState, p: CPlayer, teamId: number, listing?: Transfe
 /** 이 선수를 데려갈 수 있는 팀 (이미 제안한 팀 제외) */
 function buyersFor(s: CareerState, p: CPlayer, minMoney: number) {
   const offered = new Set((s.offers ?? []).filter(o => o.player === p.id).map(o => o.team));
-  return proTeams(s).filter(t => t.id !== s.myTeam && !offered.has(t.id) && rosterOf(s, t.id).length < rosterLimits(s, t.id).max && t.money >= minMoney);
+  return proTeams(s).filter(t => t.id !== s.myTeam && !offered.has(t.id) && rosterOf(s, t.id).length < rosterLimits(s, t.id).max && freeMoney(s, t.id) >= minMoney);
 }
 
 /** 주마다 새 영입 제안: 이적시장 등록 선수는 희망가에 따라 여러 팀이, 그 밖의 선수는 가끔 한두 팀이 */
@@ -374,7 +376,7 @@ export function aiMarket(s: CareerState, rounds = 1) {
       const pick = weightedPick(pool, weights);
       if (buyer && pick) {
         const fee = round10(value(pick) * (0.9 + rand() * 0.35) * (pick.wantsOut ? 0.85 : 1));
-        if (buyer.money >= fee + 300) {
+        if (freeMoney(s, buyer.id) >= fee + 300) {
           const seller = s.teams[pick.team];
           const bonus = developmentBonus(s, seller.id, buyer.id, fee);
           buyer.money -= fee;
@@ -415,7 +417,7 @@ export function aiMarket(s: CareerState, rounds = 1) {
       const fa = team && rosterOf(s, FREE_AGENT_TEAM).sort((a, b) => totalOf(b.stats) - totalOf(a.stats)).slice(0, 5).sort(() => rand() - 0.5)[0];
       if (team && fa) {
         const fee = round10(value(fa) * 0.5);
-        if (team.money >= fee + 300) {
+        if (freeMoney(s, team.id) >= fee + 300) {
           team.money -= fee;
           aiMove(s, fa, team.id);
           logMove(s, { kind: "sign", players: [fa.id], teams: [team.id], fee });
@@ -719,6 +721,42 @@ export function newSeasonClub(s: CareerState) {
   s.ledger = { season: s.season, items: {} };
 }
 
+/**
+ * AI 구단이 우리 선수 이적료가 조금 모자랄 때 자금 마련 (모자란 돈이 이적료의 30% 이하일 때만)
+ * 이적 희망 선수나 이번 시즌 잘 안 쓴 선수(주전 6명 밖)를 다른 구단에 팔고, 살 구단이 없으면 방출해 연봉을 아낌
+ */
+function raiseFunds(s: CareerState, teamId: number, price: number, incoming: number) {
+  const team = s.teams[teamId];
+  const short = price - team.money;
+  if (short <= 0 || short > Math.max(300, price * 0.3)) return;
+  const roster = rosterOf(s, teamId);
+  const keep = Math.max(AI_KEEP, rosterLimits(s, teamId).min);
+  const core = new Set([...roster].sort((a, b) => totalOf(b.stats) - totalOf(a.stats)).slice(0, 6).map(p => p.id));
+  const apps = roster.map(p => p.sApps ?? 0).sort((a, b) => a - b);
+  const median = apps[Math.floor(apps.length / 2)] ?? 0;
+  const cands = roster
+    .filter(p => p.id !== incoming && !core.has(p.id) && (p.wantsOut || (p.sApps ?? 0) < median || (p.sApps ?? 0) === 0))
+    .sort((a, b) => Number(!!b.wantsOut) - Number(!!a.wantsOut) || (a.sApps ?? 0) - (b.sApps ?? 0));
+  for (const p of cands.slice(0, 2)) {
+    if (team.money >= price || rosterOf(s, teamId).length <= keep) break;
+    const fee = round10(askingPrice(p, s.season) * 0.8);
+    const buyer = shuffleTeams(proTeams(s).filter(t => t.id !== teamId && t.id !== s.myTeam && rosterOf(s, t.id).length < rosterLimits(s, t.id).max && freeMoney(s, t.id) >= fee + 300))[0];
+    if (buyer && fee > 0) {
+      buyer.money -= fee;
+      team.money += fee;
+      aiMove(s, p, buyer.id);
+      logMove(s, { kind: "transfer", players: [p.id], teams: [teamId, buyer.id], fee });
+      news(s, `📰 ${team.name}, ${p.name} 선수를 ${buyer.name}에 보내 이적 자금 마련 (${fee.toLocaleString()}만원)`);
+    } else {
+      const saved = round10((p.contract?.salary ?? 0) * 0.5);
+      team.money += saved;
+      aiMove(s, p, FREE_AGENT_TEAM);
+      logMove(s, { kind: "release", players: [p.id], teams: [teamId] });
+      news(s, `📰 ${team.name}, ${p.name} 선수를 방출해 이적 자금 마련`);
+    }
+  }
+}
+
 // ── 받은 제안에 답하기 ───────────────────────────────────────────
 export function respondOffer(s: CareerState, offerId: number, action: "accept" | "reject" | "counter", fee?: number) {
   const o = s.offers?.find(x => x.id === offerId);
@@ -731,6 +769,8 @@ export function respondOffer(s: CareerState, offerId: number, action: "accept" |
     const min = rosterLimits(s, s.myTeam).min;
     if (rosterOf(s, s.myTeam).length <= min) throw new CareerError(`선수가 최소 ${min}명은 있어야 합니다${myDiv(s) === 2 ? " (2부 리그 규정)" : ""}`);
     if (rosterOf(s, o.team).length >= rosterLimits(s, o.team).max) throw new CareerError(`${team.name} 선수단이 가득 찼습니다`);
+    // 조금 모자라면 이적 희망·잘 안 쓰는 선수를 팔거나 내보내 마련
+    if (team.money < price) raiseFunds(s, o.team, price, p.id);
     if (team.money < price) throw new CareerError(`${team.name}: "지금은 그만한 자금이 없습니다"`);
     team.money -= price;
     pay(s, "이적료 수입", price, `${p.name} → ${team.name}`);

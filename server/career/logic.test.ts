@@ -442,8 +442,8 @@ describe("원작 해설 중계", () => {
     const lines = set.timeline!.lines;
     expect(lines.length).toBeGreaterThan(10);
     // 모든 줄이 원작 문장 (앞의 "이름 선수" 만 붙음)
-    // 포텐셜 폭발 해설은 우리가 붙이는 문장이라 제외
-    for (const l of lines.filter(x => !x.text.includes("포텐셜이 터졌어요"))) {
+    // 포텐셜 폭발·컨디션 난조·경기 아이템 해설은 우리가 붙이는 문장이라 제외
+    for (const l of lines.filter(x => !/포텐셜이 터졌어요|컨디션 난조입니다|치어풀이 보이네요|노리고 나온 것 같은데요/.test(x.text))) {
       const body = l.text.replace(new RegExp(`^(${names.join("|")})( 선수)?(, |\\.\\. | )?`), "").replace(/^선수[, ]*/, "").trim();
       expect([...all].some(x => x.endsWith(body) || body.endsWith(x))).toBe(true);
     }
@@ -1312,5 +1312,84 @@ describe("컨디션·스나이핑·스폰서 협상력", () => {
     const d = defaultOffer(s);
     const terms = Object.fromEntries(Object.entries(d).map(([key, v]) => [key, Math.floor(v * k)])) as typeof d;
     expect(negotiateMainSponsor(s, terms, 1).result).toBe("signed");
+  });
+});
+
+describe("경기마다 바뀌는 상태·컨디션·이적 자금·아이템 세트", () => {
+  it("이긴 선수도 컨디션이 2~5 떨어지고, 다전제는 바뀐 컨디션으로 다음 세트를 치른다", async () => {
+    const { playSet } = await import("./core");
+    const s = newCareer(0);
+    const [a, b] = rosterOf(s, 1);
+    for (let i = 0; i < 30; i++) {
+      a.cond = 100; b.cond = 100;
+      const r = playSet(s, a, b, 0, false);
+      const w = r.winner === "a" ? a : b;
+      expect(100 - w.cond).toBeGreaterThanOrEqual(2);
+      expect(100 - w.cond).toBeLessThanOrEqual(5);
+      // 다음 세트 기록의 시작 컨디션은 직전 세트 끝 컨디션
+      const r2 = playSet(s, a, b, 1, false);
+      expect(r2.fx!.a.cond[0]).toBe(r.fx!.a.cond[1]);
+    }
+  });
+
+  it("경기를 마친 선수는 포텐셜 폭발·컨디션 난조를 새로 정한다 (같은 주라도)", () => {
+    const s = newCareer(0);
+    const wk = `${s.season}-${s.week}`;
+    for (const p of s.players) { if (p.team >= 0) { p.slump = wk; delete p.burst; } }
+    // 우리 1경기 (한 주 2경기라 주는 그대로)
+    const entry = aiEntry(s, s.myTeam, PRO_SETS).slice(0, PRO_SETS - 1);
+    beginMatch(s, entry);
+    let r;
+    do r = playLiveSet(s, entry[0]); while (!r.matchOver);
+    expect(s.week).toBe(1);
+    const played = [...new Set(r.set ? s.matches.find(x => x.id === r.playedMatchId)!.sets!.flatMap(x => [x.a, x.b]) : [])];
+    const stillSlumped = played.filter(id => s.players[id].slump === wk).length;
+    expect(played.length).toBeGreaterThan(0);
+    expect(stillSlumped).toBeLessThan(played.length * 0.4);
+    // 안 나온 선수는 그대로
+    const rest = s.players.filter(p => p.team >= 0 && !played.includes(p.id) && p.team !== s.myTeam && !s.matches.some(m => m.done && m.week === 1 && (m.a === p.team || m.b === p.team)));
+    expect(rest.every(p => p.slump === wk)).toBe(true);
+  });
+
+  it("다른 팀은 ACE 결정전·위너스리그 2세트부터는 아이템을 쓰지 않는다", () => {
+    const s = newCareer(0);
+    for (const t of s.teams) t.money = 100_000;
+    for (let w = 0; w < 8; w++) {
+      const m = myPendingMatch(s);
+      advanceWeek(s, m ? aiEntry(s, s.myTeam, PRO_SETS) : undefined);
+    }
+    for (const m of s.matches.filter(x => x.done)) {
+      (m.sets ?? []).forEach((x, i) => { if (i >= PRO_SETS - 1) expect(x.aiItems).toBeUndefined(); });
+    }
+  });
+
+  it("우리 선수 이적료가 조금 모자라면 AI 구단이 이적 희망·잘 안 쓰는 선수를 정리해 맞춘다", async () => {
+    const { respondOffer } = await import("./club");
+    const s = newCareer(0);
+    const p = rosterOf(s, 0).sort((a, b) => totalOf(b.stats) - totalOf(a.stats))[5];
+    const buyer = s.teams[3];
+    const before = rosterOf(s, 3).length;
+    const extra = rosterOf(s, 3).sort((a, b) => totalOf(a.stats) - totalOf(b.stats))[0];
+    extra.wantsOut = true;
+    s.offers = [{ id: 1, player: p.id, team: 3, fee: 1000, max: 1200, season: 1, week: 1, tries: 0, status: "pending" }];
+    buyer.money = 850;
+    const r = respondOffer(s, 1, "accept");
+    expect(r.result).toBe("sold");
+    expect(p.team).toBe(3);
+    expect(extra.team).not.toBe(3);
+    expect(rosterOf(s, 3).length).toBe(before);
+    // 크게 모자라면 그대로 거절
+    const q = rosterOf(s, 0).sort((a, b) => totalOf(b.stats) - totalOf(a.stats))[4];
+    s.offers = [{ id: 2, player: q.id, team: 3, fee: 3000, max: 3000, season: 1, week: 1, tries: 0, status: "pending" }];
+    buyer.money = 500;
+    expect(() => respondOffer(s, 2, "accept")).toThrow();
+  });
+
+  it("다른 구단은 우리 선수에게 낸 제안 금액을 다른 데 쓰지 않는다", async () => {
+    const { freeMoney } = await import("./core");
+    const s = newCareer(0);
+    s.teams[3].money = 2000;
+    s.offers = [{ id: 1, player: rosterOf(s, 0)[0].id, team: 3, fee: 1500, max: 1800, season: 1, week: 1, tries: 0, status: "pending" }];
+    expect(freeMoney(s, 3)).toBe(200);
   });
 });

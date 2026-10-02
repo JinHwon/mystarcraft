@@ -101,14 +101,11 @@ export function effStats(p: CPlayer, mod?: SetMods): Record<StatKey, number> {
 /**
  * 경기 뒤 컨디션 하락 (원작: 1 단위)
  * - 패배: 3~10 (경기가 길수록, 기지를 잃거나 완패할수록 더)
- * - 승리: 0~3 (컨디션이 좋으면 안 떨어지기도, 긴 경기면 더)
+ * - 승리: 2~5 (긴 경기면 더)
  */
 function condLoss(p: CPlayer, won: boolean, c: SetContent | undefined, duration: number): number {
   const long = Math.min(3, Math.max(0, (duration - 600) / 300));
-  if (won) {
-    const base = p.cond >= 80 ? randInt(0, 2) : randInt(1, 3);
-    return Math.max(0, Math.min(3, Math.round(base + long * 0.4)));
-  }
+  if (won) return Math.max(2, Math.min(5, Math.round(randInt(2, 4) + long * 0.4)));
   const pain = c ? c.crushed * 1 + c.basesLost * 0.7 + c.holdFails * 0.4 : 0;
   return Math.max(3, Math.min(10, Math.round(randInt(3, 5) + long + pain)));
 }
@@ -186,15 +183,28 @@ export function rollWeekBursts(s: CareerState) {
   const wk = `${s.season}-${s.week}`;
   if (s.burstWeek === wk) return;
   s.burstWeek = wk;
-  for (const p of s.players) {
-    if (p.team < 0) continue;
-    delete p.slump;
-    if (rand() < burstChance(gearCond(p))) p.burst = { week: wk, mul: Math.round((1.1 + rand() * 0.1) * 100) / 100 };
-    else {
-      delete p.burst;
-      if (rand() < SLUMP_CHANCE) p.slump = wk;
-    }
+  for (const p of s.players) if (p.team >= 0) rollForm(s, p);
+}
+/** 다른 구단이 우리 선수에게 낸 제안 중 아직 답하지 않은 이적료 합 (그 구단은 이 돈을 다른 데 쓰지 않음) */
+export function committedMoney(s: CareerState, team: number): number {
+  return (s.offers ?? []).filter(o => o.team === team).reduce((a, o) => a + Math.max(o.fee, o.max ?? 0), 0);
+}
+/** 구단이 지금 자유롭게 쓸 수 있는 돈 */
+export const freeMoney = (s: CareerState, team: number) => (s.teams[team]?.money ?? 0) - committedMoney(s, team);
+
+/** 한 선수의 포텐셜 폭발·컨디션 난조를 새로 정함 (주가 시작될 때, 경기를 마칠 때마다) */
+export function rollForm(s: CareerState, p: CPlayer) {
+  const wk = `${s.season}-${s.week}`;
+  delete p.slump;
+  if (rand() < burstChance(gearCond(p))) p.burst = { week: wk, mul: Math.round((1.1 + rand() * 0.1) * 100) / 100 };
+  else {
+    delete p.burst;
+    if (rand() < SLUMP_CHANCE) p.slump = wk;
   }
+}
+/** 경기(프로리그 한 경기·개인리그 한 시리즈)를 마친 선수들은 다음 경기 상태를 새로 정함 */
+export function rerollAfterMatch(s: CareerState, ids: Iterable<number>) {
+  for (const id of new Set(ids)) { const p = s.players[id]; if (p && p.team >= 0) rollForm(s, p); }
 }
 /** 이번 주 상태(포텐셜 폭발 배율·컨디션 난조)를 세트 효과에 더함 */
 const withWeek = (s: CareerState, p: CPlayer, mod?: SetMods): SetMods | undefined => {
