@@ -37,7 +37,7 @@ function EditPanel({ userId, onDone }: { userId: number; onDone: () => void }) {
   return (
     <div className="rounded-2xl bg-card border border-primary/40 p-3.5 space-y-3">
       <div className="flex items-center justify-between">
-        <div className="font-bold text-foreground">{row.name} <span className="text-xs text-muted-foreground">#{row.userId} · {row.role === "admin" ? "관리자" : "사용자"}</span></div>
+        <div className="font-bold text-foreground">{row.name}{row.managerName ? ` (감독명 ${row.managerName})` : ""} <span className="text-xs text-muted-foreground">#{row.userId} · {row.role === "admin" ? "관리자" : "사용자"}</span></div>
         <button onClick={onDone} className="text-xs text-muted-foreground">닫기 ✕</button>
       </div>
       {!s ? (
@@ -120,7 +120,7 @@ export default function Admin() {
         {rows.map(r => (
           <button key={r.userId} onClick={() => setSel(r.userId)} className={cn("w-full text-left rounded-2xl border p-3", sel === r.userId ? "bg-primary/10 border-primary/50" : "bg-card border-border")}>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-foreground truncate">{r.name}</span>
+              <span className="font-bold text-foreground truncate">{r.name}{r.managerName ? ` · ${r.managerName}` : ""}</span>
               <span className="text-[10px] text-muted-foreground">#{r.userId}</span>
               {r.role === "admin" && <span className="text-[10px] text-amber-300 font-bold">관리자</span>}
               <span className="ml-auto text-[10px] text-muted-foreground text-right">{r.lastSignedIn ? `접속 ${new Date(r.lastSignedIn).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}{r.summary?.lastLeagueAt ? <><br />진행 {new Date(r.summary.lastLeagueAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</> : null}</span>

@@ -11,6 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { resetUserSession } from "./lib/session";
 import { Redirect } from "wouter";
 import { useAuth } from "./_core/hooks/useAuth";
+import { ManagerNameGate } from "./components/ManagerName";
 import GameLayout from "./components/GameLayout";
 import { UpdateNotification } from "./components/UpdateNotification";
 
@@ -126,6 +127,7 @@ function App() {
         <TooltipProvider>
           <UpdateNotification />
           <UserWatcher />
+          <ManagerNameGate />
           <Toaster position="top-center" />
           <div className="app-frame">
             <Router />

@@ -177,6 +177,20 @@ export interface TransferOffer {
   status: "pending" | "countered";
   /** 이적시장에 내놓은 선수에게 온 제안 */
   listed?: boolean;
+  /** 선수가 먼저 그 팀으로 가고 싶다고 요청한 제안 (거절하면 사기가 떨어짐) */
+  byPlayer?: boolean;
+}
+
+/** 다른 팀 선수가 우리 팀으로 오고 싶다는 요청 (수락하면 그 이적료·선수 요구 조건으로 바로 계약) */
+export interface JoinRequest {
+  id: number;
+  player: number;
+  /** 원 소속 구단이 받아들인 이적료 (선수가 원해서 시세보다 쌈) */
+  fee: number;
+  salary: number;
+  years: number;
+  season: number;
+  week: number;
 }
 
 /** 가계부 한 줄 */
@@ -463,6 +477,10 @@ export interface CareerState {
   mainSponsor?: import("./mainSponsor").MainSponsorContract;
   /** 다른 팀의 감독 제의 (예전 세이브는 팀 번호 배열 → ensureClub 에서 변환) */
   jobOffers?: JobOffer[];
+  /** 시즌 중에 수락한 감독 제의: 시즌이 끝나면 이 팀으로 옮김 */
+  pendingJob?: { team: number; fee: number; season: number };
+  /** 다른 팀 선수의 입단 요청 */
+  joinRequests?: JoinRequest[];
   /** 적자 주 수 (3주 연속이면 구단 해체) */
   debtWeeks?: number;
   /** 게임 종료 */
@@ -525,13 +543,30 @@ export function totalOf(stats: Record<StatKey, number>): number {
   return Object.values(stats).reduce((a, b) => a + b, 0);
 }
 
-/** 영입 요구 금액 (만원): 능력치·레벨·나이 반영 */
+/**
+ * 이번 시즌 활약 배율 (0.85~1.4): 승률이 높고 많이 이길수록 비싸고, 많이 지면 싸짐 (경기 수가 적으면 덜 반영)
+ * 우리가 팔 때(영입 제안 금액)·살 때(이적료) 모두 시세에 들어감
+ */
+export function formMul(p: CPlayer): number {
+  const games = p.sWins + p.sLosses;
+  if (games < 2) return 1;
+  const wr = p.sWins / games;
+  const weight = Math.min(1, games / 10);
+  const v = 1 + ((wr - 0.5) * 0.8 + Math.min(0.15, p.sWins * 0.01)) * weight;
+  return Math.max(0.85, Math.min(1.4, v));
+}
+
+/**
+ * 영입 요구 금액 (만원): 능력치·레벨·나이·이번 시즌 활약 반영
+ * 능력치가 높을수록 가파르게 비싸짐 (능력치 합 5500 ≈ 1,500만 · 6500 ≈ 4,200만 · 8000 ≈ 14,600만, 레벨·나이 전 · 예전엔 8000 도 2,500만)
+ */
 export function askingPrice(p: CPlayer, season: number): number {
   const total = totalOf(p.stats);
   const age = ageOf(p, season);
-  const base = Math.max(0, total - 3800) * 0.6 + p.level * 60;
+  const x = Math.max(0, total - 3800) / 1000;
+  const base = 600 * x + 80 * Math.pow(x, 3.5) + p.level * 60;
   const ageMul = age <= 22 ? 1.2 : age >= 28 ? 0.6 : 1;
-  return Math.max(50, Math.round((base * ageMul) / 10) * 10);
+  return Math.max(50, Math.round((base * ageMul * formMul(p)) / 10) * 10);
 }
 
 // ── 트레이드 ────────────────────────────────────────────────────

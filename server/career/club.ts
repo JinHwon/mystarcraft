@@ -19,12 +19,14 @@ import {
   type CashEntry,
   ageOf,
   askingPrice,
+  formMul,
   totalOf,
   type BonusKey,
   type CareerState,
   type Contract,
   type CPlayer,
   type JobOffer,
+  type JoinRequest,
   type MarketMove,
   MARKET_LOG_MAX,
   type OfferLog,
@@ -125,13 +127,16 @@ function buyerValuation(s: CareerState, p: CPlayer) {
 }
 
 /** 한 팀이 우리 선수에게 제안을 보냄 (listed: 이적시장 희망가 기준) */
-function makeOffer(s: CareerState, p: CPlayer, teamId: number, listing?: TransferListing) {
+function makeOffer(s: CareerState, p: CPlayer, teamId: number, listing?: TransferListing, byPlayer = false) {
   const team = s.teams[teamId];
   const value = buyerValuation(s, p);
   let fee: number;
   if (listing) {
     // 희망가를 받아들일 만하면 그 금액, 아니면 자기 평가액보다 조금 낮게 부른다
     fee = value >= listing.price && rand() < 0.6 ? listing.price : round10(Math.min(listing.price, value) * (0.8 + rand() * 0.15));
+  } else if (byPlayer) {
+    // 선수가 원해서 온 제안: 구단이 시세 근처를 부름
+    fee = round10(value * (0.9 + rand() * 0.15));
   } else {
     fee = round10(value * (0.7 + rand() * 0.25));
   }
@@ -139,9 +144,10 @@ function makeOffer(s: CareerState, p: CPlayer, teamId: number, listing?: Transfe
   const max = Math.max(fee, round10(Math.min(team.money, value * (1.1 + rand() * 0.2))));
   s.offers = [...(s.offers ?? []), {
     id: (s.nextOfferId = (s.nextOfferId ?? 1) + 1), player: p.id, team: teamId, fee, max,
-    season: s.season, week: s.week, tries: 0, status: "pending", listed: !!listing,
+    season: s.season, week: s.week, tries: 0, status: "pending", listed: !!listing, ...(byPlayer ? { byPlayer: true } : {}),
   }];
-  news(s, `📨 ${team.name}에서 ${p.name} 선수 영입을 제안했습니다 (${fee.toLocaleString()}만원${listing ? ` · 희망가 ${listing.price.toLocaleString()}만원` : ""})`);
+  if (byPlayer) news(s, `🙋 ${p.name} 선수가 ${team.name} 이적을 원합니다 — ${team.name} 제시 이적료 ${fee.toLocaleString()}만원 (거절하면 사기가 떨어집니다)`);
+  else news(s, `📨 ${team.name}에서 ${p.name} 선수 영입을 제안했습니다 (${fee.toLocaleString()}만원${listing ? ` · 희망가 ${listing.price.toLocaleString()}만원` : ""})`);
 }
 
 /** 이 선수를 데려갈 수 있는 팀 (이미 제안한 팀 제외) */
@@ -183,6 +189,84 @@ function weeklyOffers(s: CareerState) {
     if (buyers.length) makeOffer(s, target, buyers[randInt(0, buyers.length - 1)].id);
   }
 }
+/**
+ * 선수가 먼저 원하는 이적 (매주, 시즌 중)
+ * - 우리 선수: 사기가 낮거나 이적 희망이거나 이번 시즌 활약이 좋은 선수가 다른 팀으로 가고 싶다고 요청 (그 팀 제시 이적료와 함께)
+ * - 다른 팀 선수: 우리 팀에서 뛰고 싶다며 입단 요청 (원 소속 구단이 시세보다 싸게 보내 줌)
+ */
+function weeklyPlayerRequests(s: CareerState) {
+  const mine = rosterOf(s, s.myTeam);
+  // 우리 선수 → 다른 팀
+  if (mine.length > rosterLimits(s, s.myTeam).min + 1 && rand() < 0.15) {
+    const pool = mine.filter(p => !(s.offers ?? []).some(o => o.player === p.id));
+    const weights = pool.map(p => (p.wantsOut ? 4 : 0) + ((p.morale ?? 70) < 50 ? 2 : 0) + Math.max(0, formMul(p) - 1.1) * 10 + 0.2);
+    const target = pickWeighted(pool, weights);
+    if (target) {
+      const buyers = buyersFor(s, target, askingPrice(target, s.season) * 0.9);
+      if (buyers.length) makeOffer(s, target, buyers[randInt(0, buyers.length - 1)].id, undefined, true);
+    }
+  }
+  // 다른 팀 선수 → 우리 팀
+  s.joinRequests = (s.joinRequests ?? []).filter(r => r.season === s.season && s.week - r.week < 2 && s.players[r.player]?.team !== s.myTeam);
+  if (s.joinRequests.length < 2 && rosterOf(s, s.myTeam).length < rosterLimits(s, s.myTeam).max && rand() < 0.12) {
+    const money = s.teams[s.myTeam].money;
+    const pool = activePlayers(s).filter(p => p.team !== s.myTeam && p.team !== FREE_AGENT_TEAM && p.team !== myBTeam(s)
+      && rosterOf(s, p.team).length > Math.max(AI_KEEP, rosterLimits(s, p.team).min)
+      && !s.joinRequests!.some(r => r.player === p.id)
+      && sellMinimum(s, p) * 0.75 <= money);
+    const weights = pool.map(p => (p.wantsOut ? 3 : 1) * (totalOf(p.stats) / 5000));
+    const p = pickWeighted(pool, weights);
+    if (p) {
+      const fee = round10(sellMinimum(s, p) * 0.75);
+      const d = playerDemand(s, p, s.myTeam);
+      const r: JoinRequest = { id: (s.nextOfferId = (s.nextOfferId ?? 1) + 1), player: p.id, fee, salary: round10(d.salary * 0.95), years: d.years, season: s.season, week: s.week };
+      s.joinRequests.push(r);
+      news(s, `🙋 ${s.teams[p.team].name} ${p.name} 선수가 우리 팀에서 뛰고 싶다고 합니다 — 이적료 ${fee.toLocaleString()}만원 · 연봉 ${r.salary.toLocaleString()}만원 (구단 운영 → 제안)`);
+    }
+  }
+}
+function pickWeighted<T>(pool: T[], weights: number[]): T | undefined {
+  const sum = weights.reduce((a, b) => a + b, 0);
+  let r = rand() * sum;
+  for (let i = 0; i < pool.length; i++) { r -= weights[i]; if (r <= 0) return pool[i]; }
+  return undefined;
+}
+
+/** 입단 요청에 답하기: 수락하면 요청 조건(이적료·연봉·기간)으로 바로 계약 */
+export function respondJoin(s: CareerState, id: number, action: "accept" | "reject") {
+  const r = s.joinRequests?.find(x => x.id === id);
+  if (!r) throw new CareerError("이미 끝난 요청입니다");
+  const p = s.players[r.player];
+  s.joinRequests = s.joinRequests!.filter(x => x !== r);
+  if (action === "reject") return { result: "rejected" as const, message: `${p.name} 선수의 요청을 거절했습니다` };
+  if (s.live) throw new CareerError("경기 중에는 영입할 수 없습니다");
+  const from = s.teams[p.team];
+  if (p.team === s.myTeam || p.team === FREE_AGENT_TEAM || !from) throw new CareerError("이미 팀을 옮긴 선수입니다");
+  const { max } = rosterLimits(s, s.myTeam);
+  if (rosterOf(s, s.myTeam).length >= max) throw new CareerError(`선수단은 최대 ${max}명입니다`);
+  if (s.teams[s.myTeam].money < r.fee) throw new CareerError("소지금이 부족합니다");
+  pay(s, "이적료 지출", -r.fee, `${p.name} ← ${from.name} (선수 요청)`);
+  from.money += r.fee + developmentBonus(s, from.id, s.myTeam, r.fee);
+  const c: Contract = { salary: r.salary, years: r.years + (s.phase === "offseason" ? 1 : 0) };
+  logOffer(s, { player: p.id, team: from.id, fee: r.fee, dir: "in", result: "signed", note: `선수 요청 · 연봉 ${r.salary.toLocaleString()}만원 · ${r.years}년` });
+  moveTo(s, p, s.myTeam, c);
+  p.morale = Math.min(100, (p.morale ?? 70) + 15);
+  news(s, `✍️ ${p.name} 선수 영입! 본인이 원해서 왔습니다 (이적료 ${r.fee.toLocaleString()}만원, 연봉 ${r.salary.toLocaleString()}만원)`);
+  return { result: "signed" as const, message: `${p.name}: "불러 주셔서 감사합니다!" (계약 성사)` };
+}
+
+/** 시즌 중 감독 제의 (평판이 되는 팀에서 가끔). 수락하면 시즌이 끝날 때 옮김 */
+function weeklyJobOffer(s: CareerState) {
+  if (s.pendingJob || (s.jobOffers ?? []).length >= 2 || rand() >= 0.08) return;
+  const rep = s.manager?.reputation ?? 50;
+  const ranked = proTeams(s).sort((a, b) => teamPower(s, b.id) - teamPower(s, a.id));
+  const eligible = ranked.filter((t, i) => t.id !== s.myTeam && rep >= jobThreshold(i) && !(s.jobOffers ?? []).some(o => o.team === t.id)).slice(0, 4);
+  if (!eligible.length) return;
+  const t = eligible[randInt(0, eligible.length - 1)];
+  s.jobOffers = [...(s.jobOffers ?? []), newJobOffer(s, t.id)];
+  news(s, `🤵 ${t.name}에서 다음 시즌 감독 제의가 왔습니다! 수락하면 이번 시즌이 끝난 뒤 옮깁니다 (구단 운영 → 감독)`);
+}
+
 const shuffleTeams = <T,>(list: T[]) => list.map(x => ({ x, o: rand() })).sort((a, b) => a.o - b.o).map(v => v.x);
 
 // ── 다른 구단끼리의 선수 이동 (이적·트레이드·방출·무소속 영입) ─────────────────
@@ -431,8 +515,12 @@ export function weeklyClub(s: CareerState) {
     if (s.players[o.player]?.team !== s.myTeam) closeOffer(s, o, "closed", "선수가 이미 팀을 떠남");
     else if (o.season !== s.season || s.week - o.week >= 2) closeOffer(s, o, "expired", "2주 동안 답하지 않아 만료");
   }
-  // 새 영입 제안 (다른 팀 → 우리 선수)
-  if (s.phase !== "offseason") weeklyOffers(s);
+  // 새 영입 제안 (다른 팀 → 우리 선수), 선수가 먼저 원하는 이적·입단 요청, 시즌 중 감독 제의
+  if (s.phase !== "offseason") {
+    weeklyOffers(s);
+    weeklyPlayerRequests(s);
+    weeklyJobOffer(s);
+  }
   // 다른 구단끼리 이적·트레이드·방출·무소속 영입
   aiMarket(s, s.phase === "offseason" ? 3 : 1);
 
@@ -488,6 +576,14 @@ export function seasonEndClub(s: CareerState, myResult: string, champion: number
   const mslBonus = msl?.champion !== undefined && s.players[msl.champion]?.team === s.myTeam ? 5 : 0;
   m.reputation = Math.max(0, Math.min(100, m.reputation + delta + mslBonus));
 
+  // 시즌 중에 수락한 감독 제의: 이제 옮김
+  if (s.pendingJob) {
+    const pj = s.pendingJob;
+    delete s.pendingJob;
+    s.jobOffers = [];
+    moveManager(s, pj.team, pj.fee);
+    return;
+  }
   // 감독 제의: 평판이 높으면 더 강한 팀에서
   const ranked = proTeams(s).sort((a, b) => teamPower(s, b.id) - teamPower(s, a.id));
   const offers = ranked
@@ -539,6 +635,7 @@ export function newSeasonClub(s: CareerState) {
   s.listings = (s.listings ?? []).filter(l => s.players[l.player]?.team === s.myTeam);
   s.agreements = {};
   s.jobOffers = [];
+  s.joinRequests = [];
   // 비시즌 이적시장: 다른 구단끼리 활발하게 움직인다
   aiMarket(s, 6);
   // 메인 스폰서 계약 기간
@@ -579,7 +676,11 @@ export function respondOffer(s: CareerState, offerId: number, action: "accept" |
   if (action === "accept") return sell(o.fee, "제시 금액 수락");
   if (action === "reject") {
     closeOffer(s, o, "rejected", "우리가 거절");
-    if (p.wantsOut) p.morale = Math.max(0, (p.morale ?? 50) - 10);
+    if (o.byPlayer) {
+      // 본인이 원한 이적을 막으면 크게 실망
+      p.morale = Math.max(0, (p.morale ?? 60) - 15);
+      if (!p.wantsOut && p.morale < 35) { p.wantsOut = true; news(s, `😤 ${p.name} 선수가 이적을 막았다며 실망했습니다 (이적 희망)`); }
+    } else if (p.wantsOut) p.morale = Math.max(0, (p.morale ?? 50) - 10);
     return { result: "rejected" as const, message: "거절했습니다" };
   }
   // 역제안
@@ -670,14 +771,27 @@ function jobOfferOf(s: CareerState, teamId: number) {
   return o;
 }
 
-/** 감독 제의 수락: 지금 제시된(또는 합의한) 계약금으로 옮긴다 */
+/**
+ * 감독 제의 수락: 지금 제시된(또는 합의한) 계약금으로
+ * - 비시즌이면 바로 옮기고, 시즌 중이면 약속만 해 두고 시즌이 끝날 때 옮긴다 (pendingJob)
+ */
 export function acceptJob(s: CareerState, teamId: number) {
   const offer = jobOfferOf(s, teamId);
+  if (s.pendingJob) throw new CareerError("이미 다음 시즌에 옮길 팀이 정해져 있습니다");
+  if (s.phase !== "offseason") {
+    s.pendingJob = { team: teamId, fee: offer.fee, season: s.season };
+    s.jobOffers = [];
+    news(s, `🤝 ${s.teams[teamId].name} 감독 제의 수락! 이번 시즌이 끝나면 옮깁니다 (영입 계약금 ${offer.fee.toLocaleString()}만원)`);
+    return { team: teamId, fee: offer.fee, pending: true };
+  }
   if (s.live) throw new CareerError("경기 중에는 옮길 수 없습니다");
-  if (s.phase !== "offseason") throw new CareerError("감독 이동은 시즌이 끝난 뒤에만 할 수 있습니다");
+  return moveManager(s, teamId, offer.fee);
+}
+
+/** 감독이 다른 구단으로 옮김 */
+function moveManager(s: CareerState, teamId: number, fee: number) {
   const next = s.teams[teamId];
   // 모은 자금은 원래 구단에 두고 가고, 새 구단이 감독 영입 계약금을 내서 운영 자금에 보탠다
-  const fee = offer.fee;
   next.money += fee;
   const money = next.money;
   for (const p of rosterOf(s, s.myTeam)) p.action = null;
@@ -690,6 +804,7 @@ export function acceptJob(s: CareerState, teamId: number) {
   s.offers = [];
   s.listings = [];
   s.agreements = {};
+  s.joinRequests = [];
   s.debtWeeks = 0;
   // 감독 레벨·경험치·평판은 그대로, 맡은 팀 기록에 추가
   const m = s.manager ?? { reputation: 50 };
