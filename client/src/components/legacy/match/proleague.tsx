@@ -8,7 +8,7 @@ import { STAGE_NAMES } from "@shared/career/view";
 import { viewStateAt, type SnapReport } from "./viewState";
 import { ITEM_BY_KEY, gearCond, gearStats } from "@shared/career/items";
 import { LegacyFrame, LegacyImg, LegacyRadar, MapInfo, TeamLogo } from "../Legacy";
-import { EquipRow, condStats, setItemAll, useSpeed } from "./common";
+import { EquipRow, condStats, setItemBoost, useSpeed } from "./common";
 import { AceScreen } from "./entry";
 import { Broadcast, PlayerCard, SetList, type BroadcastSet } from "./broadcast";
 
@@ -268,16 +268,16 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose, held, onHo
             ) : lp && rp && (
               <div className="grid grid-cols-2 gap-2 mt-2">
                 {[{ p: lp, o: rp }, { p: rp, o: lp }].map(({ p, o }) => {
-                  // 이 세트 우리 선수의 경기 아이템 (치어풀이면 모든 능력치 +75 가 실제 경기에 들어감)
+                  // 이 세트 우리 선수의 경기 아이템 (치어풀·작전 메모는 능력치 추가가 실제 경기에 들어감)
                   const itemKey = p.team === s.myTeam ? results[i]?.item ?? info.items?.[i]?.key : undefined;
-                  const extra = setItemAll(itemKey);
+                  const { extra, text } = setItemBoost(itemKey);
                   return (
                     <div key={p.id} className="flex flex-col items-center">
                       <PlayerCard p={p} opp={o} />
                       <div className="mt-0.5"><EquipRow p={p} size={20} /></div>
                       <LegacyRadar stats={condStats(p, s, extra)} base={p.stats} gear={gearStats(p, extra)} level={p.level} size={112} />
                       <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p)} %{burstOf(s, p) ? <span className="text-[#ffb84d] font-bold"> 🔥{Math.round(burstOf(s, p)! * 100)}%</span> : null}</div>
-                      {itemKey && <div className="text-[11px] text-[#ffe45c]">아이템 : {ITEM_BY_KEY[itemKey]?.name}{extra ? ` (모든 능력치 +${extra} 반영)` : ""} · 보유 {s.inventory?.[itemKey] ?? 0}개</div>}
+                      {itemKey && <div className="text-[11px] text-[#ffe45c]">아이템 : {ITEM_BY_KEY[itemKey]?.name}{text ? ` (${text} 반영)` : ""} · 보유 {s.inventory?.[itemKey] ?? 0}개</div>}
                     </div>
                   );
                 })}

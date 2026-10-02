@@ -995,3 +995,26 @@ describe("선수 가격·감독 제의·선수 요청", () => {
     expect(mine.morale).toBe(45);
   });
 });
+
+describe("작전 메모", () => {
+  it("그 세트 경기 능력치에 센스 +100·전략 +60 이 들어가고, 화면 계산과 같다", async () => {
+    const { effStats } = await import("./core");
+    const { setItemExtra, gearStats, ITEM_BY_KEY } = await import("@shared/career/items");
+    const s = newCareer(0);
+    const p = { ...rosterOf(s, 0)[0], cond: 100, equip: {} };
+    const base = effStats(p);
+    const boosted = effStats(p, { bonus: ITEM_BY_KEY.memo.setBonus });
+    expect(boosted.sense - base.sense).toBe(100);
+    expect(boosted.strategy - base.strategy).toBe(60);
+    expect(boosted.attack).toBe(base.attack);
+    expect(gearStats(p, setItemExtra("memo")).sense).toBe(boosted.sense);
+    expect(setItemExtra("cheer").attack).toBe(75);
+    // 실제 경기: 보유해야 쓰고, 쓰면 소모
+    s.inventory = { memo: 1 };
+    const front = rosterOf(s, 0).slice(0, 4).map(x => x.id);
+    beginMatch(s, front, { 0: { key: "memo" } });
+    const r = playLiveSet(s);
+    expect(r.set.item).toBe("memo");
+    expect(s.inventory.memo).toBe(0);
+  });
+});
