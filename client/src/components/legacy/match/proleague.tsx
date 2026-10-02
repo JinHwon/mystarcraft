@@ -22,16 +22,18 @@ export type ProReportView = { matchId: number; stage: CMatch["stage"]; a: number
  * - 세트 목록의 맵을 누르면 치른·치를 세트의 선수를 볼 수 있음 (ACE 결정전 선수는 2:2·3:3 이 되어야 공개)
  * - onClose(✕): 나중에 이어 보기, start·onProgress: 이어 볼 위치
  */
-export function ProSeriesFlow({ s: latest, reports, onDone, onClose, start, onProgress, all }: {
+export function ProSeriesFlow({ s: latest, reports, onDone, onClose, start, onProgress, all, intro }: {
   s: CareerState; reports: ProReportView[]; onDone: () => void; onClose?: () => void;
   start?: { k: number; idx: number }; onProgress?: (p: { k: number; idx: number }) => void;
   /** 이번 주 관전 경기 전체 (포스트시즌 → 개인리그 순) — 선수 상태를 그 세트 직전으로 보여줄 때 씀 */
   all?: SnapReport[];
+  /** 우리 경기를 막 끝낸 뒤: 첫 경기도 "관전하기"를 눌러야 시작 */
+  intro?: boolean;
 }) {
   const [k, setK] = useState(start?.k ?? 0);
   const [idx, setIdx] = useState(start?.idx ?? 0);
   // between: 한 경기를 다 보고 다음 경기 전 (정규시즌처럼 "관전하기"를 눌러야 다음 경기로)
-  const [mode, setMode] = useState<"preview" | "live" | "result" | "between">("preview");
+  const [mode, setMode] = useState<"preview" | "live" | "result" | "between">(intro ? "between" : "preview");
   const [view, setView] = useState<number | null>(null);
   const [speed, setSpeed] = useSpeed();
   useEffect(() => { onProgress?.({ k, idx }); }, [k, idx]);
@@ -62,7 +64,8 @@ export function ProSeriesFlow({ s: latest, reports, onDone, onClose, start, onPr
     return (
       <LegacyFrame season={s.season} onBack={exit} onNext={() => setMode("preview")} nextLabel="관전하기 ▷▷">
         <div className="px-3 pt-6 pb-4 text-center space-y-3">
-          {prev && <div className="text-[13px] text-neutral-300">마이프로리그 {STAGE_NAMES[prev.stage]} 경기가 끝났습니다 · {prev.sa}:{prev.sb} {s.teams[prev.sa > prev.sb ? prev.a : prev.b]?.name} 승</div>}
+          {prev ? <div className="text-[13px] text-neutral-300">마이프로리그 {STAGE_NAMES[prev.stage]} 경기가 끝났습니다 · {prev.sa}:{prev.sb} {s.teams[prev.sa > prev.sb ? prev.a : prev.b]?.name} 승</div>
+            : <div className="text-[13px] text-neutral-300">우리 팀 경기가 끝났습니다 · 이번 주 다른 팀 경기</div>}
           <div className="text-[12px] text-[#ffe45c]">다음 경기 ({k + 1}/{reports.length})</div>
           <div className="text-[15px] text-white">마이프로리그 {STAGE_NAMES[n.stage]}</div>
           <div className="flex items-center justify-center gap-3">

@@ -39,7 +39,7 @@ import { activePlayers, divOf, myDiv, proTeams, rosterOf, teamPower } from "@sha
 import { developmentBonus, myBTeam, rosterLimits } from "./divisions";
 import { CareerError, addExp, clampCond, gainStats, news, rand, randInt } from "./core";
 import { activeSponsors, maxSponsors, questLabel, questProgress, questRange, questReward, sponsorOffers } from "@shared/career/sponsor";
-import { defaultOffer, mainSponsorName, managerExpNeed, sponsorBudget, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
+import { SPONSOR_COUNTER, SPONSOR_STRETCH, defaultOffer, mainSponsorName, managerExpNeed, sponsorBudget, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
 
 const round10 = (v: number) => Math.round(v / 10) * 10;
 
@@ -485,17 +485,18 @@ export function negotiateMainSponsor(s: CareerState, terms: MainSponsorTerms, ye
   useTry(s, "mainSponsor");
   const budget = sponsorBudget(s);
   const value = termsValue(terms);
-  if (value <= budget) {
+  // 예산보다 조금(15%) 높아도 감독이 밀어붙이면 계약
+  if (value <= budget * SPONSOR_STRETCH) {
     s.mainSponsor = { ...terms, years: years + (s.phase === "offseason" ? 1 : 0), season: s.season, team: s.myTeam };
     news(s, `🏢 ${name}와(과) 메인 스폰서 계약 (${years}년, 승리 수당 ${terms.win}만원)`);
     return { result: "signed" as const, message: `${name}: "좋습니다. 이 조건으로 계약하죠" (계약 성사)` };
   }
-  if (value <= budget * 1.2) {
-    const k = budget / value;
+  if (value <= budget * SPONSOR_COUNTER) {
+    const k = (budget * SPONSOR_STRETCH) / value;
     const counter = Object.fromEntries(Object.entries(terms).map(([key, v]) => [key, Math.floor((v * k) / 10) * 10])) as unknown as MainSponsorTerms;
     return { result: "countered" as const, counter, message: `${name}: "예산이 부족합니다. 이 정도면 가능합니다" (역제안)` };
   }
-  return { result: "rejected" as const, message: `${name}: "그 조건은 무리입니다" (거절 · 기대 지급 ${value.toLocaleString()} > 예산 ${budget.toLocaleString()})` };
+  return { result: "rejected" as const, message: `${name}: "그 조건은 무리입니다" (거절 · 기대 지급 ${value.toLocaleString()} > 협상 한도 ${Math.round(budget * SPONSOR_STRETCH).toLocaleString()})` };
 }
 
 /** 메인 스폰서 수당 지급 */

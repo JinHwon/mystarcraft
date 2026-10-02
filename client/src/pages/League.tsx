@@ -44,7 +44,7 @@ export function MslReports({ s, reports, onWatch }: { s: CareerState; reports: M
  * - heldWeek: 주가 끝난 뒤 보는 다른 팀 포스트시즌·개인리그 경기와 결과 요약
  */
 type HeldLive = { finish: HeldFinish; diff: CareerDiff; s: CareerState; applied: boolean; lastMatch: number | null; closed?: boolean };
-type WeekView = { w: WeekDone; stage: "pro" | "msl" | "summary"; pro?: { k: number; idx: number }; msl?: number; closed?: boolean };
+type WeekView = { w: WeekDone; stage: "pro" | "msl" | "summary"; pro?: { k: number; idx: number }; msl?: number; closed?: boolean; /** 우리 경기 뒤: 다른 경기는 "관전하기"를 눌러야 시작 */ intro?: boolean };
 let heldLive: HeldLive | null = null;
 let heldWeek: WeekView | null = null;
 // 다른 사용자로 바뀌면 보던 관전을 버림
@@ -114,10 +114,10 @@ function MatchTab({ s }: { s: CareerState }) {
   });
 
   // 주가 끝나면 다른 팀 포스트시즌 → 개인리그 경기 → 결과 요약 순으로 관전
-  function finishWeekView(w: WeekDone) {
+  function finishWeekView(w: WeekDone, intro = false) {
     // 조 지명식·개인리그 준비부터 (s.weekHold). 다른 팀 포스트시즌 경기가 있으면 그것부터 보고 개인리그 준비로
     if (w.needNomination || (w.needMsl && !w.proReports?.length)) { setWv(null); return; }
-    setWv({ w, stage: w.proReports?.length ? "pro" : w.mslReports?.length || w.mslPlans?.length ? "msl" : "summary" });
+    setWv({ w, stage: w.proReports?.length ? "pro" : w.mslReports?.length || w.mslPlans?.length ? "msl" : "summary", intro });
   }
   const afterPro = (w: WeekDone) => (w.needMsl ? setWv(null) : setWv({ w, stage: w.mslReports?.length || w.mslPlans?.length ? "msl" : "summary" }));
   /** 우리 경기 관전 끝 (끝까지 봤거나 건너뜀) */
@@ -125,7 +125,7 @@ function MatchTab({ s }: { s: CareerState }) {
     if (!h.applied) patch(h.diff);
     setLive(null);
     setWatching(false);
-    if (h.finish.week) finishWeekView(h.finish.week); else setLegDone(h.lastMatch);
+    if (h.finish.week) finishWeekView(h.finish.week, true); else setLegDone(h.lastMatch);
     window.scrollTo(0, 0);
   };
   const resumeCard = (title: string, onResume: () => void, onSkip: () => void) => (
@@ -176,7 +176,7 @@ function MatchTab({ s }: { s: CareerState }) {
     // 이번 주 관전 경기 전체 (포스트시즌 → 개인리그): 선수 상태를 보고 있는 경기 직전으로
     const all = [...(wv.w.proReports ?? []), ...(wv.w.mslReports ?? [])];
     if (wv.stage === "pro") {
-      return <ProSeriesFlow s={s} reports={wv.w.proReports ?? []} all={all} start={wv.pro}
+      return <ProSeriesFlow s={s} reports={wv.w.proReports ?? []} all={all} start={wv.pro} intro={wv.intro && !wv.pro}
         onProgress={p => { if (heldWeek) heldWeek = { ...heldWeek, pro: p }; }}
         onClose={close} onDone={() => afterPro(wv.w)} />;
     }

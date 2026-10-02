@@ -63,9 +63,13 @@ export const COND_LABELS = ["", "최악", "짜증", "나쁨", "저조", "보통"
 /** 한 주가 끝날 때 모든 선수 컨디션 회복량 (%) */
 export const WEEKLY_COND_RECOVERY = 10;
 export const condLabel = (cond: number) => COND_LABELS[Math.max(1, Math.min(10, Math.ceil(cond / 10)))];
-/** 컨디션에 따른 경기력 배율: 100% 가 원래 능력치, 낮을수록 줄어듦 (50% → 0.9, 1% → 0.8) */
+/**
+ * 컨디션에 따른 경기력 배율: 100% 가 원래 능력치, 낮을수록 점점 더 크게 줄어듦
+ * 90% → 0.97, 80% → 0.92, 60% → 0.82, 40% → 0.68, 10% 이하 → 0.4
+ */
 export function condMultiplier(cond: number): number {
-  return 1 - (COND_MAX - Math.max(COND_MIN, Math.min(COND_MAX, cond))) * 0.002;
+  const d = COND_MAX - Math.max(COND_MIN, Math.min(COND_MAX, cond));
+  return Math.max(0.4, 1 - d * 0.003 - d * d * 0.00004);
 }
 
 /** 이번 주 포텐셜 폭발 배율 (없으면 undefined) */
@@ -495,7 +499,7 @@ export interface CareerState {
   news: Array<{ season: number; week: number; text: string }>;
   /** 지난 시즌 기록 */
   history: Array<{
-    season: number; champion: number; myRank: number; myResult: string; mslChampion?: number; mslRunnerUp?: number; /** 그 시즌 우리(감독) 팀 */ team?: number;
+    season: number; champion: number; myRank: number; myResult: string; mslChampion?: number; mslRunnerUp?: number; /** 그 시즌 우리(감독) 팀 */ team?: number; /** 우리 팀 선수가 개인리그 1 우승·2 준우승 */ myMsl?: 1 | 2;
     /** 그 시즌 우리 팀 리그 */ div?: 1 | 2; /** 2부 1위 */ champion2?: number; /** 승강전 결과 (올라간 팀 → 내려간 팀) */ promo?: Array<{ up: number; down: number }>;
   }>;
   /** 이번 시즌 마이스타리그 */

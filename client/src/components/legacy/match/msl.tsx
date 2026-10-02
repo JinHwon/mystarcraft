@@ -497,11 +497,15 @@ function MslPreview({ s, planIdx }: { s: CareerState; planIdx: number }) {
   );
 }
 
+/** 포스트시즌 주별 프로리그 일정 (12주부터) */
+const POST_WEEKS = ["준플레이오프 · 승강전", "플레이오프", "결승"];
+
 /** 원작 "정규 시즌 일정" 화면: 주마다 프로리그 2경기 + 개인리그 일정 */
 export function ScheduleScreen({ s, onClose }: { s: CareerState; onClose: () => void }) {
   const [viewPlan, setViewPlan] = useState<number | null>(null);
   const me = s.teams[s.myTeam];
-  const weeks = Math.max(11, ...s.matches.map(m => m.week));
+  // 정규시즌 11주 + 포스트시즌 (12주 준PO·승강전, 13주 PO, 14주 결승)
+  const weeks = Math.max(11 + POST_WEEKS.length, ...s.matches.map(m => m.week));
   const mine = (w: number) => s.matches.filter(m => m.week === w && (m.a === s.myTeam || m.b === s.myTeam)).sort((a, b) => (a.leg ?? 1) - (b.leg ?? 1));
   const Cell = ({ m }: { m?: CMatch }) => {
     if (!m) return <div className="h-9 border-r border-neutral-600" />;
@@ -514,6 +518,33 @@ export function ScheduleScreen({ s, onClose }: { s: CareerState; onClose: () => 
         <TeamLogo team={opp} className="w-[34px] h-[20px] shrink-0" />
         <span className="text-[11px] truncate flex-1"><span className="min-[480px]:hidden">{opp.short}</span><span className="hidden min-[480px]:inline">{opp.name}</span></span>
         {m.done && <span className={cn("text-[10.5px] font-bold", won ? "text-[#bff5c6]" : "text-[#ff9a9a]")}>{my}:{their}</span>}
+      </div>
+    );
+  };
+  /** 포스트시즌 주: 그 주의 프로리그 경기 전부 (우리 팀이 없어도), 아직 대진 전이면 예정 */
+  const PostCell = ({ w }: { w: number }) => {
+    const list = s.matches.filter(m => m.week === w && m.stage !== "regular").sort((a, b) => (a.div ?? 1) - (b.div ?? 1) || a.id - b.id);
+    if (!list.length) {
+      const plan = POST_WEEKS[w - 12];
+      return <div className="col-span-2 min-h-9 flex items-center px-1.5 text-[11px] text-neutral-400">{plan ? `${plan} (대진 미정)` : ""}</div>;
+    }
+    return (
+      <div className="col-span-2 py-0.5 px-1.5 space-y-0.5 min-w-0">
+        {list.map(m => {
+          const ta = s.teams[m.a], tb = s.teams[m.b];
+          const mine = m.a === s.myTeam || m.b === s.myTeam;
+          const won = m.done && mine ? m.winner === s.myTeam : undefined;
+          return (
+            <div key={m.id} className={cn("flex items-center gap-1 h-[22px] min-w-0 text-[11px]", mine && "text-[#8fd0ff]")}>
+              <span className="text-[10px] text-[#ffe45c] w-[34px] shrink-0 truncate">{STAGE_NAMES[m.stage].slice(0, 3)}</span>
+              <TeamLogo team={ta} className="w-[30px] h-[18px] shrink-0" />
+              <span className={cn("truncate", m.done && m.winner === m.a && "font-bold")}>{ta.short}</span>
+              <span className={cn("text-[10.5px] shrink-0 px-0.5", won === undefined ? "text-neutral-300" : won ? "text-[#bff5c6] font-bold" : "text-[#ff9a9a] font-bold")}>{m.done ? `${m.scoreA}:${m.scoreB}` : "vs"}</span>
+              <span className={cn("truncate", m.done && m.winner === m.b && "font-bold")}>{tb.short}</span>
+              <TeamLogo team={tb} className="w-[30px] h-[18px] shrink-0" />
+            </div>
+          );
+        })}
       </div>
     );
   };
@@ -538,9 +569,8 @@ export function ScheduleScreen({ s, onClose }: { s: CareerState; onClose: () => 
             const icon = plan ? MSL_ICON[plan.label] ?? "MySL" : undefined;
             return (
               <div key={w} className={cn("grid grid-cols-[1fr_1fr_104px] border-b border-neutral-700 last:border-b-0", w === s.week && s.phase !== "offseason" && "outline outline-2 outline-white -outline-offset-2")}>
-                <Cell m={m1} />
-                <Cell m={m2} />
-                <button disabled={!plan} onClick={() => plan && setViewPlan(k)} className="h-9 flex items-center gap-1 px-1 border-l border-[#8fe07a]/60 min-w-0 text-left">
+                {w > 11 ? <PostCell w={w} /> : (<><Cell m={m1} /><Cell m={m2} /></>)}
+                <button disabled={!plan} onClick={() => plan && setViewPlan(k)} className="min-h-9 flex items-center gap-1 px-1 border-l border-[#8fe07a]/60 min-w-0 text-left">
                   {icon && <LegacyImg dir="로고" name={icon} className="h-6 w-6 shrink-0 object-contain" fallback={null} />}
                   <span className="text-[10.5px] leading-tight whitespace-nowrap">{plan ? mslShort(k) : ""}</span>
                   {plan && mslDone(k) && <span className="ml-auto text-[10px] text-[#8fe07a]">✓</span>}
@@ -549,7 +579,7 @@ export function ScheduleScreen({ s, onClose }: { s: CareerState; onClose: () => 
             );
           })}
         </div>
-        <div className="text-[10px] text-neutral-500 text-center mt-2">주마다 프로리그 2경기와 개인리그 일정이 차례로 진행됩니다 · 흰 테두리 = 이번 주 · 개인리그를 누르면 결과·예정 대진</div>
+        <div className="text-[10px] text-neutral-500 text-center mt-2">주마다 프로리그 2경기와 개인리그 일정이 차례로 진행됩니다 · 12주부터 포스트시즌 (전체 대진) · 흰 테두리 = 이번 주 · 개인리그를 누르면 결과·예정 대진</div>
       </div>
     </LegacyFrame>
   );
