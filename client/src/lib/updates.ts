@@ -12,6 +12,17 @@ export interface UpdateNote {
 
 export const UPDATES: UpdateNote[] = [
   {
+    id: 35,
+    date: "2026-10-03",
+    title: "패배 컨디션 하락 완화",
+    summary: "세트에서 지면 컨디션 3~7 하락 (이전 3~10)",
+    details: [
+      { head: "컨디션", items: [
+        "진 선수의 컨디션 하락을 3~10 → 3~7로 줄였습니다 (긴 경기·완패일수록 7에 가깝게). 이긴 선수는 그대로 2~5.",
+      ] },
+    ],
+  },
+  {
     id: 34,
     date: "2026-10-03",
     title: "떠난 선수 제안 자동 정리 · 선수단 최소 8명",
