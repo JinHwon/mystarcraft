@@ -504,11 +504,19 @@ describe("아이템 상점", () => {
     expect(s.inventory?.vitavita).toBe(2);
     expect(s.inventory).toMatchObject({ m3: 3, m1: 96 });
     expect(() => buyItem(s, "m3", undefined, 97)).toThrow("최대 99개");
+    // 다른 장비: 지우고 덮어씀 / 같은 장비: 사용 횟수가 더해짐
     equipItem(s, "m1", p.id);
-    expect(p.equip?.mouse?.key).toBe("m1");
+    expect(p.equip?.mouse).toEqual({ key: "m1", left: 30 });
     expect(s.inventory?.m1).toBe(95);
+    equipItem(s, "m1", p.id, 2);
+    expect(p.equip?.mouse).toEqual({ key: "m1", left: 90 });
+    expect(s.inventory?.m1).toBe(93);
     equipItem(s, "m3", p.id);
-    expect(p.equip?.mouse?.key).toBe("m3");
+    expect(p.equip?.mouse).toEqual({ key: "m3", left: 30 });
+    expect(s.inventory?.m3).toBe(2);
+    // 선수를 골라 사면 산 만큼 바로 장착
+    buyItem(s, "m3", p.id, 2);
+    expect(p.equip?.mouse).toEqual({ key: "m3", left: 90 });
     expect(s.inventory?.m3).toBe(2);
     expect(() => equipItem(s, "k1", p.id)).toThrow("보유한 장비가 없습니다");
     expect(gearStats(p).control).toBe(Math.min(1100, p.stats.control + 80));

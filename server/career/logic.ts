@@ -756,10 +756,8 @@ export function buyItem(s: CareerState, key: string, target?: number, qty = 1): 
     if (me.money < it.price * n) throw new CareerError("소지금이 부족합니다");
     pay(s, "아이템", -it.price * n, `${it.name}${n > 1 ? ` ×${n}` : ""}${packOf(it) > 1 ? ` (${units}개)` : ""}`);
     s.inventory = { ...s.inventory, [key]: owned + units };
-    if (it.kind === "equip" && target !== undefined) {
-      equipItem(s, key, target);
-      return { message: n > 1 ? `${n}개 구입, 1개 장착하였습니다` : "구입하여 장착하였습니다" };
-    }
+    // 선수를 고르고 사면 산 만큼 바로 장착 (같은 장비면 사용 횟수가 더해짐)
+    if (it.kind === "equip" && target !== undefined) return equipItem(s, key, target, n);
     return { message: units > 1 ? `${units}개 구입하였습니다 (보유 ${owned + units}개)` : "구입하였습니다" };
   }
   if (me.money < it.price) throw new CareerError("소지금이 부족합니다");
@@ -801,7 +799,7 @@ export function buyItem(s: CareerState, key: string, target?: number, qty = 1): 
 /**
  * 보관함의 장비를 선수에게 장착 (그 칸에 끼던 장비는 버려짐, 같은 장비면 새것으로 바꿔 내구도가 다시 참)
  */
-export function equipItem(s: CareerState, key: string, target: number): BuyResult {
+export function equipItem(s: CareerState, key: string, target: number, qty = 1): BuyResult {
   const it = ITEM_BY_KEY[key];
   if (!it || it.kind !== "equip") throw new CareerError("장착할 수 있는 장비가 아닙니다");
   if ((s.inventory?.[key] ?? 0) <= 0) throw new CareerError("보유한 장비가 없습니다. 먼저 구입하세요");
@@ -809,11 +807,16 @@ export function equipItem(s: CareerState, key: string, target: number): BuyResul
   if (!p || p.team !== s.myTeam) throw new CareerError("선수를 선택하세요");
   if (s.live && (s.live.mine.includes(p.id))) throw new CareerError("경기 중인 선수는 장비를 바꿀 수 없습니다");
   const slot = slotOf(it)!;
+  const n = Math.max(1, Math.min(s.inventory![key], Math.floor(qty)));
   const prev = p.equip?.[slot];
-  s.inventory![key]--;
-  p.equip = { ...p.equip, [slot]: { key, left: it.uses ?? 20 } };
-  news(s, `🛒 ${p.name} 선수 ${it.name} 장착${prev && prev.key !== key ? ` (${ITEM_BY_KEY[prev.key]?.name ?? "이전 장비"} 교체)` : prev ? " (새것으로 교체)" : ""}`);
-  return { message: prev ? (prev.key === key ? "새것으로 바꿔 장착하였습니다" : `${ITEM_BY_KEY[prev.key]?.name ?? "이전 장비"} 대신 장착하였습니다`) : "장착하였습니다" };
+  const uses = (it.uses ?? 20) * n;
+  s.inventory![key] -= n;
+  // 같은 장비면 남은 경기 수에 더하고, 다른 장비면 지우고 덮어씀
+  const same = prev?.key === key;
+  p.equip = { ...p.equip, [slot]: { key, left: (same ? prev!.left : 0) + uses } };
+  const left = p.equip[slot]!.left;
+  news(s, `🛒 ${p.name} 선수 ${it.name}${n > 1 ? ` ×${n}` : ""} 장착${same ? ` (남은 ${left}경기)` : prev ? ` (${ITEM_BY_KEY[prev.key]?.name ?? "이전 장비"} 교체)` : ""}`);
+  return { message: same ? `같은 장비라 사용 횟수를 더했습니다 (남은 ${left}경기)` : prev ? `${ITEM_BY_KEY[prev.key]?.name ?? "이전 장비"}을(를) 빼고 장착하였습니다 (${left}경기)` : `장착하였습니다 (${left}경기)` };
 }
 
 /** 보관한 아이템을 선수에게 사용 (비타비타: 컨디션 +3). qty 개까지, 컨디션이 가득 차거나 아이템이 떨어지면 멈춤 */
