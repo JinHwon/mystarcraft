@@ -324,6 +324,39 @@ const stageGrowthOf = (m: CMatch) => (m.stage === "regular" ? 1 : STAGE_GROWTH[m
 /** 2부 정규 경기는 어린 선수일수록 크게 성장 */
 const youthOf = (m: CMatch) => m.stage === "regular" && m.div === 2;
 
+/**
+ * 다른 팀(컴퓨터)의 세트 아이템: 큰 경기일수록 자주 (정규 12% · 승강전/준PO/PO 30% · 결승 45%)
+ * 치어풀은 팬이 주는 것(가끔, 무료), 나머지는 구단 자금으로 (자금이 넉넉할 때만)
+ * 스나이핑은 35% 확률로 적중해 능력치 110%
+ */
+const AI_ITEM_CHANCE: Record<CMatch["stage"], number> = { regular: 0.12, promo: 0.3, semi: 0.3, po: 0.3, final: 0.45 };
+function aiSetItem(s: CareerState, team: number, m: CMatch): { key: string; mod: SetMods; sniped?: boolean } | undefined {
+  if (team === s.myTeam || rand() >= AI_ITEM_CHANCE[m.stage]) return undefined;
+  const t = s.teams[team];
+  if (rand() < 0.15) return { key: "cheer", mod: { all: ITEM_BY_KEY.cheer.all } };
+  const options = ["memo", "gum", "sniping", "ceremony"].filter(k => t.money >= ITEM_BY_KEY[k].price + 1500);
+  if (!options.length) return undefined;
+  const key = options[randInt(0, options.length - 1)];
+  const it = ITEM_BY_KEY[key];
+  t.money -= it.price;
+  if (key === "memo") return { key, mod: { bonus: it.setBonus } };
+  if (key === "gum") return { key, mod: { gum: true } };
+  if (key === "sniping") { const sniped = rand() < 0.35; return { key, mod: sniped ? { mul: 1.1 } : {}, sniped }; }
+  return { key, mod: {} };
+}
+/** 세트에 다른 팀 아이템 기록 + 세레모니(이기면 150만·팀 컨디션 +1) */
+function settleAiItems(s: CareerState, set: SetResult, teamA: number, teamB: number, items: { a?: ReturnType<typeof aiSetItem>; b?: ReturnType<typeof aiSetItem> }) {
+  if (!items.a && !items.b) return;
+  set.aiItems = { ...(items.a ? { a: items.a.key } : {}), ...(items.b ? { b: items.b.key } : {}) };
+  if (items.a?.sniped || items.b?.sniped) set.aiSniped = { ...(items.a?.sniped ? { a: true } : {}), ...(items.b?.sniped ? { b: true } : {}) };
+  for (const [side, team] of [["a", teamA], ["b", teamB]] as const) {
+    if (items[side]?.key === "ceremony" && set.winner === side) {
+      s.teams[team].money += 150;
+      for (const p of rosterOf(s, team)) p.cond = clampCond(p.cond + 1);
+    }
+  }
+}
+
 function playMatch(s: CareerState, m: CMatch, myEntry?: number[]): PlayedSet[] {
   const sets = matchSets(m);
   const need = matchNeed(m);
@@ -337,8 +370,11 @@ function playMatch(s: CareerState, m: CMatch, myEntry?: number[]): PlayedSet[] {
   for (let i = 0; i < sets && sa < need && sb < need; i++) {
     const pa = s.players[entryA[i]], pb = s.players[entryB[i]];
     if (!pa || !pb) continue;
-    // 다른 팀끼리 경기는 빠른 판정 (중계가 필요 없음)
-    const r = withStageGrowth(stageGrowthOf(m), () => (involvesMe ? playSet(s, pa, pb, m.maps[i % m.maps.length], true, true) : quickSet(s, pa, pb, m.maps[i % m.maps.length])), youthOf(m));
+    // 다른 팀끼리 경기는 빠른 판정 (중계가 필요 없음), 다른 팀은 가끔 경기 아이템을 씀
+    const ai = { a: aiSetItem(s, m.a, m), b: aiSetItem(s, m.b, m) };
+    const mods = { a: ai.a?.mod, b: ai.b?.mod };
+    const r = withStageGrowth(stageGrowthOf(m), () => (involvesMe ? playSet(s, pa, pb, m.maps[i % m.maps.length], true, true, mods) : quickSet(s, pa, pb, m.maps[i % m.maps.length], mods)), youthOf(m));
+    settleAiItems(s, r, m.a, m.b, ai);
     if (r.winner === "a") sa++; else sb++;
     results.push(r);
   }
@@ -379,7 +415,10 @@ function playWinnersMatch(s: CareerState, m: CMatch, withBroadcast: boolean, myE
   let sa = 0, sb = 0;
   for (let i = 0; sa < need && sb < need; i++) {
     const map = m.maps[i % m.maps.length];
-    const r = withStageGrowth(stageGrowthOf(m), () => (withBroadcast ? playSet(s, s.players[pa], s.players[pb], map, true, true) : quickSet(s, s.players[pa], s.players[pb], map)), youthOf(m));
+    const ai = { a: aiSetItem(s, m.a, m), b: aiSetItem(s, m.b, m) };
+    const mods = { a: ai.a?.mod, b: ai.b?.mod };
+    const r = withStageGrowth(stageGrowthOf(m), () => (withBroadcast ? playSet(s, s.players[pa], s.players[pb], map, true, true, mods) : quickSet(s, s.players[pa], s.players[pb], map, mods)), youthOf(m));
+    settleAiItems(s, r, m.a, m.b, ai);
     results.push(r);
     if (r.winner === "a") { sa++; pb = nextInOrder(orderB, winnersOut(results, "b")); }
     else { sb++; pa = nextInOrder(orderA, winnersOut(results, "a")); }
@@ -644,8 +683,17 @@ export function playLiveSet(s: CareerState, ace?: number): LiveSetResult {
     if (ITEM_BY_KEY[plan.key]?.setBonus) mod.bonus = ITEM_BY_KEY[plan.key].setBonus;
     if (plan.key === "sniping" && plan.predict === live.opp[i]) { mod.mul = 1.1; sniped = true; }
   }
-  const mods = meA ? { a: mod } : { b: mod };
+  // 상대(컴퓨터)도 가끔 경기 아이템을 씀
+  const oppTeam = meA ? m.b : m.a;
+  const oppItem = aiSetItem(s, oppTeam, m);
+  const mods = meA ? { a: mod, b: oppItem?.mod } : { a: oppItem?.mod, b: mod };
   const set = withStageGrowth(stageGrowthOf(m), () => playSet(s, s.players[entryA[i]], s.players[entryB[i]], m.maps[i % m.maps.length], true, true, mods), youthOf(m));
+  settleAiItems(s, set, m.a, m.b, meA ? { b: oppItem } : { a: oppItem });
+  if (oppItem && set.timeline) {
+    const opp = s.players[live.opp[i]];
+    const text = oppItem.key === "cheer" ? `${opp.name} 선수를 응원하는 치어풀이 보이네요.` : oppItem.sniped ? `${opp.name} 선수, 상대를 노리고 나온 것 같은데요!` : undefined;
+    if (text) set.timeline.lines.unshift({ t: 0, side: meA ? 2 : 1, text });
+  }
   if (plan) {
     set.item = plan.key;
     set.sniped = sniped;

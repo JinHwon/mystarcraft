@@ -15,10 +15,15 @@ import { LEFT_COLOR, R, RIGHT_COLOR, nameRace, setItemBoost, type Speed } from "
  * 중계 화면 선수 아래: 이 세트에 쓴 경기 아이템 (치어풀이면 모든 능력치 +75 로 경기함)
  * 중계 중인 세이브는 세트가 끝난 뒤 상태라, 능력치 합계 대신 아이템 효과만 표시
  */
-function SetPower({ s, p, item }: { s: CareerState; p: CPlayer; item?: string }) {
-  const { text } = p.team === s.myTeam ? setItemBoost(item) : { text: "" };
-  if (!text || !item) return null;
-  return <div className="text-[10px] text-center leading-tight text-[#ffe45c]">{item === "cheer" ? "📣" : "📝"} {ITEM_BY_KEY[item]?.name}<br />{text}</div>;
+function SetPower({ s, p, set, side }: { s: CareerState; p: CPlayer; set: BroadcastSet; side: "a" | "b" }) {
+  // 우리 선수 아이템(set.item) 또는 다른 팀(컴퓨터)이 쓴 아이템(set.aiItems)
+  const item = p.team === s.myTeam ? set.item : set.aiItems?.[side];
+  if (!item || !ITEM_BY_KEY[item]) return null;
+  const { text } = setItemBoost(item);
+  const sniped = p.team === s.myTeam ? set.sniped : set.aiSniped?.[side];
+  const note = text || (item === "sniping" ? (sniped ? "예측 적중! 능력치 110%" : "예측 빗나감") : item === "gum" ? "지면 능력치 감소 -66%" : item === "ceremony" ? "이기면 +150만·팀 컨디션 +1" : "");
+  const icon = item === "cheer" ? "📣" : item === "memo" ? "📝" : item === "sniping" ? "🎯" : item === "gum" ? "🍬" : "🎉";
+  return <div className="text-[10px] text-center leading-tight text-[#ffe45c]">{icon} {ITEM_BY_KEY[item].name}<br />{note}</div>;
 }
 
 // ── 중계 화면 ─────────────────────────────────────────────────────
@@ -102,7 +107,7 @@ export function Broadcast({ s, stageName, lp, rp, mapId, set, leftIsA, score, le
             <div className="flex flex-col items-center">
               <PlayerPhoto id={lp.photoOf ?? lp.id} name={lp.name} titles={lp.titles} size={56} />
               <span className="text-[11px] mt-0.5 text-center">{nameRace(lp)}</span>
-              <SetPower s={s} p={lp} item={set.item} />
+              <SetPower s={s} p={lp} set={set} side={leftIsA ? "a" : "b"} />
               {done && leftWon && <Winner />}
             </div>
             <VBars army={frame?.army[L] ?? 0} res={frame?.res[L] ?? 0} maxArmy={maxArmy} maxRes={maxRes} />
@@ -118,7 +123,7 @@ export function Broadcast({ s, stageName, lp, rp, mapId, set, leftIsA, score, le
             <div className="flex flex-col items-center">
               <PlayerPhoto id={rp.photoOf ?? rp.id} name={rp.name} titles={rp.titles} size={56} />
               <span className="text-[11px] mt-0.5 text-center">{nameRace(rp)}</span>
-              <SetPower s={s} p={rp} item={set.item} />
+              <SetPower s={s} p={rp} set={set} side={leftIsA ? "b" : "a"} />
               {done && !leftWon && <Winner />}
             </div>
             <VBars army={frame?.army[Rr] ?? 0} res={frame?.res[Rr] ?? 0} maxArmy={maxArmy} maxRes={maxRes} />

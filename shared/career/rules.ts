@@ -325,6 +325,9 @@ export interface SetResult {
   fx?: { a: PlayerFx; b: PlayerFx };
   /** 세레모니 보너스 (만원) */
   ceremony?: number;
+  /** 다른 팀(컴퓨터)이 이 세트에 쓴 경기 아이템 (쪽별), 스나이핑 적중 여부 */
+  aiItems?: { a?: string; b?: string };
+  aiSniped?: { a?: boolean; b?: boolean };
   /** 포텐셜 폭발 (그 세트 능력치 배율, 예: 1.15) */
   burst?: { a?: number; b?: number };
   /** 컨디션 난조였던 쪽 */
