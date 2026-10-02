@@ -3,7 +3,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
-import { burstOf, MSL_PLAN, totalOf, type CareerState, type CMatch, type CPlayer, type MslGroup, type MslSeries } from "@shared/career/rules";
+import { burstLabel, burstOf, MSL_PLAN, totalOf, type CareerState, type CMatch, type CPlayer, type MslGroup, type MslSeries } from "@shared/career/rules";
 import { STAGE_NAMES, activePlayers, mapView } from "@shared/career/view";
 import { gearCond, gearStats } from "@shared/career/items";
 import { trpc } from "@/lib/trpc";
@@ -257,7 +257,7 @@ export function MslFlow({ s, reports, plans = [], flat, onDone, onClose, start =
               <PlayerCard p={p} opp={o} />
               <div className="text-[10px] text-neutral-500">{sv.teams[p.team]?.name}</div>
               <LegacyRadar stats={condStats(p, sv)} base={p.stats} gear={gearStats(p)} level={p.level} size={112} />
-              <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p)} %{burstOf(sv, p) ? <span className="text-[#ffb84d] font-bold"> 🔥{Math.round(burstOf(sv, p)! * 100)}%</span> : null}</div>
+              <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p)} %{burstOf(sv, p) ? <span className="font-bold" style={{ color: burstLabel(burstOf(sv, p)!).color }}> {burstLabel(burstOf(sv, p)!).icon}{Math.round(burstOf(sv, p)! * 100)}%</span> : null}</div>
             </div>
           ))}
         </div>

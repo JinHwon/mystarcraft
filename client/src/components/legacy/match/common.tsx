@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { navigate } from "wouter/use-browser-location";
 import { cn } from "@/lib/utils";
 import { STAT_KEYS, STAT_LABELS, type StatKey } from "@shared/gameConstants";
-import { COND_MAX, burstOf, condMultiplier, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
+import { COND_MAX, burstLabel, burstOf, condMultiplier, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
 import { ITEMS, ITEM_BY_KEY, SLOT_NAMES, gearCond, gearStats, itemImg, setItemExtra, type EquipSlot, type StatExtra } from "@shared/career/items";
 import { trpc } from "@/lib/trpc";
 import { useCareerPatch } from "@/lib/career";
@@ -152,12 +152,12 @@ export function PlayerPanel({ p, color, empty, s }: { p?: CPlayer; color: string
           <div>{R[p.race]} · Lv.{p.level}</div>
           <div>Condition <b className={gearCond(p) >= 70 ? "text-[#bff5c6]" : gearCond(p) <= 30 ? "text-[#ff9a9a]" : "text-white"}>{gearCond(p)}%</b>{gearCond(p) !== p.cond && <span className="text-[9px] text-neutral-500"> (장비)</span>}</div>
           <div className="text-neutral-400">원래 {totalOf(p.stats).toLocaleString()}{totalOf(gearStats(p)) !== totalOf(p.stats) ? <span className="text-[#8fd0ff]"> +장비 {(totalOf(gearStats(p)) - totalOf(p.stats)).toLocaleString()}</span> : null} → 실전 <b className="text-[#ffe45c]">{totalOf(cs).toLocaleString()}</b></div>
-          {burst && <div className="text-[#ffb84d] font-bold">🔥 포텐셜 폭발! {Math.round(burst * 100)}%</div>}
+          {burst && <div className="font-bold" style={{ color: burstLabel(burst).color }}>{burstLabel(burst).icon} {burstLabel(burst).name}! {Math.round(burst * 100)}%</div>}
         </div>
       </div>
       <div className="mt-1"><EquipRow p={p} /></div>
       <LegacyRadar stats={cs} base={p.stats} gear={gearStats(p)} level={p.level} size={92} />
-      <div className="text-[9px] text-neutral-500 -mt-1">회색 점선 = 원래 · 빨강 = 컨디션·장비{burst ? "·포텐셜" : ""} 반영</div>
+      <div className="text-[9px] text-neutral-500 -mt-1">회색 점선 = 원래 · 빨강 = 컨디션·장비{burst ? (burst >= 1 ? "·포텐셜" : "·난조") : ""} 반영</div>
     </div>
   );
 }

@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
-import { burstOf, matchFormatName, matchSets, totalOf, type CareerState, type CMatch, type CPlayer } from "@shared/career/rules";
+import { burstLabel, burstOf, matchFormatName, matchSets, totalOf, type CareerState, type CMatch, type CPlayer } from "@shared/career/rules";
 import { STAGE_NAMES, mapView, rosterOf } from "@shared/career/view";
 import { ITEM_BY_KEY, gearCond, itemImg } from "@shared/career/items";
 import { GrayBox, LEGACY_FONT, LegacyFrame, LegacyImg, MapInfo, MslBadges, TeamLogo } from "../Legacy";
@@ -97,7 +97,7 @@ export function RosterList({ players, onPick, selected, marks, s }: { players: C
             className={cn("w-full flex items-center gap-1 px-1 py-[5px] text-left border-b border-neutral-800 last:border-b-0", s ? "text-[12px]" : "text-[13px]",
               mark ? "text-[#ffe45c]" : "text-white", selected === p.id && "bg-[#3a3a5a]")}
           >
-            <span className="truncate flex-1">{s && burstOf(s, p) ? "🔥" : ""}{p.name}<MslBadges titles={p.titles} size={11} className="ml-0.5 align-middle" /></span>
+            <span className="truncate flex-1">{s && burstOf(s, p) ? burstLabel(burstOf(s, p)!).icon : ""}{p.name}<MslBadges titles={p.titles} size={11} className="ml-0.5 align-middle" /></span>
             <span className="text-[11px] text-neutral-400">{mark ?? ""}</span>
             <span>({R[p.race]})</span>
             {s && (

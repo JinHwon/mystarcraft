@@ -73,6 +73,16 @@ export function burstOf(s: { season: number; week: number }, p: CPlayer): number
   return p.burst && p.burst.week === `${s.season}-${s.week}` ? p.burst.mul : undefined;
 }
 
+/** 이번 주 상태 표시: 포텐셜 폭발(배율 > 1) 또는 컨디션 난조(배율 < 1) */
+export function burstLabel(mul: number): { icon: string; name: string; color: string } {
+  return mul >= 1 ? { icon: "🔥", name: "포텐셜 폭발", color: "#ffb84d" } : { icon: "😵", name: "컨디션 난조", color: "#8fb8ff" };
+}
+
+/** 컨디션 난조 확률 (주마다, 컨디션이 나쁠수록 잘 걸림) — 걸리면 그 주 경기 능력치 60~90% */
+export function slumpChance(cond: number): number {
+  return cond >= 90 ? 0.03 : cond >= 70 ? 0.05 : cond >= 50 ? 0.08 : 0.12;
+}
+
 /** 포텐셜 폭발 확률 (주마다, 컨디션이 좋을수록 잘 터짐) — 터지면 그 주 경기 능력치 110~120% */
 export function burstChance(cond: number): number {
   return cond >= 90 ? 0.08 : cond >= 70 ? 0.05 : cond >= 50 ? 0.03 : 0.01;
@@ -114,7 +124,7 @@ export interface CPlayer {
   action?: ActionKey | null;
   /** 선수 행동력 (우리 팀) */
   ap?: number;
-  /** 이번 주 포텐셜 폭발 (주 시작 때 정해짐, 그 주 경기 동안 능력치 배율) */
+  /** 이번 주 포텐셜 폭발(배율 1.1~1.2) 또는 컨디션 난조(0.6~0.9) — 주 시작 때 정해짐, 그 주 경기 동안 능력치 배율 */
   burst?: { week: string; mul: number };
   /** 우승 경력 */
   titles?: string[];

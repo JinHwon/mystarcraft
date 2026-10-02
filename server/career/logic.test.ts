@@ -1180,3 +1180,23 @@ describe("팬미팅 수익·인기", () => {
     expect(msl).toBeGreaterThan(pro * 3);
   });
 });
+
+describe("컨디션 난조", () => {
+  it("주마다 일부 선수가 컨디션 난조(능력치 60~90%)에 걸리고 그 주 경기 능력치에 반영, 다음 주엔 풀림", async () => {
+    const { rollWeekBursts, effStats } = await import("./core");
+    const { burstOf } = await import("@shared/career/rules");
+    const s = newCareer(0);
+    for (const p of s.players) p.cond = 40; // 컨디션이 나쁠수록 잘 걸림
+    s.burstWeek = undefined;
+    rollWeekBursts(s);
+    const slumped = s.players.filter(p => (burstOf(s, p) ?? 1) < 1);
+    expect(slumped.length).toBeGreaterThan(0);
+    for (const p of slumped) { const m = burstOf(s, p)!; expect(m).toBeGreaterThanOrEqual(0.6); expect(m).toBeLessThanOrEqual(0.9); }
+    const p = slumped[0];
+    const plain = effStats(p);
+    const withSlump = effStats(p, { mul: burstOf(s, p) });
+    expect(withSlump.attack).toBeLessThan(plain.attack);
+    s.week++;
+    expect(burstOf(s, p)).toBeUndefined();
+  });
+});
