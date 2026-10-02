@@ -28,6 +28,7 @@ import { ACTIONS } from "@shared/career/rules";
 import { rosterOf } from "@shared/career/view";
 import { useCareer } from "@/lib/career";
 import { Notifications } from "@/components/Notifications";
+import { UpdatesButton } from "@/components/UpdatesButton";
 
 interface NavItem { path: string; label: string; tab?: string; icon: LucideIcon }
 
@@ -99,6 +100,7 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
                 <span className="flex items-center gap-1 rounded-full bg-yellow-500/15 border border-yellow-500/30 text-yellow-300 font-bold px-2 py-0.5 text-[11px]">
                   <Coins className="w-3.5 h-3.5" />{team.money.toLocaleString()}만
                 </span>
+                <UpdatesButton />
                 <Notifications s={s} />
               </div>
             )}
