@@ -4,7 +4,7 @@ import { STAT_LABELS, type StatKey } from "@shared/gameConstants";
 import type { ActionResult } from "../../../server/career/logic";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { ACTIONS, WEEKLY_AP, actionOf, ageOf, totalOf, type ActionKey, type CareerState } from "@shared/career/rules";
+import { ACTIONS, WEEKLY_AP, actionOf, ageOf, restNotNeeded, totalOf, type ActionKey, type CareerState } from "@shared/career/rules";
 import { rosterOf } from "@shared/career/view";
 import { useCareer, useCareerPatch, useCareerUpdater } from "@/lib/career";
 import { CondBadge, RaceBadge } from "@/components/career/Bits";
@@ -59,7 +59,8 @@ export default function Training() {
   if (!s) { navigate("/lobby"); return null; }
   const roster = rosterOf(s, s.myTeam).sort((a, b) => totalOf(b.stats) - totalOf(a.stats));
   const apOf = (p: (typeof roster)[number]) => p.ap ?? WEEKLY_AP;
-  const ready = roster.filter(p => { const a = actionOf(p.action); return a && apOf(p) >= a.ap; }).length;
+  // 컨디션 100% 선수의 휴식은 실행에서 자동으로 빠짐
+  const ready = roster.filter(p => { const a = actionOf(p.action); return a && apOf(p) >= a.ap && !restNotNeeded(p); }).length;
   const planned = roster.filter(p => p.action).length;
 
   return (
@@ -155,11 +156,11 @@ export default function Training() {
             </div>
             {(() => {
               const a = actionOf(p.action);
-              const can = !!a && apOf(p) >= a.ap && !s.live;
+              const can = !!a && apOf(p) >= a.ap && !s.live && !restNotNeeded(p);
               return (
                 <button onClick={() => run.mutate({ playerId: p.id })} disabled={!can || run.isPending}
                   className="mt-1.5 w-full py-2 rounded-xl text-xs font-black bg-emerald-600 text-white disabled:bg-muted disabled:text-muted-foreground">
-                  {!a ? "행동을 고르세요" : apOf(p) < a.ap ? `행동력 부족 (${a.name} ${a.ap} 필요)` : `▶ ${p.name} ${a.name} 실행 (행동력 ${apOf(p)} → ${apOf(p) - a.ap})`}
+                  {!a ? "행동을 고르세요" : restNotNeeded(p) ? "컨디션 100% — 휴식은 건너뜁니다 (행동력 그대로)" : apOf(p) < a.ap ? `행동력 부족 (${a.name} ${a.ap} 필요)` : `▶ ${p.name} ${a.name} 실행 (행동력 ${apOf(p)} → ${apOf(p) - a.ap})`}
                 </button>
               );
             })()}

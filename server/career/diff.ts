@@ -5,6 +5,8 @@ import type { CareerDiff } from "@shared/career/diff";
 // ── 바뀐 부분만 주고받기 ─────────────────────────────────────────
 /** 원소 단위로 비교하는 큰 배열 */
 const ARRAY_KEYS = ["players", "matches"] as const;
+/** 원소 안에서도 바뀐 필드만 보내는 배열 */
+const FIELD_KEYS: ReadonlySet<string> = new Set(["players"]);
 export type Snapshot = { keys: Map<string, string>; arrays: Record<string, string[]> };
 
 export function snapshot(s: CareerState): Snapshot {
@@ -34,15 +36,35 @@ export function diffOf(before: Snapshot, s: CareerState): CareerDiff & { after: 
   for (const k of ARRAY_KEYS) {
     const arr = s[k] as unknown[], old = before.arrays[k] ?? [];
     const items: Array<[number, unknown]> = [];
-    const strs = arr.map((x, i) => { const j = JSON.stringify(x); if (old[i] !== j) items.push([i, x]); return j; });
+    const fields: Array<[number, Record<string, unknown>, string[]?]> = [];
+    const strs = arr.map((x, i) => {
+      const j = JSON.stringify(x);
+      if (old[i] === j) return j;
+      if (FIELD_KEYS.has(k) && old[i] !== undefined) fields.push(fieldDiff(JSON.parse(old[i]) as Record<string, unknown>, x as Record<string, unknown>, i));
+      else items.push([i, x]);
+      return j;
+    });
     after.arrays[k] = strs;
     if (items.length) d.items[k] = items;
+    if (fields.length) (d.fields ??= {})[k] = fields;
     if (arr.length !== old.length) d.len[k] = arr.length;
   }
   // 진행 중 경기: 지난 세트 해설은 화면이 이미 갖고 있으므로 마지막 세트만 통째로
   const live = d.set.live as CareerState["live"];
   if (live) d.set.live = { ...live, sets: live.sets.map((x, k, all) => (k === all.length - 1 ? x : { ...x, timeline: undefined })) };
   return { ...d, after };
+}
+
+/** 원소 하나에서 바뀐 필드 (JSON 으로 비교: undefined 필드는 없는 것과 같음) */
+function fieldDiff(prev: Record<string, unknown>, next: Record<string, unknown>, i: number): [number, Record<string, unknown>, string[]?] {
+  const set: Record<string, unknown> = {};
+  const del: string[] = [];
+  for (const [f, v] of Object.entries(next)) {
+    if (v === undefined) continue;
+    if (JSON.stringify(v) !== JSON.stringify(prev[f])) set[f] = v;
+  }
+  for (const f of Object.keys(prev)) if (next[f] === undefined) del.push(f);
+  return del.length ? [i, set, del] : [i, set];
 }
 
 /** 스냅샷 조각으로 세이브 JSON 조립 (JSON.stringify(s) 와 같은 결과, 다시 직렬화하지 않음) */

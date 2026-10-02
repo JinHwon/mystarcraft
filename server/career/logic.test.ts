@@ -343,6 +343,7 @@ describe("커리어 모드", () => {
     const s = newCareer(0);
     const r = rosterOf(s, 0);
     setAction(s, r[0].id, "train");
+    r[1].cond = 60; // 컨디션 100% 면 휴식은 건너뜀
     setAction(s, r[1].id, "rest");
     const first = runMyActions(s);
     expect(first.results.map(x => x.id).sort()).toEqual([r[0].id, r[1].id].sort());
@@ -1016,5 +1017,22 @@ describe("작전 메모", () => {
     const r = playLiveSet(s);
     expect(r.set.item).toBe("memo");
     expect(s.inventory.memo).toBe(0);
+  });
+});
+
+describe("휴식: 컨디션 100%", () => {
+  it("컨디션 100% 선수의 휴식은 실행에서 빠지고 행동력도 그대로", async () => {
+    const { runMyActions } = await import("./logic");
+    const s = newCareer(0);
+    const [full, tired] = rosterOf(s, 0);
+    full.cond = 100; tired.cond = 70;
+    for (const p of rosterOf(s, 0)) p.action = null;
+    full.action = "rest"; tired.action = "rest";
+    const r = runMyActions(s);
+    expect(r.full).toEqual([full.id]);
+    expect(r.results.map(x => x.id)).toEqual([tired.id]);
+    expect(full.ap ?? 20).toBe(20);
+    tired.action = null;
+    expect(() => runMyActions(s)).toThrow("컨디션이 이미 100%라 휴식할 필요가 없습니다");
   });
 });

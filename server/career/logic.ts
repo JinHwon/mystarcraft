@@ -11,7 +11,7 @@ import {
   CMatch,
   COND_MAX,
   WEEKLY_COND_RECOVERY,
-  actionOf,
+  actionOf, restNotNeeded,
   COND_MIN,
   CPlayer,
   FINAL_SETS,
@@ -205,16 +205,19 @@ export interface ActionResult { id: number; action: ActionKey; ap: number; cond:
  * 우리 선수 행동 바로 진행: 행동을 정한 선수마다 행동력이 남아 있으면 한 번 실행하고 행동력을 쓴다
  * 고른 행동은 바꾸거나 초기화할 때까지 유지 (행동력이 남으면 또 진행 가능)
  */
-export function runMyActions(s: CareerState, only?: number): { results: ActionResult[]; skipped: number[] } {
+export function runMyActions(s: CareerState, only?: number): { results: ActionResult[]; skipped: number[]; full: number[] } {
   if (s.live) throw new CareerError("경기 중에는 행동을 진행할 수 없습니다");
   // only: 그 선수만 (선수 카드의 진행 버튼)
   const roster = rosterOf(s, s.myTeam).filter(p => only === undefined || p.id === only);
   if (!roster.some(p => p.action)) throw new CareerError("행동을 정한 선수가 없습니다");
   const results: ActionResult[] = [];
   const skipped: number[] = [];
+  const full: number[] = [];
   for (const p of roster) {
     const a = actionOf(p.action);
     if (!a) continue;
+    // 컨디션 100% 선수의 휴식은 건너뜀 (행동력도 그대로)
+    if (restNotNeeded(p)) { full.push(p.id); continue; }
     if (playerAp(p) < a.ap) { skipped.push(p.id); continue; }
     p.ap = playerAp(p) - a.ap;
     const before = { cond: p.cond, stats: { ...p.stats }, money: s.teams[s.myTeam].money, cheer: s.inventory?.cheer ?? 0 };
@@ -222,9 +225,9 @@ export function runMyActions(s: CareerState, only?: number): { results: ActionRe
     const stats = Object.fromEntries(STAT_KEYS.map(k => [k, p.stats[k] - before.stats[k]]).filter(([, d]) => d !== 0));
     results.push({ id: p.id, action: a.key, ap: p.ap, cond: [before.cond, p.cond], stats, money: s.teams[s.myTeam].money - before.money, cheer: (s.inventory?.cheer ?? 0) > before.cheer || undefined });
   }
-  if (!results.length) throw new CareerError("행동력이 부족합니다 (매주 선수마다 20씩 받습니다)");
+  if (!results.length) throw new CareerError(full.length && !skipped.length ? "컨디션이 이미 100%라 휴식할 필요가 없습니다" : "행동력이 부족합니다 (매주 선수마다 20씩 받습니다)");
   s.myActionsWeek = `${s.season}-${s.week}`;
-  return { results, skipped };
+  return { results, skipped, full };
 }
 
 /** 선수 행동력 (예전 세이브·새로 온 선수는 한 주치) */
