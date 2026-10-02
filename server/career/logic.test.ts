@@ -1169,7 +1169,8 @@ describe("팬미팅 수익·인기", () => {
   it("인기가 높을수록 수익이 크고 최대 150만, 개인리그 우승이 프로리그 우승보다 인기에 크게 반영", async () => {
     const { eventIncome, popularity, EVENT_INCOME_MAX } = await import("@shared/career/contract");
     const s = newCareer(0);
-    const [star, rookie] = [rosterOf(s, 0)[0], rosterOf(s, 0).sort((a, b) => popularity(a) - popularity(b))[0]];
+    const byPop = rosterOf(s, 0).sort((a, b) => popularity(b) - popularity(a));
+    const star = byPop[0], rookie = byPop[byPop.length - 1];
     expect(eventIncome(star)).toBeGreaterThan(eventIncome(rookie) * 3);
     const maxed = { ...star, level: 15, wins: 300, titles: ["1시즌 마이스타리그 우승", "2시즌 마이스타리그 우승"] };
     expect(eventIncome(maxed)).toBe(EVENT_INCOME_MAX);
