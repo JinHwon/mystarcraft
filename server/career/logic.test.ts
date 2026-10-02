@@ -1242,3 +1242,23 @@ describe("결장 감각 저하·팬미팅 능력치", () => {
     expect(before - totalOf(p.stats)).toBeLessThanOrEqual(4);
   });
 });
+
+describe("다른 팀(컴퓨터) 경기 아이템", () => {
+  it("다른 팀도 세트마다 가끔 경기 아이템을 쓰고, 산 아이템은 구단 자금에서 나간다", () => {
+    const s = newCareer(0);
+    for (const t of s.teams) t.money = 100_000;
+    for (let w = 0; w < 6; w++) {
+      const m = myPendingMatch(s);
+      advanceWeek(s, m ? aiEntry(s, s.myTeam, PRO_SETS) : undefined);
+    }
+    const sets = s.matches.filter(m => m.done).flatMap(m => m.sets ?? []);
+    const used = sets.filter(x => x.aiItems);
+    expect(used.length).toBeGreaterThan(0);
+    const keys = new Set(used.flatMap(x => Object.values(x.aiItems!)));
+    expect([...keys].every(k => ["cheer", "memo", "gum", "sniping", "ceremony"].includes(k!))).toBe(true);
+    // 우리 팀 쪽에는 컴퓨터 아이템이 붙지 않음
+    for (const m of s.matches.filter(x => x.done && (x.a === 0 || x.b === 0))) {
+      for (const x of m.sets ?? []) expect(x.aiItems?.[m.a === 0 ? "a" : "b"]).toBeUndefined();
+    }
+  });
+});
