@@ -6,7 +6,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { B_MAX_ROSTER, B_MIN_ROSTER, MAX_ROSTER, MIN_ROSTER, ageOf, askingPrice, gradeColor, legacyGrade, youthGrowth, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
+import { B_MAX_ROSTER, B_MIN_ROSTER, MAX_ROSTER, SQUAD_MIN, ageOf, askingPrice, gradeColor, legacyGrade, youthGrowth, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
 import { DIV_NAMES, bTeamIdOf, divOf, myDiv, rosterOf, teamPower } from "@shared/career/view";
 import { PlayerPhoto } from "@/components/legacy/Legacy";
 import { popularity, potentialStars } from "@shared/career/contract";
@@ -114,7 +114,7 @@ export default function Team() {
   const player = open !== null ? s.players[open] : null;
   const div = myDiv(s);
   const bTeam = bTeamIdOf(s, s.myTeam);
-  const { min, max } = div === 2 ? { min: B_MIN_ROSTER, max: B_MAX_ROSTER } : { min: MIN_ROSTER, max: MAX_ROSTER };
+  const { min, max } = div === 2 ? { min: B_MIN_ROSTER, max: B_MAX_ROSTER } : { min: SQUAD_MIN, max: MAX_ROSTER };
 
   return (
     <div className="p-4 space-y-3">

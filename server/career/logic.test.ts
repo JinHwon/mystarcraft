@@ -1413,3 +1413,37 @@ describe("포텐셜 폭발도 컨디션처럼 줄어듦", () => {
     expect(a.burst).toBeUndefined();
   });
 });
+
+describe("선수단 최소 8명 · 떠난 선수 제안 정리", () => {
+  it("방출·이적으로 8명 아래로 줄일 수 없다", async () => {
+    const { respondOffer } = await import("./club");
+    const s = newCareer(0);
+    while (rosterOf(s, 0).length > 8) releasePlayer(s, rosterOf(s, 0).at(-1)!.id);
+    expect(rosterOf(s, 0).length).toBe(8);
+    expect(() => releasePlayer(s, rosterOf(s, 0)[0].id)).toThrow(/최소 8명/);
+    const p = rosterOf(s, 0)[0];
+    s.offers = [{ id: 7, player: p.id, team: 3, fee: 100, max: 100, season: 1, week: 1, tries: 0, status: "pending" }];
+    s.teams[3].money = 100_000;
+    expect(() => respondOffer(s, 7, "accept")).toThrow(/최소 8명/);
+    expect(p.team).toBe(0);
+  });
+
+  it("팀을 떠난 선수에게 남은 제안은 정리된다", async () => {
+    const { pruneOffers } = await import("./club");
+    const s = newCareer(0);
+    const p = rosterOf(s, 0)[0];
+    s.offers = [{ id: 8, player: p.id, team: 3, fee: 100, max: 100, season: 1, week: 1, tries: 0, status: "pending" }];
+    releasePlayer(s, p.id);
+    pruneOffers(s);
+    expect(s.offers).toEqual([]);
+  });
+
+  it("계약 만료·은퇴로 8명보다 적어지면 새 시즌에 무소속 선수가 배정된다", () => {
+    const s = newCareer(0);
+    while (rosterOf(s, 0).length > 8) releasePlayer(s, rosterOf(s, 0).at(-1)!.id);
+    s.phase = "offseason";
+    for (const p of rosterOf(s, 0).slice(0, 3)) p.contract = { salary: p.contract?.salary ?? 100, years: 1 };
+    startNextSeason(s, { releaseExpiring: true });
+    expect(rosterOf(s, 0).length).toBeGreaterThanOrEqual(8);
+  });
+});

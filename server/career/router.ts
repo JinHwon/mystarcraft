@@ -15,7 +15,7 @@ import type { CareerState } from "@shared/career/rules";
 import { diffOf, jsonOf, snapshot, type Snapshot } from "./diff";
 import { nominate } from "./msl";
 import { ACTIONS, type ActionKey } from "@shared/career/rules";
-import { negotiateMainSponsor, pay } from "./club";
+import { negotiateMainSponsor, pay, pruneOffers } from "./club";
 import { acceptJob, bidPlayer, chooseSponsor, listPlayer, negotiateContract, respondJob, respondJoin, respondOffer, respondRaise, unlistPlayer } from "./club";
 import { sendToB } from "./divisions";
 import {
@@ -154,6 +154,8 @@ function mutate<T>(userId: number, fn: (s: CareerState) => T) {
     try {
       if (s.gameOver) throw new CareerError(`게임이 종료되었습니다: ${s.gameOver.reason}. 새 게임을 시작하세요`);
       const result = fn(s);
+      // 팀을 떠난 선수에게 남은 제안은 자동으로 정리
+      pruneOffers(s);
       const { after, ...diff } = diffOf(before, s);
       save(userId, s, jsonOf(s, after), after);
       return { result, diff };
