@@ -166,14 +166,27 @@ function mutate<T>(userId: number, fn: (s: CareerState) => T) {
   });
 }
 
-/** 관리자용: 게임 오버 세이브도 수정 */
+/**
+ * 세이브가 바깥(관리자 수정·초기화)에서 바뀐 횟수 (사용자별, 메모리)
+ * 사용자 화면이 가끔 묻고(career.rev) 값이 바뀌면 세이브를 다시 받는다
+ */
+const outsideRev = new Map<number, number>();
+const bumpRev = (userId: number) => outsideRev.set(userId, (outsideRev.get(userId) ?? 0) + 1);
+
+/**
+ * 관리자용: 게임 오버 세이브도 수정
+ * 비교 기준(snap)은 고치기 전 것을 그대로 둠 → 사용자의 다음 요청 변경분에 관리자 수정도 함께 들어감
+ * (예전엔 고친 뒤 상태가 기준이 되어 사용자 화면에 돈·아이템이 반영되지 않았음)
+ */
 function mutateAny<T>(userId: number, fn: (s: CareerState) => T) {
   return withLock(userId, async () => {
     const s = await load(userId);
     if (!s) throw new TRPCError({ code: "NOT_FOUND", message: "이 사용자는 커리어가 없습니다" });
+    const before = cache.get(userId)?.snap ?? snapshot(s);
     try {
       const result = fn(s);
-      save(userId, s);
+      save(userId, s, JSON.stringify(s), before);
+      bumpRev(userId);
       return { result };
     } catch (e) {
       const hit = cache.get(userId);
@@ -368,8 +381,12 @@ export const careerRouter = router({
       await db.delete(careers).where(eq(careers.userId, input.userId));
       cache.delete(input.userId);
       summaries.delete(input.userId);
+      bumpRev(input.userId);
       return { ok: true };
     })),
+
+  /** 세이브가 바깥(관리자)에서 바뀌었는지 확인용 번호 (가벼움, 화면이 주기적으로 물음) */
+  rev: protectedProcedure.query(({ ctx }) => ({ rev: outsideRev.get(ctx.user.id) ?? 0 })),
 
   get: protectedProcedure.query(async ({ ctx }) => {
     return { state: await load(ctx.user.id) };

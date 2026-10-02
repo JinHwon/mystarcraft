@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import type { CareerState } from "@shared/career/rules";
@@ -28,4 +29,20 @@ export function useCareerUpdater() {
     },
     onError: (e: { message: string }) => toast.error(e.message),
   };
+}
+
+/**
+ * 관리자가 세이브를 고치면 (돈·아이템 지급 등) 열려 있는 화면도 곧바로 다시 받음
+ * 가벼운 번호(career.rev)만 15초마다·화면으로 돌아올 때 묻고, 바뀌었을 때만 세이브 전체를 받는다
+ */
+export function useCareerRevWatch(enabled: boolean) {
+  const utils = trpc.useUtils();
+  const q = trpc.career.rev.useQuery(undefined, { enabled, refetchInterval: 15_000, refetchOnWindowFocus: true, staleTime: 0 });
+  const last = useRef<number | null>(null);
+  const rev = q.data?.rev;
+  useEffect(() => {
+    if (rev === undefined) return;
+    if (last.current !== null && last.current !== rev) void utils.career.get.invalidate();
+    last.current = rev;
+  }, [rev]);
 }
