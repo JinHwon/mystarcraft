@@ -4,6 +4,7 @@ import { STAT_LABELS, type StatKey } from "@shared/gameConstants";
 import type { ActionResult } from "../../../server/career/logic";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import { eventIncome, popularity } from "@shared/career/contract";
 import { ACTIONS, WEEKLY_AP, actionOf, ageOf, restNotNeeded, totalOf, type ActionKey, type CareerState } from "@shared/career/rules";
 import { rosterOf } from "@shared/career/view";
 import { useCareer, useCareerPatch, useCareerUpdater } from "@/lib/career";
@@ -116,7 +117,7 @@ export default function Training() {
               <div className="text-lg leading-none">{a.emoji}</div>
               <div className="text-[11px] font-bold text-foreground mt-0.5">{a.name}</div>
               <div className="text-[10px] text-muted-foreground">행동력 {a.ap}</div>
-              <div className="text-[9.5px] text-muted-foreground/80 leading-tight mt-0.5">{a.key === "train" ? "능력치↑ 컨디션 -3~5" : a.key === "rest" ? "컨디션 +5" : "자금·치어풀 컨디션 -3~5"}</div>
+              <div className="text-[9.5px] text-muted-foreground/80 leading-tight mt-0.5">{a.key === "train" ? "능력치↑ 컨디션 -3~5" : a.key === "rest" ? "컨디션 +5" : "자금(인기 많을수록 많이, 최대 150만)·치어풀 컨디션 -3~5"}</div>
             </div>
           ))}
         </div>
@@ -150,6 +151,7 @@ export default function Training() {
                       active ? "bg-primary text-primary-foreground border-primary" : affordable ? "bg-muted/50 border-border text-foreground" : "bg-muted/30 border-border text-muted-foreground/50")}
                   >
                     {a.emoji} {a.name} <span className="text-[10px] opacity-70">{a.ap}</span>
+                    {a.key === "event" && <span className="block text-[10px] font-normal opacity-80">약 {Math.round(eventIncome(p))}만 · 인기 {popularity(p)}</span>}
                   </button>
                 );
               })}
