@@ -896,8 +896,7 @@ export function releasePlayer(s: CareerState, pid: number) {
   const p = s.players[pid];
   if (!p || p.team !== s.myTeam) throw new CareerError("우리 팀 선수가 아닙니다");
   if (s.live) throw new CareerError("경기 중에는 방출할 수 없습니다");
-  if (myPendingMatch(s) && rosterOf(s, s.myTeam).length <= MIN_ROSTER) throw new CareerError(`경기를 치르려면 최소 ${MIN_ROSTER}명이 필요합니다`);
-  if (myDiv(s) === 2 && rosterOf(s, s.myTeam).length <= rosterLimits(s, s.myTeam).min) throw new CareerError(`2부 팀은 최소 ${rosterLimits(s, s.myTeam).min}명이 있어야 합니다 (리그 규정)`);
+  if (rosterOf(s, s.myTeam).length <= rosterLimits(s, s.myTeam).min) throw new CareerError(`선수단은 최소 ${rosterLimits(s, s.myTeam).min}명을 유지해야 합니다`);
   const gain = Math.round(askingPrice(p, s.season) * 0.2 / 10) * 10;
   pay(s, "방출", gain, p.name);
   delete p.contract;
@@ -1027,7 +1026,7 @@ export function proposeTrade(s: CareerState, teamId: number, myIds: number[], th
   const theirAfter = rosterOf(s, teamId).length - theirIds.length + myIds.length;
   const mine = rosterLimits(s, s.myTeam), theirs = rosterLimits(s, teamId);
   if (myAfter > mine.max) throw new CareerError(`선수단은 최대 ${mine.max}명입니다`);
-  if (myAfter < mine.min) throw new CareerError(`선수가 최소 ${mine.min}명 있어야 합니다`);
+  if (myAfter < mine.min && myAfter < rosterOf(s, s.myTeam).length) throw new CareerError(`선수단은 최소 ${mine.min}명을 유지해야 합니다`);
   if (theirAfter > theirs.max) throw new CareerError(`${s.teams[teamId].name} 선수단이 가득 찹니다`);
   if (theirAfter < Math.max(AI_MIN_ROSTER, theirs.min)) throw new CareerError(`${s.teams[teamId].name}은(는) 선수가 너무 적어져서 거절합니다`);
   const ev = evaluateTrade(s, teamId, myIds, theirIds, cash);

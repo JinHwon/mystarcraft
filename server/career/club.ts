@@ -93,6 +93,12 @@ function closeOffer(s: CareerState, o: TransferOffer, result: OfferLog["result"]
   logOffer(s, { player: o.player, team: o.team, fee, dir: "out", result, note });
 }
 
+/** 이미 우리 팀을 떠난 선수(이적·방출·트레이드·B팀 등)에게 남은 제안·이적시장 등록을 정리 */
+export function pruneOffers(s: CareerState) {
+  for (const o of (s.offers ?? []).filter(x => s.players[x.player]?.team !== s.myTeam)) closeOffer(s, o, "closed", "선수가 팀을 떠남");
+  if (s.listings?.some(l => s.players[l.player]?.team !== s.myTeam)) s.listings = s.listings.filter(l => s.players[l.player]?.team === s.myTeam);
+}
+
 /** 우리 선수가 팀을 떠나면 그 선수에게 온 다른 제안·이적시장 등록을 정리 */
 function playerLeft(s: CareerState, pid: number, note: string) {
   for (const o of (s.offers ?? []).filter(x => x.player === pid)) closeOffer(s, o, "closed", note);
@@ -175,7 +181,7 @@ function weeklyOffers(s: CareerState) {
     }
   }
   // 등록하지 않은 선수: 가끔 (이적 희망 선수에게 잘 옴). 2부 팀이면 1부 구단들이 유망주를 자주 노림
-  if (mine.length <= rosterLimits(s, s.myTeam).min + 1) return;
+  if (mine.length <= rosterLimits(s, s.myTeam).min) return;
   const b2 = myDiv(s) === 2;
   const attempts = rand() < (b2 ? 0.6 : 0.4) ? (rand() < 0.35 ? 2 : 1) : 0;
   const listed = new Set((s.listings ?? []).map(l => l.player));
@@ -199,7 +205,7 @@ function weeklyOffers(s: CareerState) {
 function weeklyPlayerRequests(s: CareerState) {
   const mine = rosterOf(s, s.myTeam);
   // 우리 선수 → 다른 팀
-  if (mine.length > rosterLimits(s, s.myTeam).min + 1 && rand() < 0.15) {
+  if (mine.length > rosterLimits(s, s.myTeam).min && rand() < 0.15) {
     const pool = mine.filter(p => !(s.offers ?? []).some(o => o.player === p.id));
     const weights = pool.map(p => (p.wantsOut ? 4 : 0) + ((p.morale ?? 70) < 50 ? 2 : 0) + Math.max(0, formMul(p) - 1.1) * 10 + 0.2);
     const target = pickWeighted(pool, weights);
@@ -767,7 +773,7 @@ export function respondOffer(s: CareerState, offerId: number, action: "accept" |
     if (s.live) throw new CareerError("경기 중에는 선수를 보낼 수 없습니다");
     if (p.team !== s.myTeam) { closeOffer(s, o, "closed", "선수가 이미 팀을 떠남"); throw new CareerError("이미 팀을 떠난 선수입니다"); }
     const min = rosterLimits(s, s.myTeam).min;
-    if (rosterOf(s, s.myTeam).length <= min) throw new CareerError(`선수가 최소 ${min}명은 있어야 합니다${myDiv(s) === 2 ? " (2부 리그 규정)" : ""}`);
+    if (rosterOf(s, s.myTeam).length <= min) throw new CareerError(`선수단은 최소 ${min}명을 유지해야 합니다`);
     if (rosterOf(s, o.team).length >= rosterLimits(s, o.team).max) throw new CareerError(`${team.name} 선수단이 가득 찼습니다`);
     // 조금 모자라면 이적 희망·잘 안 쓰는 선수를 팔거나 내보내 마련
     if (team.money < price) raiseFunds(s, o.team, price, p.id);

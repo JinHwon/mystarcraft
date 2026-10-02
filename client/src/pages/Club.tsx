@@ -159,7 +159,7 @@ function OffersTab({ s }: { s: CareerState }) {
   const [fees, setFees] = useState<Record<number, number>>({});
   const [open, setOpen] = useState<number | null>(null);
   // 같은 선수에게 온 제안끼리 모아서 (금액 높은 순)
-  const offers = [...(s.offers ?? [])].sort((a, b) => a.player - b.player || b.fee - a.fee);
+  const offers = (s.offers ?? []).filter(o => s.players[o.player]?.team === s.myTeam).sort((a, b) => a.player - b.player || b.fee - a.fee);
   const listings = (s.listings ?? []).filter(l => s.players[l.player]?.team === s.myTeam);
   const priceOf = (pid: number) => listings.find(l => l.player === pid)?.price;
   return (

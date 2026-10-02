@@ -14,7 +14,7 @@ import {
   B_ROSTER_TARGET,
   B_TEAM_OFFSET,
   MAX_ROSTER,
-  MIN_ROSTER,
+  SQUAD_MIN,
   isWinnersSeason,
   matchSets,
   ageOf,
@@ -35,7 +35,7 @@ const KEEP_FREE_AGENTS = 18;
 
 /** 팀 인원 한도 (2부는 최소 8명) */
 export function rosterLimits(s: CareerState, team: number) {
-  return divOf(s, team) === 2 ? { min: B_MIN_ROSTER, max: B_MAX_ROSTER } : { min: MIN_ROSTER, max: MAX_ROSTER };
+  return divOf(s, team) === 2 ? { min: B_MIN_ROSTER, max: B_MAX_ROSTER } : { min: SQUAD_MIN, max: MAX_ROSTER };
 }
 
 /** 우리 구단의 B팀 (1부 구단 감독일 때) */
@@ -98,8 +98,10 @@ function assign(s: CareerState, p: CPlayer, team: number) {
  */
 export function fillBRosters(s: CareerState, initial = false) {
   const need = new Map<number, number>();
-  for (const t of divTeams(s, 2)) {
-    const target = t.id === s.myTeam && !initial ? B_MIN_ROSTER : B_ROSTER_TARGET;
+  // 우리 1부 팀도 최소 인원(계약 만료·은퇴로 줄었을 때)까지
+  const mine1 = !initial && divOf(s, s.myTeam) === 1 ? [s.teams[s.myTeam]] : [];
+  for (const t of [...divTeams(s, 2), ...mine1]) {
+    const target = t.id === s.myTeam && !initial ? rosterLimits(s, t.id).min : B_ROSTER_TARGET;
     const n = target - rosterOf(s, t.id).length;
     if (n > 0) need.set(t.id, n);
   }
@@ -128,7 +130,7 @@ export function fillBRosters(s: CareerState, initial = false) {
     const team = slots[i];
     if (team === undefined) return;
     assign(s, p, team);
-    if (team === s.myTeam && !initial) news(s, `📋 리그 규정(2부 최소 ${B_MIN_ROSTER}명): ${p.name} 선수가 우리 팀에 배정되었습니다`);
+    if (team === s.myTeam && !initial) news(s, `📋 리그 규정(선수단 최소 ${rosterLimits(s, team).min}명): ${p.name} 선수가 우리 팀에 배정되었습니다`);
   });
 }
 
@@ -192,7 +194,7 @@ export function sendToB(s: CareerState, pid: number) {
   if (b === undefined) throw new CareerError("우리 구단 B팀이 없습니다 (1부 구단 감독일 때만 가능)");
   if (!p || p.team !== s.myTeam) throw new CareerError("우리 선수가 아닙니다");
   if (s.live) throw new CareerError("경기 중에는 바꿀 수 없습니다");
-  if (rosterOf(s, s.myTeam).length <= rosterLimits(s, s.myTeam).min) throw new CareerError(`선수가 최소 ${rosterLimits(s, s.myTeam).min}명은 있어야 합니다`);
+  if (rosterOf(s, s.myTeam).length <= rosterLimits(s, s.myTeam).min) throw new CareerError(`선수단은 최소 ${rosterLimits(s, s.myTeam).min}명을 유지해야 합니다`);
   if (rosterOf(s, b).length >= B_MAX_ROSTER) throw new CareerError(`${s.teams[b].name} 선수단이 가득 찼습니다 (최대 ${B_MAX_ROSTER}명)`);
   p.team = b;
   p.action = null;
