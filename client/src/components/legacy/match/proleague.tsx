@@ -188,7 +188,7 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose, held, onHo
   const sRef = useRef(s);
   sRef.current = s;
   const [snap, setSnap] = useState(() => s.players);
-  const setIdx = (n: number) => { setIdxRaw(n); setView(null); setSnap(sRef.current.players); try { sessionStorage.setItem(watchedKey, String(n)); } catch { /* 무시 */ } };
+  const setIdx = (n: number, keepSnap = false) => { setIdxRaw(n); setView(null); if (!keepSnap) setSnap(sRef.current.players); try { sessionStorage.setItem(watchedKey, String(n)); } catch { /* 무시 */ } };
   /** 세트 목록에서 누른 (이미 치른) 세트 */
   const [view, setView] = useState<number | null>(null);
   /** 다음 세트를 미리 받아 둠 → Next 를 누르면 바로 중계 */
@@ -247,7 +247,18 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose, held, onHo
         key={idx} s={s} stageName={stageName} lp={lp} rp={rp} mapId={set.mapId} set={set} leftIsA={leftIsA}
         score={score(idx)} leftLogo={logo(leftTeam)} rightLogo={logo(rightTeam)} speed={speed} setSpeed={setSpeed}
         onClose={onClose}
-        onDone={() => { if (over && idx === results.length - 1) setMode("result"); else { setIdx(idx + 1); setMode("preview"); } }}
+        onDone={() => {
+          if (over && idx === results.length - 1) { setMode("result"); return; }
+          const n = idx + 1;
+          // 위너스리그: 안내 화면 없이 바로 — 우리가 졌으면 다음 선수 고르기, 이겼으면 상대 다음 선수가 나온 경기 전 화면
+          if (winners && !myWon(idx)) { setIdx(n); setMode("ace"); return; }
+          if (winners && n >= results.length) {
+            setSnap(sRef.current.players);
+            fetchSet(undefined, () => { setIdx(n, true); setMode("preview"); });
+            return;
+          }
+          setIdx(n); setMode("preview");
+        }}
       />
     );
   }

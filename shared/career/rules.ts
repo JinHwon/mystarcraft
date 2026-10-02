@@ -64,12 +64,12 @@ export const COND_LABELS = ["", "최악", "짜증", "나쁨", "저조", "보통"
 export const WEEKLY_COND_RECOVERY = 10;
 export const condLabel = (cond: number) => COND_LABELS[Math.max(1, Math.min(10, Math.ceil(cond / 10)))];
 /**
- * 컨디션에 따른 경기력 배율: 100% 가 원래 능력치, 낮을수록 점점 더 크게 줄어듦
- * 90% → 0.97, 80% → 0.92, 60% → 0.82, 40% → 0.68, 10% 이하 → 0.4
+ * 컨디션에 따른 경기력 배율: 100% 가 원래 능력치, 조금만 떨어져도 크게 줄어듦
+ * 95% → 0.955, 90% → 0.90, 85% → 0.835, 80% → 0.76 (실전에서 거의 못 씀), 70% → 0.58, 60% → 0.36, 그 아래 0.3
  */
 export function condMultiplier(cond: number): number {
   const d = COND_MAX - Math.max(COND_MIN, Math.min(COND_MAX, cond));
-  return Math.max(0.4, 1 - d * 0.003 - d * d * 0.00004);
+  return Math.max(0.3, 1 - d * 0.008 - d * d * 0.0002);
 }
 
 /** 이번 주 포텐셜 폭발 배율 (없으면 undefined) */

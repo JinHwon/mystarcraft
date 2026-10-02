@@ -33,12 +33,12 @@ export function aiShopping(s: CareerState) {
       .slice(0, 6)
       .map(x => x.p);
 
-    // 1) 컨디션: 지친 주전에게 비타비타 (+3)
+    // 1) 컨디션: 지친 주전에게 비타비타 (+3) — 컨디션이 조금만 떨어져도 경기력이 크게 줄어서 90% 아래면 챙김
     const vita = ITEM_BY_KEY.vitavita;
-    // 이번 주 예산의 40%까지 (나머지는 장비·포션)
-    let condBudget = budget * 0.4;
+    // 이번 주 예산의 60%까지 (나머지는 장비·포션)
+    let condBudget = budget * 0.6;
     for (const p of core) {
-      while (gearCond(p) < 70 && p.cond < COND_MAX && condBudget >= vita.price) {
+      while (gearCond(p) < 90 && p.cond < COND_MAX && condBudget >= vita.price) {
         spend(vita.price);
         condBudget -= vita.price;
         p.cond = clampCond(p.cond + (vita.cond ?? 3));

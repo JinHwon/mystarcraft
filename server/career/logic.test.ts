@@ -1267,8 +1267,10 @@ describe("컨디션·스나이핑·스폰서 협상력", () => {
   it("컨디션이 낮을수록 능력치가 크게 깎인다 (난조 -40 이면 큰 차이)", async () => {
     const { condMultiplier } = await import("@shared/career/rules");
     expect(condMultiplier(100)).toBe(1);
-    expect(condMultiplier(60)).toBeLessThan(0.85);
-    expect(condMultiplier(10)).toBeLessThan(0.45);
+    expect(condMultiplier(90)).toBeCloseTo(0.9, 2);
+    expect(condMultiplier(80)).toBeLessThan(0.8);
+    expect(condMultiplier(60)).toBeLessThan(0.45);
+    expect(condMultiplier(10)).toBeLessThan(0.35);
     expect(condMultiplier(90)).toBeGreaterThan(condMultiplier(80));
   });
 
