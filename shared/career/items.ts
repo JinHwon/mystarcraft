@@ -31,6 +31,8 @@ export interface ItemDef {
    * potion: 포션 (즉시 사용, 능력치 무작위 변화)
    */
   kind: "equip" | "match" | "instant" | "potion" | "stock";
+  /** 한 번 구입할 때 받는 개수 (비타비타 3개) */
+  pack?: number;
   /** 상점에서 팔지 않음 (치어풀: 이벤트 행동에서 팬에게 받음) */
   notForSale?: boolean;
   uses?: number;
@@ -50,7 +52,7 @@ const st = (control = 0, attack = 0, harass = 0, strategy = 0, supply = 0, defen
 
 export const ITEMS: ItemDef[] = [
   // ── 소모품 ──
-  { key: "vitavita", cat: "소모품", img: "0", name: "비타비타", desc: ["힘들고 지칠 때", "비타민을 마시면 기운이 날거다."], effect: ["즉시 컨디션 ＋3"], price: 40, kind: "stock", cond: 3 },
+  { key: "vitavita", cat: "소모품", img: "0", name: "비타비타", desc: ["힘들고 지칠 때", "비타민을 마시면 기운이 날거다."], effect: ["즉시 컨디션 ＋3", "한 번 구입에 3개"], price: 40, kind: "stock", cond: 3, pack: 3 },
   { key: "gum", cat: "소모품", img: "1", name: "츄잉껌", desc: ["긴장하지 말고 껌을 씹으며", "맘 편하게 경기해보자."], effect: ["패했을 경우", "능력치 감소 －66%"], price: 50, kind: "match" },
   { key: "ceremony", cat: "소모품", img: "2", name: "세레모니", desc: ["이번 경기를 승리한다면", "이런 춤을 춰보는건 어때?"], effect: ["소지금 ＋150만원", "승리시 전원 컨디션 ＋1"], price: 80, kind: "match" },
   { key: "sniping", cat: "소모품", img: "3", name: "스나이핑", desc: ["상대의 카드는 뻔하다", "그렇다면 승리는 뻔한거지."], effect: ["상대 선수 예측시", "이길 확률 ↑"], price: 100, kind: "match" },
@@ -104,8 +106,14 @@ export const slotOf = (item: ItemDef): EquipSlot | undefined => SLOT_OF[item.cat
 /** 그림 경로 (img 에 확장자가 있으면 그대로, 없으면 원작 .gif) */
 export const itemImg = (item: ItemDef) => ({ dir: `아이템/${item.cat}`, name: item.img });
 
-/** 아이템 한 종류 최대 보유 개수 */
-export const ITEM_STACK_MAX = 99;
+/** 장비 한 종류 최대 보유 개수 */
+export const EQUIP_STACK_MAX = 99;
+/** 소모품(경기 아이템·비타비타) 한 종류 최대 보유 개수 */
+export const CONSUMABLE_STACK_MAX = 999;
+/** 이 아이템을 최대 몇 개까지 가질 수 있는지 */
+export const stackMax = (item: ItemDef) => (item.kind === "equip" ? EQUIP_STACK_MAX : CONSUMABLE_STACK_MAX);
+/** 한 번 구입할 때 받는 개수 */
+export const packOf = (item: ItemDef) => item.pack ?? 1;
 /** 사 두었다가 쓰는 아이템 (경기 아이템·비타비타·장비) */
 export const isStackable = (item: ItemDef) => item.kind === "match" || item.kind === "stock" || item.kind === "equip";
 /** 장비 능력치 합산 상한 (경기 중) */

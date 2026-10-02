@@ -482,7 +482,7 @@ export const careerRouter = router({
 
   /** 아이템 구입 (장비·즉시·포션은 target 선수에게 바로 사용) */
   buyItem: protectedProcedure
-    .input(z.object({ key: z.string(), target: z.number().int().optional(), qty: z.number().int().min(1).max(99).optional() }))
+    .input(z.object({ key: z.string(), target: z.number().int().optional(), qty: z.number().int().min(1).max(999).optional() }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => buyItem(s, input.key, input.target, input.qty ?? 1))),
 
   /** 보관함의 장비를 선수에게 장착 */
