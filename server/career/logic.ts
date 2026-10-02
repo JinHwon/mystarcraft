@@ -51,7 +51,7 @@ import { aiShopping } from "./aiShop";
 import { broadcastRights, gateIncome, regularSeasonPrize, weeklyGoods } from "./income";
 import { applyPromo, ensureDivisions, fillBRosters, promoMoves, rosterLimits, scheduleDivision, schedulePromo } from "./divisions";
 import { createMsl, mslDueThisWeek, mslPlayersThisWeek, nominationPending, runMslWeek, type MslReport } from "./msl";
-import { ITEM_BY_KEY, ITEM_STACK_MAX, isStackable, slotOf } from "@shared/career/items";
+import { ITEM_BY_KEY, isStackable, packOf, slotOf, stackMax } from "@shared/career/items";
 import { ensurePotential, retirements, rookies } from "./generation";
 import { addManagerExp, mainSponsorPay, book, ensureClub, newSeasonClub, pay, seasonEndClub, weeklyClub } from "./club";
 import { cheerChance, defaultContract, popularity, scoutPrice } from "@shared/career/contract";
@@ -725,7 +725,8 @@ export function releasePlayer(s: CareerState, pid: number) {
 export interface BuyResult { message: string; delta?: Partial<Record<string, number>> }
 
 /**
- * 아이템 구입. 경기 아이템·비타비타·장비는 보관함에 (종류마다 최대 99개), 장비는 target 을 주면 산 것 하나를 바로 장착
+ * 아이템 구입. 경기 아이템·비타비타·장비는 보관함에 (종류마다 소모품 999개·장비 99개), 장비는 target 을 주면 산 것 하나를 바로 장착
+ * qty 는 구입 횟수 (비타비타는 한 번에 3개)
  * 즉시 사용·포션은 선수(target)에게 바로 쓴다
  */
 export function buyItem(s: CareerState, key: string, target?: number, qty = 1): BuyResult {
@@ -733,17 +734,18 @@ export function buyItem(s: CareerState, key: string, target?: number, qty = 1): 
   if (!it || it.notForSale) throw new CareerError("구입 불가능 품목입니다");
   const me = s.teams[s.myTeam];
   if (isStackable(it)) {
-    const n = Math.max(1, Math.min(ITEM_STACK_MAX, Math.floor(qty)));
+    const n = Math.max(1, Math.min(stackMax(it), Math.floor(qty)));
+    const units = n * packOf(it);
     const owned = s.inventory?.[key] ?? 0;
-    if (owned + n > ITEM_STACK_MAX) throw new CareerError(`${it.name}은(는) 최대 ${ITEM_STACK_MAX}개까지 가질 수 있습니다 (보유 ${owned}개)`);
+    if (owned + units > stackMax(it)) throw new CareerError(`${it.name}은(는) 최대 ${stackMax(it)}개까지 가질 수 있습니다 (보유 ${owned}개)`);
     if (me.money < it.price * n) throw new CareerError("소지금이 부족합니다");
-    pay(s, "아이템", -it.price * n, `${it.name}${n > 1 ? ` ×${n}` : ""}`);
-    s.inventory = { ...s.inventory, [key]: (s.inventory?.[key] ?? 0) + n };
+    pay(s, "아이템", -it.price * n, `${it.name}${n > 1 ? ` ×${n}` : ""}${packOf(it) > 1 ? ` (${units}개)` : ""}`);
+    s.inventory = { ...s.inventory, [key]: owned + units };
     if (it.kind === "equip" && target !== undefined) {
       equipItem(s, key, target);
       return { message: n > 1 ? `${n}개 구입, 1개 장착하였습니다` : "구입하여 장착하였습니다" };
     }
-    return { message: n > 1 ? `${n}개 구입하였습니다` : "구입하였습니다" };
+    return { message: units > 1 ? `${units}개 구입하였습니다 (보유 ${owned + units}개)` : "구입하였습니다" };
   }
   if (me.money < it.price) throw new CareerError("소지금이 부족합니다");
   const p = target !== undefined ? s.players[target] : undefined;

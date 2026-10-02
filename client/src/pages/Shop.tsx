@@ -6,7 +6,7 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { STAT_LABELS, type StatKey } from "@shared/gameConstants";
-import { ITEMS, ITEM_CATS, ITEM_STACK_MAX, SLOT_NAMES, isStackable, itemImg, slotOf, type ItemCat, type ItemDef, type EquipSlot } from "@shared/career/items";
+import { ITEMS, ITEM_CATS, SLOT_NAMES, isStackable, packOf, stackMax, itemImg, slotOf, type ItemCat, type ItemDef, type EquipSlot } from "@shared/career/items";
 import { totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
 import { rosterOf } from "@shared/career/view";
 import { useCareer, useCareerPatch } from "@/lib/career";
@@ -158,17 +158,17 @@ function ShopScreen({ s }: { s: CareerState }) {
         )}
         {stackable && (
           <div className="flex items-center justify-between border border-neutral-600 px-2 py-1.5 text-[12.5px]">
-            <span className="text-neutral-400">구입 수량</span>
+            <span className="text-neutral-400">구입 수량{packOf(item) > 1 ? <span className="text-[#bff5c6]"> (한 번에 {packOf(item)}개 → {qty * packOf(item)}개)</span> : null}</span>
             <div className="flex items-center gap-1">
               {[-5, -1].map(d => <button key={d} onClick={() => setQty(q => Math.max(1, q + d))} className="border border-neutral-600 px-2">{d}</button>)}
               <span className="w-10 text-center text-[#ffe45c] text-[15px]">{qty}</span>
-              {[1, 5].map(d => <button key={d} onClick={() => setQty(q => Math.max(1, Math.min(ITEM_STACK_MAX - owned, q + d)))} className="border border-neutral-600 px-2">+{d}</button>)}
+              {[1, 5].map(d => <button key={d} onClick={() => setQty(q => Math.max(1, Math.min(Math.floor((stackMax(item) - owned) / packOf(item)), q + d)))} className="border border-neutral-600 px-2">+{d}</button>)}
             </div>
           </div>
         )}
         {isEquip ? (
           <>
-            <div className="text-center text-[12px] text-neutral-300">구입한 장비는 보관함에 쌓입니다 (최대 {ITEM_STACK_MAX}개) · 선수를 고르고 장착하세요 · {SLOT_NAMES[slotOf(item) as EquipSlot]} 칸</div>
+            <div className="text-center text-[12px] text-neutral-300">구입한 장비는 보관함에 쌓입니다 (최대 {stackMax(item)}개) · 선수를 고르고 장착하세요 · {SLOT_NAMES[slotOf(item) as EquipSlot]} 칸</div>
             <PlayerPanel p={target !== undefined ? s.players[target] : undefined} color="#8fd0ff" empty="장착할 선수를 고르세요" />
             <TargetList s={s} item={item} sel={target} onSel={setTarget} />
             <button disabled={target === undefined || equip.isPending || buy.isPending} onClick={doEquip}
