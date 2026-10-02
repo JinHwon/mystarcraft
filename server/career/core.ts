@@ -12,7 +12,9 @@ import {
   STAT_MAX_CAREER,
   STAT_MIN,
   burstChance,
-  slumpChance,
+  SLUMP_CHANCE,
+  slumpCond,
+  slumpOn,
   burstOf,
   condMultiplier,
   totalOf,
@@ -78,6 +80,8 @@ export interface SetMods {
   all?: number;
   /** 능력치 배율 (스나이핑 적중) */
   mul?: number;
+  /** 컨디션 난조 (그 주 경기 컨디션 -40, 최저 10) */
+  slump?: boolean;
   /** 능력치별 추가 (작전 메모) */
   bonus?: Partial<Record<StatKey, number>>;
   /** 패배 시 능력치 감소 완화 (츄잉껌) */
@@ -87,7 +91,8 @@ export interface SetMods {
 /** 세트에 실제로 들어가는 능력치 (장비·컨디션·세트 아이템). 화면의 condStats 와 같은 계산 */
 export function effStats(p: CPlayer, mod?: SetMods): Record<StatKey, number> {
   const g = gearStats(p, Object.fromEntries(STAT_KEYS.map(s => [s, (mod?.all ?? 0) + (mod?.bonus?.[s] ?? 0)])));
-  const k = condMultiplier(gearCond(p)) * (mod?.mul ?? 1);
+  const cond = mod?.slump ? slumpCond(gearCond(p)) : gearCond(p);
+  const k = condMultiplier(cond) * (mod?.mul ?? 1);
   return Object.fromEntries(STAT_KEYS.map(s => [s, g[s] * k])) as Record<StatKey, number>;
 }
 
@@ -172,7 +177,8 @@ function wearEquip(s: CareerState, p: CPlayer) {
 }
 
 /**
- * 주가 시작될 때 이번 주 포텐셜이 터질 선수(능력치 110~120%)와 컨디션 난조 선수(60~90%)를 정함 (엔트리 화면부터 보임)
+ * 주가 시작될 때 이번 주 포텐셜이 터질 선수(능력치 110~120%)와 컨디션 난조 선수(컨디션 -40, 최저 10)를 정함 (엔트리 화면부터 보임)
+ * 난조는 컨디션과 관계없이 무작위
  */
 export function rollWeekBursts(s: CareerState) {
   const wk = `${s.season}-${s.week}`;
@@ -180,20 +186,28 @@ export function rollWeekBursts(s: CareerState) {
   s.burstWeek = wk;
   for (const p of s.players) {
     if (p.team < 0) continue;
-    const r = rand(), cond = gearCond(p);
-    if (r < burstChance(cond)) p.burst = { week: wk, mul: Math.round((1.1 + rand() * 0.1) * 100) / 100 };
-    else if (r < burstChance(cond) + slumpChance(cond)) p.burst = { week: wk, mul: Math.round((0.6 + rand() * 0.3) * 100) / 100 };
-    else delete p.burst;
+    delete p.slump;
+    if (rand() < burstChance(gearCond(p))) p.burst = { week: wk, mul: Math.round((1.1 + rand() * 0.1) * 100) / 100 };
+    else {
+      delete p.burst;
+      if (rand() < SLUMP_CHANCE) p.slump = wk;
+    }
   }
 }
-const withBurst = (mod: SetMods | undefined, burst: number | undefined): SetMods | undefined => (burst ? { ...mod, mul: (mod?.mul ?? 1) * burst } : mod);
+/** 이번 주 상태(포텐셜 폭발 배율·컨디션 난조)를 세트 효과에 더함 */
+const withWeek = (s: CareerState, p: CPlayer, mod?: SetMods): SetMods | undefined => {
+  const burst = burstOf(s, p), slump = slumpOn(s, p);
+  if (!burst && !slump) return mod;
+  return { ...mod, ...(burst ? { mul: (mod?.mul ?? 1) * burst } : {}), ...(slump ? { slump: true } : {}) };
+};
 
 export function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, withHighlights: boolean, withTimeline = false, mods?: { a?: SetMods; b?: SetMods }): PlayedSet {
   const m = mapView(mapId);
   const burst = { a: burstOf(s, a), b: burstOf(s, b) };
+  const slump = { a: slumpOn(s, a), b: slumpOn(s, b) };
   const r = simulateSet(
-    { id: a.id + 1, name: a.name, race: a.race, stats: effStats(a, withBurst(mods?.a, burst.a)), fatigue: 100 },
-    { id: b.id + 1, name: b.name, race: b.race, stats: effStats(b, withBurst(mods?.b, burst.b)), fatigue: 100 },
+    { id: a.id + 1, name: a.name, race: a.race, stats: effStats(a, withWeek(s, a, mods?.a)), fatigue: 100 },
+    { id: b.id + 1, name: b.name, race: b.race, stats: effStats(b, withWeek(s, b, mods?.b)), fatigue: 100 },
     mapAdvantage(mapId, a.race, b.race),
     // 원작 100 기준 → 엔진 50 기준
     { rushDistance: m.rush / 2, resources: m.res / 2, complexity: m.complexity / 2 },
@@ -204,12 +218,14 @@ export function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, w
   const fx = afterSet(s, a, b, aWin, mods, r.content, r.duration);
   // 중계: 포텐셜이 터진 선수 해설
   for (const [side, p] of [[1, a], [2, b]] as const) {
-    const b = burst[side === 1 ? "a" : "b"];
-    if (b && r.timeline) r.timeline.lines.unshift({ t: 0, side, text: b >= 1 ? `${p.name} 선수, 오늘 뭔가 다릅니다! 포텐셜이 터졌어요!` : `${p.name} 선수, 오늘은 몸이 무거워 보이네요. 컨디션 난조입니다.` });
+    const k = side === 1 ? "a" : "b";
+    if (burst[k] && r.timeline) r.timeline.lines.unshift({ t: 0, side, text: `${p.name} 선수, 오늘 뭔가 다릅니다! 포텐셜이 터졌어요!` });
+    if (slump[k] && r.timeline) r.timeline.lines.unshift({ t: 0, side, text: `${p.name} 선수, 오늘은 몸이 무거워 보이네요. 컨디션 난조입니다.` });
   }
   return {
     mapId, a: a.id, b: b.id, winner: aWin ? "a" : "b", duration: r.duration, fx,
     burst: burst.a || burst.b ? burst : undefined,
+    slump: slump.a || slump.b ? slump : undefined,
     highlights: withHighlights ? r.highlights : undefined,
     timeline: r.timeline,
   };
@@ -217,7 +233,7 @@ export function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, w
 
 /** 빠른 판정 승패: 실전 능력치 차이와 맵 종족 상성으로 (a 가 이기면 true) */
 export function quickWin(s: CareerState, a: CPlayer, b: CPlayer, mapId: number): boolean {
-  const pa = totalOf(effStats(a, withBurst(undefined, burstOf(s, a)))), pb = totalOf(effStats(b, withBurst(undefined, burstOf(s, b))));
+  const pa = totalOf(effStats(a, withWeek(s, a))), pb = totalOf(effStats(b, withWeek(s, b)));
   const adv = a.race === b.race ? 0 : (matchupValue(mapId, a.race, b.race) - 50) / 100;
   const pWin = 1 / (1 + Math.exp(-((pa - pb) / 450 + adv * 2.2)));
   return rand() < pWin;

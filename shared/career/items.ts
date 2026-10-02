@@ -4,7 +4,7 @@
  * 금액은 이 게임 경제(만원)에 맞춘 값이다. (포션은 횟수 제한이 없어, 돈으로 능력치를 너무 싸게 사지 못하게 비싸게)
  */
 import { STAT_KEYS, type StatKey } from "../gameConstants";
-import type { CPlayer } from "./rules";
+import { slumpCond, slumpOn, type CPlayer } from "./rules";
 
 export type ItemCat = "소모품" | "마우스" | "키보드" | "모니터" | "기타" | "포션";
 export const ITEM_CATS: ItemCat[] = ["소모품", "마우스", "키보드", "모니터", "기타", "포션"];
@@ -157,4 +157,9 @@ export function setItemExtra(key: string | undefined): Partial<Record<StatKey, n
 /** 경기에 쓰이는 컨디션 (1~10) */
 export function gearCond(p: CPlayer): number {
   return Math.max(1, Math.min(100, p.cond + equipCond(p)));
+}
+/** 이번 주 경기 컨디션: 장비 반영 + 컨디션 난조면 -40 (최저 10) */
+export function matchCond(p: CPlayer, s?: { season: number; week: number }): number {
+  const c = gearCond(p);
+  return s && slumpOn(s, p) ? slumpCond(c) : c;
 }

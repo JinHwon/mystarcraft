@@ -73,15 +73,22 @@ export function burstOf(s: { season: number; week: number }, p: CPlayer): number
   return p.burst && p.burst.week === `${s.season}-${s.week}` ? p.burst.mul : undefined;
 }
 
-/** 이번 주 상태 표시: 포텐셜 폭발(배율 > 1) 또는 컨디션 난조(배율 < 1) */
+/** 이번 주 포텐셜 폭발 표시 */
 export function burstLabel(mul: number): { icon: string; name: string; color: string } {
   return mul >= 1 ? { icon: "🔥", name: "포텐셜 폭발", color: "#ffb84d" } : { icon: "😵", name: "컨디션 난조", color: "#8fb8ff" };
 }
 
-/** 컨디션 난조 확률 (주마다, 컨디션이 나쁠수록 잘 걸림) — 걸리면 그 주 경기 능력치 60~90% */
-export function slumpChance(cond: number): number {
-  return cond >= 90 ? 0.03 : cond >= 70 ? 0.05 : cond >= 50 ? 0.08 : 0.12;
+/** 컨디션 난조: 주마다 컨디션과 관계없이 이 확률로 걸림 (포텐셜 폭발과 겹치지 않음) */
+export const SLUMP_CHANCE = 0.05;
+/** 컨디션 난조면 그 주 경기 컨디션이 이만큼 떨어짐 (최저 10) — 100 → 60, 90 → 50, 40 이하 → 10 */
+export const SLUMP_COND = 40;
+export const SLUMP_MIN_COND = 10;
+/** 이번 주 컨디션 난조인지 */
+export function slumpOn(s: { season: number; week: number }, p: CPlayer): boolean {
+  return p.slump === `${s.season}-${s.week}`;
 }
+/** 난조를 반영한 컨디션 */
+export const slumpCond = (cond: number) => Math.max(SLUMP_MIN_COND, cond - SLUMP_COND);
 
 /** 포텐셜 폭발 확률 (주마다, 컨디션이 좋을수록 잘 터짐) — 터지면 그 주 경기 능력치 110~120% */
 export function burstChance(cond: number): number {
@@ -94,7 +101,7 @@ export interface ActionDef { key: ActionKey; name: string; emoji: string; ap: nu
 export const ACTIONS: ActionDef[] = [
   { key: "train", name: "훈련", emoji: "🏋️", ap: 20, money: 0, desc: "연습을 열심히 합니다. 능력치가 오르지만 지칩니다. (컨디션 -3~5)" },
   { key: "rest", name: "휴식", emoji: "😴", ap: 10, money: 0, desc: "휴식을 취합니다. 쉬면서 컨디션을 회복합니다. (컨디션 +5)" },
-  { key: "event", name: "이벤트", emoji: "🎤", ap: 20, money: 0, desc: "팬미팅을 합니다. 구단 자금을 벌고, 인기가 많을수록 치어풀을 받을 확률이 높습니다. 한 주에 여러 명이 열면 팬이 나뉘어 수익이 줄어듭니다. (컨디션 -3~5)" },
+  { key: "event", name: "이벤트", emoji: "🎤", ap: 20, money: 0, desc: "팬미팅을 합니다. 구단 자금을 벌고, 인기가 많을수록 치어풀을 받을 확률이 높습니다. 한 주에 여러 명이 열면 팬이 나뉘어 수익이 줄어듭니다. 연습을 못 해 능력치도 조금 떨어집니다. (컨디션 -3~5)" },
 ];
 /** 선수별 주당 행동력 (선수마다 매주 받고, 쓰지 않으면 시즌 동안 계속 쌓임. 새 시즌에 다시 시작) */
 export const WEEKLY_AP = 20;
@@ -126,6 +133,8 @@ export interface CPlayer {
   ap?: number;
   /** 이번 주 포텐셜 폭발(배율 1.1~1.2) 또는 컨디션 난조(0.6~0.9) — 주 시작 때 정해짐, 그 주 경기 동안 능력치 배율 */
   burst?: { week: string; mul: number };
+  /** 컨디션 난조인 주 (시즌-주): 그 주 경기 컨디션 -40 (최저 10) */
+  slump?: string;
   /** 우승 경력 */
   titles?: string[];
   /** 종족별 통산 전적 [승, 패] */
@@ -146,6 +155,10 @@ export interface CPlayer {
   wantsOut?: boolean;
   /** 이번 시즌 프로리그 출전 경기 수 */
   sApps?: number;
+  /** 프로리그(1부·2부·승강전·포스트시즌)에 연속으로 못 나간 주 수 (정규시즌만 셈, 개인리그 출전은 제외) */
+  benchWeeks?: number;
+  /** 마지막으로 프로리그에 나간 주 (시즌-주) */
+  lastProWeek?: string;
   /** 성장 한계 (능력치 합) */
   potential?: number;
   /** 은퇴한 시즌 (팀 번호는 -1) */
@@ -314,6 +327,8 @@ export interface SetResult {
   ceremony?: number;
   /** 포텐셜 폭발 (그 세트 능력치 배율, 예: 1.15) */
   burst?: { a?: number; b?: number };
+  /** 컨디션 난조였던 쪽 */
+  slump?: { a?: boolean; b?: boolean };
 }
 
 export interface CMatch {
@@ -409,12 +424,15 @@ export interface PlayerSnap {
   titles?: string[];
   /** 그 주 포텐셜 폭발 배율 */
   burst?: number;
+  /** 그 주 컨디션 난조 */
+  slump?: boolean;
 }
 export function snapOf(p: CPlayer, s?: { season: number; week: number }): PlayerSnap {
   const out: PlayerSnap = { cond: p.cond, stats: { ...p.stats } };
   if (p.titles?.length) out.titles = [...p.titles];
   const b = s ? burstOf(s, p) : undefined;
   if (b) out.burst = b;
+  if (s && slumpOn(s, p)) out.slump = true;
   return out;
 }
 
