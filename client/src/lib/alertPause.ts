@@ -8,6 +8,9 @@ let paused = false;
 const subs = new Set<() => void>();
 const set = (v: boolean) => { if (paused !== v) { paused = v; subs.forEach(f => f()); } };
 
+/** 지금 멈춘 상태인지 (타이머 안에서 다시 확인할 때) */
+export const isAlertsPaused = () => paused;
+
 export function useAlertsPaused(): boolean {
   return useSyncExternalStore(cb => { subs.add(cb); return () => subs.delete(cb); }, () => paused);
 }

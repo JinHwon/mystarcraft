@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { careerAlerts } from "@/lib/alerts";
-import { useAlertsPaused } from "@/lib/alertPause";
+import { isAlertsPaused, useAlertsPaused } from "@/lib/alertPause";
 import type { CareerState } from "@shared/career/rules";
 
 const SEEN_KEY = "mysc-seen-alerts";
@@ -25,26 +25,31 @@ export function Notifications({ s }: { s: CareerState }) {
   const [, navigate] = useLocation();
   const [open, setOpen] = useState(false);
   // 관전 중에는 멈췄다가, 관전을 마치면 그동안 생긴 알림을 띄움
+  // 주 진행 응답이 세이브에 먼저 반영되고 관전 화면은 그 직후에 뜨므로, 새 알림은 잠깐 기다렸다가 그때도 관전 중이 아니면 반영
   const paused = useAlertsPaused();
   const all = useMemo(() => careerAlerts(s), [s]);
-  const [held, setHeld] = useState(all);
-  useEffect(() => { if (!paused) setHeld(all); }, [all, paused]);
-  const alerts = paused ? held : all;
+  const [alerts, setAlerts] = useState(all);
   const [seen, setSeen] = useState(readSeen);
   const unseen = alerts.filter(a => !seen.has(a.key));
   // 새 중요 알림은 어느 화면에서든 팝업 (처음 불러올 때는 뱃지로만)
-  const known = useRef<Set<string> | null>(null);
+  const toasted = useRef<Set<string> | null>(null);
   useEffect(() => {
-    const keys = new Set(alerts.map(a => a.key));
-    if (known.current) {
-      for (const a of alerts) {
-        if (a.urgent && !known.current.has(a.key) && !seen.has(a.key)) {
-          toast(`${a.icon} ${a.text}`, { action: { label: "보기", onClick: () => navigate(a.to) }, duration: 6000 });
+    if (paused) return;
+    const first = toasted.current === null;
+    const id = setTimeout(() => {
+      if (isAlertsPaused()) return;
+      if (!first) {
+        for (const a of all) {
+          if (a.urgent && !toasted.current!.has(a.key) && !seen.has(a.key)) {
+            toast(`${a.icon} ${a.text}`, { action: { label: "보기", onClick: () => navigate(a.to) }, duration: 6000 });
+          }
         }
       }
-    }
-    known.current = keys;
-  }, [alerts]);
+      toasted.current = new Set([...(toasted.current ?? []), ...all.map(a => a.key)]);
+      setAlerts(all);
+    }, first ? 0 : 400);
+    return () => clearTimeout(id);
+  }, [all, paused]);
   const markAll = () => {
     const next = new Set([...seen, ...alerts.map(a => a.key)]);
     setSeen(next);
