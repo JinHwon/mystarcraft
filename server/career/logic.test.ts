@@ -1207,7 +1207,7 @@ describe("컨디션 난조", () => {
 });
 
 describe("결장 감각 저하·팬미팅 능력치", () => {
-  it("프로리그에 3주 이상 연속 못 나간 선수는 능력치가 줄고, 나간 선수는 결장 주 수가 0", async () => {
+  it("프로리그에 2주 이상 연속 못 나간 선수는 능력치가 줄고, 나간 선수는 결장 주 수가 0", async () => {
     const { benchDecay } = await import("./logic");
     const s = newCareer(0);
     const m = myPendingMatch(s);
@@ -1215,12 +1215,12 @@ describe("결장 감각 저하·팬미팅 능력치", () => {
     const played = s.players.filter(p => p.team >= 0 && p.lastProWeek === `${s.season}-${s.week - 1}`);
     expect(played.length).toBeGreaterThan(0);
     for (const p of played) expect(p.benchWeeks).toBe(0);
-    // 결장 2주째인 선수가 이번 주도 못 나가면 3주째 → 능력치 하락
+    // 결장 1주째인 선수가 이번 주도 못 나가면 2주째 → 능력치 하락
     const p = rosterOf(s, 1)[0];
-    p.benchWeeks = 2; p.lastProWeek = undefined;
+    p.benchWeeks = 1; p.lastProWeek = undefined;
     const before = totalOf(p.stats);
     benchDecay(s);
-    expect(p.benchWeeks).toBe(3);
+    expect(p.benchWeeks).toBe(2);
     expect(totalOf(p.stats)).toBeLessThan(before);
     // 이번 주에 나간 선수는 그대로
     const q = rosterOf(s, 2)[0];
