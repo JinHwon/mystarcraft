@@ -117,11 +117,38 @@ export function jobThreshold(powerRank: number): number {
   return Math.max(0, 85 - powerRank * 6);
 }
 
-/** 인기 (0~100): 능력치·통산 승수·레벨·우승 경력 */
+/**
+ * 커리어 명성: 개인리그(마이스타리그) 우승 위주
+ * 개인리그 우승 +20 · 준우승 +8 · 프로리그 우승 +5 · 2부 리그 1위 +2
+ */
+export function careerFame(p: CPlayer): number {
+  let v = 0;
+  for (const t of p.titles ?? []) {
+    if (t.includes("마이스타리그 우승")) v += 20;
+    else if (t.includes("마이스타리그 준우승")) v += 8;
+    else if (t.includes("프로리그 우승")) v += 5;
+    else if (t.includes("2부 리그 1위")) v += 2;
+    else v += 3;
+  }
+  return v;
+}
+
+/** 인기 (0~100): 능력치·통산 승수·레벨 + 커리어 명성(개인리그 우승 위주) */
 export function popularity(p: CPlayer): number {
-  const v = (totalOf(p.stats) - 4200) / 30 + p.wins * 0.4 + p.level * 2 + (p.titles?.length ?? 0) * 12;
+  const v = (totalOf(p.stats) - 4200) / 30 + p.wins * 0.4 + p.level * 2 + careerFame(p);
   return Math.max(0, Math.min(100, Math.round(v)));
 }
+/** 이벤트(팬미팅) 한 번 최대 수익 (만원) */
+export const EVENT_INCOME_MAX = 150;
+/**
+ * 이벤트(팬미팅) 기본 수익 (만원): 인기가 높을수록 크게 늘어남 (최대 150)
+ * 인기 20 ≈ 15만 · 50 ≈ 45만 · 80 ≈ 95만 · 100 ≈ 150만 (레벨 조금 반영)
+ */
+export function eventIncome(p: CPlayer): number {
+  return Math.min(EVENT_INCOME_MAX, 5 + p.level * 2 + 0.0115 * popularity(p) ** 2);
+}
+/** 이벤트(팬미팅) 추가 컨디션 소모: 인기 많은 선수는 일정이 빡빡해 조금 더 지침 (인기 100 이면 +5) */
+export const eventCondCost = (p: CPlayer) => Math.round(popularity(p) / 20);
 /** 이벤트(팬미팅)에서 치어풀을 받을 확률: 5% ~ 45% (인기 없어도 0은 아님) */
 export function cheerChance(p: CPlayer): number {
   return 0.05 + (popularity(p) / 100) * 0.4;

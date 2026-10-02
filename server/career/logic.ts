@@ -52,7 +52,7 @@ import { createMsl, mslDueThisWeek, mslPlayersThisWeek, nominationPending, runMs
 import { ITEM_BY_KEY, isStackable, packOf, slotOf, stackMax } from "@shared/career/items";
 import { ensurePotential, retirements, rookies } from "./generation";
 import { addManagerExp, mainSponsorPay, book, ensureClub, newSeasonClub, pay, seasonEndClub, weeklyClub } from "./club";
-import { cheerChance, defaultContract, popularity, scoutPrice } from "@shared/career/contract";
+import { EVENT_INCOME_MAX, cheerChance, defaultContract, eventCondCost, eventIncome, popularity, scoutPrice } from "@shared/career/contract";
 export type { MslReport };
 
 const RACE: Record<string, Race> = { T: "terran", Z: "zerg", P: "protoss" };
@@ -168,12 +168,13 @@ function actOne(s: CareerState, p: CPlayer, action: ActionKey | null | undefined
     case "train": gainStats(p, 2, 2 * boost, 6 * boost); p.cond = clampCond(p.cond - randInt(3, 5)); break;
     case "rest": p.cond = clampCond(p.cond + 5); break;
     case "event": {
-      // 인기 많은 선수일수록 팬미팅 수익이 큼. 한 주에 팬미팅을 여러 번 열수록 팬이 덜 모임 (한 번에 10%씩, 최소 30%)
-      // (예전엔 선수 전원이 매주 팬미팅만 해도 시즌에 2억 넘게 벌려 경제가 무너졌음 → 시즌 약 2~4천만)
+      // 인기 많은 선수일수록 팬미팅 수익이 큼 (최대 150만). 한 주에 팬미팅을 여러 번 열수록 팬이 덜 모임 (한 번에 10%씩, 최소 30%)
+      // (예전엔 선수 전원이 매주 팬미팅만 해도 시즌에 2억 넘게 벌려 경제가 무너졌음)
       const wk = `${s.season}-${s.week}`;
       if (mine && s.eventCount?.week !== wk) s.eventCount = { week: wk, n: 0 };
       const fade = mine ? Math.max(0.3, 1 - 0.1 * s.eventCount!.n++) : 1;
-      const earn = Math.round((10 + p.level * 3 + popularity(p) * 0.4 + randInt(0, 8)) * fade);
+      // 인기(능력치·승수·우승 경력)가 높은 선수일수록 훨씬 많이 벌어옴
+      const earn = Math.round(Math.min(EVENT_INCOME_MAX, eventIncome(p) + randInt(0, 6)) * fade);
       if (mine) {
         pay(s, "이벤트", earn, `${p.name} 팬미팅`);
         // 팬미팅: 인기가 많을수록 치어풀을 받을 확률이 높음
@@ -182,7 +183,7 @@ function actOne(s: CareerState, p: CPlayer, action: ActionKey | null | undefined
           news(s, `📣 ${p.name} 선수가 팬미팅에서 치어풀을 선물 받았습니다!`);
         }
       }
-      p.cond = clampCond(p.cond - randInt(3, 5));
+      p.cond = clampCond(p.cond - randInt(3, 5) - eventCondCost(p));
       break;
     }
     default: break; // 자율 연습: 주가 끝날 때 기본 회복(+10%)만
@@ -216,7 +217,9 @@ export interface ActionResult { id: number; action: ActionKey; ap: number; cond:
 export function runMyActions(s: CareerState, only?: number): { results: ActionResult[]; skipped: number[]; full: number[] } {
   if (s.live) throw new CareerError("경기 중에는 행동을 진행할 수 없습니다");
   // only: 그 선수만 (선수 카드의 진행 버튼)
-  const roster = rosterOf(s, s.myTeam).filter(p => only === undefined || p.id === only);
+  // 팬미팅은 한 주에 여러 번 열수록 수익이 줄어드므로, 인기 많은 선수부터 진행
+  const roster = rosterOf(s, s.myTeam).filter(p => only === undefined || p.id === only)
+    .sort((a, b) => Number(b.action === "event") - Number(a.action === "event") || popularity(b) - popularity(a));
   if (!roster.some(p => p.action)) throw new CareerError("행동을 정한 선수가 없습니다");
   const results: ActionResult[] = [];
   const skipped: number[] = [];
