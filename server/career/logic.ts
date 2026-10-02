@@ -164,8 +164,12 @@ function actOne(s: CareerState, p: CPlayer, action: ActionKey | null | undefined
     case "train": gainStats(p, 2, 2 * boost, 6 * boost); p.cond = clampCond(p.cond - randInt(3, 5)); break;
     case "rest": p.cond = clampCond(p.cond + 5); break;
     case "event": {
-      // 인기 많은 선수일수록 팬미팅 수익이 큼
-      const earn = 30 + p.level * 12 + Math.round(popularity(p) * 1.5) + randInt(0, 40);
+      // 인기 많은 선수일수록 팬미팅 수익이 큼. 한 주에 팬미팅을 여러 번 열수록 팬이 덜 모임 (한 번에 10%씩, 최소 30%)
+      // (예전엔 선수 전원이 매주 팬미팅만 해도 시즌에 2억 넘게 벌려 경제가 무너졌음 → 시즌 약 2~4천만)
+      const wk = `${s.season}-${s.week}`;
+      if (mine && s.eventCount?.week !== wk) s.eventCount = { week: wk, n: 0 };
+      const fade = mine ? Math.max(0.3, 1 - 0.1 * s.eventCount!.n++) : 1;
+      const earn = Math.round((10 + p.level * 3 + popularity(p) * 0.4 + randInt(0, 8)) * fade);
       if (mine) {
         pay(s, "이벤트", earn, `${p.name} 팬미팅`);
         // 팬미팅: 인기가 많을수록 치어풀을 받을 확률이 높음

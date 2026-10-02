@@ -84,7 +84,7 @@ export interface ActionDef { key: ActionKey; name: string; emoji: string; ap: nu
 export const ACTIONS: ActionDef[] = [
   { key: "train", name: "훈련", emoji: "🏋️", ap: 20, money: 0, desc: "연습을 열심히 합니다. 능력치가 오르지만 지칩니다. (컨디션 -3~5)" },
   { key: "rest", name: "휴식", emoji: "😴", ap: 10, money: 0, desc: "휴식을 취합니다. 쉬면서 컨디션을 회복합니다. (컨디션 +5)" },
-  { key: "event", name: "이벤트", emoji: "🎤", ap: 20, money: 0, desc: "팬미팅을 합니다. 구단 자금을 벌고, 인기가 많을수록 치어풀을 받을 확률이 높습니다. (컨디션 -3~5)" },
+  { key: "event", name: "이벤트", emoji: "🎤", ap: 20, money: 0, desc: "팬미팅을 합니다. 구단 자금을 벌고, 인기가 많을수록 치어풀을 받을 확률이 높습니다. 한 주에 여러 명이 열면 팬이 나뉘어 수익이 줄어듭니다. (컨디션 -3~5)" },
 ];
 /** 선수별 주당 행동력 (선수마다 매주 받고, 쓰지 않으면 시즌 동안 계속 쌓임. 새 시즌에 다시 시작) */
 export const WEEKLY_AP = 20;
@@ -505,6 +505,8 @@ export interface CareerState {
   burstWeek?: string;
   /** 컨디션 단위 (100 = % 단위. 없으면 예전 1~10 단위 세이브) */
   condScale?: 100;
+  /** 이번 주 우리 팀 팬미팅 횟수 (많이 열수록 수익이 줄어듦) */
+  eventCount?: { week: string; n: number };
   /** 선수 행동을 반영한 주 (한 주 한 번) */
   actionsWeek?: string;
   /** 우리 선수 행동을 진행한 주 (선수 행동 화면 "진행하기") */
@@ -560,13 +562,13 @@ export function formMul(p: CPlayer): number {
 
 /**
  * 영입 요구 금액 (만원): 능력치·레벨·나이·이번 시즌 활약 반영
- * 능력치가 높을수록 가파르게 비싸짐 (능력치 합 5500 ≈ 1,500만 · 6500 ≈ 4,200만 · 8000 ≈ 14,600만, 레벨·나이 전 · 예전엔 8000 도 2,500만)
+ * 능력치가 높을수록 비싸짐 (능력치 합 5500 ≈ 1,400만 · 6500 ≈ 3,200만 · 8000 ≈ 9,300만, 레벨·나이 전 · 예전엔 8000 도 2,500만)
  */
 export function askingPrice(p: CPlayer, season: number): number {
   const total = totalOf(p.stats);
   const age = ageOf(p, season);
   const x = Math.max(0, total - 3800) / 1000;
-  const base = 600 * x + 80 * Math.pow(x, 3.5) + p.level * 60;
+  const base = 600 * x + 60 * Math.pow(x, 3.3) + p.level * 60;
   const ageMul = age <= 22 ? 1.2 : age >= 28 ? 0.6 : 1;
   return Math.max(50, Math.round((base * ageMul * formMul(p)) / 10) * 10);
 }

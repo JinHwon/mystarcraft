@@ -2,7 +2,7 @@
  * 계약·연봉·출전 기대치 (서버·화면 공용, 결정적 계산)
  */
 import { FREE_AGENT_TEAM } from "./originalData";
-import { ageOf, askingPrice, totalOf, type BonusKey, type CareerState, type Contract, type CPlayer } from "./rules";
+import { ageOf, askingPrice, gradeIndex, LEGACY_GRADES, totalOf, type BonusKey, type CareerState, type Contract, type CPlayer } from "./rules";
 import { rosterOf } from "./view";
 import { levelPerks, managerLevel } from "./mainSponsor";
 
@@ -15,9 +15,26 @@ export function seeded(...keys: number[]): number {
 
 const round10 = (v: number) => Math.round(v / 10) * 10;
 
-/** 기본 연봉 (만원/시즌): 선수 가치의 10% (20~300) */
+/** 기본 연봉 (만원/시즌): 선수 가치의 12% (20~1,500) — 비싼 선수일수록 유지비도 큼 */
 export function baseSalary(p: CPlayer, season: number): number {
-  return Math.max(20, Math.min(300, round10(askingPrice(p, season) * 0.1)));
+  return Math.max(20, Math.min(1500, round10(askingPrice(p, season) * 0.12)));
+}
+
+/** 스타 선수 기준 등급 (A- 이상) */
+const STAR_GRADE = LEGACY_GRADES.indexOf("A-");
+export const isStar = (p: CPlayer) => gradeIndex(totalOf(p.stats)) >= STAR_GRADE;
+
+/**
+ * 스타 선수 연봉 배율 (재계약·영입 때 요구 연봉)
+ * - 등급 프리미엄: A- +10%, A +20%, A+ +30%, S- +40% … (최대 +80%)
+ * - 스타가 많은 팀일수록 더 요구: 그 팀의 다른 스타(A- 이상) 한 명마다 +20% (최대 2배)
+ *   → 좋은 선수를 여럿 모으면 유지비가 크게 늘어 한 팀에 스타가 몰리지 않게
+ */
+export function starSalaryMul(s: CareerState, p: CPlayer, forTeam: number): number {
+  if (!isStar(p)) return 1;
+  const grade = 1 + Math.min(0.8, (gradeIndex(totalOf(p.stats)) - STAR_GRADE + 1) * 0.1);
+  const others = rosterOf(s, forTeam).filter(x => x.id !== p.id && isStar(x)).length;
+  return grade * Math.min(2, 1 + 0.2 * others);
 }
 
 export function defaultContract(p: CPlayer, season: number): Contract {
@@ -45,8 +62,8 @@ export function playerDemand(s: CareerState, p: CPlayer, forTeam: number): Contr
   const moving = p.team !== forTeam;
   const r = seeded(p.id, s.season, forTeam);
   const mul = moving ? 1.15 + r * 0.15 : p.wantsOut ? 1.3 : 1 + r * 0.1;
-  // 감독 레벨이 높으면 우리 팀에서 뛰고 싶어해 연봉 요구가 낮아짐
-  const salary = round10(base * mul * (forTeam === s.myTeam ? levelPerks(managerLevel(s)).salary : 1));
+  // 감독 레벨이 높으면 우리 팀에서 뛰고 싶어해 연봉 요구가 낮아짐, 스타는 등급·팀의 스타 수만큼 더 요구
+  const salary = round10(base * mul * starSalaryMul(s, p, forTeam) * (forTeam === s.myTeam ? levelPerks(managerLevel(s)).salary : 1));
   const age = ageOf(p, s.season);
   const years = age <= 22 ? 5 : age >= 28 ? 1 : 3;
   // 새 팀에서의 예상 순위

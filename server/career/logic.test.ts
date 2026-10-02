@@ -501,7 +501,7 @@ describe("아이템 상점", () => {
     const money = s.teams[0].money;
     buyItem(s, "vitavita", undefined, 2);
     expect(s.inventory?.vitavita).toBe(6);
-    expect(money - s.teams[0].money).toBe(80);
+    expect(money - s.teams[0].money).toBe(180);
     expect(s.inventory).toMatchObject({ m3: 3, m1: 96 });
     expect(() => buyItem(s, "m3", undefined, 97)).toThrow("최대 99개");
     equipItem(s, "m1", p.id);
@@ -549,7 +549,7 @@ describe("아이템 상점", () => {
     s.teams[2].money = 1000;
     buyItem(s, "vitavita", undefined, 5);
     expect(s.inventory!.vitavita).toBe(15); // 한 번에 3개
-    expect(s.teams[2].money).toBe(1000 - 40 * 5);
+    expect(s.teams[2].money).toBe(1000 - 90 * 5);
     const p = rosterOf(s, 2)[0];
     p.cond = 40;
     useStockItem(s, "vitavita", p.id);
