@@ -3,7 +3,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { FINAL_SETS, burstOf, MATCH_MONEY, PRO_SETS, type CareerState, type CMatch, type PlayerSnap } from "@shared/career/rules";
+import { burstOf, MATCH_MONEY, matchSets, type CareerState, type CMatch, type PlayerSnap } from "@shared/career/rules";
 import { STAGE_NAMES } from "@shared/career/view";
 import { viewStateAt, type SnapReport } from "./viewState";
 import { ITEM_BY_KEY, gearCond, gearStats } from "@shared/career/items";
@@ -15,7 +15,7 @@ import { Broadcast, PlayerCard, SetList, type BroadcastSet } from "./broadcast";
 // ── 경기 진행 (세트마다 서버에서 진행) ─────────────────────────────────
 export interface WeekDone { playedMatchId?: number; mslReports?: MslReportView[]; mslPlans?: number[]; proReports?: ProReportView[]; needNomination?: boolean; needMsl?: number[] }
 /** 우리 팀이 없는 포스트시즌 경기 (중계). entryA·entryB·maps 가 있으면 치르지 않은 세트까지 보여줌 */
-export type ProReportView = { matchId: number; stage: CMatch["stage"]; a: number; b: number; sa: number; sb: number; sets: BroadcastSet[]; entryA?: number[]; entryB?: number[]; maps?: number[]; pre?: Record<number, PlayerSnap> };
+export type ProReportView = { matchId: number; stage: CMatch["stage"]; a: number; b: number; sa: number; sb: number; sets: BroadcastSet[]; entryA?: number[]; entryB?: number[]; maps?: number[]; pre?: Record<number, PlayerSnap>; winners?: boolean };
 
 /**
  * 포스트시즌 다른 팀 경기 관전: 경기 전 화면 → 중계 → … → 결과 (서버를 기다리지 않음)
@@ -39,7 +39,7 @@ export function ProSeriesFlow({ s: latest, reports, onDone, onClose, start, onPr
   useEffect(() => { if (!r) onDone(); }, [r]);
   if (!r) return null;
   const exit = onClose ?? onDone;
-  const total = r.stage === "final" ? FINAL_SETS : PRO_SETS;
+  const total = matchSets(r);
   const played = r.sets.length;
   // 보고 있는 세트 직전 선수 상태 (결과 화면은 경기 뒤)
   const list = all ?? reports;
@@ -91,9 +91,10 @@ export function ProSeriesFlow({ s: latest, reports, onDone, onClose, start, onPr
   const set = r.sets[i];
   const lp = s.players[set?.a ?? left[i]], rp = s.players[set?.b ?? right[i]];
   const mapId = set?.mapId ?? maps[i % maps.length];
-  const isAce = i === total - 1;
+  // 위너스리그는 ACE 결정전이 없고, 아직 안 본 세트의 출전 선수는 숨김 (누가 이겼는지 드러나지 않게)
+  const isAce = !r.winners && i === total - 1;
   const aceOpen = idx >= total - 1 || played >= total;
-  const canView = (j: number) => j !== total - 1 || aceOpen || j < played;
+  const canView = (j: number) => (r.winners ? j <= cur : j !== total - 1 || aceOpen || j < played);
   const label = view === null ? "" : view < cur || (final && view <= cur) ? (set ? `지난 경기 · ${s.players[set.winner === "a" ? set.a : set.b]?.name} 승` : "") : view > cur && !final ? "앞으로 치를 경기" : "";
   return (
     <LegacyFrame season={s.season} onBack={exit} onNext={final ? afterResult : () => { setView(null); setMode("live"); }} nextLabel={final ? "확인 ▷▷" : undefined}>
@@ -131,7 +132,9 @@ export function ProSeriesFlow({ s: latest, reports, onDone, onClose, start, onPr
           </>
         ) : <div className="text-center text-[12px] text-neutral-400 my-6">이 세트 선수 정보가 없습니다</div>}
         <div className="mt-3">
-          <SetList s={s} left={left} right={right} maps={maps} total={Math.max(total, played)}
+          <SetList s={s} winners={r.winners}
+            left={r.winners ? left.map((x, j) => (j <= cur ? x : undefined)) : left} right={r.winners ? right.map((x, j) => (j <= cur ? x : undefined)) : right}
+            maps={maps} total={r.winners && final ? played : Math.max(total, played)}
             idx={final ? played : idx} results={r.sets.slice(0, final ? played : idx)} leftIsA showAce={aceOpen} hideOppAce={false}
             view={view ?? undefined} onView={j => { if (canView(j)) setView(j === cur && !final ? null : j); }} />
         </div>
@@ -165,9 +168,11 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose, held, onHo
     return { m, leftIsA: m.a === s.myTeam, opp: live.opp, mine: [...live.mine], items: live.items };
   });
   const { m, leftIsA, opp } = info;
-  const total = m.stage === "final" ? FINAL_SETS : PRO_SETS;
+  const total = matchSets(m);
+  // 위너스리그: 이긴 선수는 계속, 진 쪽이 다음 선수 (ACE 결정전 없음)
+  const winners = !!m.winners;
   const heldHere = held && held.matchId === m.id ? held : null;
-  const [mine, setMine] = useState(() => { const n = [...info.mine]; if (heldHere?.ace !== undefined) n[total - 1] = heldHere.ace; return n; });
+  const [mine, setMine] = useState(() => { const n = [...info.mine]; if (heldHere?.ace !== undefined && !winners) n[total - 1] = heldHere.ace; return n; });
   const [results, setResults] = useState<BroadcastSet[]>(() => [...(s.live?.sets ?? []), ...(heldHere ? [heldHere.set] : [])]);
   // 본 세트 수 (미리 치러 둔 세트는 아직 안 본 것) — 나갔다 들어와도 이어서 보도록 기억
   const watchedKey = `mysc-watched-${m.id}`;
@@ -202,10 +207,11 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose, held, onHo
   const fetchSet = (ace: number | undefined, then?: () => void) => {
     if (fetching.current) return;
     fetching.current = true;
+    const prevLen = results.length;
     playSet(ace, r => {
       fetching.current = false;
       setResults(prev => [...prev, r.set]);
-      if (ace !== undefined) setMine(prev => { const n = [...prev]; n[total - 1] = ace; return n; });
+      if (ace !== undefined) setMine(prev => { const n = [...prev]; n[winners ? prevLen : total - 1] = ace; return n; });
       if (r.week) setWeek(r.week);
       if (r.matchOver) { setOver(true); onHold?.({ matchId: m.id, set: r.set, week: r.week ?? null, ace }); }
       then?.();
@@ -213,13 +219,20 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose, held, onHo
   };
   const play = (ace?: number) => fetchSet(ace, () => setMode("live"));
 
-  // 경기 전 화면이 뜨면 이번 세트를 미리 진행해 둔다 (ACE 결정전은 선수를 골라야 하므로 제외)
-  const prefetchable = mode === "preview" && !over && idx === results.length && idx < total - 1;
+  /** k 세트를 우리가 이겼는지 */
+  const myWon = (k: number) => !!results[k] && (results[k].winner === "a") === leftIsA;
+  /** 위너스리그: 이번 경기에서 진 우리 선수 (다시 못 나옴) */
+  const myOut = new Set(results.filter((_, k) => !myWon(k)).map(x => (leftIsA ? x.a : x.b)));
+  /** 위너스리그: 다음 세트 선수를 골라야 하는지 (직전 세트를 졌음) */
+  const needPick = winners && idx > 0 && idx === results.length && !myWon(idx - 1) && mine[idx] === undefined;
+  // 경기 전 화면이 뜨면 이번 세트를 미리 진행해 둔다 (ACE 결정전·위너스리그 다음 선수 고르기는 제외)
+  const prefetchable = mode === "preview" && !over && idx === results.length && (winners ? !needPick : idx < total - 1);
   useEffect(() => { if (prefetchable) fetchSet(undefined); }, [prefetchable, idx]);
   // 미리 받기 전에 Next 를 눌렀으면 도착하는 대로 중계
   useEffect(() => { if (goLive && idx < results.length) { setGoLive(false); setMode("live"); } }, [goLive, results.length, idx]);
 
   if (mode === "ace") {
+    if (winners) return <AceScreen s={s} teamLeft={leftTeam} teamRight={rightTeam} mapId={m.maps[idx % m.maps.length]} score={score(idx)} submitting={pending} next={idx + 1} out={myOut} onPick={id => fetchSet(id, () => setMode("preview"))} />;
     return <AceScreen s={s} teamLeft={leftTeam} teamRight={rightTeam} mapId={m.maps[(total - 1) % m.maps.length]} score={score(idx)} submitting={pending} onPick={id => fetchSet(id, () => setMode("preview"))} />;
   }
 
@@ -241,16 +254,19 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose, held, onHo
   /** 이미 본 세트를 다시 보는 중 */
   const past = view !== null && (final || view < idx);
   const [sl, sr] = score(final ? results.length : idx);
-  const isAce = i === total - 1;
-  const lpId = results[i] ? (leftIsA ? results[i].a : results[i].b) : mine[i];
-  const rpId = results[i] ? (leftIsA ? results[i].b : results[i].a) : opp[i];
-  const lp = lpId !== undefined ? snap[lpId] : undefined, rp = snap[rpId];
+  const isAce = !winners && i === total - 1;
+  // 위너스리그 다음 세트: 직전 세트를 이긴 쪽은 같은 선수, 진 쪽은 새 선수 (상대 새 선수는 경기 시작 때 공개)
+  const prevMy = i > 0 && results[i - 1] ? (leftIsA ? results[i - 1].a : results[i - 1].b) : undefined;
+  const prevOpp = i > 0 && results[i - 1] ? (leftIsA ? results[i - 1].b : results[i - 1].a) : undefined;
+  const lpId = results[i] ? (leftIsA ? results[i].a : results[i].b) : winners && i > 0 ? (myWon(i - 1) ? prevMy : mine[i]) : mine[i];
+  const rpId = results[i] ? (leftIsA ? results[i].b : results[i].a) : winners && i > 0 ? (myWon(i - 1) ? undefined : prevOpp) : opp[i];
+  const lp = lpId !== undefined ? snap[lpId] : undefined, rp = rpId !== undefined ? snap[rpId] : undefined;
   const mapId = m.maps[i % m.maps.length];
   const won = sl > sr;
   const next = () => {
     if (final) { onFinished(week); return; }
     if (idx < results.length) { setMode("live"); return; } // 미리 치러 둔 세트
-    if (idx === total - 1) { setMode("ace"); return; }
+    if (winners ? needPick : idx === total - 1) { setMode("ace"); return; }
     setGoLive(true);
     fetchSet(undefined);
   };
@@ -287,6 +303,10 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose, held, onHo
             )}
             {isAce && !results[i] ? (
               <div className="text-center text-[12px] text-[#ffe45c] my-6">{sl}:{sr} — ACE 결정전! 다음 화면에서 출전 선수를 고릅니다</div>
+            ) : winners && !results[i] && (!lp || !rp) ? (
+              <div className="text-center text-[12px] text-[#ffe45c] my-6">
+                {!lp ? "우리 선수가 졌습니다 — 다음 화면에서 다음 출전 선수를 고릅니다" : `${lp.name} 선수 계속 출전! 상대의 다음 선수는 경기 시작 때 공개됩니다`}
+              </div>
             ) : lp && rp && (
               <div className="grid grid-cols-2 gap-2 mt-2">
                 {[{ p: lp, o: rp }, { p: rp, o: lp }].map(({ p, o }) => {
@@ -308,7 +328,10 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose, held, onHo
           </>
         )}
         <div className="mt-3">
-          <SetList s={s} left={mine} right={opp} maps={m.maps} total={total} idx={final ? results.length : idx} results={results.slice(0, final ? results.length : idx)} leftIsA={leftIsA} showAce={mine[total - 1] !== undefined}
+          <SetList s={s} winners={winners}
+            left={winners ? Array.from({ length: total }, (_, k) => (k < (final ? results.length : idx) && results[k] ? (leftIsA ? results[k].a : results[k].b) : k === i && !final ? lpId : undefined)) : mine}
+            right={winners ? Array.from({ length: total }, (_, k) => (k < (final ? results.length : idx) && results[k] ? (leftIsA ? results[k].b : results[k].a) : k === i && !final ? rpId : undefined)) : opp}
+            maps={m.maps} total={winners && final ? results.length : total} idx={final ? results.length : idx} results={results.slice(0, final ? results.length : idx)} leftIsA={leftIsA} showAce={mine[total - 1] !== undefined}
             view={view ?? undefined} onView={k => { if (k === total - 1 && !results[k] && !(k < idx)) return; setView(k === (final ? -1 : idx) ? null : k); }} />
         </div>
       </div>

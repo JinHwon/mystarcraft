@@ -14,15 +14,13 @@ import {
   actionOf, restNotNeeded,
   COND_MIN,
   CPlayer,
-  FINAL_SETS,
-  FINAL_WIN,
   MATCH_MONEY,
+  matchNeed,
+  matchSets,
   MAX_ROSTER,
   MIN_ROSTER,
   ORIG_STAT_ORDER,
   POSTSEASON_PRIZE,
-  PRO_SETS,
-  PRO_WIN,
   Race,
   SetResult,
   START_MONEY,
@@ -49,7 +47,7 @@ import { initialPlayers, initialTeams } from "@shared/career/init";
 import { eventOn } from "./events";
 import { aiShopping } from "./aiShop";
 import { broadcastRights, gateIncome, regularSeasonPrize, weeklyGoods } from "./income";
-import { applyPromo, ensureDivisions, fillBRosters, promoMoves, rosterLimits, scheduleDivision, schedulePromo } from "./divisions";
+import { applyPromo, ensureDivisions, fillBRosters, fmt, promoMoves, rosterLimits, scheduleDivision, schedulePromo } from "./divisions";
 import { createMsl, mslDueThisWeek, mslPlayersThisWeek, nominationPending, runMslWeek, type MslReport } from "./msl";
 import { ITEM_BY_KEY, isStackable, packOf, slotOf, stackMax } from "@shared/career/items";
 import { ensurePotential, retirements, rookies } from "./generation";
@@ -316,10 +314,11 @@ const stageGrowthOf = (m: CMatch) => (m.stage === "regular" ? 1 : STAGE_GROWTH[m
 const youthOf = (m: CMatch) => m.stage === "regular" && m.div === 2;
 
 function playMatch(s: CareerState, m: CMatch, myEntry?: number[]): PlayedSet[] {
-  const sets = m.stage === "final" ? FINAL_SETS : PRO_SETS;
-  const need = m.stage === "final" ? FINAL_WIN : PRO_WIN;
+  const sets = matchSets(m);
+  const need = matchNeed(m);
   // 우리 경기와 포스트시즌(준PO·PO·결승)은 중계
   const involvesMe = m.a === s.myTeam || m.b === s.myTeam || m.stage !== "regular";
+  if (m.winners) return playWinnersMatch(s, m, involvesMe, myEntry);
   const entryA = m.a === s.myTeam && myEntry ? myEntry : aiEntry(s, m.a, sets);
   const entryB = m.b === s.myTeam && myEntry ? myEntry : aiEntry(s, m.b, sets);
   let sa = 0, sb = 0;
@@ -336,8 +335,50 @@ function playMatch(s: CareerState, m: CMatch, myEntry?: number[]): PlayedSet[] {
   return results;
 }
 
+/**
+ * 위너스리그 출전 순서 (AI): 컨디션 반영 능력치 상위 선수들, 가장 강한 선수는 뒤에 (마무리)
+ * first 를 주면 그 선수가 선봉
+ */
+export function winnersOrder(s: CareerState, team: number, first?: number): number[] {
+  const ranked = rosterOf(s, team).map(p => ({ id: p.id, v: totalOf(p.stats) * condMultiplier(p.cond) })).sort((a, b) => b.v - a.v).map(x => x.id);
+  const top = ranked.slice(0, 7);
+  const [ace, ...rest] = top;
+  const order = [...shuffle(rest), ace].filter(id => id !== undefined && id !== first);
+  const tail = ranked.slice(7).filter(id => id !== first);
+  return first !== undefined ? [first, ...order, ...tail] : [...order, ...tail];
+}
+
+/** 위너스리그 다음 출전 선수: 순서대로, 이번 경기에서 진 선수는 빠짐 (모두 졌으면 처음부터 다시) */
+function nextInOrder(order: number[], out: Set<number>) {
+  return order.find(id => !out.has(id)) ?? order[0];
+}
+
+/** 이번 경기에서 진(탈락한) 선수 */
+function winnersOut(sets: SetResult[], side: "a" | "b") {
+  return new Set(sets.filter(x => x.winner !== side).map(x => (side === "a" ? x.a : x.b)));
+}
+
+/** 위너스리그 한 경기 (AI끼리, 또는 엔트리를 미리 낸 우리 경기): 이긴 선수는 질 때까지, 진 팀은 순서대로 다음 선수 */
+function playWinnersMatch(s: CareerState, m: CMatch, withBroadcast: boolean, myEntry?: number[]): PlayedSet[] {
+  const need = matchNeed(m);
+  const orderA = winnersOrder(s, m.a, m.a === s.myTeam ? myEntry?.[0] : undefined);
+  const orderB = winnersOrder(s, m.b, m.b === s.myTeam ? myEntry?.[0] : undefined);
+  let pa = orderA[0], pb = orderB[0];
+  const results: PlayedSet[] = [];
+  let sa = 0, sb = 0;
+  for (let i = 0; sa < need && sb < need; i++) {
+    const map = m.maps[i % m.maps.length];
+    const r = withStageGrowth(stageGrowthOf(m), () => (withBroadcast ? playSet(s, s.players[pa], s.players[pb], map, true, true) : quickSet(s, s.players[pa], s.players[pb], map)), youthOf(m));
+    results.push(r);
+    if (r.winner === "a") { sa++; pb = nextInOrder(orderB, winnersOut(results, "b")); }
+    else { sb++; pa = nextInOrder(orderA, winnersOut(results, "a")); }
+  }
+  recordMatch(s, m, results.map(x => x.a), results.map(x => x.b), results);
+  return results;
+}
+
 /** 포스트시즌 다른 팀 경기 (중계 화면용, 세이브에는 해설을 남기지 않음) */
-export interface ProReport { matchId: number; stage: CMatch["stage"]; a: number; b: number; sa: number; sb: number; sets: PlayedSet[]; entryA: number[]; entryB: number[]; maps: number[]; pre?: Record<number, PlayerSnap> }
+export interface ProReport { matchId: number; stage: CMatch["stage"]; a: number; b: number; sa: number; sb: number; sets: PlayedSet[]; entryA: number[]; entryB: number[]; maps: number[]; pre?: Record<number, PlayerSnap>; winners?: boolean }
 
 /** 오래된 중계 하이라이트는 지워서 세이브 크기를 줄임 (내 팀 최근 4경기만 유지) */
 function pruneHighlights(s: CareerState) {
@@ -401,10 +442,11 @@ export function advanceWeek(s: CareerState, myEntry?: number[]): WeekResult {
   if (s.live) throw new CareerError("진행 중인 경기가 있습니다");
   const mine = myPendingMatch(s);
   if (mine) {
-    const sets = mine.stage === "final" ? FINAL_SETS : PRO_SETS;
+    const sets = matchSets(mine);
     if (!myEntry) throw new CareerError("엔트리를 편성해주세요");
     if (rosterOf(s, s.myTeam).length < MIN_ROSTER) throw new CareerError(`선수가 최소 ${MIN_ROSTER}명 있어야 경기를 치를 수 있습니다`);
-    validateEntry(s, myEntry, sets);
+    if (mine.winners) { if (s.players[myEntry[0]]?.team !== s.myTeam) throw new CareerError("선봉으로 나갈 우리 선수를 골라주세요"); }
+    else validateEntry(s, myEntry, sets);
   }
   let broadcast: PlayedSet[] | undefined;
   let m = mine, last = mine;
@@ -427,7 +469,7 @@ function playOtherMatches(s: CareerState): ProReport[] {
     const pre = watched ? Object.fromEntries([...rosterOf(s, m.a), ...rosterOf(s, m.b)].map(p => [p.id, snapOf(p, s)])) : undefined;
     const sets = playMatch(s, m);
     if (watched) {
-      proReports.push({ matchId: m.id, stage: m.stage, a: m.a, b: m.b, sa: m.scoreA ?? 0, sb: m.scoreB ?? 0, sets: sets.map(x => ({ ...x })), entryA: m.entryA ?? [], entryB: m.entryB ?? [], maps: m.maps, pre });
+      proReports.push({ matchId: m.id, stage: m.stage, a: m.a, b: m.b, sa: m.scoreA ?? 0, sb: m.scoreB ?? 0, sets: sets.map(x => ({ ...x })), entryA: m.entryA ?? [], entryB: m.entryB ?? [], maps: m.maps, pre, ...(m.winners ? { winners: true } : {}) });
       for (const x of sets) { delete x.timeline; delete x.highlights; }
     }
   }
@@ -466,8 +508,8 @@ function finishWeek(s: CareerState): WeekResult {
 
 // ── 우리 경기: 세트마다 진행 ──────────────────────────────────────
 
-const setsOf = (m: CMatch) => (m.stage === "final" ? FINAL_SETS : PRO_SETS);
-const needOf = (m: CMatch) => (m.stage === "final" ? FINAL_WIN : PRO_WIN);
+const setsOf = (m: CMatch) => matchSets(m);
+const needOf = (m: CMatch) => matchNeed(m);
 
 /** 엔트리(1~(n-1)세트)를 내고 경기 시작. 선수 행동은 이때 반영된다 */
 export type SetItemPlan = Record<number, { key: string; predict?: number }>;
@@ -478,6 +520,7 @@ export function beginMatch(s: CareerState, front: number[], items: SetItemPlan =
   const m = myPendingMatch(s);
   if (!m) throw new CareerError("이번 주 우리 팀 경기가 없습니다");
   const sets = setsOf(m);
+  if (m.winners) return beginWinners(s, m, front, items);
   if (front.length !== sets - 1) throw new CareerError(`1~${sets - 1}세트 엔트리를 모두 정해주세요`);
   for (const id of front) if (s.players[id]?.team !== s.myTeam) throw new CareerError("우리 팀 선수만 출전할 수 있습니다");
   if (new Set(front).size !== front.length) throw new CareerError(`1~${sets - 1}세트에는 서로 다른 선수를 배치해야 합니다`);
@@ -497,6 +540,24 @@ export function beginMatch(s: CareerState, front: number[], items: SetItemPlan =
   return { matchId: m.id };
 }
 
+/** 위너스리그 경기 시작: 선봉 한 명 (+ 1세트 아이템, 스나이핑으로 상대 선봉 예측 가능) */
+function beginWinners(s: CareerState, m: CMatch, front: number[], items: SetItemPlan) {
+  const first = front[0];
+  if (front.length !== 1 || s.players[first]?.team !== s.myTeam) throw new CareerError("선봉으로 나갈 우리 선수 한 명을 골라주세요");
+  if (rosterOf(s, s.myTeam).length < MIN_ROSTER) throw new CareerError(`선수가 최소 ${MIN_ROSTER}명 있어야 경기를 치를 수 있습니다`);
+  for (const [k, v] of Object.entries(items)) {
+    const it = ITEM_BY_KEY[v.key];
+    if (Number(k) !== 0) throw new CareerError("위너스리그는 1세트에만 아이템을 미리 정합니다");
+    if (!it || it.kind !== "match") throw new CareerError("경기에 쓸 수 없는 아이템입니다");
+    if (v.key === "sniping" && (v.predict === undefined || !s.players[v.predict])) throw new CareerError("스나이핑할 상대 선수를 골라주세요");
+    if ((s.inventory?.[v.key] ?? 0) < 1) throw new CareerError(`${it.name} 이(가) 부족합니다`);
+  }
+  const oppTeam = m.a === s.myTeam ? m.b : m.a;
+  const oppOrder = winnersOrder(s, oppTeam);
+  s.live = { matchId: m.id, mine: [first], opp: [oppOrder[0]], sets: [], items, oppOrder, winners: true };
+  return { matchId: m.id };
+}
+
 export interface LiveSetResult {
   set: PlayedSet;
   /** 이 세트로 경기가 끝남 */
@@ -508,14 +569,32 @@ export interface LiveSetResult {
   needAce: boolean;
 }
 
-/** 다음 세트 진행. ACE 결정전이면 ace(우리 선수, 누구나)를 함께 보낸다 */
+/**
+ * 다음 세트 진행. ACE 결정전이면 ace(우리 선수, 누구나)를 함께 보낸다
+ * 위너스리그: 우리 선수가 지면 다음 세트에 나갈 선수를 ace 로 보낸다 (이번 경기에서 진 선수는 못 나옴)
+ */
 export function playLiveSet(s: CareerState, ace?: number): LiveSetResult {
   const live = s.live;
   if (!live) throw new CareerError("진행 중인 경기가 없습니다");
   const m = s.matches.find(x => x.id === live.matchId)!;
   const sets = setsOf(m), need = needOf(m);
   const i = live.sets.length;
-  if (i === sets - 1) {
+  const meA0 = m.a === s.myTeam;
+  if (live.winners && i > 0) {
+    const prev = live.sets[i - 1];
+    const myWon = (prev.winner === "a") === meA0;
+    const myOut = winnersOut(live.sets, meA0 ? "a" : "b");
+    if (myWon) {
+      live.mine[i] = live.mine[i - 1];
+      live.opp[i] = live.opp[i] ?? nextInOrder(live.oppOrder ?? [live.opp[i - 1]], winnersOut(live.sets, meA0 ? "b" : "a"));
+    } else {
+      const left = rosterOf(s, s.myTeam).filter(p => !myOut.has(p.id));
+      if (ace === undefined || s.players[ace]?.team !== s.myTeam) throw new CareerError("다음 세트에 나갈 선수를 골라주세요");
+      if (myOut.has(ace) && left.length) throw new CareerError("이번 경기에서 진 선수는 다시 나갈 수 없습니다");
+      live.mine[i] = ace;
+      live.opp[i] = live.opp[i - 1];
+    }
+  } else if (!live.winners && i === sets - 1) {
     if (ace === undefined || s.players[ace]?.team !== s.myTeam) throw new CareerError("ACE 결정전에 나갈 선수를 골라주세요");
     live.mine[i] = ace;
   }
@@ -559,6 +638,8 @@ export function playLiveSet(s: CareerState, ace?: number): LiveSetResult {
     const week = endWeek(s, m.id);
     return { set, matchOver: true, playedMatchId: m.id, week, needAce: false };
   }
+  // 위너스리그: 우리 선수가 졌으면 다음 선수를 골라야 함
+  if (live.winners) return { set, matchOver: false, needAce: (set.winner === "a") !== meA };
   return { set, matchOver: false, needAce: live.sets.length === sets - 1 };
 }
 
@@ -572,7 +653,7 @@ function progressSchedule(s: CareerState) {
   if (s.phase === "regular" && s.week > REGULAR_WEEKS) {
     s.phase = "postseason";
     const st = standings(s, 1);
-    s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "semi", div: 1, a: st[2].id, b: st[3].id, maps: pickMaps(PRO_SETS, s.mapPool) });
+    s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "semi", div: 1, a: st[2].id, b: st[3].id, ...fmt(s, "semi") });
     schedulePromo(s);
     regularSeasonPrize(s);
     const mine = standings(s);
@@ -589,9 +670,9 @@ function progressSchedule(s: CareerState) {
   if (!last || s.matches.some(m => !m.done)) return;
   const st = standings(s, 1);
   if (last.stage === "semi") {
-    s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "po", div: 1, a: st[1].id, b: last.winner!, maps: pickMaps(PRO_SETS, s.mapPool) });
+    s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "po", div: 1, a: st[1].id, b: last.winner!, ...fmt(s, "po") });
   } else if (last.stage === "po") {
-    s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "final", div: 1, a: st[0].id, b: last.winner!, maps: pickMaps(FINAL_SETS, s.mapPool) });
+    s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "final", div: 1, a: st[0].id, b: last.winner!, ...fmt(s, "final") });
   } else if (last.stage === "final") {
     finishSeason(s, last);
   }

@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { VitaButton, saveEntryDraft, takeEntryReturn } from "@/components/legacy/match/common";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { FINAL_SETS, PRO_SETS, type CareerState, type CMatch } from "@shared/career/rules";
+import { isWinnersSeason, matchFormatName, matchSets, type CareerState, type CMatch } from "@shared/career/rules";
 import { DIV_NAMES, STAGE_NAMES, divTeams, leagueName, myDiv, myPendingMatch, rosterOf, standings } from "@shared/career/view";
 import { useCareer, useCareerPatch, useCareerUpdater } from "@/lib/career";
 import { USER_CHANGE_EVENT } from "@/lib/session";
@@ -55,7 +55,9 @@ function MatchTab({ s }: { s: CareerState }) {
   const patch = useCareerPatch();
   const [, navigate] = useLocation();
   const pending = myPendingMatch(s);
-  const sets = pending?.stage === "final" ? FINAL_SETS : PRO_SETS;
+  const sets = pending ? matchSets(pending) : 5;
+  // 위너스리그는 선봉 한 명만 미리 정함
+  const entryN = pending?.winners ? 1 : sets - 1;
   const [front, setFront] = useState<(number | undefined)[]>([]);
   const [items, setItems] = useState<ItemPlan>({});
   const [live, setLiveRaw] = useState<HeldLive | null>(() => heldLive && { ...heldLive, closed: true });
@@ -320,7 +322,7 @@ function MatchTab({ s }: { s: CareerState }) {
       <EntryScreen
         s={s} match={pending} front={front} setFront={setFront} items={items} setItems={setItems}
         submitting={begin.isPending}
-        onSubmit={() => begin.mutate({ entry: front as number[], items: Object.fromEntries(Object.entries(items).map(([k, v]) => [k, v])) })}
+        onSubmit={() => begin.mutate({ entry: (front as number[]).slice(0, entryN), items: Object.fromEntries(Object.entries(items).map(([k, v]) => [k, v])) })}
         onShowMaps={() => setShowMaps(true)}
         onBack={() => setEditing(false)}
       />
@@ -334,7 +336,7 @@ function MatchTab({ s }: { s: CareerState }) {
   return (
     <div className="space-y-3">
       <div className="rounded-2xl bg-card border border-border p-3.5">
-        <div className="text-xs text-muted-foreground">{STAGE_NAMES[pending.stage]}{pending.stage === "regular" ? ` ${pending.week}주차` : ""} · {sets === FINAL_SETS ? "7전 4선승" : "5전 3선승"}</div>
+        <div className="text-xs text-muted-foreground">{STAGE_NAMES[pending.stage]}{pending.stage === "regular" ? ` ${pending.week}주차` : ""} · {matchFormatName(pending)}</div>
         <div className="mt-1 flex items-center gap-2">
           <TeamBadge short={s.teams[s.myTeam].short} color={s.teams[s.myTeam].color} />
           <span className="font-black text-foreground">{s.teams[s.myTeam].name}</span>
@@ -342,7 +344,7 @@ function MatchTab({ s }: { s: CareerState }) {
           <TeamBadge short={opp.short} color={opp.color} />
           <span className="font-black text-rose-200 truncate">{opp.name}</span>
         </div>
-        <div className="mt-1 text-[11px] text-muted-foreground">엔트리 {filled}/{sets - 1} · ACE 결정전 선수는 2:2 가 되면 고릅니다</div>
+        <div className="mt-1 text-[11px] text-muted-foreground">{pending.winners ? `선봉 ${Math.min(filled, 1)}/1 · 이긴 선수는 질 때까지 계속, 지면 다음 선수를 고릅니다` : `엔트리 ${filled}/${sets - 1} · ACE 결정전 선수는 2:2 가 되면 고릅니다`}</div>
       </div>
       {!actionsDone && <p className="text-xs text-amber-300 px-1">이번 주 선수 행동을 아직 진행하지 않았습니다. <button onClick={() => navigate("/training")} className="underline font-bold">선수 행동 진행하기</button></p>}
       <button onClick={openEntry} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black">
@@ -388,7 +390,7 @@ function TableTab({ s }: { s: CareerState }) {
       </table>
       <p className="text-[10px] text-muted-foreground px-3 py-2">
         구단을 누르면 구단 정보와 선수단을 볼 수 있습니다 ·{" "}
-        {div === 1 ? "4위까지 포스트시즌 진출 · 준플레이오프(3위 vs 4위) → 플레이오프(2위) → 결승(1위, 7전 4선승)" : "2부는 포스트시즌 없이 정규시즌 순위로"}
+        {div === 1 ? `4위까지 포스트시즌 진출 · 준플레이오프(3위 vs 4위) → 플레이오프(2위) → 결승(1위, ${isWinnersSeason(s.season) ? "9전 5선승" : "7전 4선승"})` : "2부는 포스트시즌 없이 정규시즌 순위로"}
         {hasB && <> · <span className="text-rose-300">승강전</span>: 1부 11위 vs 2부 2위, 1부 12위 vs 2부 1위 (이긴 팀이 다음 시즌 1부)</>}
       </p>
     </div>
@@ -406,6 +408,7 @@ export default function League() {
     <div className="p-4 space-y-3">
       <div className="text-center">
         <div className="text-lg font-black text-foreground">🏆 {s.season}시즌 {leagueName(myDiv(s))}</div>
+        {isWinnersSeason(s.season) && <div className="mt-1 inline-block rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-300 text-[11px] font-bold px-2 py-0.5">⚔️ 위너스리그 시즌 · 이긴 선수는 질 때까지 계속 출전 (7전 4선승, 결승 9전 5선승)</div>}
         <div className="text-xs text-muted-foreground">{s.phase === "regular" ? `정규시즌 ${s.week}주차 / 11` : s.phase === "postseason" ? "포스트시즌" : "시즌 종료"}</div>
       </div>
       <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-card border border-border">
