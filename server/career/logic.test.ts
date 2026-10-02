@@ -751,10 +751,10 @@ describe("경기 뒤 변화", () => {
     beginMatch(s, front);
     expect(s.players[roster[6].id].action).toBe("rest");
     const r = playLiveSet(s);
-    // 컨디션은 1 단위: 승자 0~3, 패자 3~10 하락
+    // 컨디션은 1 단위: 승자 2~5, 패자 3~10 하락
     const [w, l] = r.set.winner === "a" ? [r.set.fx!.a, r.set.fx!.b] : [r.set.fx!.b, r.set.fx!.a];
-    expect(w.cond[0] - w.cond[1]).toBeGreaterThanOrEqual(0);
-    expect(w.cond[0] - w.cond[1]).toBeLessThanOrEqual(3);
+    if (w.cond[0] > 6) expect(w.cond[0] - w.cond[1]).toBeGreaterThanOrEqual(2);
+    expect(w.cond[0] - w.cond[1]).toBeLessThanOrEqual(5);
     if (l.cond[0] > 12) { expect(l.cond[0] - l.cond[1]).toBeGreaterThanOrEqual(3); expect(l.cond[0] - l.cond[1]).toBeLessThanOrEqual(10); }
     expect(r.set.fx!.a.exp + r.set.fx!.b.exp).toBe(40);
   });
@@ -1391,5 +1391,24 @@ describe("경기마다 바뀌는 상태·컨디션·이적 자금·아이템 세
     s.teams[3].money = 2000;
     s.offers = [{ id: 1, player: rosterOf(s, 0)[0].id, team: 3, fee: 1500, max: 1800, season: 1, week: 1, tries: 0, status: "pending" }];
     expect(freeMoney(s, 3)).toBe(200);
+  });
+});
+
+describe("포텐셜 폭발도 컨디션처럼 줄어듦", () => {
+  it("포텐셜 114% 선수가 경기하면 떨어진 컨디션만큼 배율도 줄고, 100% 이하면 끝난다", async () => {
+    const { playSet } = await import("./core");
+    const s = newCareer(0);
+    const [a, b] = rosterOf(s, 1);
+    const wk = `${s.season}-${s.week}`;
+    a.cond = 100; b.cond = 100;
+    a.burst = { week: wk, mul: 1.14 };
+    delete a.slump;
+    const r = playSet(s, a, b, 0, false);
+    const lost = 100 - a.cond;
+    expect(r.fx!.a.burst).toEqual([1.14, Math.round((1.14 - lost / 100) * 100) / 100]);
+    expect(a.burst?.mul).toBeCloseTo(1.14 - lost / 100, 5);
+    a.burst = { week: wk, mul: 1.02 };
+    playSet(s, a, b, 1, false);
+    expect(a.burst).toBeUndefined();
   });
 });

@@ -313,6 +313,8 @@ export interface PlayerFx {
   exp: number;
   /** 레벨 업 했으면 새 레벨 */
   level?: number;
+  /** 포텐셜 폭발 배율 [전, 후] (후 0 = 끝남) — 떨어진 컨디션만큼 줄어듦 */
+  burst?: [number, number];
 }
 export interface SetResult {
   mapId: number;

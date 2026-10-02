@@ -10,15 +10,16 @@ export type SnapReport = { sets: SetResult[]; pre?: Record<number, PlayerSnap> }
 
 /** pre 에서 앞의 n세트 결과를 더한 상태 */
 function after(pre: PlayerSnap, sets: SetResult[], n: number, id: number): PlayerSnap {
-  let cond = pre.cond;
+  let cond = pre.cond, burst = pre.burst;
   const stats = { ...pre.stats };
   for (const x of sets.slice(0, n)) {
     const fx = x.a === id ? x.fx?.a : x.b === id ? x.fx?.b : undefined;
     if (!fx) continue;
     cond = fx.cond[1];
+    if (fx.burst) burst = fx.burst[1] || undefined;
     for (const k of STAT_KEYS) stats[k] += fx.stats?.[k] ?? 0;
   }
-  return { ...pre, cond, stats };
+  return { ...pre, cond, stats, burst };
 }
 
 /** reports[k] 의 j세트 직전 (k 가 끝이면 지금 세이브 그대로) */
