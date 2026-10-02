@@ -1262,3 +1262,53 @@ describe("다른 팀(컴퓨터) 경기 아이템", () => {
     }
   });
 });
+
+describe("컨디션·스나이핑·스폰서 협상력", () => {
+  it("컨디션이 낮을수록 능력치가 크게 깎인다 (난조 -40 이면 큰 차이)", async () => {
+    const { condMultiplier } = await import("@shared/career/rules");
+    expect(condMultiplier(100)).toBe(1);
+    expect(condMultiplier(60)).toBeLessThan(0.85);
+    expect(condMultiplier(10)).toBeLessThan(0.45);
+    expect(condMultiplier(90)).toBeGreaterThan(condMultiplier(80));
+  });
+
+  it("스나이핑이 적중하면 훨씬 약한 선수로도 65% 이상 이긴다", async () => {
+    const { quickWin, playSet } = await import("./core");
+    const s = newCareer(0);
+    const [a] = s.players.filter(p => p.team >= 0).sort((x, y) => totalOf(x.stats) - totalOf(y.stats));
+    const strong = s.players.filter(p => p.team >= 0).sort((x, y) => totalOf(y.stats) - totalOf(x.stats))[0];
+    let quick = 0, live = 0;
+    const N = 200;
+    for (let i = 0; i < N; i++) {
+      a.cond = 100; strong.cond = 100;
+      if (quickWin(s, a, strong, 0, { a: { snipe: true } })) quick++;
+    }
+    for (let i = 0; i < 60; i++) {
+      a.cond = 100; strong.cond = 100;
+      if (playSet(s, a, strong, 0, false, false, { a: { snipe: true } }).winner === "a") live++;
+    }
+    expect(quick / N).toBeGreaterThan(0.57);
+    expect(live / 60).toBeGreaterThan(0.5);
+  });
+
+  it("메인 스폰서 예산: 지난 시즌 우승·개인리그 우승이면 크게 오르고, 강등이면 크게 깎인다", async () => {
+    const { sponsorBudget, sponsorFactors, SPONSOR_STRETCH } = await import("@shared/career/mainSponsor");
+    const { negotiateMainSponsor } = await import("./club");
+    const s = newCareer(0);
+    const base = sponsorBudget(s);
+    s.history.unshift({ season: 1, champion: 0, myRank: 1, myResult: "우승", team: 0, myMsl: 1 });
+    const good = sponsorBudget(s);
+    expect(good).toBeGreaterThan(base * 1.4);
+    expect(sponsorFactors(s).items.length).toBeGreaterThan(0);
+    s.history[0] = { season: 1, champion: 3, myRank: 12, myResult: "강등", team: 0 };
+    expect(sponsorBudget(s)).toBeLessThan(base * 0.6);
+    // 예산보다 조금 높은 제안도 계약
+    s.history.shift();
+    s.phase = "offseason";
+    const k = (base * (SPONSOR_STRETCH - 0.03)) / base;
+    const { defaultOffer } = await import("@shared/career/mainSponsor");
+    const d = defaultOffer(s);
+    const terms = Object.fromEntries(Object.entries(d).map(([key, v]) => [key, Math.floor(v * k)])) as typeof d;
+    expect(negotiateMainSponsor(s, terms, 1).result).toBe("signed");
+  });
+});

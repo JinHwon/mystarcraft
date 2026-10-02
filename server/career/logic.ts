@@ -327,7 +327,7 @@ const youthOf = (m: CMatch) => m.stage === "regular" && m.div === 2;
 /**
  * 다른 팀(컴퓨터)의 세트 아이템: 큰 경기일수록 자주 (정규 12% · 승강전/준PO/PO 30% · 결승 45%)
  * 치어풀은 팬이 주는 것(가끔, 무료), 나머지는 구단 자금으로 (자금이 넉넉할 때만)
- * 스나이핑은 35% 확률로 적중해 능력치 110%
+ * 스나이핑은 35% 확률로 적중해 이길 확률 65% 이상
  */
 const AI_ITEM_CHANCE: Record<CMatch["stage"], number> = { regular: 0.12, promo: 0.3, semi: 0.3, po: 0.3, final: 0.45 };
 function aiSetItem(s: CareerState, team: number, m: CMatch): { key: string; mod: SetMods; sniped?: boolean } | undefined {
@@ -341,7 +341,7 @@ function aiSetItem(s: CareerState, team: number, m: CMatch): { key: string; mod:
   t.money -= it.price;
   if (key === "memo") return { key, mod: { bonus: it.setBonus } };
   if (key === "gum") return { key, mod: { gum: true } };
-  if (key === "sniping") { const sniped = rand() < 0.35; return { key, mod: sniped ? { mul: 1.1 } : {}, sniped }; }
+  if (key === "sniping") { const sniped = rand() < 0.35; return { key, mod: sniped ? { snipe: true } : {}, sniped }; }
   return { key, mod: {} };
 }
 /** 세트에 다른 팀 아이템 기록 + 세레모니(이기면 150만·팀 컨디션 +1) */
@@ -681,7 +681,7 @@ export function playLiveSet(s: CareerState, ace?: number): LiveSetResult {
     if (plan.key === "cheer") mod.all = ITEM_BY_KEY.cheer.all;
     if (plan.key === "gum") mod.gum = true;
     if (ITEM_BY_KEY[plan.key]?.setBonus) mod.bonus = ITEM_BY_KEY[plan.key].setBonus;
-    if (plan.key === "sniping" && plan.predict === live.opp[i]) { mod.mul = 1.1; sniped = true; }
+    if (plan.key === "sniping" && plan.predict === live.opp[i]) { mod.snipe = true; sniped = true; }
   }
   // 상대(컴퓨터)도 가끔 경기 아이템을 씀
   const oppTeam = meA ? m.b : m.a;
@@ -780,6 +780,13 @@ function myPostseasonResult(s: CareerState): string {
   return "준플레이오프";
 }
 
+/** 우리 팀 선수가 이번 시즌 개인리그 우승(1)·준우승(2) */
+function myMslOf(s: CareerState, msl?: { champion?: number; runnerUp?: number }): 1 | 2 | undefined {
+  if (msl?.champion !== undefined && s.players[msl.champion]?.team === s.myTeam) return 1;
+  if (msl?.runnerUp !== undefined && s.players[msl.runnerUp]?.team === s.myTeam) return 2;
+  return undefined;
+}
+
 function finishSeason(s: CareerState, final: CMatch) {
   s.phase = "offseason";
   const champion = final.winner!;
@@ -792,7 +799,7 @@ function finishSeason(s: CareerState, final: CMatch) {
   const champion2 = s.matches.some(m => m.div === 2 && m.done) ? standings(s, 2)[0]?.id : undefined;
   const moves = promoMoves(s);
   s.promo = { season: s.season, moves };
-  s.history.unshift({ season: s.season, champion, myRank, myResult: result, mslChampion: msl?.champion, mslRunnerUp: msl?.runnerUp, team: s.myTeam, div: myDiv(s), champion2, promo: moves });
+  s.history.unshift({ season: s.season, champion, myRank, myResult: result, mslChampion: msl?.champion, mslRunnerUp: msl?.runnerUp, team: s.myTeam, myMsl: myMslOf(s, msl), div: myDiv(s), champion2, promo: moves });
   for (const p of rosterOf(s, champion)) p.titles = [...(p.titles ?? []), `${s.season}시즌 프로리그 우승`];
   if (champion2 !== undefined) for (const p of rosterOf(s, champion2)) p.titles = [...(p.titles ?? []), `${s.season}시즌 2부 리그 1위`];
   news(s, `🏆 ${s.season}시즌 마이프로리그 우승: ${s.teams[champion].name}!${champion2 !== undefined ? ` 2부 1위: ${s.teams[champion2].name}.` : ""} 우리 팀 최종 성적: ${result}${prize ? ` (상금 ${prize.toLocaleString()}만원)` : ""}`);

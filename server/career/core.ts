@@ -78,8 +78,10 @@ export type PlayedSet = SetResult & { timeline?: SetTimeline };
 export interface SetMods {
   /** 모든 능력치 추가 (치어풀) */
   all?: number;
-  /** 능력치 배율 (스나이핑 적중) */
+  /** 능력치 배율 (포텐셜 폭발) */
   mul?: number;
+  /** 스나이핑 적중: 이 세트를 이길 확률 65% 이상 */
+  snipe?: boolean;
   /** 컨디션 난조 (그 주 경기 컨디션 -40, 최저 10) */
   slump?: boolean;
   /** 능력치별 추가 (작전 메모) */
@@ -205,7 +207,7 @@ export function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, w
   const m = mapView(mapId);
   const burst = { a: burstOf(s, a), b: burstOf(s, b) };
   const slump = { a: slumpOn(s, a), b: slumpOn(s, b) };
-  const r = simulateSet(
+  let r = simulateSet(
     { id: a.id + 1, name: a.name, race: a.race, stats: effStats(a, withWeek(s, a, mods?.a)), fatigue: 100 },
     { id: b.id + 1, name: b.name, race: b.race, stats: effStats(b, withWeek(s, b, mods?.b)), fatigue: 100 },
     mapAdvantage(mapId, a.race, b.race),
@@ -214,7 +216,24 @@ export function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, w
     withHighlights,
     withTimeline
   );
-  const aWin = r.winnerId === a.id + 1;
+  let aWin = r.winnerId === a.id + 1;
+  // 스나이핑 적중: 65% 확률로 그 선수가 이기는 경기를 다시 뽑음 (원래 이길 확률까지 더하면 65% 이상)
+  const snipe = snipeSide(mods);
+  if (snipe && rand() < SNIPE_WIN && aWin !== (snipe === "a")) {
+    // 실력 차이가 너무 크면 다시 뽑을 때마다 노린 쪽 경기력을 조금씩 올림
+    const boost = (side: "a" | "b", t: number) => side === snipe ? { mul: (mods?.[side]?.mul ?? 1) * (1 + t * 0.04) } : {};
+    for (let t = 1; t <= 40 && aWin !== (snipe === "a"); t++) {
+      r = simulateSet(
+        { id: a.id + 1, name: a.name, race: a.race, stats: effStats(a, withWeek(s, a, { ...mods?.a, ...boost("a", t) })), fatigue: 100 },
+        { id: b.id + 1, name: b.name, race: b.race, stats: effStats(b, withWeek(s, b, { ...mods?.b, ...boost("b", t) })), fatigue: 100 },
+        mapAdvantage(mapId, a.race, b.race),
+        { rushDistance: m.rush / 2, resources: m.res / 2, complexity: m.complexity / 2 },
+        withHighlights,
+        withTimeline
+      );
+      aWin = r.winnerId === a.id + 1;
+    }
+  }
   const fx = afterSet(s, a, b, aWin, mods, r.content, r.duration);
   // 중계: 포텐셜이 터진 선수 해설
   for (const [side, p] of [[1, a], [2, b]] as const) {
@@ -231,11 +250,23 @@ export function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, w
   };
 }
 
+/** 스나이핑이 적중하면 이 세트를 이길 최소 확률 */
+export const SNIPE_WIN = 0.65;
+/** 스나이핑이 적중한 쪽 (둘 다면 상쇄) */
+function snipeSide(mods?: { a?: SetMods; b?: SetMods }): "a" | "b" | undefined {
+  const a = !!mods?.a?.snipe, b = !!mods?.b?.snipe;
+  return a === b ? undefined : a ? "a" : "b";
+}
+
 /** 빠른 판정 승패: 실전 능력치 차이와 맵 종족 상성으로 (a 가 이기면 true) */
 export function quickWin(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, mods?: { a?: SetMods; b?: SetMods }): boolean {
   const pa = totalOf(effStats(a, withWeek(s, a, mods?.a))), pb = totalOf(effStats(b, withWeek(s, b, mods?.b)));
   const adv = a.race === b.race ? 0 : (matchupValue(mapId, a.race, b.race) - 50) / 100;
-  const pWin = 1 / (1 + Math.exp(-((pa - pb) / 450 + adv * 2.2)));
+  let pWin = 1 / (1 + Math.exp(-((pa - pb) / 450 + adv * 2.2)));
+  // 스나이핑 적중: 이길 확률 65% 이상 (원래 확률이 높으면 더 높게)
+  const snipe = snipeSide(mods);
+  if (snipe === "a") pWin = SNIPE_WIN + (1 - SNIPE_WIN) * pWin;
+  if (snipe === "b") pWin = (1 - SNIPE_WIN) * pWin;
   return rand() < pWin;
 }
 

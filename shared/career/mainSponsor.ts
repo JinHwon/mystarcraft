@@ -63,13 +63,43 @@ export const levelPerks = (level: number) => ({
   scout: Math.max(0.8, 1 - (level - 1) * 0.015),
 });
 
-/** 메인 스폰서 예산 (이 안이면 계약 수락) */
+/** 지난 시즌 프로리그 성적에 따른 예산 증감 */
+const RESULT_BONUS: Record<string, number> = { 우승: 0.3, 준우승: 0.15, 플레이오프: 0.08, 준플레이오프: 0.04, 승격: 0.1, "2부 우승": 0.05, 잔류: -0.2, 강등: -0.45 };
+
+/**
+ * 감독 협상력: 감독 평판과 지난 시즌 성적(프로리그·개인리그 우승)에 따라 스폰서가 더 쓰거나 덜 씀
+ * 지난 시즌이 아주 나쁘면 (강등·하위권) 크게 깎인다
+ */
+export function sponsorFactors(s: CareerState): { items: Array<{ label: string; v: number }>; mul: number } {
+  const items: Array<{ label: string; v: number }> = [];
+  const rep = s.manager?.reputation ?? 50;
+  const repV = Math.round(((rep - 50) / 250) * 100) / 100;
+  if (repV) items.push({ label: `감독 평판 ${rep}`, v: repV });
+  const h = s.history[0];
+  if (h) {
+    const r = RESULT_BONUS[h.myResult];
+    if (r !== undefined) items.push({ label: `${h.season}시즌 프로리그 ${h.myResult}`, v: r });
+    else if (h.myResult === "포스트시즌 진출 실패" && h.myRank >= 9) items.push({ label: `${h.season}시즌 프로리그 ${h.myRank}위`, v: -0.15 });
+    else if (/^2부 (\d+)위$/.test(h.myResult) && Number(h.myResult.match(/\d+/)![0]) >= 4) items.push({ label: `${h.season}시즌 ${h.myResult}`, v: -0.1 });
+    const msl = h.myMsl ?? (h.mslChampion !== undefined && s.players[h.mslChampion]?.team === s.myTeam ? 1 : h.mslRunnerUp !== undefined && s.players[h.mslRunnerUp]?.team === s.myTeam ? 2 : undefined);
+    if (msl === 1) items.push({ label: `${h.season}시즌 개인리그 우승 배출`, v: 0.2 });
+    if (msl === 2) items.push({ label: `${h.season}시즌 개인리그 준우승 배출`, v: 0.08 });
+  }
+  const mul = Math.max(0.5, Math.min(1.8, 1 + items.reduce((a, x) => a + x.v, 0)));
+  return { items, mul };
+}
+
+/** 메인 스폰서 예산 (이 안이면 계약 수락): 모기업 규모 × 감독 레벨 × 감독 협상력 */
 export function sponsorBudget(s: CareerState, team = s.myTeam): number {
   // B팀(2부)은 모구단 모기업이 작게 후원
   const t = s.teams[team];
   const size = t?.div === 2 ? (MAIN_SPONSORS[t.parent ?? -1]?.size ?? 1) * 0.5 : MAIN_SPONSORS[team]?.size ?? 1;
-  return Math.round(termsValue(DEFAULT_TERMS) * size * levelPerks(managerLevel(s)).sponsor);
+  return Math.round(termsValue(DEFAULT_TERMS) * size * levelPerks(managerLevel(s)).sponsor * (team === s.myTeam ? sponsorFactors(s).mul : 1));
 }
+/** 협상 여유: 예산보다 이만큼까지 높게 불러도 계약 */
+export const SPONSOR_STRETCH = 1.15;
+/** 이 이하면 거절하지 않고 역제안 */
+export const SPONSOR_COUNTER = 1.4;
 
 /** 예산에 맞춘 기본 제안 */
 export function defaultOffer(s: CareerState, team = s.myTeam): MainSponsorTerms {

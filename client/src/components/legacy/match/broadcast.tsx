@@ -21,7 +21,7 @@ function SetPower({ s, p, set, side }: { s: CareerState; p: CPlayer; set: Broadc
   if (!item || !ITEM_BY_KEY[item]) return null;
   const { text } = setItemBoost(item);
   const sniped = p.team === s.myTeam ? set.sniped : set.aiSniped?.[side];
-  const note = text || (item === "sniping" ? (sniped ? "예측 적중! 능력치 110%" : "예측 빗나감") : item === "gum" ? "지면 능력치 감소 -66%" : item === "ceremony" ? "이기면 +150만·팀 컨디션 +1" : "");
+  const note = text || (item === "sniping" ? (sniped ? "예측 적중! 승리 확률 65% 이상" : "예측 빗나감") : item === "gum" ? "지면 능력치 감소 -66%" : item === "ceremony" ? "이기면 +150만·팀 컨디션 +1" : "");
   const icon = item === "cheer" ? "📣" : item === "memo" ? "📝" : item === "sniping" ? "🎯" : item === "gum" ? "🍬" : "🎉";
   return <div className="text-[10px] text-center leading-tight text-[#ffe45c]">{icon} {ITEM_BY_KEY[item].name}<br />{note}</div>;
 }

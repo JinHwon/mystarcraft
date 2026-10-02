@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { DEBT_LIMIT_WEEKS, OPERATING_COST, askingPrice, totalOf, type CareerState, type Contract } from "@shared/career/rules";
 import { jobThreshold, playerDemand, teamWages } from "@shared/career/contract";
 import { activeSponsors, maxSponsors, questLabel, questProgress, questRange, questReward, sponsorOfferCount, sponsorOffers, type SponsorQuest } from "@shared/career/sponsor";
-import { TERM_NAMES, levelPerks, mainSponsorName, managerExpNeed, managerLevel, sponsorBudget, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
+import { SPONSOR_STRETCH, TERM_NAMES, levelPerks, mainSponsorName, managerExpNeed, managerLevel, sponsorBudget, sponsorFactors, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
 import { proTeams, rosterOf, teamPower } from "@shared/career/view";
 import { useCareer, useCareerPatch } from "@/lib/career";
 import { ManagerNameBox } from "@/components/ManagerName";
@@ -417,6 +417,8 @@ function MainSponsorCard({ s }: { s: CareerState }) {
   const cur: MainSponsorTerms = { win: sp.win, loss: sp.loss, proTitle: sp.proTitle, proRunnerUp: sp.proRunnerUp, mslTitle: sp.mslTitle, mslRunnerUp: sp.mslRunnerUp };
   const edit = terms ?? cur;
   const budget = sponsorBudget(s);
+  const limit = Math.round(budget * SPONSOR_STRETCH);
+  const factors = sponsorFactors(s);
   const value = termsValue(edit);
   const open = canNegotiate(s);
   return (
@@ -424,6 +426,10 @@ function MainSponsorCard({ s }: { s: CareerState }) {
       <div className="flex items-center gap-2">
         <TeamLogo team={s.teams[s.myTeam]} className="w-[52px] h-[30px]" />
         <div className="flex-1"><div className="text-[15px] text-[#ffe45c]">메인 스폰서 · {name}</div><div className="text-[10.5px] text-neutral-400">필수 스폰서 · 남은 계약 {sp.years}시즌 · 감독 Lv.{managerLevel(s)} 예산 {budget.toLocaleString()}만</div></div>
+      </div>
+      <div className="text-[10.5px] text-neutral-400">
+        감독 협상력 <b className={factors.mul >= 1 ? "text-[#bff5c6]" : "text-[#ffb8c8]"}>{Math.round(factors.mul * 100)}%</b>
+        {factors.items.length ? ` · ${factors.items.map(x => `${x.label} ${x.v > 0 ? "+" : ""}${Math.round(x.v * 100)}%`).join(" · ")}` : " · 평판·지난 시즌 성적(우승하면 ↑, 강등·하위권이면 크게 ↓)"}
       </div>
       {(Object.keys(TERM_NAMES) as Array<keyof MainSponsorTerms>).map(k => (
         <div key={k} className="flex items-center justify-between gap-1">
@@ -437,12 +443,12 @@ function MainSponsorCard({ s }: { s: CareerState }) {
           <div className="flex items-center justify-between"><span className="text-neutral-300">계약 기간</span>
             <div className="flex gap-1">{[1, 2, 3].map(y => <button key={y} onClick={() => setYears(y)} className={cn("border px-2", years === y ? "border-white text-white" : "border-neutral-700 text-neutral-400")}>{y}년</button>)}</div>
           </div>
-          <div className="text-[11px] text-neutral-400">한 시즌 기대 지급액 <b className={value <= budget ? "text-[#bff5c6]" : "text-[#ffb8c8]"}>{value.toLocaleString()}</b> / 스폰서 예산 {budget.toLocaleString()} — 승리 수당을 올리면 우승 수당을 줄이는 식으로 나누세요</div>
-          <div className="h-1.5 bg-neutral-800"><div className="h-full" style={{ width: `${Math.min(100, (value / budget) * 100)}%`, background: value <= budget ? "#8fe07a" : "#ff6b6b" }} /></div>
+          <div className="text-[11px] text-neutral-400">한 시즌 기대 지급액 <b className={value <= budget ? "text-[#bff5c6]" : value <= limit ? "text-[#ffe45c]" : "text-[#ffb8c8]"}>{value.toLocaleString()}</b> / 스폰서 예산 {budget.toLocaleString()} (협상하면 최대 {limit.toLocaleString()}) — 승리 수당을 올리면 우승 수당을 줄이는 식으로 나누세요</div>
+          <div className="h-1.5 bg-neutral-800"><div className="h-full" style={{ width: `${Math.min(100, (value / limit) * 100)}%`, background: value <= budget ? "#8fe07a" : value <= limit ? "#ffe45c" : "#ff6b6b" }} /></div>
           {reply && <Reply {...reply} />}
           <button disabled={neg.isPending} onClick={() => neg.mutate({ terms: edit, years })} className="w-full py-1.5 text-[13px] font-bold text-black border border-neutral-500" style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}>{name}에 계약 제안</button>
         </>
-      ) : <div className="text-[10.5px] text-neutral-500">재협상은 비시즌이나 시즌 첫 경기 전에 할 수 있습니다. 감독 레벨이 오르면 예산이 커집니다.</div>}
+      ) : <div className="text-[10.5px] text-neutral-500">재협상은 비시즌이나 시즌 첫 경기 전에 할 수 있습니다. 감독 레벨·평판·지난 시즌 성적(우승)에 따라 예산이 달라집니다.</div>}
     </div>
   );
 }
