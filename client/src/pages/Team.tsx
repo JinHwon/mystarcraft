@@ -1,6 +1,7 @@
 import { ITEM_BY_KEY, SLOT_NAMES, gearStats, type EquipSlot } from "@shared/career/items";
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { navigate as navigateTo } from "wouter/use-browser-location";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -69,6 +70,9 @@ export function PlayerSheet({ s, player, onClose, actions }: { s: CareerState; p
                   );
                 })}
               </div>
+              {player.team === s.myTeam && (
+                <button onClick={() => navigateTo(`/shop?cat=${encodeURIComponent("마우스")}&player=${player.id}`)} className="mt-1.5 w-full rounded-lg bg-background/60 border border-border py-1.5 font-bold text-foreground">🛒 장비 바꾸기 (상점에서 이 선수에게 장착)</button>
+              )}
               {player.equip && Object.keys(player.equip).length > 0 && <div className="mt-1 text-[10.5px] text-muted-foreground">장비 효과: 능력치 {totalOf(gearStats(player)) - totalOf(player.stats) >= 0 ? "+" : ""}{(totalOf(gearStats(player)) - totalOf(player.stats)).toLocaleString()} (경기마다 1회씩 닳음)</div>}
             </div>
             <div className="text-[11px] text-muted-foreground">영입 시세 약 {askingPrice(player, s.season).toLocaleString()}만원</div>
