@@ -4,9 +4,9 @@
 import { useEffect, useState } from "react";
 import { navigate } from "wouter/use-browser-location";
 import { cn } from "@/lib/utils";
-import { STAT_KEYS, type StatKey } from "@shared/gameConstants";
+import { STAT_KEYS, STAT_LABELS, type StatKey } from "@shared/gameConstants";
 import { COND_MAX, burstOf, condMultiplier, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
-import { ITEMS, ITEM_BY_KEY, SLOT_NAMES, gearCond, gearStats, itemImg, type EquipSlot } from "@shared/career/items";
+import { ITEMS, ITEM_BY_KEY, SLOT_NAMES, gearCond, gearStats, itemImg, setItemExtra, type EquipSlot, type StatExtra } from "@shared/career/items";
 import { trpc } from "@/lib/trpc";
 import { useCareerPatch } from "@/lib/career";
 import { LegacyImg, LegacyRadar, PlayerPhoto } from "../Legacy";
@@ -89,17 +89,21 @@ export function VitaButton({ s, pid }: { s: CareerState; pid: number }) {
 
 /**
  * 컨디션(+장비, 이번 주 포텐셜 폭발)이 반영된 능력치
- * extraAll: 그 세트에만 붙는 모든 능력치 추가 (치어풀) — 서버 core.ts effStats 와 같은 계산
+ * extra: 그 세트에만 붙는 능력치 추가 (치어풀·작전 메모) — 서버 core.ts effStats 와 같은 계산
  */
-export function condStats(p: CPlayer, s?: { season: number; week: number }, extraAll = 0): Record<StatKey, number> {
-  const g = gearStats(p, extraAll);
+export function condStats(p: CPlayer, s?: { season: number; week: number }, extra: StatExtra = 0): Record<StatKey, number> {
+  const g = gearStats(p, extra);
   const k = condMultiplier(gearCond(p)) * ((s && burstOf(s, p)) || 1);
   return Object.fromEntries(STAT_KEYS.map(s => [s, Math.round(g[s] * k)])) as Record<StatKey, number>;
 }
 
-/** 그 세트에 쓴(쓸) 경기 아이템의 모든 능력치 추가량 (치어풀 +75) */
-export function setItemAll(key: string | undefined): number {
-  return key ? ITEM_BY_KEY[key]?.all ?? 0 : 0;
+/** 그 세트에 쓴(쓸) 경기 아이템의 능력치 추가량과 설명 (치어풀: 모든 능력치 +75 · 작전 메모: 센스 +100, 전략 +60) */
+export function setItemBoost(key: string | undefined): { extra: Partial<Record<StatKey, number>>; text: string } {
+  const extra = setItemExtra(key);
+  const it = key ? ITEM_BY_KEY[key] : undefined;
+  if (!it || !Object.keys(extra).length) return { extra, text: "" };
+  const text = it.all ? `모든 능력치 +${it.all}` : Object.entries(extra).map(([k, v]) => `${STAT_LABELS[k as StatKey]} +${v}`).join(", ");
+  return { extra, text };
 }
 
 /** 장착 장비 4칸 (마우스·키보드·모니터·기타) */

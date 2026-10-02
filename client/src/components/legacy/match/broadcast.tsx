@@ -7,17 +7,18 @@ import { cn } from "@/lib/utils";
 import { STAT_LABELS, type StatKey } from "@shared/gameConstants";
 import { type CareerState, type CPlayer, type PlayerFx, type SetResult, type SetTimeline } from "@shared/career/rules";
 import { headToHead, mapView } from "@shared/career/view";
+import { ITEM_BY_KEY } from "@shared/career/items";
 import { GrayBox, LEGACY_FONT, LegacyFrame, MapImage, PlayerPhoto } from "../Legacy";
-import { LEFT_COLOR, R, RIGHT_COLOR, nameRace, setItemAll, type Speed } from "./common";
+import { LEFT_COLOR, R, RIGHT_COLOR, nameRace, setItemBoost, type Speed } from "./common";
 
 /**
  * 중계 화면 선수 아래: 이 세트에 쓴 경기 아이템 (치어풀이면 모든 능력치 +75 로 경기함)
  * 중계 중인 세이브는 세트가 끝난 뒤 상태라, 능력치 합계 대신 아이템 효과만 표시
  */
 function SetPower({ s, p, item }: { s: CareerState; p: CPlayer; item?: string }) {
-  const extra = p.team === s.myTeam ? setItemAll(item) : 0;
-  if (!extra) return null;
-  return <div className="text-[10px] text-center leading-tight text-[#ffe45c]">📣 치어풀<br />모든 능력치 +{extra}</div>;
+  const { text } = p.team === s.myTeam ? setItemBoost(item) : { text: "" };
+  if (!text || !item) return null;
+  return <div className="text-[10px] text-center leading-tight text-[#ffe45c]">{item === "cheer" ? "📣" : "📝"} {ITEM_BY_KEY[item]?.name}<br />{text}</div>;
 }
 
 // ── 중계 화면 ─────────────────────────────────────────────────────

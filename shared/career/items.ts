@@ -121,10 +121,26 @@ export function equipBonus(p: CPlayer): Record<StatKey, number> {
 export function equipCond(p: CPlayer): number {
   return Object.values(p.equip ?? {}).reduce((sum, e) => sum + (e ? ITEM_BY_KEY[e.key]?.cond ?? 0 : 0), 0);
 }
-/** 경기에 쓰이는 능력치 (기본 + 장비 + 추가) */
-export function gearStats(p: CPlayer, extraAll = 0): Record<StatKey, number> {
+/** 세트 추가 능력치: 숫자면 모든 능력치, 객체면 능력치별 */
+export type StatExtra = number | Partial<Record<StatKey, number>>;
+const extraOf = (e: StatExtra, k: StatKey) => (typeof e === "number" ? e : e[k] ?? 0);
+
+/** 경기에 쓰이는 능력치 (기본 + 장비 + 세트 추가) */
+export function gearStats(p: CPlayer, extra: StatExtra = 0): Record<StatKey, number> {
   const b = equipBonus(p);
-  return Object.fromEntries(STAT_KEYS.map(k => [k, Math.min(EFFECTIVE_STAT_MAX, p.stats[k] + b[k] + extraAll)])) as Record<StatKey, number>;
+  return Object.fromEntries(STAT_KEYS.map(k => [k, Math.min(EFFECTIVE_STAT_MAX, p.stats[k] + b[k] + extraOf(extra, k))])) as Record<StatKey, number>;
+}
+
+/** 경기 아이템이 그 세트에 더하는 능력치 (치어풀: 모든 능력치 +75, 작전 메모: 센스 +100·전략 +60) */
+export function setItemExtra(key: string | undefined): Partial<Record<StatKey, number>> {
+  const it = key ? ITEM_BY_KEY[key] : undefined;
+  if (!it) return {};
+  const out: Partial<Record<StatKey, number>> = {};
+  for (const k of STAT_KEYS) {
+    const v = (it.all ?? 0) + (it.setBonus?.[k] ?? 0);
+    if (it.kind === "match" && v) out[k] = v;
+  }
+  return out;
 }
 /** 경기에 쓰이는 컨디션 (1~10) */
 export function gearCond(p: CPlayer): number {
