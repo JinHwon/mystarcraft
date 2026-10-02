@@ -98,16 +98,21 @@ export function effStats(p: CPlayer, mod?: SetMods): Record<StatKey, number> {
   return Object.fromEntries(STAT_KEYS.map(s => [s, g[s] * k])) as Record<StatKey, number>;
 }
 
+/** 실력 차이가 크다고 보는 기준 (컨디션 반영 능력치 합이 이만큼 이상 차이) */
+const BIG_GAP = 0.12;
+/** 단기전·장기전 기준 (초) — 중계 없는 빠른 판정(duration 0)은 경기 길이를 따지지 않음 */
+const SHORT_GAME = 600, LONG_GAME = 1000;
+
 /**
- * 경기 뒤 컨디션 하락 (원작: 1 단위)
- * - 패배: 3~7 (경기가 길수록, 기지를 잃거나 완패할수록 더)
- * - 승리: 2~5 (긴 경기면 더)
+ * 경기 뒤 컨디션 하락 (1 단위)
+ * - 승리: 쉽게 이김(내가 훨씬 강하거나 단기전) 0~2, 그 밖 1~3
+ * - 패배: 실력 차이가 크거나 장기전 3~6, 그 밖(비슷한 실력·단기전) 1~4
+ * edge: (내 실전 능력치 - 상대) / 상대
  */
-function condLoss(p: CPlayer, won: boolean, c: SetContent | undefined, duration: number): number {
-  const long = Math.min(3, Math.max(0, (duration - 600) / 300));
-  if (won) return Math.max(2, Math.min(5, Math.round(randInt(2, 4) + long * 0.4)));
-  const pain = c ? c.crushed * 1 + c.basesLost * 0.7 + c.holdFails * 0.4 : 0;
-  return Math.max(3, Math.min(7, Math.round(randInt(3, 4) + long * 0.7 + pain * 0.7)));
+function condLoss(won: boolean, edge: number, duration: number): number {
+  const short = duration > 0 && duration <= SHORT_GAME, long = duration >= LONG_GAME;
+  if (won) return edge >= BIG_GAP || short ? randInt(0, 2) : randInt(1, 3);
+  return Math.abs(edge) >= BIG_GAP || long ? randInt(3, 6) : randInt(1, 4);
 }
 
 /** 세트 전 상태 → 변화 기록 */
@@ -159,8 +164,11 @@ function afterSet(s: CareerState, a: CPlayer, b: CPlayer, aWin: boolean, mods?: 
       if (next > 1) p.burst = { ...p.burst!, mul: next }; else delete p.burst;
     }
   };
-  tire(w, condLoss(w, true, content?.[w === a ? 0 : 1], duration));
-  tire(l, condLoss(l, false, content?.[l === a ? 0 : 1], duration));
+  // 세트 전 실전 능력치(컨디션 반영)로 실력 차이
+  const power = (p: CPlayer, snap: { cond: number; stats: Record<StatKey, number> }) => totalOf(snap.stats) * condMultiplier(snap.cond) * (burstBefore[p === a ? "a" : "b"] ?? 1);
+  const pw = power(w, w === a ? before.a : before.b), pl = power(l, l === a ? before.a : before.b);
+  tire(w, condLoss(true, (pw - pl) / Math.max(1, pl), duration));
+  tire(l, condLoss(false, (pl - pw) / Math.max(1, pw), duration));
   addExp(s, w, 30); addExp(s, l, 10);
   for (const [p, d] of [[a, da], [b, db]] as const) {
     const age = ageOf(p, s.season);

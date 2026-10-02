@@ -751,11 +751,11 @@ describe("경기 뒤 변화", () => {
     beginMatch(s, front);
     expect(s.players[roster[6].id].action).toBe("rest");
     const r = playLiveSet(s);
-    // 컨디션은 1 단위: 승자 2~5, 패자 3~7 하락
+    // 컨디션은 1 단위: 승자 0~3, 패자 1~6 하락
     const [w, l] = r.set.winner === "a" ? [r.set.fx!.a, r.set.fx!.b] : [r.set.fx!.b, r.set.fx!.a];
-    if (w.cond[0] > 6) expect(w.cond[0] - w.cond[1]).toBeGreaterThanOrEqual(2);
-    expect(w.cond[0] - w.cond[1]).toBeLessThanOrEqual(5);
-    if (l.cond[0] > 12) { expect(l.cond[0] - l.cond[1]).toBeGreaterThanOrEqual(3); expect(l.cond[0] - l.cond[1]).toBeLessThanOrEqual(7); }
+    expect(w.cond[0] - w.cond[1]).toBeGreaterThanOrEqual(0);
+    expect(w.cond[0] - w.cond[1]).toBeLessThanOrEqual(3);
+    if (l.cond[0] > 7) { expect(l.cond[0] - l.cond[1]).toBeGreaterThanOrEqual(1); expect(l.cond[0] - l.cond[1]).toBeLessThanOrEqual(6); }
     expect(r.set.fx!.a.exp + r.set.fx!.b.exp).toBe(40);
   });
 });
@@ -1317,7 +1317,7 @@ describe("컨디션·스나이핑·스폰서 협상력", () => {
 });
 
 describe("경기마다 바뀌는 상태·컨디션·이적 자금·아이템 세트", () => {
-  it("이긴 선수도 컨디션이 2~5 떨어지고, 다전제는 바뀐 컨디션으로 다음 세트를 치른다", async () => {
+  it("승리 0~3·패배 1~6 컨디션 하락, 다전제는 바뀐 컨디션으로 다음 세트를 치른다", async () => {
     const { playSet } = await import("./core");
     const s = newCareer(0);
     const [a, b] = rosterOf(s, 1);
@@ -1325,8 +1325,8 @@ describe("경기마다 바뀌는 상태·컨디션·이적 자금·아이템 세
       a.cond = 100; b.cond = 100;
       const r = playSet(s, a, b, 0, false);
       const w = r.winner === "a" ? a : b;
-      expect(100 - w.cond).toBeGreaterThanOrEqual(2);
-      expect(100 - w.cond).toBeLessThanOrEqual(5);
+      expect(100 - w.cond).toBeGreaterThanOrEqual(0);
+      expect(100 - w.cond).toBeLessThanOrEqual(3);
       // 다음 세트 기록의 시작 컨디션은 직전 세트 끝 컨디션
       const r2 = playSet(s, a, b, 1, false);
       expect(r2.fx!.a.cond[0]).toBe(r.fx!.a.cond[1]);
@@ -1409,7 +1409,8 @@ describe("포텐셜 폭발도 컨디션처럼 줄어듦", () => {
     expect(r.fx!.a.burst).toEqual([1.14, Math.round((1.14 - lost / 100) * 100) / 100]);
     expect(a.burst?.mul).toBeCloseTo(1.14 - lost / 100, 5);
     a.burst = { week: wk, mul: 1.02 };
-    playSet(s, a, b, 1, false);
+    // 쉽게 이기면 컨디션이 안 떨어질 수도 있으므로 몇 세트
+    for (let i = 0; i < 20 && a.burst; i++) playSet(s, a, b, i % 10, false);
     expect(a.burst).toBeUndefined();
   });
 });
@@ -1445,5 +1446,24 @@ describe("선수단 최소 8명 · 떠난 선수 제안 정리", () => {
     for (const p of rosterOf(s, 0).slice(0, 3)) p.contract = { salary: p.contract?.salary ?? 100, years: 1 };
     startNextSeason(s, { releaseExpiring: true });
     expect(rosterOf(s, 0).length).toBeGreaterThanOrEqual(8);
+  });
+});
+
+describe("컨디션 하락: 실력 차이·경기 길이", () => {
+  it("쉽게 이기면 0~2, 비슷하면 1~3 / 크게 지거나 장기전 3~6, 비슷한 실력 패배 1~4", async () => {
+    const { playSet } = await import("./core");
+    const s = newCareer(0);
+    const ps = s.players.filter(p => p.team >= 0 && p.team < 12).sort((x, y) => totalOf(y.stats) - totalOf(x.stats));
+    const strong = ps[0], weak = ps.at(-1)!;
+    const loss = { easyWin: [] as number[], bigLoss: [] as number[] };
+    for (let i = 0; i < 40; i++) {
+      strong.cond = 100; weak.cond = 100;
+      const r = playSet(s, strong, weak, i % 10, false);
+      if (r.winner === "a") { loss.easyWin.push(100 - strong.cond); loss.bigLoss.push(100 - weak.cond); }
+    }
+    expect(loss.easyWin.length).toBeGreaterThan(10);
+    expect(Math.max(...loss.easyWin)).toBeLessThanOrEqual(2);
+    expect(Math.min(...loss.bigLoss)).toBeGreaterThanOrEqual(3);
+    expect(Math.max(...loss.bigLoss)).toBeLessThanOrEqual(6);
   });
 });
