@@ -7,6 +7,7 @@ import { FINAL_SETS, PRO_SETS, type CareerState, type CMatch } from "@shared/car
 import { DIV_NAMES, STAGE_NAMES, divTeams, leagueName, myDiv, myPendingMatch, rosterOf, standings } from "@shared/career/view";
 import { useCareer, useCareerPatch, useCareerUpdater } from "@/lib/career";
 import { USER_CHANGE_EVENT } from "@/lib/session";
+import { usePauseAlerts } from "@/lib/alertPause";
 import type { CareerDiff } from "@shared/career/diff";
 import { TeamBadge } from "@/components/career/Bits";
 import { EntryScreen, LiveMatch, MapDrawScreen, MslFlow, NominationScreen, ProSeriesFlow, ScheduleScreen, SeriesViewer, type BroadcastSet, type HeldFinish, type ItemPlan, type MslReportView, type WeekDone } from "@/components/legacy/LegacyMatch";
@@ -70,6 +71,8 @@ function MatchTab({ s }: { s: CareerState }) {
   const [showNom, setShowNom] = useState(false);
   const [watch, setWatch] = useState<MslReportView | null>(null);
   const [watching, setWatching] = useState(!!s.live && !heldLive);
+  // 관전(우리 경기·포스트시즌·개인리그)과 주 결과 화면이 떠 있는 동안은 영입 제안 등 알림을 멈췄다가, 나올 때 띄움
+  usePauseAlerts(watching || !!wv || !!watch || (!!live && !live.closed));
   const drawKey = `mysc-mapdraw-${s.season}-${s.myTeam}`;
   const [showMaps, setShowMaps] = useState(false);
   // 엔트리 편성 중 상점에 다녀왔으면 편성하던 화면으로 바로 돌아온다

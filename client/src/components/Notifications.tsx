@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { careerAlerts } from "@/lib/alerts";
+import { useAlertsPaused } from "@/lib/alertPause";
 import type { CareerState } from "@shared/career/rules";
 
 const SEEN_KEY = "mysc-seen-alerts";
@@ -23,7 +24,12 @@ const writeSeen = (keys: Set<string>) => {
 export function Notifications({ s }: { s: CareerState }) {
   const [, navigate] = useLocation();
   const [open, setOpen] = useState(false);
-  const alerts = useMemo(() => careerAlerts(s), [s]);
+  // 관전 중에는 멈췄다가, 관전을 마치면 그동안 생긴 알림을 띄움
+  const paused = useAlertsPaused();
+  const all = useMemo(() => careerAlerts(s), [s]);
+  const [held, setHeld] = useState(all);
+  useEffect(() => { if (!paused) setHeld(all); }, [all, paused]);
+  const alerts = paused ? held : all;
   const [seen, setSeen] = useState(readSeen);
   const unseen = alerts.filter(a => !seen.has(a.key));
   // 새 중요 알림은 어느 화면에서든 팝업 (처음 불러올 때는 뱃지로만)

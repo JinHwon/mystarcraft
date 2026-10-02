@@ -30,7 +30,8 @@ export function ProSeriesFlow({ s: latest, reports, onDone, onClose, start, onPr
 }) {
   const [k, setK] = useState(start?.k ?? 0);
   const [idx, setIdx] = useState(start?.idx ?? 0);
-  const [mode, setMode] = useState<"preview" | "live" | "result">("preview");
+  // between: 한 경기를 다 보고 다음 경기 전 (정규시즌처럼 "관전하기"를 눌러야 다음 경기로)
+  const [mode, setMode] = useState<"preview" | "live" | "result" | "between">("preview");
   const [view, setView] = useState<number | null>(null);
   const [speed, setSpeed] = useSpeed();
   useEffect(() => { onProgress?.({ k, idx }); }, [k, idx]);
@@ -54,6 +55,27 @@ export function ProSeriesFlow({ s: latest, reports, onDone, onClose, start, onPr
     return [a, b];
   };
   const nextReport = () => { setK(k + 1); setIdx(0); setView(null); setMode("preview"); };
+  // 다음 경기로 넘어가되 바로 시작하지 않고 "관전하기"를 기다림 (이어 보기 위치도 다음 경기)
+  const afterResult = () => { if (k + 1 < reports.length) { nextReport(); setMode("between"); } else nextReport(); };
+  if (mode === "between") {
+    const n = r, prev = reports[k - 1];
+    return (
+      <LegacyFrame season={s.season} onBack={exit} onNext={() => setMode("preview")} nextLabel="관전하기 ▷▷">
+        <div className="px-3 pt-6 pb-4 text-center space-y-3">
+          {prev && <div className="text-[13px] text-neutral-300">마이프로리그 {STAGE_NAMES[prev.stage]} 경기가 끝났습니다 · {prev.sa}:{prev.sb} {s.teams[prev.sa > prev.sb ? prev.a : prev.b]?.name} 승</div>}
+          <div className="text-[12px] text-[#ffe45c]">다음 경기 ({k + 1}/{reports.length})</div>
+          <div className="text-[15px] text-white">마이프로리그 {STAGE_NAMES[n.stage]}</div>
+          <div className="flex items-center justify-center gap-3">
+            <TeamLogo team={s.teams[n.a]} className="w-[70px] h-[40px]" />
+            <span className="text-neutral-400">vs</span>
+            <TeamLogo team={s.teams[n.b]} className="w-[70px] h-[40px]" />
+          </div>
+          <div className="text-[13px] text-neutral-200">{s.teams[n.a]?.name} vs {s.teams[n.b]?.name}</div>
+          <button onClick={onDone} className="border border-neutral-500 px-3 py-1 text-[12px] text-neutral-300">남은 경기 건너뛰고 결과 보기</button>
+        </div>
+      </LegacyFrame>
+    );
+  }
   if (mode === "live") {
     const set = r.sets[idx];
     return (
@@ -74,7 +96,7 @@ export function ProSeriesFlow({ s: latest, reports, onDone, onClose, start, onPr
   const canView = (j: number) => j !== total - 1 || aceOpen || j < played;
   const label = view === null ? "" : view < cur || (final && view <= cur) ? (set ? `지난 경기 · ${s.players[set.winner === "a" ? set.a : set.b]?.name} 승` : "") : view > cur && !final ? "앞으로 치를 경기" : "";
   return (
-    <LegacyFrame season={s.season} onBack={exit} onNext={final ? nextReport : () => { setView(null); setMode("live"); }} nextLabel={final ? "확인 ▷▷" : undefined}>
+    <LegacyFrame season={s.season} onBack={exit} onNext={final ? afterResult : () => { setView(null); setMode("live"); }} nextLabel={final ? "확인 ▷▷" : undefined}>
       <div className="px-3 pt-3 pb-4">
         <div className="text-center text-[12px] text-[#ffe45c]">{stageName} · 관전 {k + 1}/{reports.length}</div>
         <div className="flex items-start justify-between mt-1">
