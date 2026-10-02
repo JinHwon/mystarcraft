@@ -16,7 +16,7 @@ import { diffOf, jsonOf, snapshot, type Snapshot } from "./diff";
 import { nominate } from "./msl";
 import { ACTIONS, type ActionKey } from "@shared/career/rules";
 import { negotiateMainSponsor, pay } from "./club";
-import { acceptJob, bidPlayer, chooseSponsor, listPlayer, negotiateContract, respondJob, respondJoin, respondOffer, unlistPlayer } from "./club";
+import { acceptJob, bidPlayer, chooseSponsor, listPlayer, negotiateContract, respondJob, respondJoin, respondOffer, respondRaise, unlistPlayer } from "./club";
 import { sendToB } from "./divisions";
 import {
   CareerError,
@@ -504,6 +504,11 @@ export const careerRouter = router({
   respondOffer: protectedProcedure
     .input(z.object({ offerId: z.number().int(), action: z.enum(["accept", "reject", "counter"]), fee: z.number().int().min(0).max(1_000_000).optional() }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => respondOffer(s, input.offerId, input.action, input.fee))),
+
+  /** 스타 선수의 연봉 인상 요구: 수락·역제안·거절 */
+  respondRaise: protectedProcedure
+    .input(z.object({ action: z.enum(["accept", "counter", "reject"]), salary: z.number().int().min(0).max(100_000).optional() }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => respondRaise(s, input.action, input.salary))),
 
   /** 다른 팀 선수의 입단 요청: 수락·거절 */
   respondJoin: protectedProcedure

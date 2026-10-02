@@ -154,6 +154,12 @@ export function setAction(s: CareerState, pid: number, action: ActionKey | null)
 }
 
 
+/** 연봉 불만 기간인지 (sulkUntil = "시즌-주") */
+function sulking(s: CareerState, p: CPlayer) {
+  const [ss, ww] = (p.sulkUntil ?? "0-0").split("-").map(Number);
+  return s.season < ss || (s.season === ss && s.week <= ww);
+}
+
 /** 행동 한 명 실행: 능력치·컨디션·돈 변화 */
 function actOne(s: CareerState, p: CPlayer, action: ActionKey | null | undefined) {
   const mine = p.team === s.myTeam;
@@ -440,7 +446,12 @@ function finishWeek(s: CareerState): WeekResult {
   // 2부 팀 최소 인원 (이적·은퇴로 모자라면 리그가 채움)
   fillBRosters(s);
   // 한 주(프로리그 2경기)가 끝나면 모든 선수 컨디션 10% 회복
-  for (const p of activePlayers(s)) p.cond = clampCond(p.cond + WEEKLY_COND_RECOVERY);
+  // 연봉 협상이 틀어져 불만인 선수는 그 기간 동안 회복 없음
+  for (const p of activePlayers(s)) {
+    if (p.sulkUntil && sulking(s, p)) continue;
+    if (p.sulkUntil) delete p.sulkUntil;
+    p.cond = clampCond(p.cond + WEEKLY_COND_RECOVERY);
+  }
   // 다른 구단은 여유 자금으로 주전 선수 아이템 구입
   if (s.phase !== "offseason") aiShopping(s);
   // 우리 선수 행동력: 매주 20 (최대 40까지 모임)

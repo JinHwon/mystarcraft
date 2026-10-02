@@ -126,6 +126,8 @@ export interface CPlayer {
   equip?: Partial<Record<"mouse" | "keyboard" | "monitor" | "etc", { key: string; left: number }>>;
   /** 이번 시즌 마신 포션 수 */
   potions?: number;
+  /** 연봉 협상이 틀어져 불만: 이 주(시즌-주)까지 주간 컨디션 회복이 없음 */
+  sulkUntil?: string;
   /** 계약 */
   contract?: Contract;
   /** 사기 0~100 (출전이 적으면 떨어짐) */
@@ -483,6 +485,8 @@ export interface CareerState {
   pendingJob?: { team: number; fee: number; season: number };
   /** 다른 팀 선수의 입단 요청 */
   joinRequests?: JoinRequest[];
+  /** 우리 스타 선수의 연봉 인상(재계약) 요구 (한 번에 한 명, 2주 안에 답하지 않으면 거절로 봄) */
+  raiseRequest?: { player: number; salary: number; years: number; season: number; week: number };
   /** 적자 주 수 (3주 연속이면 구단 해체) */
   debtWeeks?: number;
   /** 게임 종료 */

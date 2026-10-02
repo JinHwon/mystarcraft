@@ -29,6 +29,10 @@ export function careerAlerts(s: CareerState): CareerAlert[] {
     const p = s.players[o.player];
     out.push({ key: `offer-${o.id}-${o.fee}`, icon: o.byPlayer ? "🙋" : "📨", text: o.byPlayer ? `${p?.name} 선수가 ${s.teams[o.team]?.name} 이적을 원합니다 (${o.fee.toLocaleString()}만원)` : `${s.teams[o.team]?.name}: ${p?.name} 선수 영입 제안 ${o.fee.toLocaleString()}만원`, to: "/club?tab=offers", urgent: true });
   }
+  if (s.raiseRequest && s.players[s.raiseRequest.player]?.team === s.myTeam) {
+    const r = s.raiseRequest, p = s.players[r.player];
+    out.push({ key: `raise-${r.season}-${r.week}-${r.player}`, icon: "💼", text: `${p.name} 선수 연봉 인상 요구: ${(p.contract?.salary ?? 0).toLocaleString()}만 → ${r.salary.toLocaleString()}만원`, to: "/club?tab=offers", urgent: true });
+  }
   for (const r of s.joinRequests ?? []) {
     const p = s.players[r.player];
     if (p && p.team !== s.myTeam) out.push({ key: `join-${r.id}`, icon: "🙋", text: `${s.teams[p.team]?.name} ${p.name} 선수 입단 요청 (이적료 ${r.fee.toLocaleString()}만원)`, to: "/club?tab=offers", urgent: true });
