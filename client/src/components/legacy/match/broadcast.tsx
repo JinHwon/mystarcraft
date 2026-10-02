@@ -203,8 +203,10 @@ export function PlayerCard({ p, opp }: { p: CPlayer; opp: CPlayer }) {
   );
 }
 
-export function SetList({ s, left, right, maps, total, idx, results, leftIsA, showAce, onView, view, hideOppAce = true }: {
-  s: CareerState; left: number[]; right: number[]; maps: number[]; total: number; idx: number; results: BroadcastSet[]; leftIsA: boolean; showAce: boolean;
+export function SetList({ s, left, right, maps, total, idx, results, leftIsA, showAce, onView, view, hideOppAce = true, winners = false }: {
+  s: CareerState; left: (number | undefined)[]; right: (number | undefined)[]; maps: number[]; total: number; idx: number; results: BroadcastSet[]; leftIsA: boolean; showAce: boolean;
+  /** 위너스리그: ACE 결정전이 없고, 아직 모르는 출전 선수는 "?" */
+  winners?: boolean;
   /** 오른쪽(상대) ACE 는 치를 때까지 숨김 — 우리 경기. 관전(다른 팀 경기)이면 false: 양쪽 다 showAce 를 따름 */
   hideOppAce?: boolean;
   /** 맵을 누르면 그 세트 선수를 보여줌 (보여줄 수 있는지는 부르는 쪽에서 판단) */
@@ -214,13 +216,14 @@ export function SetList({ s, left, right, maps, total, idx, results, leftIsA, sh
   return (
     <div className="space-y-1.5">
       {Array.from({ length: total }, (_, i) => {
-        const ace = i === total - 1;
+        const ace = !winners && i === total - 1;
         const r = results[i];
         const leftWon = r ? (r.winner === "a") === leftIsA : undefined;
         const hideL = ace && !r && !showAce, hideR = ace && !r && (hideOppAce || !showAce);
-        const lp = left[i] !== undefined ? s.players[left[i]] : undefined, rp = s.players[right[i]];
+        const lp = left[i] !== undefined ? s.players[left[i]!] : undefined, rp = right[i] !== undefined ? s.players[right[i]!] : undefined;
         const cell = (p: CPlayer | undefined, won: boolean | undefined, hide: boolean) =>
-          hide || !p ? <span className="inline-block border border-neutral-300 px-2 py-[1px]">ACE Card</span>
+          winners && !p ? <span className="text-neutral-500">?</span>
+          : hide || !p ? <span className="inline-block border border-neutral-300 px-2 py-[1px]">ACE Card</span>
             : <span className={cn(r && won === false && "text-neutral-500", r && won && "text-[#ffe45c]")}>{nameRace(p)}</span>;
         return (
           <div key={i} className={cn("grid grid-cols-[1fr_96px_1fr] items-center gap-1.5 text-[12px] px-1 py-[3px]", i === idx && "border border-neutral-300")}>

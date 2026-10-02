@@ -1094,3 +1094,73 @@ describe("스타 선수 연봉", () => {
     expect(() => respondRaise(s, "accept")).toThrow("받은 연봉 요구가 없습니다");
   });
 });
+
+describe("위너스리그 (3의 배수 시즌)", () => {
+  const winnersRule = (sets: { a: number; b: number; winner: "a" | "b" }[]) => {
+    for (let i = 1; i < sets.length; i++) {
+      const prev = sets[i - 1];
+      // 이긴 쪽은 같은 선수, 진 쪽은 새 선수
+      if (prev.winner === "a") { expect(sets[i].a).toBe(prev.a); expect(sets[i].b).not.toBe(prev.b); }
+      else { expect(sets[i].b).toBe(prev.b); expect(sets[i].a).not.toBe(prev.a); }
+    }
+  };
+
+  it("3시즌 일정은 위너스리그 (7전 4선승), 다른 팀 경기도 이긴 선수가 계속 나온다", async () => {
+    const { scheduleDivision } = await import("./divisions");
+    const s = newCareer(0);
+    s.season = 3;
+    s.matches = [];
+    scheduleDivision(s, 1);
+    expect(s.matches.length).toBeGreaterThan(0);
+    expect(s.matches.every(m => m.winners && m.maps.length === 7)).toBe(true);
+    s.season = 4; s.matches = [];
+    scheduleDivision(s, 1);
+    expect(s.matches.every(m => !m.winners)).toBe(true);
+    // AI 경기
+    s.season = 3; s.matches = []; s.week = 1;
+    scheduleDivision(s, 1);
+    const { matchNeed } = await import("@shared/career/rules");
+    // 주를 진행하면 다른 팀 경기도 위너스 방식으로 치러짐 (우리 팀은 선봉만 냄)
+    advanceWeek(s, aiEntry(s, 0, 7).slice(0, 1));
+    const played = s.matches.filter(x => x.done && x.winners && x.a !== 0 && x.b !== 0);
+    expect(played.length).toBeGreaterThan(0);
+    for (const x of played) {
+      expect(Math.max(x.scoreA!, x.scoreB!)).toBe(matchNeed(x));
+      winnersRule(x.sets!);
+    }
+  });
+
+  it("우리 경기: 선봉만 내고, 지면 다음 선수를 고르며 진 선수는 다시 못 나온다", async () => {
+    const s = newCareer(0);
+    const m = myPendingMatch(s)!;
+    m.winners = true;
+    m.maps = [...m.maps, ...m.maps].slice(0, 7);
+    const roster = rosterOf(s, 0);
+    expect(() => beginMatch(s, roster.slice(0, 4).map(p => p.id))).toThrow("선봉");
+    beginMatch(s, [roster[0].id]);
+    const meA = m.a === 0;
+    let guard = 0;
+    let over = false;
+    const lost = new Set<number>();
+    let r = playLiveSet(s);
+    while (!over && guard++ < 20) {
+      const set = r.set;
+      const mineId = meA ? set.a : set.b;
+      const myWin = (set.winner === "a") === meA;
+      if (!myWin) lost.add(mineId);
+      over = r.matchOver;
+      if (over) break;
+      expect(r.needAce).toBe(!myWin);
+      if (r.needAce) {
+        expect(() => playLiveSet(s)).toThrow("다음 세트에 나갈 선수");
+        if (lost.size < roster.length) expect(() => playLiveSet(s, [...lost][0])).toThrow("진 선수는");
+        const next = roster.find(p => !lost.has(p.id))!;
+        r = playLiveSet(s, next.id);
+      } else r = playLiveSet(s);
+    }
+    expect(over).toBe(true);
+    const done = s.matches.find(x => x.id === m.id)!;
+    expect(Math.max(done.scoreA!, done.scoreB!)).toBe(4);
+    winnersRule(done.sets!);
+  });
+});

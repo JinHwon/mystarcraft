@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
-import { FINAL_SETS, burstOf, PRO_SETS, totalOf, type CareerState, type CMatch, type CPlayer } from "@shared/career/rules";
+import { burstOf, matchFormatName, matchSets, totalOf, type CareerState, type CMatch, type CPlayer } from "@shared/career/rules";
 import { STAGE_NAMES, mapView, rosterOf } from "@shared/career/view";
 import { ITEM_BY_KEY, gearCond, itemImg } from "@shared/career/items";
 import { GrayBox, LEGACY_FONT, LegacyFrame, LegacyImg, MapInfo, MslBadges, TeamLogo } from "../Legacy";
@@ -129,8 +129,10 @@ export function EntryScreen({ s, match, front, setFront, items, setItems, onSubm
   onShowMaps?: () => void;
   onBack: () => void;
 }) {
-  const sets = match.stage === "final" ? FINAL_SETS : PRO_SETS;
-  const n = sets - 1;
+  const sets = matchSets(match);
+  // 위너스리그: 선봉 한 명만 (이긴 선수는 질 때까지 계속, 지면 다음 선수를 그때 고름)
+  const winners = !!match.winners;
+  const n = winners ? 1 : sets - 1;
   const oppId = match.a === s.myTeam ? match.b : match.a;
   const mine = useMemo(() => rosterOf(s, s.myTeam).sort((a, b) => a.name.localeCompare(b.name, "ko")), [s]);
   const theirs = useMemo(() => rosterOf(s, oppId).sort((a, b) => a.name.localeCompare(b.name, "ko")), [s, oppId]);
@@ -178,7 +180,7 @@ export function EntryScreen({ s, match, front, setFront, items, setItems, onSubm
           <TeamLogo team={s.teams[s.myTeam]} className="w-[70px] h-[40px]" />
           <div className="text-center">
             <div className="text-[15px] tracking-[0.3em] text-neutral-100">▽ 엔트리 편성 ▽</div>
-            <div className="text-[10px] text-neutral-400 mt-0.5">{STAGE_NAMES[match.stage]}{match.stage === "regular" ? ` ${match.week}주차` : ""} · {sets === FINAL_SETS ? "7전 4선승" : "5전 3선승"}</div>
+            <div className="text-[10px] text-neutral-400 mt-0.5">{STAGE_NAMES[match.stage]}{match.stage === "regular" ? ` ${match.week}주차` : ""} · {matchFormatName(match)}</div>
           </div>
           <TeamLogo team={s.teams[oppId]} className="w-[70px] h-[40px]" />
         </div>
@@ -201,9 +203,9 @@ export function EntryScreen({ s, match, front, setFront, items, setItems, onSubm
 
           <div className="space-y-1.5">
             <div className="text-center text-[13px] text-neutral-100">&lt; V S &gt;</div>
-            <div className="text-center text-[10px] text-[#ffe45c]">{slot + 1}세트 선수를 고르세요</div>
-            {Array.from({ length: sets }, (_, i) => {
-              const isAce = i === n;
+            <div className="text-center text-[10px] text-[#ffe45c]">{winners ? "위너스리그 · 선봉을 고르세요" : `${slot + 1}세트 선수를 고르세요`}</div>
+            {Array.from({ length: winners ? 1 : sets }, (_, i) => {
+              const isAce = !winners && i === n;
               const p = !isAce && filled[i] !== undefined ? s.players[filled[i]!] : undefined;
               return (
                 <div key={i} className="space-y-0.5">
@@ -229,10 +231,10 @@ export function EntryScreen({ s, match, front, setFront, items, setItems, onSubm
                 </div>
               );
             })}
-            <div className="text-[9px] text-neutral-500 text-center leading-tight">ACE 결정전은 2:2 가 되면<br />그때 선수를 고릅니다</div>
+            <div className="text-[9px] text-neutral-500 text-center leading-tight">{winners ? <>이긴 선수는 질 때까지 계속 출전<br />지면 그때 다음 선수를 고릅니다<br />(진 선수는 다시 못 나옴)</> : <>ACE 결정전은 2:2 가 되면<br />그때 선수를 고릅니다</>}</div>
             <div className="flex gap-1 pt-0.5">
               {([["recommend", "자동편성(추천)"], ["rotation", "자동편성(빈도낮음)"]] as const).map(([mode, label]) => (
-                <button key={mode} onClick={() => { const e = autoEntry(s, match.maps, sets, mode); setFront(e); setSlot(0); setViewMine(e[0]); }}
+                <button key={mode} onClick={() => { const e = autoEntry(s, match.maps, sets, mode).slice(0, n); setFront(e); setSlot(0); setViewMine(e[0]); }}
                   className="flex-1 text-[10px] leading-tight border border-neutral-600 text-neutral-300 py-1.5">{label}</button>
               ))}
             </div>
@@ -285,11 +287,15 @@ export function EntryScreen({ s, match, front, setFront, items, setItems, onSubm
 }
 
 // ── ACE 결정전 엔트리 (2:2 일 때) ──────────────────────────────────
-export function AceScreen({ s, teamLeft, teamRight, mapId, score, onPick, submitting }: {
+export function AceScreen({ s, teamLeft, teamRight, mapId, score, onPick, submitting, next, out }: {
   s: CareerState; teamLeft: number; teamRight: number; mapId: number; score: [number, number];
   onPick: (id: number) => void; submitting: boolean;
+  /** 위너스리그: 다음 세트 번호 (있으면 "다음 출전 선수" 화면) */
+  next?: number;
+  /** 위너스리그: 이번 경기에서 진 선수 (다시 못 나옴) */
+  out?: Set<number>;
 }) {
-  const mine = useMemo(() => rosterOf(s, s.myTeam).sort((a, b) => totalOf(condStats(b)) - totalOf(condStats(a))), [s]);
+  const mine = useMemo(() => rosterOf(s, s.myTeam).filter(p => !out?.has(p.id)).sort((a, b) => totalOf(condStats(b)) - totalOf(condStats(a))), [s, out]);
   const [sel, setSel] = useState<number | undefined>(mine[0]?.id);
   return (
     <LegacyFrame season={s.season} onNext={sel !== undefined && !submitting ? () => onPick(sel) : undefined} nextDisabled={sel === undefined || submitting} nextLabel={submitting ? "경기 준비 중..." : undefined}>
@@ -300,20 +306,29 @@ export function AceScreen({ s, teamLeft, teamRight, mapId, score, onPick, submit
           <TeamLogo team={s.teams[teamRight]} className="w-[70px] h-[40px]" />
         </div>
         <div className="text-center mt-2">
-          <LegacyImg dir="기타" name="ACE" className="mx-auto max-h-14" fallback={null} />
-          <div className="text-[16px] tracking-[0.3em] text-[#ffe45c] mt-1">◇ ACE 결정전 ◇</div>
-          <div className="text-[11px] text-neutral-400 mt-0.5">마지막 세트에 나갈 선수를 고르세요 (누구나 출전 가능)</div>
+          {next !== undefined ? (
+            <>
+              <div className="text-[16px] tracking-[0.2em] text-[#ffe45c] mt-1">◇ {next}세트 출전 선수 ◇</div>
+              <div className="text-[11px] text-neutral-400 mt-0.5">위너스리그 · 우리 선수가 졌습니다. 다음에 나갈 선수를 고르세요 (진 선수는 다시 못 나옴)</div>
+            </>
+          ) : (
+            <>
+              <LegacyImg dir="기타" name="ACE" className="mx-auto max-h-14" fallback={null} />
+              <div className="text-[16px] tracking-[0.3em] text-[#ffe45c] mt-1">◇ ACE 결정전 ◇</div>
+              <div className="text-[11px] text-neutral-400 mt-0.5">마지막 세트에 나갈 선수를 고르세요 (누구나 출전 가능)</div>
+            </>
+          )}
         </div>
         <div className="flex justify-center mt-2.5"><MapInfo mapId={mapId} size={54} /></div>
         <div className="grid grid-cols-2 gap-2 mt-2.5">
           <PlayerPanel s={s} p={sel !== undefined ? s.players[sel] : undefined} color="#8fd0ff" empty="선수를 고르세요" />
           <div className="border border-neutral-700 flex flex-col items-center justify-center gap-2 min-h-[190px]">
-            <span className="inline-block border border-neutral-300 px-3 py-1 text-[13px]">ACE Card</span>
-            <span className="text-[10px] text-neutral-500">상대 ACE 는 경기 시작 때 공개</span>
+            <span className="inline-block border border-neutral-300 px-3 py-1 text-[13px]">{next !== undefined ? "?" : "ACE Card"}</span>
+            <span className="text-[10px] text-neutral-500">{next !== undefined ? "상대는 이긴 선수가 계속 나옵니다" : "상대 ACE 는 경기 시작 때 공개"}</span>
           </div>
         </div>
         <div className="mt-2.5">
-          <RosterList s={s} players={mine} onPick={p => setSel(p.id)} selected={sel} marks={new Map(sel !== undefined ? [[sel, "ACE"]] : [])} />
+          <RosterList s={s} players={mine} onPick={p => setSel(p.id)} selected={sel} marks={new Map(sel !== undefined ? [[sel, next !== undefined ? `${next}` : "ACE"]] : [])} />
         </div>
       </div>
     </LegacyFrame>

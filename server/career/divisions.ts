@@ -15,7 +15,8 @@ import {
   B_TEAM_OFFSET,
   MAX_ROSTER,
   MIN_ROSTER,
-  PRO_SETS,
+  isWinnersSeason,
+  matchSets,
   ageOf,
   totalOf,
   type CareerState,
@@ -52,6 +53,12 @@ export function developmentBonus(s: CareerState, seller: number, buyer: number, 
  * 2라운드 풀리그 일정 (한 주 2경기: 1경기 r라운드, 2경기 (10-r)라운드, 홈·원정 바꿈)
  * fromWeek: 시즌 중간에 2부가 생긴 예전 세이브는 남은 주만
  */
+/** 경기 방식과 맵: 3의 배수 시즌은 위너스리그 (7전 4선승, 결승 9전 5선승) */
+export function fmt(s: CareerState, stage: CMatch["stage"]): Pick<CMatch, "maps" | "winners"> {
+  const winners = isWinnersSeason(s.season);
+  return { maps: pickMaps(matchSets({ stage, winners }), s.mapPool), ...(winners ? { winners: true } : {}) };
+}
+
 export function scheduleDivision(s: CareerState, div: 1 | 2, fromWeek = 1) {
   const ids = shuffle(divTeams(s, div).map(t => t.id));
   const n = ids.length;
@@ -69,8 +76,8 @@ export function scheduleDivision(s: CareerState, div: 1 | 2, fromWeek = 1) {
   }
   const weeks = Math.min(REGULAR_WEEKS, rounds.length);
   for (let w = fromWeek - 1; w < weeks; w++) {
-    for (const [a, b] of rounds[w]) s.matches.push({ id: s.nextMatchId++, week: w + 1, leg: 1, stage: "regular", div, a, b, maps: pickMaps(PRO_SETS, s.mapPool) });
-    for (const [a, b] of rounds[weeks - 1 - w]) s.matches.push({ id: s.nextMatchId++, week: w + 1, leg: 2, stage: "regular", div, a: b, b: a, maps: pickMaps(PRO_SETS, s.mapPool) });
+    for (const [a, b] of rounds[w]) s.matches.push({ id: s.nextMatchId++, week: w + 1, leg: 1, stage: "regular", div, a, b, ...fmt(s, "regular") });
+    for (const [a, b] of rounds[weeks - 1 - w]) s.matches.push({ id: s.nextMatchId++, week: w + 1, leg: 2, stage: "regular", div, a: b, b: a, ...fmt(s, "regular") });
   }
 }
 
@@ -155,7 +162,7 @@ export function schedulePromo(s: CareerState) {
   const st1 = standings(s, 1), st2 = standings(s, 2);
   if (st1.length < 4 || st2.length < 2) return;
   const pairs: Array<[number, number]> = [[st1[st1.length - 2].id, st2[1].id], [st1[st1.length - 1].id, st2[0].id]];
-  for (const [a, b] of pairs) s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "promo", div: 1, a, b, maps: pickMaps(PRO_SETS, s.mapPool) });
+  for (const [a, b] of pairs) s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "promo", div: 1, a, b, ...fmt(s, "promo") });
   news(s, `⚔️ 승강전: ${pairs.map(([a, b]) => `${s.teams[a].name}(1부) vs ${s.teams[b].name}(2부)`).join(" / ")}`);
 }
 

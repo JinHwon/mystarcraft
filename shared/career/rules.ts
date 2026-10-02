@@ -323,10 +323,19 @@ export interface CMatch {
   scoreB?: number;
   winner?: number;
   sets?: SetResult[];
-  /** 양 팀 엔트리 (경기 후 공개) */
+  /** 양 팀 엔트리 (경기 후 공개, 위너스리그는 세트마다 나온 선수) */
   entryA?: number[];
   entryB?: number[];
+  /** 위너스리그 방식 (3의 배수 시즌): 이긴 선수가 질 때까지 계속, 진 팀이 다음 선수를 내보냄 */
+  winners?: boolean;
 }
+
+/** 3의 배수 시즌은 위너스리그 */
+export const isWinnersSeason = (season: number) => season % 3 === 0;
+/** 경기 세트 수·이겨야 하는 세트 수: 보통 5전 3선승(결승 7전 4선승), 위너스리그 7전 4선승(결승 9전 5선승) */
+export const matchSets = (m: Pick<CMatch, "stage" | "winners">) => (m.winners ? (m.stage === "final" ? 9 : 7) : m.stage === "final" ? FINAL_SETS : PRO_SETS);
+export const matchNeed = (m: Pick<CMatch, "stage" | "winners">) => Math.ceil(matchSets(m) / 2);
+export const matchFormatName = (m: Pick<CMatch, "stage" | "winners">) => `${matchSets(m)}전 ${matchNeed(m)}선승${m.winners ? " · 위너스" : ""}`;
 
 /** 원작식 중계 화면 데이터 (세이브에는 저장하지 않고 경기 직후에만 내려줌) */
 export interface SetTimeline {
@@ -345,6 +354,9 @@ export interface LiveMatch {
   sets: Array<SetResult & { timeline?: SetTimeline }>;
   /** 세트별 경기 아이템 (세트 번호 → 아이템, 스나이핑은 예측한 상대 선수) */
   items?: Record<number, { key: string; predict?: number }>;
+  /** 위너스리그: 상대가 내보낼 순서 (진 선수는 빠짐) */
+  oppOrder?: number[];
+  winners?: boolean;
 }
 
 /** 시즌 맵 추첨 개수 (원작 "맵 추첨 결과" 7개, 결승 7세트) */
