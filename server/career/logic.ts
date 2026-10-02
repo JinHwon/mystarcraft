@@ -470,10 +470,10 @@ export function advanceWeek(s: CareerState, myEntry?: number[]): WeekResult {
 }
 
 /** 연속 결장이 이 주 수 이상이면 매주 능력치가 줄어듦 */
-export const BENCH_DECAY_WEEKS = 3;
+export const BENCH_DECAY_WEEKS = 2;
 /**
  * 프로리그 결장 감각 저하 (정규시즌 주 마무리): 이번 주 프로리그에 안 나온 선수는 결장 주 수 +1,
- * 3주 이상 연속이면 매주 능력치 3개가 2~5씩 줄어듦 (오래 쉴수록 조금 더, 훈련으로 오르는 것보다 큼). 무소속은 제외
+ * 2주 이상 연속이면 매주 능력치 3개가 2~5씩 줄어듦 (오래 쉴수록 조금 더, 훈련으로 오르는 것보다 큼). 무소속은 제외
  */
 export function benchDecay(s: CareerState) {
   const wk = `${s.season}-${s.week}`;
@@ -518,7 +518,7 @@ function finishWeek(s: CareerState): WeekResult {
   if (s.phase !== "offseason") weeklyGoods(s);
   // 2부 팀 최소 인원 (이적·은퇴로 모자라면 리그가 채움)
   fillBRosters(s);
-  // 프로리그에 오래(3주 이상 연속) 못 나간 선수는 실전 감각이 떨어져 능력치가 조금씩 줄어듦 (개인리그 출전은 제외)
+  // 프로리그에 오래(2주 이상 연속) 못 나간 선수는 실전 감각이 떨어져 능력치가 조금씩 줄어듦 (개인리그 출전은 제외)
   if (s.phase === "regular") benchDecay(s);
   // 한 주(프로리그 2경기)가 끝나면 모든 선수 컨디션 10% 회복
   // 연봉 협상이 틀어져 불만인 선수는 그 기간 동안 회복 없음

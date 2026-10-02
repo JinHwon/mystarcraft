@@ -1,7 +1,7 @@
 /**
  * 경기 전: 맵 추첨 결과, 엔트리 편성, ACE 결정전 엔트리
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { burstLabel, burstOf, slumpOn, matchFormatName, matchSets, totalOf, type CareerState, type CMatch, type CPlayer } from "@shared/career/rules";
@@ -143,6 +143,8 @@ export function EntryScreen({ s, match, front, setFront, items, setItems, onSubm
   const filled = Array.from({ length: n }, (_, i) => front[i]);
   const valid = filled.every(x => x !== undefined) && new Set(filled).size === n;
   const [pickFor, setPickFor] = useState<number | null>(null);
+  /** 위쪽 맵·선수 정보 (아이템 칸을 누르면 여기로 올려 그 세트의 맵과 선수를 보여줌) */
+  const topRef = useRef<HTMLDivElement>(null);
   const [snipeFor, setSnipeFor] = useState<number | null>(null);
   const usedCount = (key: string, except?: number) => Object.entries(items).filter(([k, v]) => v.key === key && Number(k) !== except).length;
   const setItem = (i: number, v?: { key: string; predict?: number }) => {
@@ -185,7 +187,7 @@ export function EntryScreen({ s, match, front, setFront, items, setItems, onSubm
           <TeamLogo team={s.teams[oppId]} className="w-[70px] h-[40px]" />
         </div>
 
-        <div className="flex justify-center mt-2.5">
+        <div ref={topRef} className="flex justify-center mt-2.5 scroll-mt-2">
           <MapInfo mapId={mapOf(slot)} size={54} hint={<span className="text-[9px] text-neutral-500">{slot + 1}세트 [↔Tab]</span>} />
         </div>
 
@@ -219,7 +221,7 @@ export function EntryScreen({ s, match, front, setFront, items, setItems, onSubm
                     {isAce ? "ACE Card" : p ? nameRace(p) : "Select Player"}
                   </button>
                   {!isAce && (
-                    <button onClick={() => setPickFor(i)} className="w-full flex items-center justify-center gap-1 text-[10px] py-[2px] border border-dashed border-neutral-600 text-neutral-400">
+                    <button onClick={() => { setSlot(i); if (p) setViewMine(p.id); setPickFor(i); topRef.current?.scrollIntoView({ block: "start", behavior: "smooth" }); }} className="w-full flex items-center justify-center gap-1 text-[10px] py-[2px] border border-dashed border-neutral-600 text-neutral-400">
                       {items[i] ? (
                         <>
                           <span className="w-4 h-4 bg-white inline-flex items-center justify-center overflow-hidden"><LegacyImg dir={itemImg(ITEM_BY_KEY[items[i].key]).dir} name={itemImg(ITEM_BY_KEY[items[i].key]).name} className="max-w-full max-h-full" fallback={null} /></span>
@@ -248,7 +250,7 @@ export function EntryScreen({ s, match, front, setFront, items, setItems, onSubm
         </div>
       </div>
       {pickFor !== null && createPortal(
-        <div className="fixed inset-0 app-fixed-x w-full z-[70] bg-black/80 flex items-end text-white" style={LEGACY_FONT} onClick={() => { setPickFor(null); setSnipeFor(null); }}>
+        <div className="fixed inset-0 app-fixed-x w-full z-[70] bg-black/40 flex items-end text-white" style={LEGACY_FONT} onClick={() => { setPickFor(null); setSnipeFor(null); }}>
           <div className="w-full bg-[#111] border-t-2 border-neutral-400 p-3 space-y-2" onClick={e => e.stopPropagation()}>
             {snipeFor === null ? (
               <>
