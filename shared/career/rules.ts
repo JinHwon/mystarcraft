@@ -89,6 +89,8 @@ export const ACTIONS: ActionDef[] = [
 /** 선수별 주당 행동력 (선수마다 매주 받고, 쓰지 않으면 시즌 동안 계속 쌓임. 새 시즌에 다시 시작) */
 export const WEEKLY_AP = 20;
 export const actionOf = (key: string | null | undefined) => ACTIONS.find(a => a.key === key);
+/** 컨디션이 이미 100% 면 휴식은 할 필요가 없음 (실행에서 자동으로 빠지고 행동력도 쓰지 않음) */
+export const restNotNeeded = (p: { cond: number; action?: string | null }) => p.action === "rest" && p.cond >= 100;
 
 // ── 세이브 상태 ─────────────────────────────────────────────────
 export interface CPlayer {
