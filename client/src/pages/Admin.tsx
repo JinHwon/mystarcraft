@@ -22,7 +22,8 @@ function EditPanel({ userId, onDone }: { userId: number; onDone: () => void }) {
   const [level, setLevel] = useState<string>("");
   const [rep, setRep] = useState<string>("");
   const [items, setItems] = useState<Record<string, string>>({});
-  const refresh = () => { utils.career.adminUsers.invalidate(); utils.career.ranking.invalidate(); };
+  // 내 계정을 고쳤으면 내 화면의 세이브도 바로 다시 받음 (다른 사용자는 그 화면이 곧 알아서 다시 받음)
+  const refresh = () => { utils.career.adminUsers.invalidate(); utils.career.ranking.invalidate(); if (userId === utils.auth.me.getData()?.id) utils.career.get.invalidate(); };
   const edit = trpc.career.adminEdit.useMutation({ onSuccess: () => { toast.success("저장했습니다"); refresh(); }, onError: e => toast.error(e.message) });
   const reset = trpc.career.adminResetCareer.useMutation({ onSuccess: () => { toast.success("커리어를 초기화했습니다"); refresh(); onDone(); }, onError: e => toast.error(e.message) });
   const role = trpc.admin.updateUserRole.useMutation({ onSuccess: () => { toast.success("권한을 바꿨습니다"); refresh(); }, onError: e => toast.error(e.message) });

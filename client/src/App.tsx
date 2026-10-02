@@ -12,6 +12,7 @@ import { resetUserSession } from "./lib/session";
 import { Redirect } from "wouter";
 import { useAuth } from "./_core/hooks/useAuth";
 import { ManagerNameGate } from "./components/ManagerName";
+import { useCareerRevWatch } from "./lib/career";
 import GameLayout from "./components/GameLayout";
 import { UpdateNotification } from "./components/UpdateNotification";
 
@@ -109,6 +110,7 @@ function Router() {
 /** 로그인 사용자가 바뀌면 (세션 만료 뒤 다른 아이디 등) 이전 사용자의 화면 데이터를 지움 */
 function UserWatcher() {
   const { user } = useAuth();
+  useCareerRevWatch(!!user);
   const queryClient = useQueryClient();
   const last = useRef<number | null>(null);
   useEffect(() => {
