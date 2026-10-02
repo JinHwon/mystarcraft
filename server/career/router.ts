@@ -23,6 +23,7 @@ import {
   advanceWeek,
   beginMatch,
   buyItem,
+  equipItem,
   useStockItem,
   playLiveSet,
   migrateCareer,
@@ -483,6 +484,11 @@ export const careerRouter = router({
   buyItem: protectedProcedure
     .input(z.object({ key: z.string(), target: z.number().int().optional(), qty: z.number().int().min(1).max(99).optional() }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => buyItem(s, input.key, input.target, input.qty ?? 1))),
+
+  /** 보관함의 장비를 선수에게 장착 */
+  equipItem: protectedProcedure
+    .input(z.object({ key: z.string(), target: z.number().int() }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => equipItem(s, input.key, input.target))),
 
   /** 보관한 아이템 사용 (비타비타) */
   useItem: protectedProcedure
