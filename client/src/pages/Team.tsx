@@ -20,7 +20,8 @@ type Sort = "total" | "cond" | "level" | "age";
 export function PlayerSheet({ s, player, onClose, actions }: { s: CareerState; player: CPlayer | null; onClose: () => void; actions?: React.ReactNode }) {
   return (
     <Sheet open={!!player} onOpenChange={o => !o && onClose()}>
-      <SheetContent side="bottom" className="app-fixed-x rounded-t-2xl bg-sidebar border-sidebar-border max-h-[88vh] overflow-y-auto safe-bottom">
+      {/* 원작 화면(LegacyFrame, z-60) 위에서도 보이게 */}
+      <SheetContent side="bottom" overlayClassName="z-[80]" className="z-[80] app-fixed-x rounded-t-2xl bg-sidebar border-sidebar-border max-h-[88vh] overflow-y-auto safe-bottom">
         {player && (
           <div className="p-4 space-y-3">
             <SheetHeader className="p-0">

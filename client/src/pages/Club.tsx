@@ -16,6 +16,7 @@ import type { CareerDiff } from "@shared/career/diff";
 import { LegacyFrame, TeamLogo } from "@/components/legacy/Legacy";
 import { PlayerPanel } from "@/components/legacy/LegacyMatch";
 import { ContractEditor, ContractText, FeeStepper, MoraleBar, Reply } from "@/components/legacy/Club";
+import { PlayerSheet } from "./Team";
 
 const R = { terran: "T", zerg: "Z", protoss: "P" } as const;
 type Tab = "sponsor" | "money" | "contracts" | "offers" | "manager";
@@ -156,12 +157,14 @@ function OffersTab({ s }: { s: CareerState }) {
   };
   const label = (id: number, action: string, text: string) => (busy === `${id}:${action}` ? "처리 중…" : text);
   const [fees, setFees] = useState<Record<number, number>>({});
+  const [open, setOpen] = useState<number | null>(null);
   // 같은 선수에게 온 제안끼리 모아서 (금액 높은 순)
   const offers = [...(s.offers ?? [])].sort((a, b) => a.player - b.player || b.fee - a.fee);
   const listings = (s.listings ?? []).filter(l => s.players[l.player]?.team === s.myTeam);
   const priceOf = (pid: number) => listings.find(l => l.player === pid)?.price;
   return (
     <div className="space-y-2">
+      <PlayerSheet s={s} player={open !== null ? s.players[open] : null} onClose={() => setOpen(null)} />
       {reply && <Reply {...reply} />}
       <ListingsBox s={s} />
       <RaiseRequest s={s} />
@@ -177,7 +180,7 @@ function OffersTab({ s }: { s: CareerState }) {
             <div className="flex items-center gap-2">
               <TeamLogo team={t} className="w-[52px] h-[30px]" />
               <div className="flex-1">
-                <div><b>{t.name}</b> → <span className="text-[#8fd0ff]">{p.name} ({R[p.race]})</span>{rivals > 1 && <span className="text-[10.5px] text-[#ffb84d]"> · 경쟁 제안 {rivals}건</span>}</div>
+                <div><b>{t.name}</b> → <button onClick={() => setOpen(p.id)} className="text-[#8fd0ff] underline underline-offset-2">{p.name} ({R[p.race]}) ⓘ</button>{rivals > 1 && <span className="text-[10.5px] text-[#ffb84d]"> · 경쟁 제안 {rivals}건</span>}</div>
                 {o.byPlayer && <div className="text-[10.5px] text-[#ffb84d]">🙋 {p.name} 선수가 {t.name} 이적을 원합니다 (거절하면 사기 하락)</div>}
                 <div className="text-neutral-400">제시 금액 <b className="text-[#ffe45c]">{o.fee.toLocaleString()}만원</b>{o.status === "countered" ? " (역제안 받음)" : ""} · 협상 {o.tries}/3 · {Math.max(0, 2 - (s.week - o.week))}주 뒤 만료</div>
                 {price !== undefined && <div className={cn("text-[10.5px]", o.fee >= price ? "text-[#bff5c6]" : "text-neutral-500")}>이적시장 희망가 {price.toLocaleString()}만원{o.fee >= price ? " 이상 제시" : ` (희망가의 ${Math.round((o.fee / price) * 100)}%)`}</div>}
@@ -208,15 +211,17 @@ function RaiseRequest({ s }: { s: CareerState }) {
   const respond = trpc.career.respondRaise.useMutation({ onSuccess: done, onError: fail });
   const r = s.raiseRequest;
   const [counter, setCounter] = useState<number | null>(null);
+  const [open, setOpen] = useState<number | null>(null);
   if (!r || !s.players[r.player] || s.players[r.player].team !== s.myTeam) return reply ? <Reply {...reply} /> : null;
   const p = s.players[r.player];
   const cur = p.contract?.salary ?? 0;
   const value = counter ?? Math.round((r.salary * 0.9) / 10) * 10;
   return (
     <div className="border border-[#ffb84d]/70 p-2 space-y-1.5 text-[12px]">
+      <PlayerSheet s={s} player={open !== null ? s.players[open] : null} onClose={() => setOpen(null)} />
       <div className="text-[#ffb84d]">💼 연봉 인상 요구 · {Math.max(0, 2 - (s.week - r.week))}주 안에 답하세요</div>
       {reply && <Reply {...reply} />}
-      <div><span className="text-[#8fd0ff]">{p.name} ({R[p.race]})</span> <span className="text-neutral-400">능력치 {totalOf(p.stats).toLocaleString()} · 계약 {p.contract?.years ?? 0}년 남음</span></div>
+      <div><button onClick={() => setOpen(p.id)} className="text-[#8fd0ff] underline underline-offset-2">{p.name} ({R[p.race]}) ⓘ</button> <span className="text-neutral-400">능력치 {totalOf(p.stats).toLocaleString()} · 계약 {p.contract?.years ?? 0}년 남음</span></div>
       <div className="text-neutral-300">연봉 {cur.toLocaleString()}만 → <b className="text-[#ffe45c]">{r.salary.toLocaleString()}만</b> · 계약 {r.years}년</div>
       <div className="text-[10.5px] text-neutral-500">거절하거나 요구의 90%보다 낮게 부르면 실망해서 컨디션 부진(-20%, 2주 회복 없음)·능력치 하락·이적 희망 중 하나가 생깁니다</div>
       <div className="flex items-center justify-between gap-1">
@@ -236,11 +241,13 @@ function RaiseRequest({ s }: { s: CareerState }) {
 function JoinRequests({ s }: { s: CareerState }) {
   const { reply, done, fail } = useMut();
   const respond = trpc.career.respondJoin.useMutation({ onSuccess: done, onError: fail });
+  const [open, setOpen] = useState<number | null>(null);
   const list = (s.joinRequests ?? []).filter(r => s.players[r.player] && s.players[r.player].team !== s.myTeam);
   if (!list.length) return reply ? <Reply {...reply} /> : null;
   return (
     <div className="border border-[#8fd0ff]/60 p-2 space-y-1.5 text-[12px]">
-      <div className="text-[#8fd0ff]">🙋 우리 팀에 오고 싶다는 선수</div>
+      <PlayerSheet s={s} player={open !== null ? s.players[open] : null} onClose={() => setOpen(null)} />
+      <div className="text-[#8fd0ff]">🙋 우리 팀에 오고 싶다는 선수 <span className="text-[10.5px] text-neutral-400">(이름을 누르면 선수 정보)</span></div>
       {reply && <Reply {...reply} />}
       {list.map(r => {
         const p = s.players[r.player], t = s.teams[p.team];
@@ -249,7 +256,7 @@ function JoinRequests({ s }: { s: CareerState }) {
             <div className="flex items-center gap-2">
               <TeamLogo team={t} className="w-[52px] h-[30px]" />
               <div className="flex-1 min-w-0">
-                <div><span className="text-[#8fd0ff]">{p.name} ({R[p.race]})</span> <span className="text-neutral-400">{t.name} · 능력치 {totalOf(p.stats).toLocaleString()} · {p.sWins}승 {p.sLosses}패</span></div>
+                <div><button onClick={() => setOpen(p.id)} className="text-[#8fd0ff] underline underline-offset-2">{p.name} ({R[p.race]}) ⓘ</button> <span className="text-neutral-400">{t.name} · 능력치 {totalOf(p.stats).toLocaleString()} · {p.sWins}승 {p.sLosses}패</span></div>
                 <div className="text-neutral-400">이적료 <b className="text-[#ffe45c]">{r.fee.toLocaleString()}만</b> (시세 {askingPrice(p, s.season).toLocaleString()}만) · 연봉 {r.salary.toLocaleString()}만 · {r.years}년 · {Math.max(0, 2 - (s.week - r.week))}주 뒤 만료</div>
               </div>
             </div>

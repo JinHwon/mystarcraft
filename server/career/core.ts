@@ -148,7 +148,17 @@ function afterSet(s: CareerState, a: CPlayer, b: CPlayer, aWin: boolean, mods?: 
   if (w.team === s.myTeam) w.h2h = { ...w.h2h, [l.id]: [(w.h2h?.[l.id]?.[0] ?? 0) + 1, w.h2h?.[l.id]?.[1] ?? 0] };
   if (l.team === s.myTeam) l.h2h = { ...l.h2h, [w.id]: [l.h2h?.[w.id]?.[0] ?? 0, (l.h2h?.[w.id]?.[1] ?? 0) + 1] };
   // 컨디션 유지 이벤트: 우리 선수는 지치지 않음
-  const tire = (p: CPlayer, d: number) => { if (!(p.team === s.myTeam && eventOn("fatigue_unlimited"))) p.cond = clampCond(p.cond - d); };
+  // 포텐셜 폭발(예: 114%)도 떨어진 컨디션만큼 줄어듦 (100% 이하가 되면 끝)
+  const burstBefore = { a: burstOf(s, a), b: burstOf(s, b) };
+  const tire = (p: CPlayer, d: number) => {
+    if (p.team === s.myTeam && eventOn("fatigue_unlimited")) return;
+    p.cond = clampCond(p.cond - d);
+    const mul = burstOf(s, p);
+    if (mul) {
+      const next = Math.round((mul - d / 100) * 100) / 100;
+      if (next > 1) p.burst = { ...p.burst!, mul: next }; else delete p.burst;
+    }
+  };
   tire(w, condLoss(w, true, content?.[w === a ? 0 : 1], duration));
   tire(l, condLoss(l, false, content?.[l === a ? 0 : 1], duration));
   addExp(s, w, 30); addExp(s, l, 10);
@@ -159,7 +169,12 @@ function afterSet(s: CareerState, a: CPlayer, b: CPlayer, aWin: boolean, mods?: 
     for (const [k, v] of Object.entries(d)) p.stats[k as StatKey] = clampStat(p.stats[k as StatKey] + (v! > 0 ? Math.round(v! * up) : Math.round(v! * down)));
   }
   for (const p of [a, b]) wearEquip(s, p);
-  return { a: fxOf(a, before.a, aWin ? 30 : 10), b: fxOf(b, before.b, aWin ? 10 : 30) };
+  const fx = { a: fxOf(a, before.a, aWin ? 30 : 10), b: fxOf(b, before.b, aWin ? 10 : 30) };
+  for (const [k, p] of [["a", a], ["b", b]] as const) {
+    const was = burstBefore[k];
+    if (was) fx[k].burst = [was, burstOf(s, p) ?? 0];
+  }
+  return fx;
 }
 
 /** 장비 내구도 1 감소, 다 쓰면 사라짐 */

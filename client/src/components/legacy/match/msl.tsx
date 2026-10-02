@@ -72,6 +72,8 @@ export function SeriesBoard({ s, start, report, played, leftIsA, onNext, onClose
               <div className={cn("text-[12.5px] mt-0.5", p.team === s.myTeam && "text-[#8fd0ff]")}>{nameRace(p)}</div>
               <div className="text-[10px] text-neutral-500">{s.teams[p.team]?.name ?? "무소속"}</div>
               <StateLine p={p} before={start?.players[p.id]} />
+              <LegacyRadar stats={condStats(p, s)} base={p.stats} gear={gearStats(p)} level={p.level} size={104} />
+              <div className="text-[11px] -mt-1">{slumpOn(s, p) ? <span className="font-bold text-[#8fb8ff]">😵난조</span> : null}{burstOf(s, p) ? <span className="font-bold" style={{ color: burstLabel(burstOf(s, p)!).color }}> {burstLabel(burstOf(s, p)!).icon}{Math.round(burstOf(s, p)! * 100)}%</span> : null}</div>
               {over && (report.winner === p.id) && <div className="text-[13px] font-black text-[#ffe45c]">WINNER</div>}
             </div>
           ))}
