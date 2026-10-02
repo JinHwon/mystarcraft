@@ -4,9 +4,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
-import { burstLabel, burstOf, matchFormatName, matchSets, totalOf, type CareerState, type CMatch, type CPlayer } from "@shared/career/rules";
+import { burstLabel, burstOf, slumpOn, matchFormatName, matchSets, totalOf, type CareerState, type CMatch, type CPlayer } from "@shared/career/rules";
 import { STAGE_NAMES, mapView, rosterOf } from "@shared/career/view";
-import { ITEM_BY_KEY, gearCond, itemImg } from "@shared/career/items";
+import { ITEM_BY_KEY, gearCond, itemImg, matchCond } from "@shared/career/items";
 import { GrayBox, LEGACY_FONT, LegacyFrame, LegacyImg, MapInfo, MslBadges, TeamLogo } from "../Legacy";
 import { MATCH_ITEMS, PlayerPanel, R, VitaButton, condStats, nameRace, navigateShop } from "./common";
 
@@ -97,12 +97,12 @@ export function RosterList({ players, onPick, selected, marks, s }: { players: C
             className={cn("w-full flex items-center gap-1 px-1 py-[5px] text-left border-b border-neutral-800 last:border-b-0", s ? "text-[12px]" : "text-[13px]",
               mark ? "text-[#ffe45c]" : "text-white", selected === p.id && "bg-[#3a3a5a]")}
           >
-            <span className="truncate flex-1">{s && burstOf(s, p) ? burstLabel(burstOf(s, p)!).icon : ""}{p.name}<MslBadges titles={p.titles} size={11} className="ml-0.5 align-middle" /></span>
+            <span className="truncate flex-1">{s && burstOf(s, p) ? burstLabel(burstOf(s, p)!).icon : ""}{s && slumpOn(s, p) ? "😵" : ""}{p.name}<MslBadges titles={p.titles} size={11} className="ml-0.5 align-middle" /></span>
             <span className="text-[11px] text-neutral-400">{mark ?? ""}</span>
             <span>({R[p.race]})</span>
             {s && (
               <span className="flex flex-col items-end leading-none shrink-0 w-[28px]">
-                <span className={cn("text-[9.5px]", gearCond(p) >= 70 ? "text-[#bff5c6]" : gearCond(p) <= 30 ? "text-[#ff9a9a]" : "text-neutral-300")}>{gearCond(p)}%</span>
+                <span className={cn("text-[9.5px]", matchCond(p, s) >= 70 ? "text-[#bff5c6]" : matchCond(p, s) <= 30 ? "text-[#ff9a9a]" : "text-neutral-300")}>{matchCond(p, s)}%</span>
                 <span className="text-[8.5px] text-neutral-400">{totalOf(condStats(p, s)).toLocaleString()}</span>
               </span>
             )}

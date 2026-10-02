@@ -50,7 +50,7 @@ import { aiShopping } from "./aiShop";
 import { broadcastRights, gateIncome, regularSeasonPrize, weeklyGoods } from "./income";
 import { applyPromo, ensureDivisions, fillBRosters, fmt, promoMoves, rosterLimits, scheduleDivision, schedulePromo } from "./divisions";
 import { createMsl, mslDueThisWeek, mslPlayersThisWeek, nominationPending, runMslWeek, type MslReport } from "./msl";
-import { ITEM_BY_KEY, isStackable, packOf, slotOf, stackMax } from "@shared/career/items";
+import { ITEM_BY_KEY, isStackable, matchCond, packOf, slotOf, stackMax } from "@shared/career/items";
 import { ensurePotential, retirements, rookies } from "./generation";
 import { addManagerExp, mainSponsorPay, book, ensureClub, newSeasonClub, pay, seasonEndClub, weeklyClub } from "./club";
 import { EVENT_INCOME_MAX, cheerChance, defaultContract, eventCondCost, eventIncome, popularity, scoutPrice } from "@shared/career/contract";
@@ -185,6 +185,8 @@ function actOne(s: CareerState, p: CPlayer, action: ActionKey | null | undefined
         }
       }
       p.cond = clampCond(p.cond - randInt(3, 5) - eventCondCost(p));
+      // 팬미팅으로 연습을 못 해 능력치도 조금 떨어짐 (능력치 1~2개 1~2씩)
+      for (const k of shuffle([...STAT_KEYS]).slice(0, randInt(1, 2))) p.stats[k] = clampStat(p.stats[k] - randInt(1, 2));
       break;
     }
     default: break; // 자율 연습: 주가 끝날 때 기본 회복(+10%)만
@@ -250,7 +252,7 @@ export const playerAp = (p: CPlayer) => p.ap ?? WEEKLY_AP;
 /** AI 엔트리: 1~(n-1)세트는 상위 선수 중 무작위(중복 없음), 마지막 세트(에이스 결정전)는 최강 선수 */
 export function aiEntry(s: CareerState, team: number, sets: number): number[] {
   const roster = rosterOf(s, team)
-    .map(p => ({ p, v: totalOf(p.stats) * condMultiplier(p.cond) * (burstOf(s, p) ?? 1) }))
+    .map(p => ({ p, v: totalOf(p.stats) * condMultiplier(matchCond(p, s)) * (burstOf(s, p) ?? 1) }))
     .sort((a, b) => b.v - a.v)
     .map(x => x.p.id);
   if (!roster.length) return [];
@@ -303,7 +305,12 @@ function recordMatch(s: CareerState, m: CMatch, entryA: number[], entryB: number
     addManagerExp(s, won ? 30 : 10);
   }
   // 출전 기록 (사기·출전 보장 조건)
-  for (const id of new Set(results.flatMap(r => [r.a, r.b]))) s.players[id].sApps = (s.players[id].sApps ?? 0) + 1;
+  for (const id of new Set(results.flatMap(r => [r.a, r.b]))) {
+    const p = s.players[id];
+    p.sApps = (p.sApps ?? 0) + 1;
+    p.lastProWeek = `${s.season}-${s.week}`;
+    p.benchWeeks = 0;
+  }
   if (m.a === s.myTeam || m.b === s.myTeam) {
     const won = m.winner === s.myTeam;
     const opp = s.teams[m.a === s.myTeam ? m.b : m.a];
@@ -344,7 +351,7 @@ function playMatch(s: CareerState, m: CMatch, myEntry?: number[]): PlayedSet[] {
  * first 를 주면 그 선수가 선봉
  */
 export function winnersOrder(s: CareerState, team: number, first?: number): number[] {
-  const ranked = rosterOf(s, team).map(p => ({ id: p.id, v: totalOf(p.stats) * condMultiplier(p.cond) * (burstOf(s, p) ?? 1) })).sort((a, b) => b.v - a.v).map(x => x.id);
+  const ranked = rosterOf(s, team).map(p => ({ id: p.id, v: totalOf(p.stats) * condMultiplier(matchCond(p, s)) * (burstOf(s, p) ?? 1) })).sort((a, b) => b.v - a.v).map(x => x.id);
   const top = ranked.slice(0, 7);
   const [ace, ...rest] = top;
   const order = [...shuffle(rest), ace].filter(id => id !== undefined && id !== first);
@@ -462,6 +469,26 @@ export function advanceWeek(s: CareerState, myEntry?: number[]): WeekResult {
   return { ...endWeek(s, last?.id), broadcast };
 }
 
+/** 연속 결장이 이 주 수 이상이면 매주 능력치가 줄어듦 */
+export const BENCH_DECAY_WEEKS = 3;
+/**
+ * 프로리그 결장 감각 저하 (정규시즌 주 마무리): 이번 주 프로리그에 안 나온 선수는 결장 주 수 +1,
+ * 3주 이상 연속이면 매주 능력치 3개가 2~5씩 줄어듦 (오래 쉴수록 조금 더, 훈련으로 오르는 것보다 큼). 무소속은 제외
+ */
+export function benchDecay(s: CareerState) {
+  const wk = `${s.season}-${s.week}`;
+  for (const p of activePlayers(s)) {
+    if (p.team === FREE_AGENT_TEAM) continue;
+    if (p.lastProWeek === wk) continue;
+    p.benchWeeks = (p.benchWeeks ?? 0) + 1;
+    if (p.benchWeeks < BENCH_DECAY_WEEKS) continue;
+    const extra = Math.min(2, p.benchWeeks - BENCH_DECAY_WEEKS);
+    const keys = shuffle([...STAT_KEYS]).slice(0, 3);
+    for (const k of keys) p.stats[k] = clampStat(p.stats[k] - randInt(2, 5 + extra));
+    if (p.team === s.myTeam && p.benchWeeks === BENCH_DECAY_WEEKS) news(s, `📉 ${p.name} 선수가 ${BENCH_DECAY_WEEKS}주째 프로리그에 못 나가 실전 감각이 떨어지고 있습니다 (능력치 조금씩 하락)`);
+  }
+}
+
 /** 이번 주 다른 팀 경기 (한 번만: 이미 치른 경기는 건너뜀). 우리 팀이 없는 포스트시즌 경기는 관전용 중계를 돌려줌 */
 function playOtherMatches(s: CareerState): ProReport[] {
   // 다른 팀 선수의 주간 훈련·휴식 (경기 시작 요청을 가볍게 하려고 주 마무리 때 한꺼번에)
@@ -491,6 +518,8 @@ function finishWeek(s: CareerState): WeekResult {
   if (s.phase !== "offseason") weeklyGoods(s);
   // 2부 팀 최소 인원 (이적·은퇴로 모자라면 리그가 채움)
   fillBRosters(s);
+  // 프로리그에 오래(3주 이상 연속) 못 나간 선수는 실전 감각이 떨어져 능력치가 조금씩 줄어듦 (개인리그 출전은 제외)
+  if (s.phase === "regular") benchDecay(s);
   // 한 주(프로리그 2경기)가 끝나면 모든 선수 컨디션 10% 회복
   // 연봉 협상이 틀어져 불만인 선수는 그 기간 동안 회복 없음
   for (const p of activePlayers(s)) {

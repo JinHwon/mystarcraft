@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 import { navigate } from "wouter/use-browser-location";
 import { cn } from "@/lib/utils";
 import { STAT_KEYS, STAT_LABELS, type StatKey } from "@shared/gameConstants";
-import { COND_MAX, burstLabel, burstOf, condMultiplier, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
-import { ITEMS, ITEM_BY_KEY, SLOT_NAMES, gearCond, gearStats, itemImg, setItemExtra, type EquipSlot, type StatExtra } from "@shared/career/items";
+import { COND_MAX, burstLabel, burstOf, slumpOn, condMultiplier, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
+import { ITEMS, ITEM_BY_KEY, SLOT_NAMES, gearCond, gearStats, matchCond, itemImg, setItemExtra, type EquipSlot, type StatExtra } from "@shared/career/items";
 import { trpc } from "@/lib/trpc";
 import { useCareerPatch } from "@/lib/career";
 import { LegacyImg, LegacyRadar, PlayerPhoto } from "../Legacy";
@@ -93,7 +93,8 @@ export function VitaButton({ s, pid }: { s: CareerState; pid: number }) {
  */
 export function condStats(p: CPlayer, s?: { season: number; week: number }, extra: StatExtra = 0): Record<StatKey, number> {
   const g = gearStats(p, extra);
-  const k = condMultiplier(gearCond(p)) * ((s && burstOf(s, p)) || 1);
+  // 컨디션 난조면 그 주 경기 컨디션 -40 (최저 10)
+  const k = condMultiplier(s ? matchCond(p, s) : gearCond(p)) * ((s && burstOf(s, p)) || 1);
   return Object.fromEntries(STAT_KEYS.map(s => [s, Math.round(g[s] * k)])) as Record<StatKey, number>;
 }
 
@@ -143,6 +144,8 @@ export function PlayerPanel({ p, color, empty, s }: { p?: CPlayer; color: string
   }
   const cs = condStats(p, s);
   const burst = s ? burstOf(s, p) : undefined;
+  const slump = !!s && slumpOn(s, p);
+  const mc = s ? matchCond(p, s) : gearCond(p);
   return (
     <div className="border border-neutral-700 px-1.5 pt-1.5 pb-1 flex flex-col items-center">
       <div className="flex items-start gap-2 w-full justify-center">
@@ -150,14 +153,15 @@ export function PlayerPanel({ p, color, empty, s }: { p?: CPlayer; color: string
         <div className="text-[11px] leading-[1.45] text-neutral-200 pt-0.5">
           <div className="text-[13px] font-bold" style={{ color }}>{p.name}</div>
           <div>{R[p.race]} · Lv.{p.level}</div>
-          <div>Condition <b className={gearCond(p) >= 70 ? "text-[#bff5c6]" : gearCond(p) <= 30 ? "text-[#ff9a9a]" : "text-white"}>{gearCond(p)}%</b>{gearCond(p) !== p.cond && <span className="text-[9px] text-neutral-500"> (장비)</span>}</div>
+          <div>Condition <b className={mc >= 70 ? "text-[#bff5c6]" : mc <= 30 ? "text-[#ff9a9a]" : "text-white"}>{mc}%</b>{slump ? <span className="text-[9px] text-[#8fb8ff]"> (난조 -40)</span> : gearCond(p) !== p.cond && <span className="text-[9px] text-neutral-500"> (장비)</span>}</div>
           <div className="text-neutral-400">원래 {totalOf(p.stats).toLocaleString()}{totalOf(gearStats(p)) !== totalOf(p.stats) ? <span className="text-[#8fd0ff]"> +장비 {(totalOf(gearStats(p)) - totalOf(p.stats)).toLocaleString()}</span> : null} → 실전 <b className="text-[#ffe45c]">{totalOf(cs).toLocaleString()}</b></div>
           {burst && <div className="font-bold" style={{ color: burstLabel(burst).color }}>{burstLabel(burst).icon} {burstLabel(burst).name}! {Math.round(burst * 100)}%</div>}
+          {slump && <div className="font-bold text-[#8fb8ff]">😵 컨디션 난조! (이번 주 컨디션 -40)</div>}
         </div>
       </div>
       <div className="mt-1"><EquipRow p={p} /></div>
       <LegacyRadar stats={cs} base={p.stats} gear={gearStats(p)} level={p.level} size={92} />
-      <div className="text-[9px] text-neutral-500 -mt-1">회색 점선 = 원래 · 빨강 = 컨디션·장비{burst ? (burst >= 1 ? "·포텐셜" : "·난조") : ""} 반영</div>
+      <div className="text-[9px] text-neutral-500 -mt-1">회색 점선 = 원래 · 빨강 = 컨디션·장비{burst ? "·포텐셜" : ""}{slump ? "·난조" : ""} 반영</div>
     </div>
   );
 }

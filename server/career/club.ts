@@ -675,6 +675,7 @@ function newJobOffer(s: CareerState, team: number): JobOffer {
 export function newSeasonClub(s: CareerState) {
   for (const p of activePlayers(s)) {
     p.sApps = 0;
+    p.benchWeeks = 0;
     if (p.team === FREE_AGENT_TEAM) { delete p.contract; continue; }
     const c = p.contract ?? defaultContract(p, s.season);
     c.years--;

@@ -144,6 +144,7 @@ export function SetFxBox({ s, set, lp, rp, leftIsA }: { s: CareerState; set: Bro
     <div className="mt-2 pt-1.5 border-t border-neutral-600 space-y-0.5 text-[11px]">
       <div className="text-neutral-400">— 경기 결과 —</div>
       {[[lp, leftIsA ? set.burst?.a : set.burst?.b], [rp, leftIsA ? set.burst?.b : set.burst?.a]].map(([p, v]) => v ? <div key={(p as CPlayer).id} style={{ color: burstLabel(v as number).color }}>{burstLabel(v as number).icon} {(p as CPlayer).name} {burstLabel(v as number).name}! 이 세트 능력치 {Math.round((v as number) * 100)}%</div> : null)}
+      {[[lp, leftIsA ? set.slump?.a : set.slump?.b], [rp, leftIsA ? set.slump?.b : set.slump?.a]].map(([p, v]) => v ? <div key={`slump-${(p as CPlayer).id}`} className="text-[#8fb8ff]">😵 {(p as CPlayer).name} 컨디션 난조! 이 세트 컨디션 -40</div> : null)}
       {row(lp, fl, LEFT_COLOR)}
       {row(rp, fr, RIGHT_COLOR)}
       {set.ceremony && <div className="text-[#ffe45c]">🎉 세레모니! 소지금 +{set.ceremony}만원 · 우리 선수 전원 컨디션 +1 (현재 {s.teams[s.myTeam].money.toLocaleString()}만원)</div>}

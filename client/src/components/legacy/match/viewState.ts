@@ -38,7 +38,7 @@ export function viewStateAt(s: CareerState, reports: SnapReport[], k: number, j 
   const wk = `${s.season}-${s.week}`;
   const players = s.players.map(p => {
     const v = view.get(p.id);
-    return v ? { ...p, cond: v.cond, stats: v.stats, titles: v.titles ?? [], burst: v.burst ? { week: wk, mul: v.burst } : undefined } : p;
+    return v ? { ...p, cond: v.cond, stats: v.stats, titles: v.titles ?? [], burst: v.burst ? { week: wk, mul: v.burst } : undefined, slump: v.slump ? wk : undefined } : p;
   });
   return { ...s, players };
 }

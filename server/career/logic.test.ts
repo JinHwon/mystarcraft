@@ -1182,21 +1182,63 @@ describe("팬미팅 수익·인기", () => {
 });
 
 describe("컨디션 난조", () => {
-  it("주마다 일부 선수가 컨디션 난조(능력치 60~90%)에 걸리고 그 주 경기 능력치에 반영, 다음 주엔 풀림", async () => {
+  it("주마다 컨디션과 관계없이 일부 선수가 난조: 그 주 경기 컨디션 -40 (최저 10), 다음 주엔 풀림", async () => {
     const { rollWeekBursts, effStats } = await import("./core");
-    const { burstOf } = await import("@shared/career/rules");
+    const { slumpOn, slumpCond, SLUMP_CHANCE } = await import("@shared/career/rules");
+    const { matchCond } = await import("@shared/career/items");
+    expect(slumpCond(100)).toBe(60);
+    expect(slumpCond(90)).toBe(50);
+    expect(slumpCond(40)).toBe(10);
+    expect(slumpCond(25)).toBe(10);
     const s = newCareer(0);
-    for (const p of s.players) p.cond = 40; // 컨디션이 나쁠수록 잘 걸림
+    for (const p of s.players) p.cond = 100;
     s.burstWeek = undefined;
     rollWeekBursts(s);
-    const slumped = s.players.filter(p => (burstOf(s, p) ?? 1) < 1);
-    expect(slumped.length).toBeGreaterThan(0);
-    for (const p of slumped) { const m = burstOf(s, p)!; expect(m).toBeGreaterThanOrEqual(0.6); expect(m).toBeLessThanOrEqual(0.9); }
-    const p = slumped[0];
-    const plain = effStats(p);
-    const withSlump = effStats(p, { mul: burstOf(s, p) });
-    expect(withSlump.attack).toBeLessThan(plain.attack);
+    const slumped = s.players.filter(p => p.team >= 0 && slumpOn(s, p));
+    const n = s.players.filter(p => p.team >= 0).length;
+    expect(slumped.length).toBeGreaterThan(n * SLUMP_CHANCE * 0.3);
+    const p = { ...slumped[0], equip: {} };
+    expect(matchCond(p, s)).toBe(60);
+    expect(effStats(p, { slump: true }).attack).toBeLessThan(effStats(p).attack);
     s.week++;
-    expect(burstOf(s, p)).toBeUndefined();
+    expect(slumpOn(s, p)).toBe(false);
+    expect(matchCond(p, s)).toBe(100);
+  });
+});
+
+describe("결장 감각 저하·팬미팅 능력치", () => {
+  it("프로리그에 3주 이상 연속 못 나간 선수는 능력치가 줄고, 나간 선수는 결장 주 수가 0", async () => {
+    const { benchDecay } = await import("./logic");
+    const s = newCareer(0);
+    const m = myPendingMatch(s);
+    advanceWeek(s, m ? aiEntry(s, s.myTeam, PRO_SETS) : undefined);
+    const played = s.players.filter(p => p.team >= 0 && p.lastProWeek === `${s.season}-${s.week - 1}`);
+    expect(played.length).toBeGreaterThan(0);
+    for (const p of played) expect(p.benchWeeks).toBe(0);
+    // 결장 2주째인 선수가 이번 주도 못 나가면 3주째 → 능력치 하락
+    const p = rosterOf(s, 1)[0];
+    p.benchWeeks = 2; p.lastProWeek = undefined;
+    const before = totalOf(p.stats);
+    benchDecay(s);
+    expect(p.benchWeeks).toBe(3);
+    expect(totalOf(p.stats)).toBeLessThan(before);
+    // 이번 주에 나간 선수는 그대로
+    const q = rosterOf(s, 2)[0];
+    q.lastProWeek = `${s.season}-${s.week}`; q.benchWeeks = 5;
+    const qb = totalOf(q.stats);
+    benchDecay(s);
+    expect(totalOf(q.stats)).toBe(qb);
+  });
+
+  it("팬미팅(이벤트)을 하면 능력치가 조금 떨어진다", async () => {
+    const { runMyActions } = await import("./logic");
+    const s = newCareer(0);
+    const p = rosterOf(s, 0)[0];
+    for (const x of rosterOf(s, 0)) x.action = null;
+    p.action = "event";
+    const before = totalOf(p.stats);
+    runMyActions(s);
+    expect(totalOf(p.stats)).toBeLessThan(before);
+    expect(before - totalOf(p.stats)).toBeLessThanOrEqual(4);
   });
 });
