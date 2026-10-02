@@ -74,11 +74,16 @@ function ShopScreen({ s }: { s: CareerState }) {
   const [fromEntry] = useState(() => new URLSearchParams(window.location.search).get("from") === "entry");
   const close = () => navigate(fromEntry ? "/league" : "/lobby");
   const utils = trpc.useUtils();
-  const [cat, setCat] = useState<ItemCat>("소모품");
+  // 선수 정보의 "장비 바꾸기"에서 오면 ?cat=마우스&player=번호 (그 분류·선수가 선택된 채로)
+  const [query] = useState(() => new URLSearchParams(window.location.search));
+  const [cat, setCat] = useState<ItemCat>(() => (ITEM_CATS as string[]).includes(query.get("cat") ?? "") ? (query.get("cat") as ItemCat) : "소모품");
   const list = ITEMS.filter(i => i.cat === cat && !i.notForSale);
   const [key, setKey] = useState(list[0].key);
   const item = ITEMS.find(i => i.key === key) ?? list[0];
-  const [target, setTarget] = useState<number | undefined>();
+  const [target, setTarget] = useState<number | undefined>(() => {
+    const id = Number(query.get("player"));
+    return query.get("player") !== null && s.players[id]?.team === s.myTeam ? id : undefined;
+  });
   const [msg, setMsg] = useState<{ text: string; ok: boolean; delta?: Partial<Record<string, number>> } | null>(null);
   const stackable = isStackable(item);
   const isEquip = item.kind === "equip";
@@ -169,12 +174,12 @@ function ShopScreen({ s }: { s: CareerState }) {
         {isEquip ? (
           <>
             <div className="text-center text-[12px] text-neutral-300">구입한 장비는 보관함에 쌓입니다 (최대 {stackMax(item)}개) · 선수를 고르고 장착하세요 · {SLOT_NAMES[slotOf(item) as EquipSlot]} 칸</div>
-            <PlayerPanel p={target !== undefined ? s.players[target] : undefined} color="#8fd0ff" empty="장착할 선수를 고르세요" />
-            <TargetList s={s} item={item} sel={target} onSel={setTarget} />
             <button disabled={target === undefined || equip.isPending || buy.isPending} onClick={doEquip}
               className="w-full border border-[#8fe07a] text-[#bff5c6] py-1.5 text-[13px] disabled:opacity-40">
               {equip.isPending ? "장착 중…" : target === undefined ? "장착할 선수를 고르세요" : owned > 0 ? `${s.players[target].name} 선수에게 장착 (보유 ${owned}개)` : `1개 구입해서 ${s.players[target].name} 선수에게 장착 (${item.price.toLocaleString()}만)`}
             </button>
+            <PlayerPanel p={target !== undefined ? s.players[target] : undefined} color="#8fd0ff" empty="장착할 선수를 고르세요" />
+            <TargetList s={s} item={item} sel={target} onSel={setTarget} />
             <div className="text-center text-[10.5px] text-neutral-500">이미 장비를 끼고 있으면 새 장비로 바뀝니다 (끼던 장비는 사라짐, 같은 장비면 내구도가 다시 참)</div>
           </>
         ) : needsTarget ? (

@@ -31,7 +31,7 @@ export interface ItemDef {
    * potion: 포션 (즉시 사용, 능력치 무작위 변화)
    */
   kind: "equip" | "match" | "instant" | "potion" | "stock";
-  /** 한 번 구입할 때 받는 개수 (비타비타 3개) */
+  /** 한 번 구입할 때 받는 개수 (츄잉껌 3개) */
   pack?: number;
   /** 상점에서 팔지 않음 (치어풀: 이벤트 행동에서 팬에게 받음) */
   notForSale?: boolean;
@@ -52,8 +52,8 @@ const st = (control = 0, attack = 0, harass = 0, strategy = 0, supply = 0, defen
 
 export const ITEMS: ItemDef[] = [
   // ── 소모품 ──
-  { key: "vitavita", cat: "소모품", img: "0", name: "비타비타", desc: ["힘들고 지칠 때", "비타민을 마시면 기운이 날거다."], effect: ["즉시 컨디션 ＋3", "한 번 구입에 3개"], price: 90, kind: "stock", cond: 3, pack: 3 },
-  { key: "gum", cat: "소모품", img: "1", name: "츄잉껌", desc: ["긴장하지 말고 껌을 씹으며", "맘 편하게 경기해보자."], effect: ["패했을 경우", "능력치 감소 －66%"], price: 50, kind: "match" },
+  { key: "vitavita", cat: "소모품", img: "0", name: "비타비타", desc: ["힘들고 지칠 때", "비타민을 마시면 기운이 날거다."], effect: ["즉시 컨디션 ＋3"], price: 40, kind: "stock", cond: 3 },
+  { key: "gum", cat: "소모품", img: "1", name: "츄잉껌", desc: ["긴장하지 말고 껌을 씹으며", "맘 편하게 경기해보자."], effect: ["패했을 경우", "능력치 감소 －66%", "한 번 구입에 3개"], price: 50, kind: "match", pack: 3 },
   { key: "ceremony", cat: "소모품", img: "2", name: "세레모니", desc: ["이번 경기를 승리한다면", "이런 춤을 춰보는건 어때?"], effect: ["소지금 ＋150만원", "승리시 전원 컨디션 ＋1"], price: 80, kind: "match" },
   { key: "sniping", cat: "소모품", img: "3", name: "스나이핑", desc: ["상대의 카드는 뻔하다", "그렇다면 승리는 뻔한거지."], effect: ["상대 선수 예측시", "이길 확률 ↑"], price: 100, kind: "match" },
   { key: "memo", cat: "소모품", img: "memo.svg", name: "작전 메모", desc: ["상대의 버릇을 꼼꼼히 적어뒀다.", "경기 전에 한 번 더 읽어보자."], effect: ["한 경기 동안", "센스＋100, 전략＋60"], price: 90, kind: "match", setBonus: st(0, 0, 0, 60, 0, 0, 0, 100) },

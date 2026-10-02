@@ -494,14 +494,14 @@ describe("아이템 상점", () => {
     // 이미 끼고 있어도 더 사서 보관할 수 있고 (최대 99개), 보관함에서 다른 장비로 바꿔 끼울 수 있음
     buyItem(s, "m3", undefined, 3);
     buyItem(s, "m1", undefined, 96);
-    // 소모품은 999개까지, 비타비타는 한 번에 3개
-    buyItem(s, "gum", undefined, 500);
-    expect(s.inventory?.gum).toBe(500);
-    expect(() => buyItem(s, "gum", undefined, 500)).toThrow("최대 999개");
+    // 소모품은 999개까지, 츄잉껌은 한 번에 3개 (50만)
     const money = s.teams[0].money;
+    buyItem(s, "gum", undefined, 300);
+    expect(s.inventory?.gum).toBe(900);
+    expect(money - s.teams[0].money).toBe(50 * 300);
+    expect(() => buyItem(s, "gum", undefined, 34)).toThrow("최대 999개");
     buyItem(s, "vitavita", undefined, 2);
-    expect(s.inventory?.vitavita).toBe(6);
-    expect(money - s.teams[0].money).toBe(180);
+    expect(s.inventory?.vitavita).toBe(2);
     expect(s.inventory).toMatchObject({ m3: 3, m1: 96 });
     expect(() => buyItem(s, "m3", undefined, 97)).toThrow("최대 99개");
     equipItem(s, "m1", p.id);
@@ -548,13 +548,13 @@ describe("아이템 상점", () => {
     const s = newCareer(2);
     s.teams[2].money = 1000;
     buyItem(s, "vitavita", undefined, 5);
-    expect(s.inventory!.vitavita).toBe(15); // 한 번에 3개
-    expect(s.teams[2].money).toBe(1000 - 90 * 5);
+    expect(s.inventory!.vitavita).toBe(5);
+    expect(s.teams[2].money).toBe(1000 - 40 * 5);
     const p = rosterOf(s, 2)[0];
     p.cond = 40;
     useStockItem(s, "vitavita", p.id);
     expect(p.cond).toBe(43);
-    expect(s.inventory!.vitavita).toBe(14);
+    expect(s.inventory!.vitavita).toBe(4);
     p.cond = 100;
     expect(() => useStockItem(s, "vitavita", p.id)).toThrow("컨디션이 최대 입니다");
     expect(() => buyItem(s, "vitavita", undefined, 1000)).toThrow(CareerError);
