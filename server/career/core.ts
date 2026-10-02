@@ -100,14 +100,14 @@ export function effStats(p: CPlayer, mod?: SetMods): Record<StatKey, number> {
 
 /**
  * 경기 뒤 컨디션 하락 (원작: 1 단위)
- * - 패배: 3~10 (경기가 길수록, 기지를 잃거나 완패할수록 더)
+ * - 패배: 3~7 (경기가 길수록, 기지를 잃거나 완패할수록 더)
  * - 승리: 2~5 (긴 경기면 더)
  */
 function condLoss(p: CPlayer, won: boolean, c: SetContent | undefined, duration: number): number {
   const long = Math.min(3, Math.max(0, (duration - 600) / 300));
   if (won) return Math.max(2, Math.min(5, Math.round(randInt(2, 4) + long * 0.4)));
   const pain = c ? c.crushed * 1 + c.basesLost * 0.7 + c.holdFails * 0.4 : 0;
-  return Math.max(3, Math.min(10, Math.round(randInt(3, 5) + long + pain)));
+  return Math.max(3, Math.min(7, Math.round(randInt(3, 4) + long * 0.7 + pain * 0.7)));
 }
 
 /** 세트 전 상태 → 변화 기록 */

@@ -751,11 +751,11 @@ describe("경기 뒤 변화", () => {
     beginMatch(s, front);
     expect(s.players[roster[6].id].action).toBe("rest");
     const r = playLiveSet(s);
-    // 컨디션은 1 단위: 승자 2~5, 패자 3~10 하락
+    // 컨디션은 1 단위: 승자 2~5, 패자 3~7 하락
     const [w, l] = r.set.winner === "a" ? [r.set.fx!.a, r.set.fx!.b] : [r.set.fx!.b, r.set.fx!.a];
     if (w.cond[0] > 6) expect(w.cond[0] - w.cond[1]).toBeGreaterThanOrEqual(2);
     expect(w.cond[0] - w.cond[1]).toBeLessThanOrEqual(5);
-    if (l.cond[0] > 12) { expect(l.cond[0] - l.cond[1]).toBeGreaterThanOrEqual(3); expect(l.cond[0] - l.cond[1]).toBeLessThanOrEqual(10); }
+    if (l.cond[0] > 12) { expect(l.cond[0] - l.cond[1]).toBeGreaterThanOrEqual(3); expect(l.cond[0] - l.cond[1]).toBeLessThanOrEqual(7); }
     expect(r.set.fx!.a.exp + r.set.fx!.b.exp).toBe(40);
   });
 });
