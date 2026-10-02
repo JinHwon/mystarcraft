@@ -40,7 +40,7 @@ import {
 } from "@shared/career/rules";
 import {
   type SetMods,
-  CareerError, addExp, clampCond, rollWeekBursts, quickSet, clampStat, drawMapPool, gainStats, news, pickMaps, playSet, rand, randInt, shuffle, STAGE_GROWTH, withStageGrowth,
+  CareerError, addExp, clampCond, freeMoney, rollWeekBursts, rerollAfterMatch, quickSet, clampStat, drawMapPool, gainStats, news, pickMaps, playSet, rand, randInt, shuffle, STAGE_GROWTH, withStageGrowth,
   type PlayedSet,
 } from "./core";
 export { CareerError };
@@ -317,6 +317,8 @@ function recordMatch(s: CareerState, m: CMatch, entryA: number[], entryB: number
     const stageName = { regular: `${m.week}주차`, semi: "준플레이오프", po: "플레이오프", final: "결승", promo: "승강전" }[m.stage];
     news(s, `${won ? "🎉" : "😢"} ${stageName} vs ${opp.name} ${Math.max(sa, sb)}:${Math.min(sa, sb)} ${won ? "승리" : "패배"}`);
   }
+  // 포텐셜 폭발·컨디션 난조는 경기마다 새로 (나온 선수만)
+  rerollAfterMatch(s, results.flatMap(r => [r.a, r.b]));
 }
 
 /** 포스트시즌·승강전은 경기 뒤 능력치가 크게 오름 */
@@ -330,11 +332,13 @@ const youthOf = (m: CMatch) => m.stage === "regular" && m.div === 2;
  * 스나이핑은 35% 확률로 적중해 이길 확률 65% 이상
  */
 const AI_ITEM_CHANCE: Record<CMatch["stage"], number> = { regular: 0.12, promo: 0.3, semi: 0.3, po: 0.3, final: 0.45 };
-function aiSetItem(s: CareerState, team: number, m: CMatch): { key: string; mod: SetMods; sniped?: boolean } | undefined {
-  if (team === s.myTeam || rand() >= AI_ITEM_CHANCE[m.stage]) return undefined;
+/** 우리 팀처럼 경기 전에 정할 수 있는 세트에만 아이템 (위너스리그는 1세트, 일반 경기는 ACE 결정전 전까지) */
+const itemSetAllowed = (m: CMatch, i: number) => (m.winners ? i === 0 : i < setsOf(m) - 1);
+function aiSetItem(s: CareerState, team: number, m: CMatch, setIdx: number): { key: string; mod: SetMods; sniped?: boolean } | undefined {
+  if (team === s.myTeam || !itemSetAllowed(m, setIdx) || rand() >= AI_ITEM_CHANCE[m.stage]) return undefined;
   const t = s.teams[team];
   if (rand() < 0.15) return { key: "cheer", mod: { all: ITEM_BY_KEY.cheer.all } };
-  const options = ["memo", "gum", "sniping", "ceremony"].filter(k => t.money >= ITEM_BY_KEY[k].price + 1500);
+  const options = ["memo", "gum", "sniping", "ceremony"].filter(k => freeMoney(s, team) >= ITEM_BY_KEY[k].price + 1500);
   if (!options.length) return undefined;
   const key = options[randInt(0, options.length - 1)];
   const it = ITEM_BY_KEY[key];
@@ -371,7 +375,7 @@ function playMatch(s: CareerState, m: CMatch, myEntry?: number[]): PlayedSet[] {
     const pa = s.players[entryA[i]], pb = s.players[entryB[i]];
     if (!pa || !pb) continue;
     // 다른 팀끼리 경기는 빠른 판정 (중계가 필요 없음), 다른 팀은 가끔 경기 아이템을 씀
-    const ai = { a: aiSetItem(s, m.a, m), b: aiSetItem(s, m.b, m) };
+    const ai = { a: aiSetItem(s, m.a, m, i), b: aiSetItem(s, m.b, m, i) };
     const mods = { a: ai.a?.mod, b: ai.b?.mod };
     const r = withStageGrowth(stageGrowthOf(m), () => (involvesMe ? playSet(s, pa, pb, m.maps[i % m.maps.length], true, true, mods) : quickSet(s, pa, pb, m.maps[i % m.maps.length], mods)), youthOf(m));
     settleAiItems(s, r, m.a, m.b, ai);
@@ -415,7 +419,7 @@ function playWinnersMatch(s: CareerState, m: CMatch, withBroadcast: boolean, myE
   let sa = 0, sb = 0;
   for (let i = 0; sa < need && sb < need; i++) {
     const map = m.maps[i % m.maps.length];
-    const ai = { a: aiSetItem(s, m.a, m), b: aiSetItem(s, m.b, m) };
+    const ai = { a: aiSetItem(s, m.a, m, i), b: aiSetItem(s, m.b, m, i) };
     const mods = { a: ai.a?.mod, b: ai.b?.mod };
     const r = withStageGrowth(stageGrowthOf(m), () => (withBroadcast ? playSet(s, s.players[pa], s.players[pb], map, true, true, mods) : quickSet(s, s.players[pa], s.players[pb], map, mods)), youthOf(m));
     settleAiItems(s, r, m.a, m.b, ai);
@@ -685,7 +689,7 @@ export function playLiveSet(s: CareerState, ace?: number): LiveSetResult {
   }
   // 상대(컴퓨터)도 가끔 경기 아이템을 씀
   const oppTeam = meA ? m.b : m.a;
-  const oppItem = aiSetItem(s, oppTeam, m);
+  const oppItem = aiSetItem(s, oppTeam, m, i);
   const mods = meA ? { a: mod, b: oppItem?.mod } : { a: oppItem?.mod, b: mod };
   const set = withStageGrowth(stageGrowthOf(m), () => playSet(s, s.players[entryA[i]], s.players[entryB[i]], m.maps[i % m.maps.length], true, true, mods), youthOf(m));
   settleAiItems(s, set, m.a, m.b, meA ? { b: oppItem } : { a: oppItem });

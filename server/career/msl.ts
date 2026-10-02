@@ -18,7 +18,7 @@ import {
 } from "@shared/career/rules";
 import { addManagerExp, book, mainSponsorPay } from "./club";
 import { activePlayers } from "@shared/career/view";
-import { CareerError, STAGE_GROWTH, news, pickMaps, playSet, quickSet, rand, shuffle, withStageGrowth, type PlayedSet } from "./core";
+import { CareerError, STAGE_GROWTH, news, pickMaps, playSet, quickSet, rand, rerollAfterMatch, shuffle, withStageGrowth, type PlayedSet } from "./core";
 
 const GROUP_NAMES = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
@@ -63,6 +63,8 @@ function series(s: CareerState, a: number, b: number, bestOf: number, label: str
     sets.push(r);
   }
   const result: MslSeries = { a, b, bestOf, sa, sb, winner: sa > sb ? a : b, label, sets };
+  // 포텐셜 폭발·컨디션 난조는 경기(시리즈)마다 새로
+  rerollAfterMatch(s, [a, b]);
   if (involved && isMine(s, result.winner)) addManagerExp(s, 5);
   if (mine) {
     report.push({ ...result, stage, maps, sets: sets.map(x => ({ ...x })), pre });
