@@ -104,6 +104,10 @@ export const slotOf = (item: ItemDef): EquipSlot | undefined => SLOT_OF[item.cat
 /** 그림 경로 (img 에 확장자가 있으면 그대로, 없으면 원작 .gif) */
 export const itemImg = (item: ItemDef) => ({ dir: `아이템/${item.cat}`, name: item.img });
 
+/** 아이템 한 종류 최대 보유 개수 */
+export const ITEM_STACK_MAX = 99;
+/** 사 두었다가 쓰는 아이템 (경기 아이템·비타비타·장비) */
+export const isStackable = (item: ItemDef) => item.kind === "match" || item.kind === "stock" || item.kind === "equip";
 /** 장비 능력치 합산 상한 (경기 중) */
 export const EFFECTIVE_STAT_MAX = 1100;
 

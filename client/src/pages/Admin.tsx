@@ -8,10 +8,10 @@ import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { TeamBadge } from "@/components/career/Bits";
-import { ITEMS } from "@shared/career/items";
+import { ITEMS, isStackable } from "@shared/career/items";
 import { EVENT_INFO, type CareerEventType } from "@shared/career/events";
 
-const STOCK_ITEMS = ITEMS.filter(i => i.kind === "match" || i.kind === "stock");
+const STOCK_ITEMS = ITEMS.filter(isStackable);
 
 function EditPanel({ userId, onDone }: { userId: number; onDone: () => void }) {
   const utils = trpc.useUtils();

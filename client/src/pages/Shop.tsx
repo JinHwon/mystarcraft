@@ -6,7 +6,7 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { STAT_LABELS, type StatKey } from "@shared/gameConstants";
-import { ITEMS, ITEM_CATS, SLOT_NAMES, itemImg, slotOf, type ItemCat, type ItemDef, type EquipSlot } from "@shared/career/items";
+import { ITEMS, ITEM_CATS, ITEM_STACK_MAX, SLOT_NAMES, isStackable, itemImg, slotOf, type ItemCat, type ItemDef, type EquipSlot } from "@shared/career/items";
 import { totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
 import { rosterOf } from "@shared/career/view";
 import { useCareer, useCareerPatch } from "@/lib/career";
@@ -39,7 +39,7 @@ function Detail({ item, s }: { item: ItemDef; s: CareerState }) {
         <div className="text-[#bff5c6] mt-0.5">{item.effect.map((e, i) => <div key={i}>{e}</div>)}</div>
         <div className="flex justify-between text-neutral-400 mt-0.5">
           <span>사용 : {useText(item)}</span>
-          {(item.kind === "match" || item.kind === "stock") && <span>보유 {owned}개</span>}
+          {isStackable(item) && <span>보유 {owned}개</span>}
         </div>
       </div>
     </div>
@@ -80,10 +80,22 @@ function ShopScreen({ s }: { s: CareerState }) {
   const item = ITEMS.find(i => i.key === key) ?? list[0];
   const [target, setTarget] = useState<number | undefined>();
   const [msg, setMsg] = useState<{ text: string; ok: boolean; delta?: Partial<Record<string, number>> } | null>(null);
-  const stackable = item.kind === "match" || item.kind === "stock";
+  const stackable = isStackable(item);
+  const isEquip = item.kind === "equip";
   const needsTarget = !stackable;
+  const owned = s.inventory?.[item.key] ?? 0;
   const [qty, setQty] = useState(1);
   const patch = useCareerPatch();
+  // 장비: 보관함에서 선수에게 장착 (없으면 하나 사서 바로 장착)
+  const equip = trpc.career.equipItem.useMutation({
+    onSuccess: r => { patch(r.diff); setMsg({ text: (r.result as { message: string }).message, ok: true }); },
+    onError: e => setMsg({ text: e.message, ok: false }),
+  });
+  const doEquip = () => {
+    if (target === undefined) return;
+    if (owned > 0) equip.mutate({ key: item.key, target });
+    else buy.mutate({ key: item.key, target, qty: 1 });
+  };
   const buy = trpc.career.buyItem.useMutation({
     onSuccess: r => {
       patch(r.diff);
@@ -130,7 +142,7 @@ function ShopScreen({ s }: { s: CareerState }) {
               <ItemIcon item={it} size={48} />
               <span className="text-[10px] text-neutral-200 truncate w-full text-center">{it.name}</span>
               <span className="text-[9.5px] text-[#ffe45c]">{it.price.toLocaleString()}만</span>
-              {(it.kind === "match" || it.kind === "stock") && (s.inventory?.[it.key] ?? 0) > 0 && <span className="text-[9px] text-[#bff5c6]">보유 {s.inventory![it.key]}</span>}
+              {isStackable(it) && (s.inventory?.[it.key] ?? 0) > 0 && <span className="text-[9px] text-[#bff5c6]">보유 {s.inventory![it.key]}</span>}
             </button>
           ))}
         </div>
@@ -150,11 +162,22 @@ function ShopScreen({ s }: { s: CareerState }) {
             <div className="flex items-center gap-1">
               {[-5, -1].map(d => <button key={d} onClick={() => setQty(q => Math.max(1, q + d))} className="border border-neutral-600 px-2">{d}</button>)}
               <span className="w-10 text-center text-[#ffe45c] text-[15px]">{qty}</span>
-              {[1, 5].map(d => <button key={d} onClick={() => setQty(q => Math.min(99, q + d))} className="border border-neutral-600 px-2">+{d}</button>)}
+              {[1, 5].map(d => <button key={d} onClick={() => setQty(q => Math.max(1, Math.min(ITEM_STACK_MAX - owned, q + d)))} className="border border-neutral-600 px-2">+{d}</button>)}
             </div>
           </div>
         )}
-        {needsTarget ? (
+        {isEquip ? (
+          <>
+            <div className="text-center text-[12px] text-neutral-300">구입한 장비는 보관함에 쌓입니다 (최대 {ITEM_STACK_MAX}개) · 선수를 고르고 장착하세요 · {SLOT_NAMES[slotOf(item) as EquipSlot]} 칸</div>
+            <PlayerPanel p={target !== undefined ? s.players[target] : undefined} color="#8fd0ff" empty="장착할 선수를 고르세요" />
+            <TargetList s={s} item={item} sel={target} onSel={setTarget} />
+            <button disabled={target === undefined || equip.isPending || buy.isPending} onClick={doEquip}
+              className="w-full border border-[#8fe07a] text-[#bff5c6] py-1.5 text-[13px] disabled:opacity-40">
+              {equip.isPending ? "장착 중…" : target === undefined ? "장착할 선수를 고르세요" : owned > 0 ? `${s.players[target].name} 선수에게 장착 (보유 ${owned}개)` : `1개 구입해서 ${s.players[target].name} 선수에게 장착 (${item.price.toLocaleString()}만)`}
+            </button>
+            <div className="text-center text-[10.5px] text-neutral-500">이미 장비를 끼고 있으면 새 장비로 바뀝니다 (끼던 장비는 사라짐, 같은 장비면 내구도가 다시 참)</div>
+          </>
+        ) : needsTarget ? (
           <>
             <div className="text-center text-[12px] text-neutral-300">{item.kind === "equip" ? `선수를 선택하세요 · ${SLOT_NAMES[slotOf(item) as EquipSlot]} 칸에 장착` : "대상을 선택해 주세요"}</div>
             <PlayerPanel p={target !== undefined ? s.players[target] : undefined} color="#8fd0ff" empty="아이템을 쓸 선수를 고르세요" />

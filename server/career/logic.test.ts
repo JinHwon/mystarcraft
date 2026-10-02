@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FINAL_SETS, PRO_SETS, totalOf, type CareerState, type CMatch } from "@shared/career/rules";
-import { CareerError, advanceWeek as advanceOnly, completeWeek, aiEntry, beginMatch, buyItem, migrateCareer, useStockItem, myPendingMatch, newCareer, playLiveSet, proposeTrade, releasePlayer, rosterOf, scoutPlayer, setAction, standings, startNextSeason } from "./logic";
+import { CareerError, advanceWeek as advanceOnly, completeWeek, aiEntry, beginMatch, buyItem, equipItem, migrateCareer, useStockItem, myPendingMatch, newCareer, playLiveSet, proposeTrade, releasePlayer, rosterOf, scoutPlayer, setAction, standings, startNextSeason } from "./logic";
 
 /** 한 주 진행 (우리 선수가 조장인 조 지명식에서 멈추면 자동 지명으로 마저 진행) */
 function advanceWeek(s: CareerState, entry?: number[]) {
@@ -490,7 +490,19 @@ describe("아이템 상점", () => {
     const p = rosterOf(s, 0)[0];
     buyItem(s, "m3", p.id);
     expect(p.equip?.mouse?.key).toBe("m3");
-    expect(() => buyItem(s, "m3", p.id)).toThrow("이미 장착 중입니다");
+    expect(s.inventory?.m3).toBe(0);
+    // 이미 끼고 있어도 더 사서 보관할 수 있고 (최대 99개), 보관함에서 다른 장비로 바꿔 끼울 수 있음
+    buyItem(s, "m3", undefined, 3);
+    buyItem(s, "m1", undefined, 96);
+    expect(s.inventory).toMatchObject({ m3: 3, m1: 96 });
+    expect(() => buyItem(s, "m3", undefined, 97)).toThrow("최대 99개");
+    equipItem(s, "m1", p.id);
+    expect(p.equip?.mouse?.key).toBe("m1");
+    expect(s.inventory?.m1).toBe(95);
+    equipItem(s, "m3", p.id);
+    expect(p.equip?.mouse?.key).toBe("m3");
+    expect(s.inventory?.m3).toBe(2);
+    expect(() => equipItem(s, "k1", p.id)).toThrow("보유한 장비가 없습니다");
     expect(gearStats(p).control).toBe(Math.min(1100, p.stats.control + 80));
     const left = p.equip!.mouse!.left;
     const front = [p.id, ...rosterOf(s, 0).filter(x => x.id !== p.id).slice(0, 3).map(x => x.id)];
