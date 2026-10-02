@@ -64,12 +64,17 @@ export const COND_LABELS = ["", "최악", "짜증", "나쁨", "저조", "보통"
 export const WEEKLY_COND_RECOVERY = 10;
 export const condLabel = (cond: number) => COND_LABELS[Math.max(1, Math.min(10, Math.ceil(cond / 10)))];
 /**
- * 컨디션에 따른 경기력 배율: 100% 가 원래 능력치, 조금만 떨어져도 크게 줄어듦
- * 95% → 0.955, 90% → 0.90, 85% → 0.835, 80% → 0.76 (실전에서 거의 못 씀), 70% → 0.58, 60% → 0.36, 그 아래 0.3
+ * 컨디션에 따른 경기력 배율: 100% 가 원래 능력치. 조금만 떨어져도 바로 줄고(90% → 87%), 낮아질수록 완만하게 (50~60% → 절반 언저리)
+ * 표의 점 사이는 직선으로 이음
  */
+const COND_CURVE: Array<[number, number]> = [[100, 1], [90, 0.87], [80, 0.76], [70, 0.65], [60, 0.55], [50, 0.47], [40, 0.4], [20, 0.3], [1, 0.25]];
 export function condMultiplier(cond: number): number {
-  const d = COND_MAX - Math.max(COND_MIN, Math.min(COND_MAX, cond));
-  return Math.max(0.3, 1 - d * 0.008 - d * d * 0.0002);
+  const c = Math.max(COND_MIN, Math.min(COND_MAX, cond));
+  for (let k = 1; k < COND_CURVE.length; k++) {
+    const [c0, m0] = COND_CURVE[k - 1], [c1, m1] = COND_CURVE[k];
+    if (c >= c1) return m1 + ((c - c1) / (c0 - c1)) * (m0 - m1);
+  }
+  return COND_CURVE[COND_CURVE.length - 1][1];
 }
 
 /** 이번 주 포텐셜 폭발 배율 (없으면 undefined) */
