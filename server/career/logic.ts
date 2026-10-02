@@ -154,6 +154,12 @@ export function setAction(s: CareerState, pid: number, action: ActionKey | null)
 }
 
 
+/** 연봉 불만 기간인지 (sulkUntil = "시즌-주") */
+function sulking(s: CareerState, p: CPlayer) {
+  const [ss, ww] = (p.sulkUntil ?? "0-0").split("-").map(Number);
+  return s.season < ss || (s.season === ss && s.week <= ww);
+}
+
 /** 행동 한 명 실행: 능력치·컨디션·돈 변화 */
 function actOne(s: CareerState, p: CPlayer, action: ActionKey | null | undefined) {
   const mine = p.team === s.myTeam;
@@ -164,8 +170,12 @@ function actOne(s: CareerState, p: CPlayer, action: ActionKey | null | undefined
     case "train": gainStats(p, 2, 2 * boost, 6 * boost); p.cond = clampCond(p.cond - randInt(3, 5)); break;
     case "rest": p.cond = clampCond(p.cond + 5); break;
     case "event": {
-      // 인기 많은 선수일수록 팬미팅 수익이 큼
-      const earn = 30 + p.level * 12 + Math.round(popularity(p) * 1.5) + randInt(0, 40);
+      // 인기 많은 선수일수록 팬미팅 수익이 큼. 한 주에 팬미팅을 여러 번 열수록 팬이 덜 모임 (한 번에 10%씩, 최소 30%)
+      // (예전엔 선수 전원이 매주 팬미팅만 해도 시즌에 2억 넘게 벌려 경제가 무너졌음 → 시즌 약 2~4천만)
+      const wk = `${s.season}-${s.week}`;
+      if (mine && s.eventCount?.week !== wk) s.eventCount = { week: wk, n: 0 };
+      const fade = mine ? Math.max(0.3, 1 - 0.1 * s.eventCount!.n++) : 1;
+      const earn = Math.round((10 + p.level * 3 + popularity(p) * 0.4 + randInt(0, 8)) * fade);
       if (mine) {
         pay(s, "이벤트", earn, `${p.name} 팬미팅`);
         // 팬미팅: 인기가 많을수록 치어풀을 받을 확률이 높음
@@ -436,7 +446,12 @@ function finishWeek(s: CareerState): WeekResult {
   // 2부 팀 최소 인원 (이적·은퇴로 모자라면 리그가 채움)
   fillBRosters(s);
   // 한 주(프로리그 2경기)가 끝나면 모든 선수 컨디션 10% 회복
-  for (const p of activePlayers(s)) p.cond = clampCond(p.cond + WEEKLY_COND_RECOVERY);
+  // 연봉 협상이 틀어져 불만인 선수는 그 기간 동안 회복 없음
+  for (const p of activePlayers(s)) {
+    if (p.sulkUntil && sulking(s, p)) continue;
+    if (p.sulkUntil) delete p.sulkUntil;
+    p.cond = clampCond(p.cond + WEEKLY_COND_RECOVERY);
+  }
   // 다른 구단은 여유 자금으로 주전 선수 아이템 구입
   if (s.phase !== "offseason") aiShopping(s);
   // 우리 선수 행동력: 매주 20 (최대 40까지 모임)

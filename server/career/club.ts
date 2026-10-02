@@ -34,7 +34,7 @@ import {
   type TransferOffer,
   BONUS_NAMES,
 } from "@shared/career/rules";
-import { contractScore, defaultContract, expectedShare, jobThreshold, playerDemand, sellMinimum, squadRank, weeklyWage } from "@shared/career/contract";
+import { contractScore, defaultContract, expectedShare, isStar, jobThreshold, playerDemand, sellMinimum, squadRank, weeklyWage } from "@shared/career/contract";
 import { activePlayers, divOf, myDiv, proTeams, rosterOf, teamPower } from "@shared/career/view";
 import { developmentBonus, myBTeam, rosterLimits } from "./divisions";
 import { CareerError, addExp, clampCond, gainStats, news, rand, randInt } from "./core";
@@ -253,6 +253,73 @@ export function respondJoin(s: CareerState, id: number, action: "accept" | "reje
   p.morale = Math.min(100, (p.morale ?? 70) + 15);
   news(s, `✍️ ${p.name} 선수 영입! 본인이 원해서 왔습니다 (이적료 ${r.fee.toLocaleString()}만원, 연봉 ${r.salary.toLocaleString()}만원)`);
   return { result: "signed" as const, message: `${p.name}: "불러 주셔서 감사합니다!" (계약 성사)` };
+}
+
+/**
+ * 스타 선수의 연봉 인상 요구 (매주, 정규시즌): 계약이 남았어도 A- 이상 스타가 지금 연봉이 요구 연봉보다 많이 낮으면
+ * 재계약(연봉 인상)을 요구. 한 번에 한 명만 (구단 운영이 어려워지지 않게). 2주 안에 답하지 않으면 거절로 봄
+ */
+function weeklyRaiseRequest(s: CareerState) {
+  const r = s.raiseRequest;
+  if (r) {
+    const p = s.players[r.player];
+    if (!p || p.team !== s.myTeam) delete s.raiseRequest;
+    else if (r.season !== s.season || s.week - r.week >= 2) { delete s.raiseRequest; raiseRefused(s, p, "2주 동안 답이 없어"); }
+    return;
+  }
+  if (s.phase !== "regular" || rand() >= 0.12) return;
+  const cands = rosterOf(s, s.myTeam).filter(p => isStar(p) && p.contract && (p.contract.years ?? 0) >= 1).map(p => ({ p, d: playerDemand(s, p, s.myTeam) }))
+    .filter(({ p, d }) => d.salary >= (p.contract!.salary) * 1.25);
+  if (!cands.length) return;
+  const { p, d } = cands.sort((a, b) => b.d.salary / b.p.contract!.salary - a.d.salary / a.p.contract!.salary)[0];
+  s.raiseRequest = { player: p.id, salary: d.salary, years: Math.max(d.years, p.contract!.years), season: s.season, week: s.week };
+  news(s, `💼 ${p.name} 선수가 연봉 인상을 요구합니다: ${p.contract!.salary.toLocaleString()}만 → ${d.salary.toLocaleString()}만원 (구단 운영 → 제안, 2주 안에 답하세요)`);
+}
+
+/** 연봉 요구를 거절당한 스타: 사기 하락 + (컨디션 2주 부진 / 능력치 하락 / 이적 희망) 중 하나 */
+function raiseRefused(s: CareerState, p: CPlayer, why: string): string {
+  p.morale = Math.max(0, (p.morale ?? 60) - 20);
+  const r = rand();
+  let what: string;
+  if (r < 0.5) {
+    p.cond = clampCond(Math.round(p.cond * 0.8));
+    const until = s.week + 2;
+    p.sulkUntil = `${s.season}-${until}`;
+    what = "의욕을 잃어 컨디션이 20% 떨어지고 2주 동안 회복되지 않습니다";
+  } else if (r < 0.8) {
+    for (const k of Object.keys(p.stats) as (keyof typeof p.stats)[]) p.stats[k] = Math.max(1, p.stats[k] - randInt(3, 10));
+    what = "연습을 소홀히 해 능력치가 떨어졌습니다";
+  } else {
+    p.wantsOut = true;
+    what = "이적을 희망합니다";
+  }
+  news(s, `😠 ${p.name} 선수: ${why} 연봉 협상이 틀어졌습니다 — ${what}`);
+  return what;
+}
+
+/** 연봉 인상 요구에 답하기: 수락(요구 연봉), 역제안(요구의 90% 이상이면 합의), 거절 */
+export function respondRaise(s: CareerState, action: "accept" | "counter" | "reject", salary?: number) {
+  const r = s.raiseRequest;
+  if (!r) throw new CareerError("받은 연봉 요구가 없습니다");
+  const p = s.players[r.player];
+  delete s.raiseRequest;
+  if (!p || p.team !== s.myTeam) return { result: "closed" as const, message: "이미 팀을 떠난 선수입니다" };
+  const sign = (pay: number) => {
+    p.contract = { ...(p.contract ?? { salary: pay, years: r.years }), salary: pay, years: Math.max(r.years, p.contract?.years ?? 1) };
+    p.morale = Math.min(100, (p.morale ?? 60) + 10);
+    p.wantsOut = false;
+    news(s, `✍️ ${p.name} 선수 연봉 인상 재계약 (연봉 ${pay.toLocaleString()}만원, ${p.contract.years}년)`);
+    return { result: "signed" as const, message: `${p.name}: "믿어 주셔서 감사합니다!" (연봉 ${pay.toLocaleString()}만원)` };
+  };
+  if (action === "accept") return sign(r.salary);
+  if (action === "counter") {
+    const offer = round10(salary ?? 0);
+    if (offer >= r.salary * 0.9) return sign(Math.min(offer, r.salary));
+    const what = raiseRefused(s, p, `역제안(${offer.toLocaleString()}만원)이 너무 낮아`);
+    return { result: "refused" as const, message: `${p.name}: "그 금액이면 곤란합니다" — ${what}` };
+  }
+  const what = raiseRefused(s, p, "요구를 거절당해");
+  return { result: "refused" as const, message: `${p.name}: "실망입니다" — ${what}` };
 }
 
 /** 시즌 중 감독 제의 (평판이 되는 팀에서 가끔). 수락하면 시즌이 끝날 때 옮김 */
@@ -520,6 +587,7 @@ export function weeklyClub(s: CareerState) {
     weeklyOffers(s);
     weeklyPlayerRequests(s);
     weeklyJobOffer(s);
+    weeklyRaiseRequest(s);
   }
   // 다른 구단끼리 이적·트레이드·방출·무소속 영입
   aiMarket(s, s.phase === "offseason" ? 3 : 1);

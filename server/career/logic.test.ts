@@ -501,7 +501,7 @@ describe("아이템 상점", () => {
     const money = s.teams[0].money;
     buyItem(s, "vitavita", undefined, 2);
     expect(s.inventory?.vitavita).toBe(6);
-    expect(money - s.teams[0].money).toBe(80);
+    expect(money - s.teams[0].money).toBe(180);
     expect(s.inventory).toMatchObject({ m3: 3, m1: 96 });
     expect(() => buyItem(s, "m3", undefined, 97)).toThrow("최대 99개");
     equipItem(s, "m1", p.id);
@@ -549,7 +549,7 @@ describe("아이템 상점", () => {
     s.teams[2].money = 1000;
     buyItem(s, "vitavita", undefined, 5);
     expect(s.inventory!.vitavita).toBe(15); // 한 번에 3개
-    expect(s.teams[2].money).toBe(1000 - 40 * 5);
+    expect(s.teams[2].money).toBe(1000 - 90 * 5);
     const p = rosterOf(s, 2)[0];
     p.cond = 40;
     useStockItem(s, "vitavita", p.id);
@@ -1054,5 +1054,35 @@ describe("휴식: 컨디션 100%", () => {
     expect(full.ap ?? 20).toBe(20);
     tired.action = null;
     expect(() => runMyActions(s)).toThrow("컨디션이 이미 100%라 휴식할 필요가 없습니다");
+  });
+});
+
+describe("스타 선수 연봉", () => {
+  it("스타가 많은 팀일수록 스타의 요구 연봉이 크게 오른다", async () => {
+    const { playerDemand, isStar } = await import("@shared/career/contract");
+    const s = newCareer(0);
+    const ace = rosterOf(s, 0).find(isStar)!;
+    const alone = playerDemand(s, ace, 0).salary;
+    for (const p of s.players.filter(p => p.team > 0 && p.team < 12 && isStar(p)).slice(0, 4)) p.team = 0;
+    expect(playerDemand(s, ace, 0).salary).toBeGreaterThan(alone * 1.6);
+  });
+
+  it("연봉 인상 요구: 수락하면 연봉이 오르고, 너무 낮은 역제안·거절이면 부진·능력치 하락·이적 희망 중 하나", async () => {
+    const { respondRaise } = await import("./club");
+    const s = newCareer(0);
+    const p = rosterOf(s, 0)[0];
+    s.raiseRequest = { player: p.id, salary: 900, years: 3, season: s.season, week: s.week };
+    respondRaise(s, "accept");
+    expect(p.contract?.salary).toBe(900);
+    expect(s.raiseRequest).toBeUndefined();
+    for (let i = 0; i < 20; i++) {
+      const before = { cond: 100, total: totalOf(p.stats) };
+      p.cond = 100; p.wantsOut = false; delete p.sulkUntil;
+      s.raiseRequest = { player: p.id, salary: 1000, years: 3, season: s.season, week: s.week };
+      const r = respondRaise(s, "counter", 500);
+      expect(r.result).toBe("refused");
+      expect(p.cond < before.cond || totalOf(p.stats) < before.total || p.wantsOut).toBe(true);
+    }
+    expect(() => respondRaise(s, "accept")).toThrow("받은 연봉 요구가 없습니다");
   });
 });

@@ -164,6 +164,7 @@ function OffersTab({ s }: { s: CareerState }) {
     <div className="space-y-2">
       {reply && <Reply {...reply} />}
       <ListingsBox s={s} />
+      <RaiseRequest s={s} />
       <JoinRequests s={s} />
       {!offers.length && <div className="text-center text-[12px] text-neutral-500 py-4">받은 영입 제안이 없습니다<br />(이적시장에 내놓거나, 출전이 적고 이적을 희망하는 선수에게 제안이 잘 들어옵니다)</div>}
       {offers.map(o => {
@@ -197,6 +198,36 @@ function OffersTab({ s }: { s: CareerState }) {
         );
       })}
       <OfferHistory s={s} />
+    </div>
+  );
+}
+
+/** 우리 스타 선수의 연봉 인상 요구 (거절·너무 낮은 역제안이면 컨디션 부진·능력치 하락·이적 희망 중 하나) */
+function RaiseRequest({ s }: { s: CareerState }) {
+  const { reply, done, fail } = useMut();
+  const respond = trpc.career.respondRaise.useMutation({ onSuccess: done, onError: fail });
+  const r = s.raiseRequest;
+  const [counter, setCounter] = useState<number | null>(null);
+  if (!r || !s.players[r.player] || s.players[r.player].team !== s.myTeam) return reply ? <Reply {...reply} /> : null;
+  const p = s.players[r.player];
+  const cur = p.contract?.salary ?? 0;
+  const value = counter ?? Math.round((r.salary * 0.9) / 10) * 10;
+  return (
+    <div className="border border-[#ffb84d]/70 p-2 space-y-1.5 text-[12px]">
+      <div className="text-[#ffb84d]">💼 연봉 인상 요구 · {Math.max(0, 2 - (s.week - r.week))}주 안에 답하세요</div>
+      {reply && <Reply {...reply} />}
+      <div><span className="text-[#8fd0ff]">{p.name} ({R[p.race]})</span> <span className="text-neutral-400">능력치 {totalOf(p.stats).toLocaleString()} · 계약 {p.contract?.years ?? 0}년 남음</span></div>
+      <div className="text-neutral-300">연봉 {cur.toLocaleString()}만 → <b className="text-[#ffe45c]">{r.salary.toLocaleString()}만</b> · 계약 {r.years}년</div>
+      <div className="text-[10.5px] text-neutral-500">거절하거나 요구의 90%보다 낮게 부르면 실망해서 컨디션 부진(-20%, 2주 회복 없음)·능력치 하락·이적 희망 중 하나가 생깁니다</div>
+      <div className="flex items-center justify-between gap-1">
+        <span className="text-neutral-400">역제안 연봉</span>
+        <FeeStepper value={value} onChange={setCounter} />
+      </div>
+      <div className="grid grid-cols-3 gap-1">
+        <button disabled={respond.isPending} onClick={() => respond.mutate({ action: "accept" })} className="border border-[#8fe07a] text-[#bff5c6] py-1">수락</button>
+        <button disabled={respond.isPending} onClick={() => respond.mutate({ action: "counter", salary: value })} className="border border-[#f8e070] text-[#ffe45c] py-1">역제안</button>
+        <button disabled={respond.isPending} onClick={() => confirm(`${p.name} 선수의 요구를 거절할까요? 실망해서 부진하거나 이적을 원할 수 있습니다.`) && respond.mutate({ action: "reject" })} className="border border-[#ff6b6b] text-[#ffb8c8] py-1">거절</button>
+      </div>
     </div>
   );
 }
@@ -515,7 +546,7 @@ function ClubScreen({ s }: { s: CareerState }) {
             <button key={k} onClick={() => setTab(k)} className={cn("text-[12px] py-1 border relative", tab === k ? "text-black border-white" : "text-neutral-200 border-neutral-600")}
               style={tab === k ? { background: "linear-gradient(#ffffff,#cfcfcf)" } : undefined}>
               {label}
-              {k === "offers" && (s.offers?.length ?? 0) + (s.joinRequests?.length ?? 0) > 0 && <span className="absolute -top-1.5 -right-1 bg-[#ff4d4d] text-white text-[9px] rounded-full px-1">{(s.offers?.length ?? 0) + (s.joinRequests?.length ?? 0)}</span>}
+              {k === "offers" && (s.offers?.length ?? 0) + (s.joinRequests?.length ?? 0) + (s.raiseRequest ? 1 : 0) > 0 && <span className="absolute -top-1.5 -right-1 bg-[#ff4d4d] text-white text-[9px] rounded-full px-1">{(s.offers?.length ?? 0) + (s.joinRequests?.length ?? 0) + (s.raiseRequest ? 1 : 0)}</span>}
               {k === "manager" && (s.jobOffers?.length ?? 0) > 0 && <span className="absolute -top-1.5 -right-1 bg-[#ff4d4d] text-white text-[9px] rounded-full px-1">{s.jobOffers!.length}</span>}
             </button>
           ))}

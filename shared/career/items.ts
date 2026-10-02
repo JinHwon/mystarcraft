@@ -1,7 +1,7 @@
 /**
  * 아이템 상점 (원작 마이스타크래프트 아이템)
  * 이름·설명·효과 문구는 원작 그대로, 그림은 client/public/legacy/아이템/{분류}/{번호}.gif
- * 금액은 이 게임 경제(만원)에 맞춘 값이다.
+ * 금액은 이 게임 경제(만원)에 맞춘 값이다. (포션은 횟수 제한이 없어, 돈으로 능력치를 너무 싸게 사지 못하게 비싸게)
  */
 import { STAT_KEYS, type StatKey } from "../gameConstants";
 import type { CPlayer } from "./rules";
@@ -52,7 +52,7 @@ const st = (control = 0, attack = 0, harass = 0, strategy = 0, supply = 0, defen
 
 export const ITEMS: ItemDef[] = [
   // ── 소모품 ──
-  { key: "vitavita", cat: "소모품", img: "0", name: "비타비타", desc: ["힘들고 지칠 때", "비타민을 마시면 기운이 날거다."], effect: ["즉시 컨디션 ＋3", "한 번 구입에 3개"], price: 40, kind: "stock", cond: 3, pack: 3 },
+  { key: "vitavita", cat: "소모품", img: "0", name: "비타비타", desc: ["힘들고 지칠 때", "비타민을 마시면 기운이 날거다."], effect: ["즉시 컨디션 ＋3", "한 번 구입에 3개"], price: 90, kind: "stock", cond: 3, pack: 3 },
   { key: "gum", cat: "소모품", img: "1", name: "츄잉껌", desc: ["긴장하지 말고 껌을 씹으며", "맘 편하게 경기해보자."], effect: ["패했을 경우", "능력치 감소 －66%"], price: 50, kind: "match" },
   { key: "ceremony", cat: "소모품", img: "2", name: "세레모니", desc: ["이번 경기를 승리한다면", "이런 춤을 춰보는건 어때?"], effect: ["소지금 ＋150만원", "승리시 전원 컨디션 ＋1"], price: 80, kind: "match" },
   { key: "sniping", cat: "소모품", img: "3", name: "스나이핑", desc: ["상대의 카드는 뻔하다", "그렇다면 승리는 뻔한거지."], effect: ["상대 선수 예측시", "이길 확률 ↑"], price: 100, kind: "match" },
@@ -86,19 +86,19 @@ export const ITEMS: ItemDef[] = [
   { key: "e7", cat: "기타", img: "7.svg", name: "전략 노트", desc: ["상대별 빌드를 정리한 노트.", "읽을수록 수가 보인다."], effect: ["센스＋30", "전략＋60"], price: 450, kind: "equip", uses: 20, bonus: st(0, 0, 0, 60, 0, 0, 0, 30) },
   { key: "e8", cat: "기타", img: "8.svg", name: "프로 유니폼", desc: ["입기만 해도 자신감이 붙는다.", "이제 진짜 프로게이머다."], effect: ["센스＋60, 컨트롤＋30", "컨디션＋1"], price: 900, kind: "equip", uses: 25, bonus: st(30, 0, 0, 0, 0, 0, 0, 60), cond: 1 },
   // ── 포션 (능력치 영구 변화, 무작위) ──
-  { key: "p_vit", cat: "포션", img: "vit", name: "비타 포션", desc: ["피곤할 땐 이만한게 없지.", "맛도 정말 좋다구."], effect: ["컨디션＋?", "전체 능력치－2"], price: 100, kind: "potion", potion: { min: 2, max: 4, condCost: 0, allMinus: 2 } },
-  { key: "p_att", cat: "포션", img: "att", name: "붉은 포션", desc: ["단숨에 마셔보렴.", "피가 뜨겁게 끓어오르지?"], effect: ["공격력 ±??", "컨디션－1"], price: 120, kind: "potion", potion: { stat: "attack", min: -10, max: 30, condCost: 1 } },
-  { key: "p_def", cat: "포션", img: "def", name: "푸른 포션", desc: ["이걸 마시면 침착해지지.", "다만 졸음이 몰려올 수도 있어."], effect: ["수비력 ±??", "컨디션－1"], price: 120, kind: "potion", potion: { stat: "defense", min: -10, max: 30, condCost: 1 } },
-  { key: "p_ctr", cat: "포션", img: "ctr", name: "노란 포션", desc: ["담긴 병부터 섬세하단다.", "마실 때도 섬세하게 마셔야해."], effect: ["컨트롤 ±??", "컨디션－1"], price: 120, kind: "potion", potion: { stat: "control", min: -10, max: 30, condCost: 1 } },
-  { key: "p_prd", cat: "포션", img: "prd", name: "검은 포션", desc: ["왼손은 거들 뿐이라니?", "물량 앞에 장사가 어디 있더냐?"], effect: ["물량 ±??", "컨디션－1"], price: 120, kind: "potion", potion: { stat: "supply", min: -10, max: 30, condCost: 1 } },
-  { key: "p_grr", cat: "포션", img: "grr", name: "주황 포션", desc: ["찰랑 거리는 모양이", "정신이 하나도 없구나."], effect: ["견제 ±??", "컨디션－1"], price: 120, kind: "potion", potion: { stat: "harass", min: -10, max: 30, condCost: 1 } },
-  { key: "p_rec", cat: "포션", img: "rec", name: "초록 포션", desc: ["정말로 이걸 마시면", "공기의 흐름이 보이나요?"], effect: ["정찰 ±??", "컨디션－1"], price: 120, kind: "potion", potion: { stat: "scout", min: -10, max: 30, condCost: 1 } },
-  { key: "p_stt", cat: "포션", img: "stt", name: "보라 포션", desc: ["스타는 전략게임이란다.", "잔머리가 아니라 전략이라고."], effect: ["전략 ±??", "컨디션－1"], price: 120, kind: "potion", potion: { stat: "strategy", min: -10, max: 30, condCost: 1 } },
-  { key: "p_sen", cat: "포션", img: "sen", name: "하얀 포션", desc: ["자네는 상대의 눈빛만 봐도", "뭘 할지 한눈에 알아챌 수 있나?"], effect: ["센스 ±??", "컨디션－1"], price: 120, kind: "potion", potion: { stat: "sense", min: -10, max: 30, condCost: 1 } },
-  { key: "p_all", cat: "포션", img: "all", name: "무지개 포션", desc: ["여러 포션을 섞어서 만들었지.", "먹기는 힘들어도 효과는 좋다네."], effect: ["전체 능력치 ±??", "컨디션－3"], price: 400, kind: "potion", potion: { min: -6, max: 15, condCost: 3 } },
-  { key: "p_spc", cat: "포션", img: "spc", name: "매직무지개 포션", desc: ["마법으로 정제한거라", "효과는 작아도 부작용이 없다네."], effect: ["전체 능력치 ＋?", "컨디션－3"], price: 600, kind: "potion", potion: { min: 1, max: 8, condCost: 3 } },
-  { key: "p_sen2", cat: "포션", img: "sen2.svg", name: "투명 포션", desc: ["맑은 정신이 오래 간다네.", "하얀 포션보다 순하지."], effect: ["센스 ＋5~25", "컨디션－1"], price: 300, kind: "potion", potion: { stat: "sense", min: 5, max: 25, condCost: 1 } },
-  { key: "p_def2", cat: "포션", img: "def2.svg", name: "강철 포션", desc: ["어떤 러시도 막아낼 것 같은", "든든한 기분이 든다."], effect: ["수비력 ＋5~25", "컨디션－1"], price: 300, kind: "potion", potion: { stat: "defense", min: 5, max: 25, condCost: 1 } },
+  { key: "p_vit", cat: "포션", img: "vit", name: "비타 포션", desc: ["피곤할 땐 이만한게 없지.", "맛도 정말 좋다구."], effect: ["컨디션＋?", "전체 능력치－2"], price: 150, kind: "potion", potion: { min: 2, max: 4, condCost: 0, allMinus: 2 } },
+  { key: "p_att", cat: "포션", img: "att", name: "붉은 포션", desc: ["단숨에 마셔보렴.", "피가 뜨겁게 끓어오르지?"], effect: ["공격력 ±??", "컨디션－1"], price: 250, kind: "potion", potion: { stat: "attack", min: -10, max: 30, condCost: 1 } },
+  { key: "p_def", cat: "포션", img: "def", name: "푸른 포션", desc: ["이걸 마시면 침착해지지.", "다만 졸음이 몰려올 수도 있어."], effect: ["수비력 ±??", "컨디션－1"], price: 250, kind: "potion", potion: { stat: "defense", min: -10, max: 30, condCost: 1 } },
+  { key: "p_ctr", cat: "포션", img: "ctr", name: "노란 포션", desc: ["담긴 병부터 섬세하단다.", "마실 때도 섬세하게 마셔야해."], effect: ["컨트롤 ±??", "컨디션－1"], price: 250, kind: "potion", potion: { stat: "control", min: -10, max: 30, condCost: 1 } },
+  { key: "p_prd", cat: "포션", img: "prd", name: "검은 포션", desc: ["왼손은 거들 뿐이라니?", "물량 앞에 장사가 어디 있더냐?"], effect: ["물량 ±??", "컨디션－1"], price: 250, kind: "potion", potion: { stat: "supply", min: -10, max: 30, condCost: 1 } },
+  { key: "p_grr", cat: "포션", img: "grr", name: "주황 포션", desc: ["찰랑 거리는 모양이", "정신이 하나도 없구나."], effect: ["견제 ±??", "컨디션－1"], price: 250, kind: "potion", potion: { stat: "harass", min: -10, max: 30, condCost: 1 } },
+  { key: "p_rec", cat: "포션", img: "rec", name: "초록 포션", desc: ["정말로 이걸 마시면", "공기의 흐름이 보이나요?"], effect: ["정찰 ±??", "컨디션－1"], price: 250, kind: "potion", potion: { stat: "scout", min: -10, max: 30, condCost: 1 } },
+  { key: "p_stt", cat: "포션", img: "stt", name: "보라 포션", desc: ["스타는 전략게임이란다.", "잔머리가 아니라 전략이라고."], effect: ["전략 ±??", "컨디션－1"], price: 250, kind: "potion", potion: { stat: "strategy", min: -10, max: 30, condCost: 1 } },
+  { key: "p_sen", cat: "포션", img: "sen", name: "하얀 포션", desc: ["자네는 상대의 눈빛만 봐도", "뭘 할지 한눈에 알아챌 수 있나?"], effect: ["센스 ±??", "컨디션－1"], price: 250, kind: "potion", potion: { stat: "sense", min: -10, max: 30, condCost: 1 } },
+  { key: "p_all", cat: "포션", img: "all", name: "무지개 포션", desc: ["여러 포션을 섞어서 만들었지.", "먹기는 힘들어도 효과는 좋다네."], effect: ["전체 능력치 ±??", "컨디션－3"], price: 800, kind: "potion", potion: { min: -6, max: 15, condCost: 3 } },
+  { key: "p_spc", cat: "포션", img: "spc", name: "매직무지개 포션", desc: ["마법으로 정제한거라", "효과는 작아도 부작용이 없다네."], effect: ["전체 능력치 ＋?", "컨디션－3"], price: 1200, kind: "potion", potion: { min: 1, max: 8, condCost: 3 } },
+  { key: "p_sen2", cat: "포션", img: "sen2.svg", name: "투명 포션", desc: ["맑은 정신이 오래 간다네.", "하얀 포션보다 순하지."], effect: ["센스 ＋5~25", "컨디션－1"], price: 600, kind: "potion", potion: { stat: "sense", min: 5, max: 25, condCost: 1 } },
+  { key: "p_def2", cat: "포션", img: "def2.svg", name: "강철 포션", desc: ["어떤 러시도 막아낼 것 같은", "든든한 기분이 든다."], effect: ["수비력 ＋5~25", "컨디션－1"], price: 600, kind: "potion", potion: { stat: "defense", min: 5, max: 25, condCost: 1 } },
 ];
 
 export const ITEM_BY_KEY: Record<string, ItemDef> = Object.fromEntries(ITEMS.map(i => [i.key, i]));
