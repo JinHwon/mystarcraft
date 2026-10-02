@@ -96,11 +96,8 @@ function ShopScreen({ s }: { s: CareerState }) {
     onSuccess: r => { patch(r.diff); setMsg({ text: (r.result as { message: string }).message, ok: true }); },
     onError: e => setMsg({ text: e.message, ok: false }),
   });
-  const doEquip = () => {
-    if (target === undefined) return;
-    if (owned > 0) equip.mutate({ key: item.key, target });
-    else buy.mutate({ key: item.key, target, qty: 1 });
-  };
+  /** 보관함(운영자 지급 등)에 있는 장비를 선수에게 장착 */
+  const doEquip = () => { if (target !== undefined && owned > 0) equip.mutate({ key: item.key, target }); };
   const buy = trpc.career.buyItem.useMutation({
     onSuccess: r => {
       patch(r.diff);
@@ -110,7 +107,8 @@ function ShopScreen({ s }: { s: CareerState }) {
     onError: e => setMsg({ text: e.message, ok: false }),
   });
   const canBuy = !buy.isPending && (!needsTarget || target !== undefined);
-  const doBuy = () => canBuy && buy.mutate({ key: item.key, target: needsTarget ? target : undefined, qty: stackable ? qty : undefined });
+  // 장비는 선수를 골랐으면 산 만큼 바로 장착 (같은 장비면 사용 횟수가 더해지고, 다른 장비면 덮어씀)
+  const doBuy = () => canBuy && buy.mutate({ key: item.key, target: needsTarget || isEquip ? target : undefined, qty: stackable ? qty : undefined });
 
   // 원작 단축키: 1~6 분류, B 구입
   useEffect(() => {
@@ -126,7 +124,7 @@ function ShopScreen({ s }: { s: CareerState }) {
   const deltaText = msg?.delta ? Object.entries(msg.delta).filter(([, v]) => v).map(([k, v]) => `${STAT_LABELS[k as StatKey]} ${v! > 0 ? "+" : ""}${v}`).join(", ") : "";
 
   return (
-    <LegacyFrame season={s.season} onBack={close} onNext={doBuy} nextDisabled={!canBuy} nextLabel={buy.isPending ? "구입 중..." : "구입 (B)"}>
+    <LegacyFrame season={s.season} onBack={close} onNext={doBuy} nextDisabled={!canBuy} nextLabel={buy.isPending ? "구입 중..." : isEquip && target !== undefined ? "구입·장착 (B)" : "구입 (B)"}>
       <div className="px-3 pt-2 pb-4 space-y-2">
         {fromEntry && (
           <button onClick={close} className="w-full border border-[#8fd0ff] text-[#8fd0ff] py-1.5 text-[13px]">◁ 엔트리 편성으로 돌아가기</button>
@@ -173,14 +171,20 @@ function ShopScreen({ s }: { s: CareerState }) {
         )}
         {isEquip ? (
           <>
-            <div className="text-center text-[12px] text-neutral-300">구입한 장비는 보관함에 쌓입니다 (최대 {stackMax(item)}개) · 선수를 고르고 장착하세요 · {SLOT_NAMES[slotOf(item) as EquipSlot]} 칸</div>
-            <button disabled={target === undefined || equip.isPending || buy.isPending} onClick={doEquip}
-              className="w-full border border-[#8fe07a] text-[#bff5c6] py-1.5 text-[13px] disabled:opacity-40">
-              {equip.isPending ? "장착 중…" : target === undefined ? "장착할 선수를 고르세요" : owned > 0 ? `${s.players[target].name} 선수에게 장착 (보유 ${owned}개)` : `1개 구입해서 ${s.players[target].name} 선수에게 장착 (${item.price.toLocaleString()}만)`}
-            </button>
+            <div className="text-center text-[12px] text-neutral-300">
+              {target !== undefined
+                ? `구입하면 ${s.players[target].name} 선수 ${SLOT_NAMES[slotOf(item) as EquipSlot]} 칸에 바로 장착 (${qty}개 = ${(item.uses ?? 20) * qty}경기)`
+                : `선수를 고르고 구입하면 바로 장착됩니다 · ${SLOT_NAMES[slotOf(item) as EquipSlot]} 칸`}
+              <div className="text-[10.5px] text-neutral-500">같은 장비를 끼고 있으면 사용 횟수가 더해지고, 다른 장비면 빼고 새 장비로 덮어씁니다</div>
+            </div>
+            {owned > 0 && (
+              <button disabled={target === undefined || equip.isPending || buy.isPending} onClick={doEquip}
+                className="w-full border border-[#8fe07a] text-[#bff5c6] py-1.5 text-[13px] disabled:opacity-40">
+                {equip.isPending ? "장착 중…" : target === undefined ? `보관함 ${owned}개 · 장착할 선수를 고르세요` : `보관함에서 ${s.players[target].name} 선수에게 장착 (보유 ${owned}개)`}
+              </button>
+            )}
             <PlayerPanel p={target !== undefined ? s.players[target] : undefined} color="#8fd0ff" empty="장착할 선수를 고르세요" />
             <TargetList s={s} item={item} sel={target} onSel={setTarget} />
-            <div className="text-center text-[10.5px] text-neutral-500">이미 장비를 끼고 있으면 새 장비로 바뀝니다 (끼던 장비는 사라짐, 같은 장비면 내구도가 다시 참)</div>
           </>
         ) : needsTarget ? (
           <>
