@@ -27,7 +27,11 @@ export function careerAlerts(s: CareerState): CareerAlert[] {
   else if (s.weekHold) out.push({ key: `nom-${s.season}`, icon: "🎤", text: "마이스타리그 조 지명식 — 우리 선수가 지명할 차례입니다", to: "/league", urgent: true });
   for (const o of s.offers ?? []) {
     const p = s.players[o.player];
-    out.push({ key: `offer-${o.id}-${o.fee}`, icon: "📨", text: `${s.teams[o.team]?.name}: ${p?.name} 선수 영입 제안 ${o.fee.toLocaleString()}만원`, to: "/club?tab=offers", urgent: true });
+    out.push({ key: `offer-${o.id}-${o.fee}`, icon: o.byPlayer ? "🙋" : "📨", text: o.byPlayer ? `${p?.name} 선수가 ${s.teams[o.team]?.name} 이적을 원합니다 (${o.fee.toLocaleString()}만원)` : `${s.teams[o.team]?.name}: ${p?.name} 선수 영입 제안 ${o.fee.toLocaleString()}만원`, to: "/club?tab=offers", urgent: true });
+  }
+  for (const r of s.joinRequests ?? []) {
+    const p = s.players[r.player];
+    if (p && p.team !== s.myTeam) out.push({ key: `join-${r.id}`, icon: "🙋", text: `${s.teams[p.team]?.name} ${p.name} 선수 입단 요청 (이적료 ${r.fee.toLocaleString()}만원)`, to: "/club?tab=offers", urgent: true });
   }
   for (const o of s.jobOffers ?? []) {
     out.push({ key: `job-${s.season}-${o.team}`, icon: "🤵", text: `${s.teams[o.team]?.name}에서 감독 제의 (계약금 ${o.fee.toLocaleString()}만원)`, to: "/club?tab=manager", urgent: true });

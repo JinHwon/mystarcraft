@@ -11,6 +11,7 @@ import { activeSponsors, maxSponsors, questLabel, questProgress, questRange, que
 import { TERM_NAMES, levelPerks, mainSponsorName, managerExpNeed, managerLevel, sponsorBudget, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
 import { proTeams, rosterOf, teamPower } from "@shared/career/view";
 import { useCareer, useCareerPatch } from "@/lib/career";
+import { ManagerNameBox } from "@/components/ManagerName";
 import type { CareerDiff } from "@shared/career/diff";
 import { LegacyFrame, TeamLogo } from "@/components/legacy/Legacy";
 import { PlayerPanel } from "@/components/legacy/LegacyMatch";
@@ -163,6 +164,7 @@ function OffersTab({ s }: { s: CareerState }) {
     <div className="space-y-2">
       {reply && <Reply {...reply} />}
       <ListingsBox s={s} />
+      <JoinRequests s={s} />
       {!offers.length && <div className="text-center text-[12px] text-neutral-500 py-4">받은 영입 제안이 없습니다<br />(이적시장에 내놓거나, 출전이 적고 이적을 희망하는 선수에게 제안이 잘 들어옵니다)</div>}
       {offers.map(o => {
         const p = s.players[o.player], t = s.teams[o.team];
@@ -175,6 +177,7 @@ function OffersTab({ s }: { s: CareerState }) {
               <TeamLogo team={t} className="w-[52px] h-[30px]" />
               <div className="flex-1">
                 <div><b>{t.name}</b> → <span className="text-[#8fd0ff]">{p.name} ({R[p.race]})</span>{rivals > 1 && <span className="text-[10.5px] text-[#ffb84d]"> · 경쟁 제안 {rivals}건</span>}</div>
+                {o.byPlayer && <div className="text-[10.5px] text-[#ffb84d]">🙋 {p.name} 선수가 {t.name} 이적을 원합니다 (거절하면 사기 하락)</div>}
                 <div className="text-neutral-400">제시 금액 <b className="text-[#ffe45c]">{o.fee.toLocaleString()}만원</b>{o.status === "countered" ? " (역제안 받음)" : ""} · 협상 {o.tries}/3 · {Math.max(0, 2 - (s.week - o.week))}주 뒤 만료</div>
                 {price !== undefined && <div className={cn("text-[10.5px]", o.fee >= price ? "text-[#bff5c6]" : "text-neutral-500")}>이적시장 희망가 {price.toLocaleString()}만원{o.fee >= price ? " 이상 제시" : ` (희망가의 ${Math.round((o.fee / price) * 100)}%)`}</div>}
               </div>
@@ -194,6 +197,38 @@ function OffersTab({ s }: { s: CareerState }) {
         );
       })}
       <OfferHistory s={s} />
+    </div>
+  );
+}
+
+/** 다른 팀 선수의 입단 요청 (수락하면 바로 계약) */
+function JoinRequests({ s }: { s: CareerState }) {
+  const { reply, done, fail } = useMut();
+  const respond = trpc.career.respondJoin.useMutation({ onSuccess: done, onError: fail });
+  const list = (s.joinRequests ?? []).filter(r => s.players[r.player] && s.players[r.player].team !== s.myTeam);
+  if (!list.length) return reply ? <Reply {...reply} /> : null;
+  return (
+    <div className="border border-[#8fd0ff]/60 p-2 space-y-1.5 text-[12px]">
+      <div className="text-[#8fd0ff]">🙋 우리 팀에 오고 싶다는 선수</div>
+      {reply && <Reply {...reply} />}
+      {list.map(r => {
+        const p = s.players[r.player], t = s.teams[p.team];
+        return (
+          <div key={r.id} className="border-t border-neutral-700 first:border-t-0 pt-1.5 space-y-1">
+            <div className="flex items-center gap-2">
+              <TeamLogo team={t} className="w-[52px] h-[30px]" />
+              <div className="flex-1 min-w-0">
+                <div><span className="text-[#8fd0ff]">{p.name} ({R[p.race]})</span> <span className="text-neutral-400">{t.name} · 능력치 {totalOf(p.stats).toLocaleString()} · {p.sWins}승 {p.sLosses}패</span></div>
+                <div className="text-neutral-400">이적료 <b className="text-[#ffe45c]">{r.fee.toLocaleString()}만</b> (시세 {askingPrice(p, s.season).toLocaleString()}만) · 연봉 {r.salary.toLocaleString()}만 · {r.years}년 · {Math.max(0, 2 - (s.week - r.week))}주 뒤 만료</div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-1">
+              <button disabled={respond.isPending} onClick={() => respond.mutate({ id: r.id, action: "accept" })} className="border border-[#8fe07a] text-[#bff5c6] py-1">영입</button>
+              <button disabled={respond.isPending} onClick={() => respond.mutate({ id: r.id, action: "reject" })} className="border border-[#ff6b6b] text-[#ffb8c8] py-1">거절</button>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -261,7 +296,7 @@ function OfferHistory({ s }: { s: CareerState }) {
 function ManagerTab({ s }: { s: CareerState }) {
   const [, navigate] = useLocation();
   const { reply, done, fail } = useMut();
-  const accept = trpc.career.acceptJob.useMutation({ onSuccess: r => { done(r); navigate("/lobby"); }, onError: fail });
+  const accept = trpc.career.acceptJob.useMutation({ onSuccess: r => { done(r); if (!(r.result as { pending?: boolean }).pending) navigate("/lobby"); }, onError: fail });
   const respond = trpc.career.respondJob.useMutation({ onSuccess: done, onError: fail });
   const [asks, setAsks] = useState<Record<number, number>>({});
   const rep = s.manager?.reputation ?? 50;
@@ -286,10 +321,12 @@ function ManagerTab({ s }: { s: CareerState }) {
         <div className="h-2 bg-neutral-800 mt-1"><div className="h-full bg-[#f8e070]" style={{ width: `${rep}%` }} /></div>
         <div className="text-[10.5px] text-neutral-500 mt-1">시즌 성적(우승 +20 · 준우승 +12 · 플레이오프 +7 · 준PO +4 · 탈락 -6 · 강등 -15 · 2부 승격 +10)과 개인리그 우승 선수로 오르내립니다. 평판이 높으면 시즌이 끝날 때 더 강한 팀에서 감독 제의가 옵니다. 옮기면 지금 구단 자금은 두고 가고, 새 구단이 영입 계약금을 운영 자금에 보태 줍니다. 감독 레벨·경험치·평판은 그대로입니다.</div>
       </div>
+      <ManagerNameBox />
       {reply && <Reply {...reply} />}
       <div className="border border-neutral-600 p-2">
         <div className="text-[#ffe45c] mb-1">받은 감독 제의</div>
-        {!(s.jobOffers ?? []).length && <div className="text-neutral-500">없음 (시즌이 끝나면 평판에 따라 제의가 옵니다)</div>}
+        {s.pendingJob && <div className="border border-[#8fe07a] p-1.5 mb-1 text-[#bff5c6]">✅ {s.teams[s.pendingJob.team].name} 감독 제의 수락 — 이번 시즌이 끝나면 옮깁니다 (영입 계약금 {s.pendingJob.fee.toLocaleString()}만)</div>}
+        {!(s.jobOffers ?? []).length && !s.pendingJob && <div className="text-neutral-500">없음 (시즌 중에도 가끔, 시즌이 끝나면 평판에 따라 제의가 옵니다)</div>}
         {(s.jobOffers ?? []).map(o => {
           const t = s.teams[o.team];
           const ask = asks[o.team] ?? Math.round((o.fee * 1.2) / 10) * 10;
@@ -306,7 +343,7 @@ function ManagerTab({ s }: { s: CareerState }) {
                 <FeeStepper value={ask} onChange={v => setAsks({ ...asks, [o.team]: v })} />
               </div>
               <div className="grid grid-cols-3 gap-1">
-                <button disabled={busy || s.phase !== "offseason"} onClick={() => confirm(`${t.name} 감독으로 옮길까요?\n지금 구단 자금은 두고 가고, ${t.name}이(가) 영입 계약금 ${o.fee.toLocaleString()}만원을 운영 자금(현재 ${t.money.toLocaleString()}만원)에 더해 줍니다.\n감독 레벨·경험치·평판은 그대로 유지됩니다.`) && accept.mutate({ teamId: o.team })}
+                <button disabled={busy || !!s.pendingJob} onClick={() => confirm(`${t.name} 감독으로 옮길까요?${s.phase !== "offseason" ? "\n시즌 중이라 이번 시즌이 끝나면 자동으로 옮깁니다." : ""}\n지금 구단 자금은 두고 가고, ${t.name}이(가) 영입 계약금 ${o.fee.toLocaleString()}만원을 운영 자금(현재 ${t.money.toLocaleString()}만원)에 더해 줍니다.\n감독 레벨·경험치·평판은 그대로 유지됩니다.`) && accept.mutate({ teamId: o.team })}
                   className="border border-[#8fe07a] text-[#bff5c6] py-1 disabled:opacity-40">수락</button>
                 <button disabled={busy} onClick={() => respond.mutate({ teamId: o.team, action: "counter", fee: ask })} className="border border-[#f8e070] text-[#ffe45c] py-1 disabled:opacity-40">역제안</button>
                 <button disabled={busy} onClick={() => confirm(`${t.name}의 제의를 거절할까요?`) && respond.mutate({ teamId: o.team, action: "reject" })} className="border border-[#ff6b6b] text-[#ffb8c8] py-1 disabled:opacity-40">거절</button>
@@ -478,7 +515,7 @@ function ClubScreen({ s }: { s: CareerState }) {
             <button key={k} onClick={() => setTab(k)} className={cn("text-[12px] py-1 border relative", tab === k ? "text-black border-white" : "text-neutral-200 border-neutral-600")}
               style={tab === k ? { background: "linear-gradient(#ffffff,#cfcfcf)" } : undefined}>
               {label}
-              {k === "offers" && (s.offers?.length ?? 0) > 0 && <span className="absolute -top-1.5 -right-1 bg-[#ff4d4d] text-white text-[9px] rounded-full px-1">{s.offers!.length}</span>}
+              {k === "offers" && (s.offers?.length ?? 0) + (s.joinRequests?.length ?? 0) > 0 && <span className="absolute -top-1.5 -right-1 bg-[#ff4d4d] text-white text-[9px] rounded-full px-1">{(s.offers?.length ?? 0) + (s.joinRequests?.length ?? 0)}</span>}
               {k === "manager" && (s.jobOffers?.length ?? 0) > 0 && <span className="absolute -top-1.5 -right-1 bg-[#ff4d4d] text-white text-[9px] rounded-full px-1">{s.jobOffers!.length}</span>}
             </button>
           ))}

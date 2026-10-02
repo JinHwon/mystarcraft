@@ -1,10 +1,10 @@
 import { maskName } from "./maskName";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { getActiveEvents, getDb } from "../db";
-import { careers, users } from "../../drizzle/schema";
+import { careers, managerNameHistory, managerNames, users } from "../../drizzle/schema";
 import { ITEM_BY_KEY } from "@shared/career/items";
 import { askingPrice } from "@shared/career/rules";
 import { rosterOf as rosterOfView, teamPower } from "@shared/career/view";
@@ -15,8 +15,8 @@ import type { CareerState } from "@shared/career/rules";
 import { diffOf, jsonOf, snapshot, type Snapshot } from "./diff";
 import { nominate } from "./msl";
 import { ACTIONS, type ActionKey } from "@shared/career/rules";
-import { negotiateMainSponsor } from "./club";
-import { acceptJob, bidPlayer, chooseSponsor, listPlayer, negotiateContract, respondJob, respondOffer, unlistPlayer } from "./club";
+import { negotiateMainSponsor, pay } from "./club";
+import { acceptJob, bidPlayer, chooseSponsor, listPlayer, negotiateContract, respondJob, respondJoin, respondOffer, unlistPlayer } from "./club";
 import { sendToB } from "./divisions";
 import {
   CareerError,
@@ -226,11 +226,11 @@ export type CareerSummary = ReturnType<typeof summaryOf>;
 const summaries = new Map<number, CareerSummary>();
 /** 커리어가 없는 사용자 (매번 DB 에 묻지 않도록) — 커리어를 만들면 메모리 캐시에 먼저 들어가므로 안전 */
 const noCareer = new Set<number>();
-let usersCache: { at: number; rows: Array<{ id: number; name: string | null; role: string; lastSignedIn: Date | null }> } | null = null;
+let usersCache: { at: number; rows: Array<{ id: number; name: string | null; managerName: string | null; role: string; lastSignedIn: Date | null }> } | null = null;
 async function allSummaries(force = false) {
   const db = await requireDb();
   if (force || !usersCache || Date.now() - usersCache.at > 60_000) {
-    usersCache = { at: Date.now(), rows: await db.select({ id: users.id, name: users.name, role: users.role, lastSignedIn: users.lastSignedIn }).from(users) };
+    usersCache = { at: Date.now(), rows: await db.select({ id: users.id, name: users.name, managerName: users.managerName, role: users.role, lastSignedIn: users.lastSignedIn }).from(users) };
   }
   const us = usersCache.rows;
   const missing = us.map(u => u.id).filter(id => !cache.has(id) && !summaries.has(id) && !noCareer.has(id));
@@ -243,24 +243,76 @@ async function allSummaries(force = false) {
     const hit = cache.get(u.id)?.state;
     let summary: CareerSummary | null = null;
     try { summary = hit ? summaryOf(hit) : summaries.get(u.id) ?? null; } catch { summary = null; }
-    return { userId: u.id, name: u.name || `감독${u.id}`, role: u.role, lastSignedIn: u.lastSignedIn, summary };
+    return { userId: u.id, name: u.name || `감독${u.id}`, managerName: u.managerName, role: u.role, lastSignedIn: u.lastSignedIn, summary };
   });
 }
 
 // 서버가 뜬 뒤 랭킹 요약을 미리 만들어 둠 (첫 랭킹 요청도 빠르게)
 if (process.env.NODE_ENV !== "test") setTimeout(() => { void allSummaries().catch(() => {}); }, 5000).unref();
 
+/** 감독명: 2~10자 한글·영문·숫자·_ */
+const MANAGER_NAME_RE = /^[가-힣A-Za-z0-9_]{2,10}$/;
+/** 감독명 변경 비용 (만원, 구단 자금). 처음 정할 때는 무료 */
+export const MANAGER_NAME_COST = 500;
+const isDup = (e: unknown) => /ER_DUP_ENTRY|Duplicate entry/i.test(String((e as { code?: string; message?: string })?.code ?? "") + String((e as Error)?.message ?? "") + String((e as { cause?: unknown })?.cause ?? ""));
+
 const actionKeys = ACTIONS.map(a => a.key) as [string, ...string[]];
 /** 리그를 진행한 요청: 진행 시각을 남김 (감독 랭킹의 "마지막 리그 진행") */
 const league = <T,>(s: CareerState, result: T): T => { s.lastLeagueAt = Date.now(); return result; };
 
 export const careerRouter = router({
+  /**
+   * 감독명 정하기·바꾸기 (중복 불가). 처음은 무료, 바꿀 때는 구단 자금 MANAGER_NAME_COST 만원
+   * 이름을 먼저 차지한 뒤(unique) 비용을 내고, 비용을 못 내면 이름을 되돌린다. 이력은 항상 남김
+   */
+  setManagerName: protectedProcedure
+    .input(z.object({ name: z.string().max(40) }))
+    .mutation(async ({ ctx, input }) => {
+      const name = input.name.trim();
+      if (!MANAGER_NAME_RE.test(name)) throw new TRPCError({ code: "BAD_REQUEST", message: "감독명은 2~10자의 한글·영문·숫자·_ 만 쓸 수 있습니다" });
+      const db = await requireDb();
+      const old = ctx.user.managerName ?? null;
+      if (old === name) throw new TRPCError({ code: "BAD_REQUEST", message: "지금 쓰는 감독명입니다" });
+      const taken = await db.select().from(managerNames).where(and(eq(managerNames.name, name), ne(managerNames.userId, ctx.user.id))).limit(1);
+      if (taken[0]) throw new TRPCError({ code: "CONFLICT", message: "이미 사용 중인 감독명입니다" });
+      try {
+        await db.insert(managerNames).values({ userId: ctx.user.id, name }).onDuplicateKeyUpdate({ set: { name } });
+      } catch (e) {
+        if (isDup(e)) throw new TRPCError({ code: "CONFLICT", message: "이미 사용 중인 감독명입니다" });
+        throw e;
+      }
+      const cost = old ? MANAGER_NAME_COST : 0;
+      let diff: unknown;
+      if (cost) {
+        try {
+          diff = (await mutate(ctx.user.id, s => {
+            if (s.teams[s.myTeam].money < cost) throw new CareerError(`구단 자금이 부족합니다 (감독명 변경 ${cost.toLocaleString()}만원)`);
+            pay(s, "감독명 변경", -cost, `${old} → ${name}`);
+          })).diff;
+        } catch (e) {
+          await db.update(managerNames).set({ name: old! }).where(eq(managerNames.userId, ctx.user.id));
+          throw e;
+        }
+      }
+      await db.update(users).set({ managerName: name }).where(eq(users.id, ctx.user.id));
+      await db.insert(managerNameHistory).values({ userId: ctx.user.id, oldName: old, newName: name, cost });
+      usersCache = null;
+      return { name, cost, diff };
+    }),
+
+  /** 내 감독명 변경 이력 (최근 순) */
+  managerNameHistory: protectedProcedure.query(async ({ ctx }) => {
+    const db = await requireDb();
+    const rows = await db.select().from(managerNameHistory).where(eq(managerNameHistory.userId, ctx.user.id)).orderBy(desc(managerNameHistory.id)).limit(50);
+    return { cost: MANAGER_NAME_COST, rows: rows.map(r => ({ oldName: r.oldName, newName: r.newName, cost: r.cost, at: r.createdAt ? new Date(r.createdAt).getTime() : null })) };
+  }),
+
   /** 감독 랭킹 (커리어가 있는 사용자) */
   ranking: protectedProcedure.query(async ({ ctx }) => {
     const rows = await allSummaries();
     return {
       me: ctx.user.id,
-      rows: rows.filter(r => r.summary).map(r => ({ userId: r.userId, name: r.userId === ctx.user.id ? r.name : maskName(r.name), lastSignedIn: r.lastSignedIn ? new Date(r.lastSignedIn).getTime() : null, ...r.summary! })),
+      rows: rows.filter(r => r.summary).map(r => ({ userId: r.userId, name: r.managerName ?? (r.userId === ctx.user.id ? r.name : maskName(r.name)), lastSignedIn: r.lastSignedIn ? new Date(r.lastSignedIn).getTime() : null, ...r.summary! })),
     };
   }),
 
@@ -429,6 +481,11 @@ export const careerRouter = router({
   respondOffer: protectedProcedure
     .input(z.object({ offerId: z.number().int(), action: z.enum(["accept", "reject", "counter"]), fee: z.number().int().min(0).max(1_000_000).optional() }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => respondOffer(s, input.offerId, input.action, input.fee))),
+
+  /** 다른 팀 선수의 입단 요청: 수락·거절 */
+  respondJoin: protectedProcedure
+    .input(z.object({ id: z.number().int(), action: z.enum(["accept", "reject"]) }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => respondJoin(s, input.id, input.action))),
 
   /** 다른 팀 선수 영입 요청 (이적료 제시) */
   bid: protectedProcedure

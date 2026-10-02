@@ -943,3 +943,55 @@ describe("개인리그 전 준비·능력치 변동", () => {
     }
   });
 });
+
+describe("선수 가격·감독 제의·선수 요청", () => {
+  it("능력치가 높을수록 가파르게 비싸고, 이번 시즌 활약이 좋으면 더 비싸다", async () => {
+    const { askingPrice, formMul } = await import("@shared/career/rules");
+    const s = newCareer(0);
+    const p = { ...rosterOf(s, 1)[0], sWins: 0, sLosses: 0, level: 10 };
+    const at = (v: number) => askingPrice({ ...p, stats: Object.fromEntries(Object.keys(p.stats).map(k => [k, v])) as typeof p.stats }, s.season);
+    expect(at(1000)).toBeGreaterThan(10_000);
+    expect(at(1000) / at(700)).toBeGreaterThan(3);
+    expect(formMul({ ...p, sWins: 10, sLosses: 2 })).toBeGreaterThan(1.2);
+    expect(formMul({ ...p, sWins: 2, sLosses: 10 })).toBeLessThan(0.95);
+    expect(formMul({ ...p, sWins: 1, sLosses: 0 })).toBe(1);
+  });
+
+  it("시즌 중에 감독 제의를 수락하면 시즌이 끝날 때 그 팀으로 옮긴다", async () => {
+    const { acceptJob } = await import("./club");
+    const s = newCareer(0);
+    const target = 3;
+    s.jobOffers = [{ team: target, fee: 500, max: 700, tries: 0, status: "pending" }];
+    const r = acceptJob(s, target);
+    expect(r.pending).toBe(true);
+    expect(s.myTeam).toBe(0);
+    expect(s.pendingJob?.team).toBe(target);
+    let g = 0;
+    while (s.phase !== "offseason" && g++ < 40) {
+      const m = myPendingMatch(s);
+      advanceWeek(s, m ? aiEntry(s, s.myTeam, m.stage === "final" ? FINAL_SETS : PRO_SETS) : undefined);
+    }
+    expect(s.phase).toBe("offseason");
+    expect(s.myTeam).toBe(target);
+    expect(s.pendingJob).toBeUndefined();
+  });
+
+  it("다른 팀 선수의 입단 요청을 수락하면 그 조건으로 바로 계약하고, 우리 선수가 원한 이적을 거절하면 사기가 떨어진다", async () => {
+    const { respondJoin, respondOffer } = await import("./club");
+    const s = newCareer(0);
+    s.teams[0].money = 50_000;
+    const p = rosterOf(s, 2)[5];
+    s.joinRequests = [{ id: 99, player: p.id, fee: 300, salary: 50, years: 2, season: s.season, week: s.week }];
+    const before = s.teams[2].money;
+    respondJoin(s, 99, "accept");
+    expect(p.team).toBe(0);
+    expect(p.contract?.salary).toBe(50);
+    expect(s.teams[2].money).toBeGreaterThanOrEqual(before + 300);
+    expect(s.joinRequests).toEqual([]);
+    const mine = rosterOf(s, 0)[0];
+    mine.morale = 60;
+    s.offers = [{ id: 7, player: mine.id, team: 4, fee: 500, max: 600, season: s.season, week: s.week, tries: 0, status: "pending", byPlayer: true }];
+    respondOffer(s, 7, "reject");
+    expect(mine.morale).toBe(45);
+  });
+});

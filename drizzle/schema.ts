@@ -147,9 +147,35 @@ export const users = mysqlTable("users", {
 	createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	lastSignedIn: timestamp({ mode: 'date' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	// 감독명 (감독 랭킹 등 다른 사용자에게 보이는 이름). 없으면 첫 접속 때 정함. 중복 방지는 manager_names 의 unique
+	// (기존 테이블에 unique 를 추가하면 배포 때 drizzle-kit 이 확인을 요청하므로 새 테이블로 보장)
+	managerName: varchar({ length: 20 }),
 },
 (table) => [
 	uniqueIndex("users_openId_unique").on(table.openId),
+]);
+
+// 사용 중인 감독명 (이름 중복 방지)
+export const managerNames = mysqlTable("manager_names", {
+	userId: int().notNull().primaryKey(),
+	name: varchar({ length: 20 }).notNull(),
+},
+(table) => [
+	uniqueIndex("manager_names_name_unique").on(table.name),
+]);
+
+// 감독명 변경 이력 (처음 정한 것 포함, 지우지 않음)
+export const managerNameHistory = mysqlTable("manager_name_history", {
+	id: int().autoincrement().notNull().primaryKey(),
+	userId: int().notNull(),
+	oldName: varchar({ length: 20 }),
+	newName: varchar({ length: 20 }).notNull(),
+	// 변경에 쓴 게임 재화 (만원, 처음 정할 때 0)
+	cost: int().default(0).notNull(),
+	createdAt: timestamp({ mode: 'date' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+},
+(table) => [
+	index("manager_name_history_userId_idx").on(table.userId),
 ]);
 
 // 자체 로그인(아이디/비밀번호) 자격 증명. users 행이 API로 노출돼도 해시가 새지 않도록 별도 테이블에 보관
