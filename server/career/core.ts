@@ -12,6 +12,7 @@ import {
   STAT_MAX_CAREER,
   STAT_MIN,
   burstChance,
+  slumpChance,
   burstOf,
   condMultiplier,
   totalOf,
@@ -170,15 +171,18 @@ function wearEquip(s: CareerState, p: CPlayer) {
   }
 }
 
-/** 세트마다 포텐셜 폭발 판정 → 능력치 배율 (1.1~1.2) */
-/** 주가 시작될 때 이번 주 포텐셜이 터질 선수를 정함 (엔트리 화면부터 보임) */
+/**
+ * 주가 시작될 때 이번 주 포텐셜이 터질 선수(능력치 110~120%)와 컨디션 난조 선수(60~90%)를 정함 (엔트리 화면부터 보임)
+ */
 export function rollWeekBursts(s: CareerState) {
   const wk = `${s.season}-${s.week}`;
   if (s.burstWeek === wk) return;
   s.burstWeek = wk;
   for (const p of s.players) {
     if (p.team < 0) continue;
-    if (rand() < burstChance(gearCond(p))) p.burst = { week: wk, mul: Math.round((1.1 + rand() * 0.1) * 100) / 100 };
+    const r = rand(), cond = gearCond(p);
+    if (r < burstChance(cond)) p.burst = { week: wk, mul: Math.round((1.1 + rand() * 0.1) * 100) / 100 };
+    else if (r < burstChance(cond) + slumpChance(cond)) p.burst = { week: wk, mul: Math.round((0.6 + rand() * 0.3) * 100) / 100 };
     else delete p.burst;
   }
 }
@@ -200,7 +204,8 @@ export function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, w
   const fx = afterSet(s, a, b, aWin, mods, r.content, r.duration);
   // 중계: 포텐셜이 터진 선수 해설
   for (const [side, p] of [[1, a], [2, b]] as const) {
-    if (burst[side === 1 ? "a" : "b"] && r.timeline) r.timeline.lines.unshift({ t: 0, side, text: `${p.name} 선수, 오늘 뭔가 다릅니다! 포텐셜이 터졌어요!` });
+    const b = burst[side === 1 ? "a" : "b"];
+    if (b && r.timeline) r.timeline.lines.unshift({ t: 0, side, text: b >= 1 ? `${p.name} 선수, 오늘 뭔가 다릅니다! 포텐셜이 터졌어요!` : `${p.name} 선수, 오늘은 몸이 무거워 보이네요. 컨디션 난조입니다.` });
   }
   return {
     mapId, a: a.id, b: b.id, winner: aWin ? "a" : "b", duration: r.duration, fx,

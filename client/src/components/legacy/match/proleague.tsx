@@ -3,7 +3,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { burstOf, MATCH_MONEY, matchSets, type CareerState, type CMatch, type PlayerSnap } from "@shared/career/rules";
+import { burstLabel, burstOf, MATCH_MONEY, matchSets, type CareerState, type CMatch, type PlayerSnap } from "@shared/career/rules";
 import { STAGE_NAMES } from "@shared/career/view";
 import { viewStateAt, type SnapReport } from "./viewState";
 import { ITEM_BY_KEY, gearCond, gearStats } from "@shared/career/items";
@@ -125,7 +125,7 @@ export function ProSeriesFlow({ s: latest, reports, onDone, onClose, start, onPr
                 <div key={p.id} className="flex flex-col items-center">
                   <PlayerCard p={p} opp={o} />
                   <LegacyRadar stats={condStats(p, s)} base={p.stats} gear={gearStats(p)} level={p.level} size={112} />
-                  <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p)} %{burstOf(s, p) ? <span className="text-[#ffb84d] font-bold"> 🔥{Math.round(burstOf(s, p)! * 100)}%</span> : null}</div>
+                  <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p)} %{burstOf(s, p) ? <span className="font-bold" style={{ color: burstLabel(burstOf(s, p)!).color }}> {burstLabel(burstOf(s, p)!).icon}{Math.round(burstOf(s, p)! * 100)}%</span> : null}</div>
                 </div>
               ))}
             </div>
@@ -318,7 +318,7 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose, held, onHo
                       <PlayerCard p={p} opp={o} />
                       <div className="mt-0.5"><EquipRow p={p} size={20} /></div>
                       <LegacyRadar stats={condStats(p, s, extra)} base={p.stats} gear={gearStats(p, extra)} level={p.level} size={112} />
-                      <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p)} %{burstOf(s, p) ? <span className="text-[#ffb84d] font-bold"> 🔥{Math.round(burstOf(s, p)! * 100)}%</span> : null}</div>
+                      <div className="text-[12px] -mt-1">Condition&nbsp;&nbsp;{gearCond(p)} %{burstOf(s, p) ? <span className="font-bold" style={{ color: burstLabel(burstOf(s, p)!).color }}> {burstLabel(burstOf(s, p)!).icon}{Math.round(burstOf(s, p)! * 100)}%</span> : null}</div>
                       {itemKey && <div className="text-[11px] text-[#ffe45c]">아이템 : {ITEM_BY_KEY[itemKey]?.name}{text ? ` (${text} 반영)` : ""} · 보유 {s.inventory?.[itemKey] ?? 0}개</div>}
                     </div>
                   );

@@ -32,6 +32,7 @@ import {
   B_WEEKLY_SPONSOR,
   ageOf,
   askingPrice,
+  burstOf,
   condMultiplier,
   snapOf,
   totalOf,
@@ -249,7 +250,7 @@ export const playerAp = (p: CPlayer) => p.ap ?? WEEKLY_AP;
 /** AI 엔트리: 1~(n-1)세트는 상위 선수 중 무작위(중복 없음), 마지막 세트(에이스 결정전)는 최강 선수 */
 export function aiEntry(s: CareerState, team: number, sets: number): number[] {
   const roster = rosterOf(s, team)
-    .map(p => ({ p, v: totalOf(p.stats) * condMultiplier(p.cond) }))
+    .map(p => ({ p, v: totalOf(p.stats) * condMultiplier(p.cond) * (burstOf(s, p) ?? 1) }))
     .sort((a, b) => b.v - a.v)
     .map(x => x.p.id);
   if (!roster.length) return [];
@@ -343,7 +344,7 @@ function playMatch(s: CareerState, m: CMatch, myEntry?: number[]): PlayedSet[] {
  * first 를 주면 그 선수가 선봉
  */
 export function winnersOrder(s: CareerState, team: number, first?: number): number[] {
-  const ranked = rosterOf(s, team).map(p => ({ id: p.id, v: totalOf(p.stats) * condMultiplier(p.cond) })).sort((a, b) => b.v - a.v).map(x => x.id);
+  const ranked = rosterOf(s, team).map(p => ({ id: p.id, v: totalOf(p.stats) * condMultiplier(p.cond) * (burstOf(s, p) ?? 1) })).sort((a, b) => b.v - a.v).map(x => x.id);
   const top = ranked.slice(0, 7);
   const [ace, ...rest] = top;
   const order = [...shuffle(rest), ace].filter(id => id !== undefined && id !== first);
