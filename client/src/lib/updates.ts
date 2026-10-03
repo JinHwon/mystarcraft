@@ -12,6 +12,17 @@ export interface UpdateNote {
 
 export const UPDATES: UpdateNote[] = [
   {
+    id: 37,
+    date: "2026-10-03",
+    title: "새 게임 시작 화면 수정",
+    summary: "새 게임(팀 다시 고르기)·게임 오버 뒤 팀을 고르고 시작하면 바로 감독실로 넘어감",
+    details: [
+      { head: "수정", items: [
+        "새 게임으로 팀을 다시 골라 '감독으로 시작'을 누르면 팀 선택 화면에 그대로 머물던 문제를 고쳤습니다. 이제 바로 새 팀 감독실로 넘어갑니다.",
+      ] },
+    ],
+  },
+  {
     id: 36,
     date: "2026-10-03",
     title: "경기 뒤 컨디션 하락: 실력 차이·경기 길이 반영",

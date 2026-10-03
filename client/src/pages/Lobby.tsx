@@ -27,14 +27,14 @@ function useInstallPrompt() {
 
 // ── 새 게임: 팀 선택 ──────────────────────────────────────────────
 
-function TeamSelect({ onCancel }: { onCancel?: () => void }) {
+function TeamSelect({ onCancel, onStarted }: { onCancel?: () => void; /** 시작하면 (다시 시작 화면 닫기) */ onStarted?: () => void }) {
   const updater = useCareerUpdater();
   const [, navigate] = useLocation();
   const preview = useMemo(() => previewWorld(), []);
   const [picked, setPicked] = useState<number | null>(null);
   const start = trpc.career.newGame.useMutation({
     ...updater,
-    onSuccess: r => { updater.onSuccess(r); toast.success(`${r.state.teams[r.state.myTeam]?.name ?? ""} 감독 부임!`); navigate("/lobby"); },
+    onSuccess: r => { updater.onSuccess(r); toast.success(`${r.state.teams[r.state.myTeam]?.name ?? ""} 감독 부임!`); onStarted?.(); navigate("/lobby"); window.scrollTo(0, 0); },
   });
 
   return (
@@ -118,7 +118,7 @@ function Office({ s }: { s: CareerState }) {
   const phaseText = s.phase === "regular" ? `정규시즌 ${s.week}주차 / 11` : s.phase === "postseason" ? "포스트시즌" : "시즌 종료";
   const last = s.history[0];
 
-  if (restart) return <TeamSelect onCancel={() => setRestart(false)} />;
+  if (restart) return <TeamSelect onCancel={() => setRestart(false)} onStarted={() => setRestart(false)} />;
 
   if (s.gameOver) {
     return (
