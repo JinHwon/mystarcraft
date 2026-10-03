@@ -1467,3 +1467,18 @@ describe("컨디션 하락: 실력 차이·경기 길이", () => {
     expect(Math.max(...loss.bigLoss)).toBeLessThanOrEqual(6);
   });
 });
+
+describe("역제안 금액 유지", () => {
+  it("우리가 부른 역제안 금액은 상대가 다시 역제안해도 제안에 그대로 남는다", async () => {
+    const { respondOffer } = await import("./club");
+    const s = newCareer(0);
+    const p = rosterOf(s, 0)[0];
+    s.teams[3].money = 100_000;
+    s.offers = [{ id: 5, player: p.id, team: 3, fee: 500, max: 800, season: 1, week: 1, tries: 0, status: "pending" }];
+    const r = respondOffer(s, 5, "counter", 950);
+    expect(r.result).toBe("countered");
+    const o = s.offers!.find(x => x.id === 5)!;
+    expect(o.myCounter).toBe(950);
+    expect(o.fee).toBeGreaterThan(500);
+  });
+});

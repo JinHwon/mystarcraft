@@ -172,7 +172,8 @@ function OffersTab({ s }: { s: CareerState }) {
       {!offers.length && <div className="text-center text-[12px] text-neutral-500 py-4">받은 영입 제안이 없습니다<br />(이적시장에 내놓거나, 출전이 적고 이적을 희망하는 선수에게 제안이 잘 들어옵니다)</div>}
       {offers.map(o => {
         const p = s.players[o.player], t = s.teams[o.team];
-        const fee = fees[o.id] ?? Math.round((o.fee * 1.3) / 10) * 10;
+        // 역제안 금액: 직접 고친 값 → 지난번 우리 역제안 → 처음엔 제시액의 130% (상대가 다시 불러도 우리 금액은 그대로)
+        const fee = fees[o.id] ?? o.myCounter ?? Math.round((o.fee * 1.3) / 10) * 10;
         const price = priceOf(o.player);
         const rivals = offers.filter(x => x.player === o.player).length;
         return (
@@ -194,7 +195,7 @@ function OffersTab({ s }: { s: CareerState }) {
             </div>
             <div className="grid grid-cols-3 gap-1">
               <button disabled={respond.isPending} onClick={() => act(o.id, "accept")} className="border border-[#8fe07a] text-[#bff5c6] py-1">{label(o.id, "accept", "합의")}</button>
-              <button disabled={respond.isPending} onClick={() => act(o.id, "counter", fee)} className="border border-[#f8e070] text-[#ffe45c] py-1">{label(o.id, "counter", "역제안")}</button>
+              <button disabled={respond.isPending} onClick={() => { setFees({ ...fees, [o.id]: fee }); act(o.id, "counter", fee); }} className="border border-[#f8e070] text-[#ffe45c] py-1">{label(o.id, "counter", "역제안")}</button>
               <button disabled={respond.isPending} onClick={() => act(o.id, "reject")} className="border border-[#ff6b6b] text-[#ffb8c8] py-1">{label(o.id, "reject", "반대")}</button>
             </div>
           </div>
@@ -383,7 +384,7 @@ function ManagerTab({ s }: { s: CareerState }) {
               <div className="grid grid-cols-3 gap-1">
                 <button disabled={busy || !!s.pendingJob} onClick={() => confirm(`${t.name} 감독으로 옮길까요?${s.phase !== "offseason" ? "\n시즌 중이라 이번 시즌이 끝나면 자동으로 옮깁니다." : ""}\n지금 구단 자금은 두고 가고, ${t.name}이(가) 영입 계약금 ${o.fee.toLocaleString()}만원을 운영 자금(현재 ${t.money.toLocaleString()}만원)에 더해 줍니다.\n감독 레벨·경험치·평판은 그대로 유지됩니다.`) && accept.mutate({ teamId: o.team })}
                   className="border border-[#8fe07a] text-[#bff5c6] py-1 disabled:opacity-40">수락</button>
-                <button disabled={busy} onClick={() => respond.mutate({ teamId: o.team, action: "counter", fee: ask })} className="border border-[#f8e070] text-[#ffe45c] py-1 disabled:opacity-40">역제안</button>
+                <button disabled={busy} onClick={() => { setAsks({ ...asks, [o.team]: ask }); respond.mutate({ teamId: o.team, action: "counter", fee: ask }); }} className="border border-[#f8e070] text-[#ffe45c] py-1 disabled:opacity-40">역제안</button>
                 <button disabled={busy} onClick={() => confirm(`${t.name}의 제의를 거절할까요?`) && respond.mutate({ teamId: o.team, action: "reject" })} className="border border-[#ff6b6b] text-[#ffb8c8] py-1 disabled:opacity-40">거절</button>
               </div>
             </div>
