@@ -184,6 +184,7 @@ function OffersTab({ s }: { s: CareerState }) {
                 <div><b>{t.name}</b> → <button onClick={() => setOpen(p.id)} className="text-[#8fd0ff] underline underline-offset-2">{p.name} ({R[p.race]}) ⓘ</button>{rivals > 1 && <span className="text-[10.5px] text-[#ffb84d]"> · 경쟁 제안 {rivals}건</span>}</div>
                 {o.byPlayer && <div className="text-[10.5px] text-[#ffb84d]">🙋 {p.name} 선수가 {t.name} 이적을 원합니다 (거절하면 사기 하락)</div>}
                 <div className="text-neutral-400">제시 금액 <b className="text-[#ffe45c]">{o.fee.toLocaleString()}만원</b>{o.status === "countered" ? " (역제안 받음)" : ""} · 협상 {o.tries}/3 · {Math.max(0, 2 - (s.week - o.week))}주 뒤 만료</div>
+                {(() => { const v = askingPrice(p, s.season); const r = Math.round((o.fee / Math.max(1, v)) * 100); return <div className="text-[10.5px] text-neutral-400">현 시세 <b className="text-neutral-200">{v.toLocaleString()}만원</b> · 제시액은 시세의 <span className={r >= 100 ? "text-[#bff5c6]" : r >= 80 ? "text-[#ffe45c]" : "text-[#ffb8c8]"}>{r}%</span>{o.myCounter ? ` · 내 역제안 ${o.myCounter.toLocaleString()}만원` : ""}</div>; })()}
                 {price !== undefined && <div className={cn("text-[10.5px]", o.fee >= price ? "text-[#bff5c6]" : "text-neutral-500")}>이적시장 희망가 {price.toLocaleString()}만원{o.fee >= price ? " 이상 제시" : ` (희망가의 ${Math.round((o.fee / price) * 100)}%)`}</div>}
               </div>
               <MoraleBar p={p} />

@@ -45,7 +45,7 @@ function Summary({ s, entries }: { s: CareerState; entries: CashEntry[] }) {
         <div>· 관중 수입: 홈 경기마다 약 {gateAmount(s, s.myTeam)}만원 (포스트시즌·승강전 2배, 결승 3배)</div>
         <div>· 굿즈 판매: 매주 약 {goods}만원</div>
         <div>· 중계권 분배금: 시즌 시작 때 {BROADCAST_RIGHTS[div]}만원 · 정규시즌 순위 상금: 1위 {RANK_PRIZE[div][0]}만원 ~</div>
-        <div>· 스폰서 수당·퀘스트, 선수 이벤트(팬미팅), 개인리그 상금, 선수 판매{div === 2 ? " (1부 구단에 팔면 육성 지원금 추가)" : ""}</div>
+        <div>· 스폰서 수당·퀘스트, 선수 이벤트(팬미팅), 개인리그 상금, 선수 판매{div === 2 ? " (1부로 보내면 육성 지원금: 같은 구단 1군 +50%, 다른 구단 +20%)" : ""}</div>
       </div>
     </div>
   );

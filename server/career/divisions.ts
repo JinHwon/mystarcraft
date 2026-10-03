@@ -9,6 +9,7 @@
 import { FREE_AGENT_TEAM, ORIG_TEAMS } from "@shared/career/originalData";
 import {
   B_DEVELOPMENT_BONUS,
+  B_DEVELOPMENT_BONUS_OTHER,
   B_MAX_ROSTER,
   B_MIN_ROSTER,
   B_ROSTER_TARGET,
@@ -45,8 +46,10 @@ export function myBTeam(s: CareerState): number | undefined {
 
 /** 2부 팀이 1부 팀에 선수를 팔 때 리그가 더 주는 육성 지원금 */
 export function developmentBonus(s: CareerState, seller: number, buyer: number, fee: number): number {
+  // 2부(B팀) → 1부: 같은 구단 1군이면 50%, 다른 구단이면 20%
   if (seller === FREE_AGENT_TEAM || divOf(s, seller) !== 2 || divOf(s, buyer) !== 1) return 0;
-  return Math.round((fee * B_DEVELOPMENT_BONUS) / 10) * 10;
+  const rate = s.teams[seller]?.parent === buyer ? B_DEVELOPMENT_BONUS : B_DEVELOPMENT_BONUS_OTHER;
+  return Math.round((fee * rate) / 10) * 10;
 }
 
 /**

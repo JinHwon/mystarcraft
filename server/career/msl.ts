@@ -18,7 +18,7 @@ import {
 } from "@shared/career/rules";
 import { addManagerExp, book, mainSponsorPay } from "./club";
 import { activePlayers } from "@shared/career/view";
-import { CareerError, STAGE_GROWTH, news, pickMaps, playSet, quickSet, rand, rerollAfterMatch, shuffle, withStageGrowth, type PlayedSet } from "./core";
+import { CareerError, STAGE_GROWTH, news, pickMaps, playSet, quickSet, rand, rerollAfterMatch, shuffle, withEvenFatigue, withStageGrowth, type PlayedSet } from "./core";
 
 const GROUP_NAMES = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
@@ -58,7 +58,7 @@ function series(s: CareerState, a: number, b: number, bestOf: number, label: str
   const sets: PlayedSet[] = [];
   for (let i = 0; sa < need && sb < need; i++) {
     // 우리 선수 경기만 중계, 나머지는 빠른 판정
-    const r: PlayedSet = mine ? playSet(s, s.players[a], s.players[b], maps[i], true, true) : quickSet(s, s.players[a], s.players[b], maps[i]);
+    const r: PlayedSet = withEvenFatigue(() => (mine ? playSet(s, s.players[a], s.players[b], maps[i], true, true) : quickSet(s, s.players[a], s.players[b], maps[i])));
     if (r.winner === "a") sa++; else sb++;
     sets.push(r);
   }

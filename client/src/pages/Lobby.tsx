@@ -66,7 +66,7 @@ function TeamSelect({ onCancel, onStarted }: { onCancel?: () => void; /** 시작
         })}
       </div>
       <div className="text-sm font-bold text-foreground pt-1">🌱 2부 리그 (B팀) — 도전 모드</div>
-      <p className="text-[11px] text-muted-foreground -mt-2">신예·유망주로 꾸린 팀으로 시작 (자금 1,500만원, 서브 스폰서 1곳). 2부 1·2위는 승강전에서 이기면 1부로 올라갑니다. 키운 선수를 1부 구단에 팔면 육성 지원금을 더 받습니다.</p>
+      <p className="text-[11px] text-muted-foreground -mt-2">신예·유망주로 꾸린 팀으로 시작 (자금 1,500만원, 서브 스폰서 1곳). 2부 1·2위는 승강전에서 이기면 1부로 올라갑니다. 키운 선수를 1부에 보내면 육성 지원금을 더 받습니다 (같은 구단 1군 +50%, 다른 구단 +20%).</p>
       <div className="grid grid-cols-3 gap-1.5">
         {preview.teams.filter(t => t.div === 2).map(t => (
           <button key={t.id} onClick={() => setPicked(t.id)}

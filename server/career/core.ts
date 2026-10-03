@@ -4,6 +4,7 @@
 import { STAT_KEYS, StatKey } from "@shared/gameConstants";
 import { ORIG_MAPS } from "@shared/career/originalData";
 import {
+  ADAPT_WEEKS,
   COND_MAX,
   ageOf,
   youthGrowth,
@@ -131,6 +132,13 @@ function fxOf(p: CPlayer, before: { cond: number; stats: Record<StatKey, number>
  */
 export const STAGE_GROWTH = { semi: 1.8, po: 2.2, final: 2.6, promo: 2.0, ro8: 1.6, ro4: 2.0, mslFinal: 2.5 } as const;
 let stageGrowth = 1;
+/** 개인리그: 이기고 진 선수의 컨디션 하락을 비슷하게 (다전제에서 한 번 진 선수가 계속 불리해지지 않게) */
+let evenFatigue = false;
+export function withEvenFatigue<T>(fn: () => T): T {
+  const prev = evenFatigue;
+  evenFatigue = true;
+  try { return fn(); } finally { evenFatigue = prev; }
+}
 /** 2부 리그 경기: 오르는 폭에 나이별 배율 (어릴수록 크게), 어린 선수는 져도 덜 떨어짐 */
 let youthMode = false;
 export function withStageGrowth<T>(mul: number, fn: () => T, youth = false): T {
@@ -167,8 +175,15 @@ function afterSet(s: CareerState, a: CPlayer, b: CPlayer, aWin: boolean, mods?: 
   // 세트 전 실전 능력치(컨디션 반영)로 실력 차이
   const power = (p: CPlayer, snap: { cond: number; stats: Record<StatKey, number> }) => totalOf(snap.stats) * condMultiplier(snap.cond) * (burstBefore[p === a ? "a" : "b"] ?? 1);
   const pw = power(w, w === a ? before.a : before.b), pl = power(l, l === a ? before.a : before.b);
-  tire(w, condLoss(true, (pw - pl) / Math.max(1, pl), duration));
-  tire(l, condLoss(false, (pl - pw) / Math.max(1, pw), duration));
+  if (evenFatigue) {
+    // 개인리그 다전제: 두 선수 비슷하게 (진 선수가 같거나 1 더)
+    const d = condLoss(true, 0, duration);
+    tire(w, d);
+    tire(l, d + randInt(0, 1));
+  } else {
+    tire(w, condLoss(true, (pw - pl) / Math.max(1, pl), duration));
+    tire(l, condLoss(false, (pl - pw) / Math.max(1, pw), duration));
+  }
   addExp(s, w, 30); addExp(s, l, 10);
   for (const [p, d] of [[a, da], [b, db]] as const) {
     const age = ageOf(p, s.season);
@@ -208,6 +223,16 @@ export function rollWeekBursts(s: CareerState) {
   s.burstWeek = wk;
   for (const p of s.players) if (p.team >= 0) rollForm(s, p);
 }
+/**
+ * 시즌 중 팀을 옮긴 선수: 프로리그 적응기간 2주 (새 팀의 이번 주 경기가 이미 끝났으면 다음 주부터 2주)
+ * 비시즌 이적은 적응기간 없음. 개인리그는 상관없음
+ */
+export function markNewcomer(s: CareerState, p: CPlayer) {
+  if (s.phase === "offseason") { delete p.newcomer; return; }
+  const left = s.matches.some(m => m.week === s.week && !m.done && (m.a === p.team || m.b === p.team));
+  p.newcomer = { season: s.season, until: s.week + ADAPT_WEEKS + (left ? 0 : 1) };
+}
+
 /** 다른 구단이 우리 선수에게 낸 제안 중 아직 답하지 않은 이적료 합 (그 구단은 이 돈을 다른 데 쓰지 않음) */
 export function committedMoney(s: CareerState, team: number): number {
   return (s.offers ?? []).filter(o => o.team === team).reduce((a, o) => a + Math.max(o.fee, o.max ?? 0), 0);

@@ -4,8 +4,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
-import { burstLabel, burstOf, slumpOn, matchFormatName, matchSets, totalOf, type CareerState, type CMatch, type CPlayer } from "@shared/career/rules";
-import { STAGE_NAMES, mapView, rosterOf } from "@shared/career/view";
+import { adaptWeeksLeft, burstLabel, burstOf, slumpOn, matchFormatName, matchSets, totalOf, type CareerState, type CMatch, type CPlayer } from "@shared/career/rules";
+import { STAGE_NAMES, mapView, proRosterOf, rosterOf } from "@shared/career/view";
 import { ITEM_BY_KEY, gearCond, itemImg, matchCond } from "@shared/career/items";
 import { GrayBox, LEGACY_FONT, LegacyFrame, LegacyImg, MapInfo, MslBadges, TeamLogo } from "../Legacy";
 import { MATCH_ITEMS, PlayerPanel, R, VitaButton, condStats, nameRace, navigateShop } from "./common";
@@ -50,7 +50,7 @@ function mapFit(s: CareerState, p: CPlayer, mapId: number) {
  */
 export function autoEntry(s: CareerState, maps: number[], sets: number, mode: "recommend" | "rotation" = "recommend"): (number | undefined)[] {
   const n = sets - 1;
-  let pool = rosterOf(s, s.myTeam);
+  let pool = proRosterOf(s, s.myTeam);
   if (mode === "rotation") {
     pool = [...pool]
       .sort((a, b) => (a.sApps ?? 0) - (b.sApps ?? 0) || totalOf(condStats(b, s)) - totalOf(condStats(a, s)))
@@ -85,19 +85,23 @@ export function SideLabel({ lines, color }: { lines: [string, string]; color: st
 }
 
 /** 선수 목록 (s 가 있으면 컨디션·실전 능력치·포텐셜 폭발 표시) */
-export function RosterList({ players, onPick, selected, marks, s }: { players: CPlayer[]; onPick: (p: CPlayer) => void; selected?: number; marks?: Map<number, string>; s?: CareerState }) {
+export function RosterList({ players, onPick, selected, marks, s, blocked }: { players: CPlayer[]; onPick: (p: CPlayer) => void; selected?: number; marks?: Map<number, string>; s?: CareerState;
+  /** 고를 수 없는 선수와 이유 (적응기간 등) */
+  blocked?: Map<number, string>;
+}) {
   return (
     <div className="border-2 border-neutral-300 p-0.5">
       {players.map(p => {
-        const mark = marks?.get(p.id);
+        const block = blocked?.get(p.id);
+        const mark = block ? "적응" : marks?.get(p.id);
         return (
           <button
             key={p.id}
-            onClick={() => onPick(p)}
+            onClick={() => { if (!block) onPick(p); }}
             className={cn("w-full flex items-center gap-1 px-1 py-[5px] text-left border-b border-neutral-800 last:border-b-0", s ? "text-[12px]" : "text-[13px]",
-              mark ? "text-[#ffe45c]" : "text-white", selected === p.id && "bg-[#3a3a5a]")}
+              block ? "text-neutral-500" : mark ? "text-[#ffe45c]" : "text-white", selected === p.id && "bg-[#3a3a5a]")}
           >
-            <span className="truncate flex-1">{s && burstOf(s, p) ? burstLabel(burstOf(s, p)!).icon : ""}{s && slumpOn(s, p) ? "😵" : ""}{p.name}<MslBadges titles={p.titles} size={11} className="ml-0.5 align-middle" /></span>
+            <span className="truncate flex-1" title={block}>{block ? "🧳" : ""}{s && burstOf(s, p) ? burstLabel(burstOf(s, p)!).icon : ""}{s && slumpOn(s, p) ? "😵" : ""}{p.name}<MslBadges titles={p.titles} size={11} className="ml-0.5 align-middle" /></span>
             <span className="text-[11px] text-neutral-400">{mark ?? ""}</span>
             <span>({R[p.race]})</span>
             {s && (
@@ -114,6 +118,12 @@ export function RosterList({ players, onPick, selected, marks, s }: { players: C
 }
 
 export type ItemPlan = Record<number, { key: string; predict?: number }>;
+
+/** 이적 적응기간이라 이번 주 프로리그에 못 나가는 우리 선수 (엔트리를 못 짤 만큼 많으면 없음) */
+export function adaptBlocked(s: CareerState): Map<number, string> {
+  const ok = new Set(proRosterOf(s, s.myTeam).map(p => p.id));
+  return new Map(rosterOf(s, s.myTeam).filter(p => !ok.has(p.id)).map(p => [p.id, `적응 ${adaptWeeksLeft(s, p)}주`] as [number, string]));
+}
 
 export function EntryScreen({ s, match, front, setFront, items, setItems, onSubmit, submitting, onBack }: {
   s: CareerState;
@@ -153,9 +163,11 @@ export function EntryScreen({ s, match, front, setFront, items, setItems, onSubm
     setItems(next);
   };
   const marks = new Map(filled.flatMap((id, i) => (id === undefined ? [] : [[id, `${i + 1}`] as [number, string]])));
+  const blocked = adaptBlocked(s);
 
   const assign = (p: CPlayer) => {
     setViewMine(p.id);
+    if (blocked.has(p.id)) return;
     const next = [...filled];
     if (next[slot] === p.id) { next[slot] = undefined; setFront(next); return; } // 같은 칸을 다시 누르면 빼기
     for (let i = 0; i < n; i++) if (next[i] === p.id) next[i] = undefined; // 다른 세트에 있던 선수는 옮김
@@ -200,7 +212,8 @@ export function EntryScreen({ s, match, front, setFront, items, setItems, onSubm
         <div className="grid grid-cols-[1fr_minmax(108px,0.9fr)_1fr] gap-1.5 mt-2.5 items-start">
           <div className="space-y-1">
             <LegacyImg dir="기타" name="아군" className="w-full max-h-16 object-contain" fallback={<SideLabel lines={["MY TEAM", "PLAYER"]} color="#3aa0ff" />} />
-            <RosterList s={s} players={mine} onPick={assign} selected={viewMine} marks={marks} />
+            <RosterList s={s} players={mine} onPick={assign} selected={viewMine} marks={marks} blocked={blocked} />
+            {blocked.size > 0 && <div className="text-[10px] text-neutral-500 leading-tight">회색 = 이적 적응기간 (프로리그 출전 불가, 개인리그는 가능)</div>}
           </div>
 
           <div className="space-y-1.5">
@@ -330,7 +343,7 @@ export function AceScreen({ s, teamLeft, teamRight, mapId, score, onPick, submit
           </div>
         </div>
         <div className="mt-2.5">
-          <RosterList s={s} players={mine} onPick={p => setSel(p.id)} selected={sel} marks={new Map(sel !== undefined ? [[sel, next !== undefined ? `${next}` : "ACE"]] : [])} />
+          <RosterList s={s} players={mine} onPick={p => setSel(p.id)} selected={sel} marks={new Map(sel !== undefined ? [[sel, next !== undefined ? `${next}` : "ACE"]] : [])} blocked={adaptBlocked(s)} />
         </div>
       </div>
     </LegacyFrame>

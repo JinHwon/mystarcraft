@@ -16,7 +16,7 @@ import { diffOf, jsonOf, snapshot, type Snapshot } from "./diff";
 import { nominate } from "./msl";
 import { ACTIONS, type ActionKey } from "@shared/career/rules";
 import { negotiateMainSponsor, pay, pruneOffers } from "./club";
-import { acceptJob, bidPlayer, chooseSponsor, listPlayer, negotiateContract, respondJob, respondJoin, respondOffer, respondRaise, unlistPlayer } from "./club";
+import { acceptJob, chooseSponsor, listPlayer, negotiateContract, respondJob, respondJoin, respondOffer, respondRaise, unlistPlayer } from "./club";
 import { sendToB } from "./divisions";
 import {
   CareerError,
@@ -28,10 +28,12 @@ import {
   playLiveSet,
   migrateCareer,
   newCareer,
-  proposeTrade,
+  requestTrade,
+  requestBid,
+  requestScout,
+  cancelRequest,
   releasePlayer,
   rosterOf,
-  scoutPlayer,
   setAction,
   runMyActions,
   completeWeek,
@@ -459,7 +461,12 @@ export const careerRouter = router({
 
   scout: protectedProcedure
     .input(z.object({ playerId: z.number().int() }))
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => scoutPlayer(s, input.playerId))),
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => requestScout(s, input.playerId))),
+
+  /** 보낸 영입 요청·트레이드·스카웃 취소 (답이 오기 전) */
+  cancelRequest: protectedProcedure
+    .input(z.object({ id: z.number().int() }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => cancelRequest(s, input.id))),
 
   release: protectedProcedure
     .input(z.object({ playerId: z.number().int() }))
@@ -472,7 +479,7 @@ export const careerRouter = router({
       take: z.array(z.number().int()).min(1).max(5),
       cash: z.number().int().min(0).max(1_000_000),
     }))
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => proposeTrade(s, input.teamId, input.give, input.take, input.cash))),
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => requestTrade(s, input.teamId, input.give, input.take, input.cash))),
 
   /** 우리 경기 시작 (1~(n-1)세트 엔트리) */
   beginMatch: protectedProcedure
@@ -520,7 +527,7 @@ export const careerRouter = router({
   /** 다른 팀 선수 영입 요청 (이적료 제시) */
   bid: protectedProcedure
     .input(z.object({ playerId: z.number().int(), fee: z.number().int().min(0).max(1_000_000) }))
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => bidPlayer(s, input.playerId, input.fee))),
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => requestBid(s, input.playerId, input.fee))),
 
   /** 계약 협상 (영입 합의 후 또는 재계약) */
   contract: protectedProcedure
