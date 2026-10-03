@@ -802,6 +802,7 @@ export function respondOffer(s: CareerState, offerId: number, action: "accept" |
   // 역제안
   if (!fee || fee <= 0) throw new CareerError("금액을 입력하세요");
   o.tries++;
+  o.myCounter = round10(fee);
   if (fee <= o.fee) return sell(o.fee, "역제안보다 높은 제시 금액으로 합의");
   if (fee <= o.max) return sell(round10(fee), `역제안 ${round10(fee).toLocaleString()}만원 수락`);
   if (o.tries >= 3 || fee > o.max * 1.35) {

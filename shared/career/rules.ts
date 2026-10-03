@@ -217,6 +217,8 @@ export interface TransferOffer {
   listed?: boolean;
   /** 선수가 먼저 그 팀으로 가고 싶다고 요청한 제안 (거절하면 사기가 떨어짐) */
   byPlayer?: boolean;
+  /** 우리가 마지막으로 부른 역제안 금액 (상대가 다시 역제안해도 그대로 보여줌) */
+  myCounter?: number;
 }
 
 /** 다른 팀 선수가 우리 팀으로 오고 싶다는 요청 (수락하면 그 이적료·선수 요구 조건으로 바로 계약) */
