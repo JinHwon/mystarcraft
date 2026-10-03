@@ -6,7 +6,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { B_MAX_ROSTER, B_MIN_ROSTER, MAX_ROSTER, SQUAD_MIN, ageOf, askingPrice, gradeColor, legacyGrade, youthGrowth, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
+import { B_MAX_ROSTER, B_MIN_ROSTER, MAX_ROSTER, SQUAD_MIN, adaptWeeksLeft, ageOf, askingPrice, gradeColor, legacyGrade, youthGrowth, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
 import { DIV_NAMES, bTeamIdOf, divOf, myDiv, rosterOf, teamPower } from "@shared/career/view";
 import { PlayerPhoto } from "@/components/legacy/Legacy";
 import { popularity, potentialStars } from "@shared/career/contract";
@@ -55,7 +55,7 @@ export function PlayerSheet({ s, player, onClose, actions }: { s: CareerState; p
               <div>📄 계약: <b>{player.contract ? `남은 ${player.contract.years}시즌 · 연봉 ${player.contract.salary.toLocaleString()}만원` : "없음 (무소속)"}</b></div>
               {player.contract?.minApps ? <div>출전 보장: 시즌 {player.contract.minApps}경기 (이번 시즌 {player.sApps ?? 0}경기 출전)</div> : null}
               {player.contract?.bonus && Object.keys(player.contract.bonus).length > 0 && <div>보너스: {Object.entries(player.contract.bonus).map(([k, v]) => `${BONUS_NAMES[k as BonusKey]} ${v}만`).join(" · ")}</div>}
-              <div>인기 {popularity(player)} · 사기 {player.morale ?? 70}{player.wantsOut ? " · 😤 이적 희망" : ""}</div>
+              <div>인기 {popularity(player)} · 사기 {player.morale ?? 70}{player.wantsOut ? " · 😤 이적 희망" : ""}{adaptWeeksLeft(s, player) ? ` · 🧳 이적 적응기간 (프로리그 ${adaptWeeksLeft(s, player)}주 뒤 출전 가능)` : ""}</div>
             </div>
             <div className="rounded-xl bg-muted/50 p-2.5 text-xs">
               <div className="font-bold mb-1">🛠️ 장착 장비 · 이번 시즌 포션 {player.potions ?? 0}회</div>
@@ -135,7 +135,7 @@ export default function Team() {
       ) : div === 2 && (
         <div className="rounded-xl bg-emerald-500/10 border border-emerald-400/30 p-2.5 text-xs text-foreground">
           <div className="font-bold">🏟️ 2부 팀 운영</div>
-          <div className="text-muted-foreground mt-0.5">2부 리그 1·2위는 승강전에서 이기면 1부로 올라갑니다. 2부 경기는 어린 선수일수록 크게 성장하고, 키운 선수를 1부 구단에 팔면 이적료만큼 육성 지원금을 더 받습니다. 리그 규정상 최소 {B_MIN_ROSTER}명, 서브 스폰서는 1곳.</div>
+          <div className="text-muted-foreground mt-0.5">2부 리그 1·2위는 승강전에서 이기면 1부로 올라갑니다. 2부 경기는 어린 선수일수록 크게 성장하고, 키운 선수를 1부에 보내면 육성 지원금을 더 받습니다 (같은 구단 1군 이적료의 50%, 다른 구단 20%). 리그 규정상 최소 {B_MIN_ROSTER}명, 서브 스폰서는 1곳.</div>
         </div>
       )}
 
@@ -156,6 +156,7 @@ export default function Team() {
                 <span className="text-[10px] text-muted-foreground">Lv.{p.level} · {ageOf(p, s.season)}세</span>
                 {div === 2 && <span className="text-[10px] text-amber-300">재능 {potentialStars(p)} · 성장 ×{youthGrowth(ageOf(p, s.season))}</span>}
                 {p.wantsOut && <span className="text-[10px] text-rose-300 font-bold">이적희망</span>}
+                {adaptWeeksLeft(s, p) > 0 && <span className="text-[10px] text-sky-300 font-bold">적응 {adaptWeeksLeft(s, p)}주</span>}
               </div>
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                 <CondBadge cond={p.cond} />

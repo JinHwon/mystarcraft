@@ -37,7 +37,7 @@ import {
 import { contractScore, defaultContract, expectedShare, isStar, jobThreshold, playerDemand, sellMinimum, squadRank, weeklyWage } from "@shared/career/contract";
 import { activePlayers, divOf, myDiv, proTeams, rosterOf, teamPower } from "@shared/career/view";
 import { developmentBonus, myBTeam, rosterLimits } from "./divisions";
-import { CareerError, addExp, clampCond, freeMoney, gainStats, news, rand, randInt } from "./core";
+import { CareerError, addExp, clampCond, freeMoney, gainStats, markNewcomer, news, rand, randInt } from "./core";
 import { activeSponsors, maxSponsors, questLabel, questProgress, questRange, questReward, sponsorOffers } from "@shared/career/sponsor";
 import { SPONSOR_COUNTER, SPONSOR_STRETCH, defaultOffer, mainSponsorName, managerExpNeed, sponsorBudget, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
 
@@ -457,6 +457,8 @@ function moveTo(s: CareerState, p: CPlayer, team: number, contract?: Contract) {
   p.morale = 70;
   p.wantsOut = false;
   if (contract) p.contract = contract;
+  // 시즌 중 이적: 프로리그 적응기간 (무소속으로 풀리면 없음)
+  if (team === FREE_AGENT_TEAM) delete p.newcomer; else markNewcomer(s, p);
 }
 
 // ── 감독 레벨 ────────────────────────────────────────────────────
@@ -921,6 +923,7 @@ function moveManager(s: CareerState, teamId: number, fee: number) {
   s.offers = [];
   s.listings = [];
   s.agreements = {};
+  s.outbox = [];
   s.joinRequests = [];
   s.debtWeeks = 0;
   // 감독 레벨·경험치·평판은 그대로, 맡은 팀 기록에 추가

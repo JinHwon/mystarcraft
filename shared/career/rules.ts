@@ -52,8 +52,9 @@ export const B_START_MONEY = 1500;
 export const B_WEEKLY_SPONSOR = 60;
 export const B_MATCH_MONEY = { win: 60, lose: 15 };
 export const B_OPERATING_COST = 35;
-/** 2부 팀이 1부 팀에 선수를 팔면 리그가 이적료만큼 더 주는 육성 지원금 비율 */
-export const B_DEVELOPMENT_BONUS = 1;
+/** 2부(B팀)가 1부로 선수를 보낼 때 리그가 이적료에 더 주는 육성 지원금 비율: 같은 구단 1군 50%, 다른 1부 구단 20% */
+export const B_DEVELOPMENT_BONUS = 0.5;
+export const B_DEVELOPMENT_BONUS_OTHER = 0.2;
 /** 1부에서 승강전에 나가는 순위 (12팀 중 11·12위) */
 export const PROMO_SLOTS = 2;
 
@@ -77,6 +78,15 @@ export function condMultiplier(cond: number): number {
     if (c >= c1) return m1 + ((c - c1) / (c0 - c1)) * (m0 - m1);
   }
   return COND_CURVE[COND_CURVE.length - 1][1];
+}
+
+/** 시즌 중 영입한 선수의 프로리그 적응기간 (주) */
+export const ADAPT_WEEKS = 2;
+/** 적응기간이라 이번 주 프로리그에 못 나가는지 (남은 주, 아니면 0) */
+export function adaptWeeksLeft(s: { season: number; week: number; phase?: string }, p: CPlayer): number {
+  const n = p.newcomer;
+  if (!n || n.season !== s.season || s.phase === "offseason") return 0;
+  return Math.max(0, n.until - s.week);
 }
 
 /** 이번 주 포텐셜 폭발 배율 (없으면 undefined) */
@@ -144,6 +154,8 @@ export interface CPlayer {
   ap?: number;
   /** 이번 주 포텐셜 폭발(배율 1.1~1.2) 또는 컨디션 난조(0.6~0.9) — 주 시작 때 정해짐, 그 주 경기 동안 능력치 배율 */
   burst?: { week: string; mul: number };
+  /** 시즌 중 새로 온 선수: until 주 전까지 프로리그 출전 불가 (적응기간, 개인리그는 가능) */
+  newcomer?: { season: number; until: number };
   /** 컨디션 난조인 주 (시즌-주): 그 주 경기 컨디션 -40 (최저 10) */
   slump?: string;
   /** 우승 경력 */
@@ -201,6 +213,26 @@ export interface Contract {
 }
 
 /** 다른 팀이 우리 선수에게 낸 영입 제안 */
+/** 우리가 다른 구단·선수에게 보낸 요청: 보낸 다음 주에 답이 오고, 답이 온 주에는 바로 이어서 협상 */
+export interface OutRequest {
+  id: number;
+  kind: "bid" | "trade" | "scout";
+  /** 상대 구단 (스카웃은 무소속) */
+  team: number;
+  /** 영입 요청·스카웃 대상 */
+  player?: number;
+  /** 영입 요청 이적료 */
+  fee?: number;
+  /** 트레이드: 내줄 선수·받을 선수·현금 */
+  give?: number[];
+  take?: number[];
+  cash?: number;
+  season: number;
+  week: number;
+  /** 상대의 답 (온 주) */
+  reply?: { ok: boolean; result: string; message: string; fee?: number; season: number; week: number };
+}
+
 export interface TransferOffer {
   id: number;
   player: number;
@@ -528,6 +560,8 @@ export interface CareerState {
   listings?: TransferListing[];
   /** 끝난 영입 제안 기록 (최근 순, 최대 40건) */
   offerLog?: OfferLog[];
+  /** 우리가 보낸 영입 요청·트레이드·스카웃 (시즌 중엔 다음 주에 상대가 답함) */
+  outbox?: OutRequest[];
   /** 이적료 합의된 영입 대상 (선수 → 합의 내용, 이번 주만 유효) */
   agreements?: Record<number, { team: number; fee: number; season: number; week: number }>;
   /** 이번 주 협상 횟수 (키: 선수-종류) */

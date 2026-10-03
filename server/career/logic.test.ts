@@ -115,7 +115,7 @@ describe("2부 리그 (B팀)", () => {
     // 8명 아래로는 방출 불가
     while (rosterOf(s, 13).length > 8) releasePlayer(s, rosterOf(s, 13)[0].id);
     expect(() => releasePlayer(s, rosterOf(s, 13)[0].id)).toThrow(CareerError);
-    // 1부 구단이 사 가면 이적료 + 같은 금액 육성 지원금
+    // 같은 구단 1군이 사 가면 이적료 + 50% 육성 지원금
     const p = rosterOf(s, 13)[0];
     const sc = s; sc.teams[0].money = 50_000;
     s.offers = [{ id: 999, player: p.id, team: 0, fee: 500, max: 600, season: s.season, week: s.week, tries: 0, status: "pending" }];
@@ -124,8 +124,16 @@ describe("2부 리그 (B팀)", () => {
     fa.team = 13;
     const before = s.teams[13].money;
     respondOffer(s, 999, "accept");
-    expect(s.teams[13].money - before).toBe(1000);
+    expect(s.teams[13].money - before).toBe(750);
     expect(p.team).toBe(0);
+    // 다른 구단 1군에 팔면 육성 지원금 20%
+    const q = rosterOf(s, 13)[0];
+    s.players.find(x => x.team === 12)!.team = 13;
+    s.teams[3].money = 50_000;
+    s.offers = [{ id: 998, player: q.id, team: 3, fee: 500, max: 600, season: s.season, week: s.week, tries: 0, status: "pending" }];
+    const before2 = s.teams[13].money;
+    respondOffer(s, 998, "accept");
+    expect(s.teams[13].money - before2).toBe(600);
   });
 
   it("예전 세이브: B팀이 생기고, 구단 2부 육성 선수는 그 구단 B팀으로, 시즌 중이면 남은 주 2부 일정", () => {
@@ -717,7 +725,6 @@ describe("메인 스폰서·감독 레벨", () => {
     expect(negotiateMainSponsor(s, { ...terms, win: terms.win + 10, loss: Math.max(0, terms.loss - 20) }, 2).result).toBe("signed");
     const win = s.mainSponsor!.win, loss = s.mainSponsor!.loss;
     const before = s.ledger?.items ?? {};
-    void before;
     const m = myPendingMatch(s);
     advanceWeek(s, m ? aiEntry(s, 0, PRO_SETS) : undefined);
     const items = s.ledger!.items;
@@ -1480,5 +1487,68 @@ describe("역제안 금액 유지", () => {
     const o = s.offers!.find(x => x.id === 5)!;
     expect(o.myCounter).toBe(950);
     expect(o.fee).toBeGreaterThan(500);
+  });
+});
+
+describe("이적 요청은 다음 주에 답 · 적응기간 · 개인리그 컨디션", () => {
+  it("시즌 중 영입 요청·스카웃은 다음 주에 답이 오고, 답이 온 주에는 바로 협상한다", async () => {
+    const { requestBid, requestScout, requestTrade } = await import("./logic");
+    const s = newCareer(0);
+    s.teams[0].money = 100_000;
+    const target = rosterOf(s, 3).sort((a, b) => totalOf(b.stats) - totalOf(a.stats))[3];
+    const r = requestBid(s, target.id, 50_000);
+    expect(r.result).toBe("sent");
+    expect(() => requestBid(s, target.id, 50_000)).toThrow(/이미/);
+    const fa = rosterOf(s, 12).sort((a, b) => totalOf(b.stats) - totalOf(a.stats))[0];
+    expect(requestScout(s, fa.id).result).toBe("sent");
+    expect(fa.team).toBe(12);
+    const give = rosterOf(s, 0).sort((a, b) => totalOf(a.stats) - totalOf(b.stats))[0];
+    expect(requestTrade(s, 5, [give.id], [rosterOf(s, 5)[0].id], 0).result).toBe("sent");
+    advanceWeek(s, aiEntry(s, s.myTeam, PRO_SETS));
+    // 답이 옴: 충분한 이적료면 합의 (이번 주 계약 가능), 스카웃은 영입
+    const bid = s.outbox!.find(x => x.kind === "bid")!;
+    expect(bid.reply?.week).toBe(s.week);
+    expect(bid.reply?.result).toBe("agreed");
+    expect(s.agreements?.[target.id]?.week).toBe(s.week);
+    expect(fa.team).toBe(0);
+    expect(s.outbox!.find(x => x.kind === "trade")!.reply).toBeDefined();
+    // 시즌 중 영입 선수는 적응기간: 프로리그 엔트리에 못 넣음
+    const { adaptWeeksLeft } = await import("@shared/career/rules");
+    expect(adaptWeeksLeft(s, fa)).toBeGreaterThan(0);
+    expect(aiEntry(s, 0, PRO_SETS)).not.toContain(fa.id);
+    expect(() => beginMatch(s, [fa.id, ...aiEntry(s, 0, PRO_SETS).filter(id => id !== fa.id).slice(0, PRO_SETS - 2)])).toThrow(/적응기간/);
+    // 답이 온 주에는 바로 협상 (영입 요청이 즉시 결과)
+    const other = rosterOf(s, 4).sort((a, b) => totalOf(b.stats) - totalOf(a.stats))[3];
+    s.outbox!.push({ id: 999, kind: "bid", team: 4, player: other.id, fee: 1, season: s.season, week: s.week - 1, reply: { ok: false, result: "countered", message: "", season: s.season, week: s.week } });
+    expect(requestBid(s, other.id, 1).result).not.toBe("sent");
+    // 2주가 지나면 출전 가능, 적응기간 동안은 결장 감소 없음
+    advanceWeek(s, myPendingMatch(s) ? aiEntry(s, s.myTeam, PRO_SETS) : undefined);
+    expect(fa.benchWeeks ?? 0).toBe(0);
+  });
+
+  it("비시즌엔 영입 요청·스카웃이 바로 처리된다", async () => {
+    const { requestScout } = await import("./logic");
+    const s = newCareer(0);
+    s.phase = "offseason";
+    s.teams[0].money = 100_000;
+    const fa = rosterOf(s, 12)[0];
+    expect(requestScout(s, fa.id).result).toBe("signed");
+    expect(fa.team).toBe(0);
+    expect(fa.newcomer).toBeUndefined();
+  });
+
+  it("개인리그에서는 이기고 진 선수의 컨디션 하락이 비슷하다 (진 선수가 같거나 1 더)", async () => {
+    const { playSet, withEvenFatigue } = await import("./core");
+    const s = newCareer(0);
+    const ps = s.players.filter(p => p.team >= 0 && p.team < 12).sort((x, y) => totalOf(y.stats) - totalOf(x.stats));
+    const [a, b] = [ps[0], ps.at(-1)!];
+    for (let i = 0; i < 30; i++) {
+      a.cond = 100; b.cond = 100;
+      const r = withEvenFatigue(() => playSet(s, a, b, i % 10, false));
+      const [w, l] = r.winner === "a" ? [a, b] : [b, a];
+      const dw = 100 - w.cond, dl = 100 - l.cond;
+      expect(dl - dw).toBeGreaterThanOrEqual(0);
+      expect(dl - dw).toBeLessThanOrEqual(1);
+    }
   });
 });

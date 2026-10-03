@@ -50,21 +50,27 @@ function Money({ s }: { s: CareerState }) {
 }
 
 /** 다른 팀 선수 영입 요청: 이적료 협상(합의·보류·거절) → 선수 계약 협상 */
-function BidTab({ s }: { s: CareerState }) {
+function BidTab({ s, focus }: { s: CareerState; /** 답이 온 요청에서 "이어서 협상"으로 들어오면 그 선수 */ focus?: number }) {
   const patch = useCareerPatch();
   const teams = proTeams(s).filter(t => t.id !== s.myTeam).sort((a, b) => (a.div ?? 1) - (b.div ?? 1) || a.id - b.id);
-  const [teamId, setTeamId] = useState(teams[0]?.id ?? 0);
-  const [sel, setSel] = useState<number | undefined>();
-  const [fee, setFee] = useState(0);
+  const focused = focus !== undefined ? s.players[focus] : undefined;
+  const [teamId, setTeamId] = useState(focused?.team ?? teams[0]?.id ?? 0);
+  const [sel, setSel] = useState<number | undefined>(focused?.id);
+  const lastReply = focused ? (s.outbox ?? []).find(r => r.kind === "bid" && r.player === focused.id && r.reply) : undefined;
+  const [fee, setFee] = useState(lastReply?.reply?.fee ?? lastReply?.fee ?? 0);
   const [reply, setReply] = useState<{ text: string; ok: boolean } | null>(null);
   const theirs = useMemo(() => rosterOf(s, teamId).sort(byTotal), [s, teamId]);
   const p = sel !== undefined ? s.players[sel] : undefined;
   const deal = p ? s.agreements?.[p.id] : undefined;
   const agreed = !!deal && deal.season === s.season && deal.week === s.week && deal.team === p!.team;
+  // 시즌 중엔 요청을 보내고 다음 주에 답이 옴 (답이 온 주에는 바로 협상)
+  const waiting = p ? (s.outbox ?? []).find(r => r.kind === "bid" && r.player === p.id && !r.reply) : undefined;
+  const talking = p ? (s.outbox ?? []).some(r => r.kind === "bid" && r.player === p.id && r.reply?.season === s.season && r.reply.week === s.week) : false;
+  const direct = s.phase === "offseason" || talking;
   const onDone = (r: { diff: CareerDiff; result: unknown }) => {
     patch(r.diff);
     const res = r.result as { result: string; message: string; fee?: number };
-    setReply({ text: res.message, ok: res.result === "agreed" || res.result === "signed" });
+    setReply({ text: res.message, ok: res.result === "agreed" || res.result === "signed" || res.result === "sent" });
     if (res.result === "countered" && res.fee) setFee(res.fee);
     if (res.result === "signed") setSel(undefined);
   };
@@ -96,9 +102,10 @@ function BidTab({ s }: { s: CareerState }) {
             <div className="border border-neutral-600 p-2 space-y-1.5 text-[12px]">
               <div className="flex items-center justify-between"><span className="text-neutral-400">이적료 제시</span><FeeStepper value={fee} onChange={setFee} max={s.teams[s.myTeam].money} /></div>
               <Money s={s} />
-              <button disabled={bid.isPending} onClick={() => bid.mutate({ playerId: p.id, fee })} className="w-full py-1.5 text-[13px] font-bold text-black border border-neutral-500 disabled:opacity-40" style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}>
-                {bid.isPending ? "협상 중..." : "영입 요청"}
+              <button disabled={bid.isPending || !!waiting} onClick={() => bid.mutate({ playerId: p.id, fee })} className="w-full py-1.5 text-[13px] font-bold text-black border border-neutral-500 disabled:opacity-40" style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}>
+                {bid.isPending ? "보내는 중..." : waiting ? "요청을 보냈습니다 · 다음 주에 답이 옵니다" : direct ? "이적료 제시 (바로 협상)" : "영입 요청 보내기 (다음 주에 답)"}
               </button>
+              {!direct && !waiting && <div className="text-[10.5px] text-neutral-500 text-center">시즌 중에는 요청을 보내면 다음 주에 구단의 답이 오고, 그 주에 이어서 협상합니다</div>}
             </div>
           ) : (
             <>
@@ -126,7 +133,13 @@ function TradeTab({ s }: { s: CareerState }) {
   const ev = take.length ? evaluateTrade(s, teamId, give, take, cash) : null;
   const trade = trpc.career.trade.useMutation({
     ...updater,
-    onSuccess: r => { updater.onSuccess(r); toast.success("트레이드 성사!"); setGive([]); setTake([]); setCash(0); },
+    onSuccess: r => {
+      updater.onSuccess(r);
+      const res = r.result as { result?: string; message?: string };
+      if (res.result === "sent") toast.info(res.message ?? "트레이드를 제안했습니다. 다음 주에 답이 옵니다");
+      else toast.success("트레이드 성사!");
+      setGive([]); setTake([]); setCash(0);
+    },
   });
   const toggle = (list: number[], set: (v: number[]) => void) => (p: CPlayer) => {
     setView(p.id);
@@ -179,7 +192,7 @@ function TradeTab({ s }: { s: CareerState }) {
         onClick={() => trade.mutate({ teamId, give, take, cash })}
         className="w-full py-2 text-[14px] font-bold text-black border border-neutral-500 disabled:opacity-40"
         style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}
-      >트레이드 제안</button>
+      >{s.phase === "offseason" || (s.outbox ?? []).some(r => r.kind === "trade" && r.team === teamId && r.reply?.season === s.season && r.reply.week === s.week) ? "트레이드 제안 (바로 답)" : (s.outbox ?? []).some(r => r.kind === "trade" && r.team === teamId && !r.reply) ? "이미 제안함 · 다음 주에 답" : "트레이드 제안 (다음 주에 답)"}</button>
     </div>
   );
 }
@@ -191,7 +204,13 @@ function ScoutTab({ s }: { s: CareerState }) {
   const list = useMemo(() => rosterOf(s, FREE_AGENT_TEAM).filter(p => race === "all" || p.race === race).sort(byTotal), [s, race]);
   const scout = trpc.career.scout.useMutation({
     ...updater,
-    onSuccess: r => { updater.onSuccess(r); toast.success(`영입 완료! (${r.result.price.toLocaleString()}만원)`); setSel(undefined); },
+    onSuccess: r => {
+      updater.onSuccess(r);
+      const res = r.result as { result: string; message?: string; price?: number };
+      if (res.result === "sent") toast.info(res.message ?? "영입 연락을 보냈습니다. 다음 주에 답이 옵니다");
+      else toast.success(`영입 완료! (${(res.price ?? 0).toLocaleString()}만원)`);
+      setSel(undefined);
+    },
   });
   const p = sel !== undefined ? s.players[sel] : undefined;
   const price = p ? scoutPrice(s, p) : 0;
@@ -218,7 +237,7 @@ function ScoutTab({ s }: { s: CareerState }) {
         onClick={() => p && scout.mutate({ playerId: p.id })}
         className="w-full py-2 text-[14px] font-bold text-black border border-neutral-500 disabled:opacity-40"
         style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}
-      >{full ? `선수단이 가득 찼습니다 (${max}명)` : "영입"}</button>
+      >{full ? `선수단이 가득 찼습니다 (${max}명)` : p && (s.outbox ?? []).some(r => r.kind === "scout" && r.player === p.id && !r.reply) ? "연락함 · 다음 주에 답" : s.phase === "offseason" ? "영입" : "영입 연락 (다음 주에 답)"}</button>
     </div>
   );
 }
@@ -255,6 +274,7 @@ export default function Transfer() {
   const { state: s, loading } = useCareer();
   const [, navigate] = useLocation();
   const [mode, setMode] = useState<Mode>("bid");
+  const [focus, setFocus] = useState<{ player: number; n: number } | undefined>();
   if (loading) return <div className="p-6 text-muted-foreground">불러오는 중...</div>;
   if (!s) { navigate("/lobby"); return null; }
   return (
@@ -268,13 +288,51 @@ export default function Transfer() {
             </button>
           ))}
         </div>
-        {mode === "bid" && <BidTab s={s} />}
+        <Outbox s={s} onTalk={pid => { setMode("bid"); setFocus({ player: pid, n: (focus?.n ?? 0) + 1 }); }} />
+        {mode === "bid" && <BidTab key={focus ? `${focus.player}-${focus.n}` : "bid"} s={s} focus={focus?.player} />}
         {mode === "trade" && <TradeTab s={s} />}
         {mode === "scout" && <ScoutTab s={s} />}
         {mode === "fire" && <FireTab s={s} />}
         <MarketNews s={s} />
       </div>
     </LegacyFrame>
+  );
+}
+
+const KIND_LABEL = { bid: "영입 요청", trade: "트레이드", scout: "스카웃" } as const;
+
+/** 보낸 요청 (답 대기) · 이번 주에 온 답 */
+function Outbox({ s, onTalk }: { s: CareerState; onTalk: (pid: number) => void }) {
+  const updater = useCareerUpdater();
+  const cancel = trpc.career.cancelRequest.useMutation(updater);
+  const list = (s.outbox ?? []).filter(r => !r.reply || (r.reply.season === s.season && r.reply.week === s.week));
+  if (!list.length) return null;
+  const what = (r: NonNullable<CareerState["outbox"]>[number]) =>
+    r.kind === "trade" ? `${s.teams[r.team]?.name} · ${(r.take ?? []).map(id => s.players[id]?.name).join(", ")} ⇄ ${(r.give ?? []).map(id => s.players[id]?.name).join(", ")}${r.cash ? ` + ${r.cash.toLocaleString()}만` : ""}`
+      : r.kind === "scout" ? `무소속 ${s.players[r.player!]?.name}` : `${s.teams[r.team]?.name} ${s.players[r.player!]?.name} · ${(r.fee ?? 0).toLocaleString()}만`;
+  return (
+    <div className="border border-[#8fd0ff]/60 p-2 mb-2 space-y-1 text-[11.5px]">
+      <div className="text-[#8fd0ff] text-[12.5px]">📨 보낸 요청 · 답장</div>
+      {list.map(r => (
+        <div key={r.id} className="border-t border-neutral-800 first:border-t-0 pt-1">
+          <div className="flex items-center gap-1">
+            <span className="text-[10.5px] text-neutral-400 shrink-0">{KIND_LABEL[r.kind]}</span>
+            <span className="truncate flex-1">{what(r)}</span>
+            {!r.reply && <span className="text-[10.5px] text-[#ffe45c] shrink-0">답 대기 · 다음 주</span>}
+            {!r.reply && <button disabled={cancel.isPending} onClick={() => cancel.mutate({ id: r.id })} className="border border-neutral-600 px-1.5 text-[10.5px] text-neutral-300 shrink-0">취소</button>}
+          </div>
+          {r.reply && (
+            <div className="flex items-center gap-1">
+              <span className={cn("flex-1 text-[11px]", r.reply.ok ? "text-[#bff5c6]" : r.reply.result === "countered" ? "text-[#ffe45c]" : "text-[#ffb8c8]")}>📬 {r.reply.message}</span>
+              {r.kind === "bid" && r.player !== undefined && s.players[r.player]?.team !== s.myTeam && (
+                <button onClick={() => onTalk(r.player!)} className="border border-[#8fe07a] text-[#bff5c6] px-1.5 text-[10.5px] shrink-0">{r.reply.result === "agreed" ? "계약하기" : "이어서 협상"}</button>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+      <div className="text-[10px] text-neutral-500">시즌 중에는 요청을 보낸 다음 주에 답이 오고, 답이 온 주에는 바로 이어서 협상할 수 있습니다 (비시즌은 바로 답)</div>
+    </div>
   );
 }
 

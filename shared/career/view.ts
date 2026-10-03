@@ -3,10 +3,16 @@
  */
 import { ORIG_MAPS, FREE_AGENT_TEAM } from "./originalData";
 import type { CareerState, CMatch, CPlayer, Race } from "./rules";
-import { B_TEAM_OFFSET, TRADE_ACE_PREMIUM, TRADE_PREMIUM, totalOf, tradeValue } from "./rules";
+import { B_TEAM_OFFSET, MIN_ROSTER, TRADE_ACE_PREMIUM, TRADE_PREMIUM, adaptWeeksLeft, totalOf, tradeValue } from "./rules";
 
 /** 선수단 */
 export const rosterOf = (s: CareerState, team: number) => s.players.filter(p => p.team === team && !p.reserve);
+/** 이번 주 프로리그에 나갈 수 있는 선수 (적응기간 선수 제외, 그러면 엔트리를 못 짤 만큼 적으면 모두) */
+export function proRosterOf(s: CareerState, team: number) {
+  const all = rosterOf(s, team);
+  const ok = all.filter(p => !adaptWeeksLeft(s, p));
+  return ok.length >= MIN_ROSTER ? ok : all;
+}
 /** 은퇴하지 않은 선수 전체 (무소속 포함) */
 export const activePlayers = (s: CareerState) => s.players.filter(p => p.team >= 0);
 /** 은퇴 선수의 팀 번호 */
