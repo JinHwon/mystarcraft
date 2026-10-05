@@ -87,6 +87,13 @@ function MatchTab({ s }: { s: CareerState }) {
     if (returned.front.length) setFront(returned.front.map(x => x ?? undefined));
     if (Object.keys(returned.items).length) setItems(returned.items);
   }, []);
+  // 다음 경기로 바뀌면 편성 초기화 (상점에서 돌아온 같은 경기 편성은 유지)
+  const [frontFor, setFrontFor] = useState(pending?.id);
+  useEffect(() => {
+    if (pending?.id === frontFor) return;
+    setFrontFor(pending?.id);
+    if (!(returned && returned.matchId === pending?.id)) { setFront([]); setItems({}); }
+  }, [pending?.id]);
   // 편성 내용 기억 (상점에 다녀와도 유지)
   useEffect(() => {
     if (editing && pending) saveEntryDraft({ matchId: pending.id, front: front.map(x => x ?? null), items });
@@ -102,7 +109,8 @@ function MatchTab({ s }: { s: CareerState }) {
 
   const begin = trpc.career.beginMatch.useMutation({
     onError: updater.onError,
-    onSuccess: r => { patch(r.diff); setEditing(false); setWatching(true); setItems({}); },
+    // 경기를 시작하면 편성은 비움 (같은 주 2경기는 새로 편성)
+    onSuccess: r => { patch(r.diff); setEditing(false); setWatching(true); setFront([]); setItems({}); },
   });
   const playSetM = trpc.career.playSet.useMutation({ onError: updater.onError });
   const advance = trpc.career.advance.useMutation({
