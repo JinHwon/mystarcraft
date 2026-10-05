@@ -79,10 +79,29 @@ export function MapImage({ mapId, size = 72 }: { mapId: number; size?: number })
 export function mslMedals(titles?: string[]) {
   let gold = 0, silver = 0;
   for (const t of titles ?? []) {
-    if (!/마이스타리그|스타리그|MSL/.test(t)) continue;
+    if (!/마이스타리그|스타리그|MSL|OSL/.test(t)) continue;
     if (t.includes("준우승")) silver++; else if (t.includes("우승")) gold++;
   }
   return { gold, silver };
+}
+
+/** 우승 경력 트로피 (대회별 색): "3시즌 MSL 우승" → 🏆 MSL 우승 · 3시즌 */
+export function TitleChips({ titles }: { titles?: string[] }) {
+  if (!titles?.length) return null;
+  const color = (x: string) => (/OSL/.test(x) ? "#ffb46b" : /MSL/.test(x) ? "#7fd0ff" : /마이스타리그/.test(x) ? "#c9a0ff" : /2부/.test(x) ? "#8fe07a" : "#ffe45c");
+  return (
+    <div className="flex flex-wrap gap-1">
+      {titles.map((x, i) => {
+        const m = x.match(/^(\d+)시즌 (.+)$/);
+        const runner = x.includes("준우승");
+        return (
+          <span key={i} className="inline-flex items-center gap-0.5 rounded-full border px-1.5 py-[1px] text-[10.5px] font-bold" style={{ borderColor: `${color(x)}99`, color: color(x), background: `${color(x)}18` }}>
+            {runner ? "🥈" : "🏆"} {m ? m[2] : x}{m ? <span className="font-normal opacity-70"> · {m[1]}시즌</span> : null}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 /** 개인리그 우승(금배지)·준우승(은배지) 뱃지 — 여러 번이면 개수 표시 */

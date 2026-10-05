@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { INDIV_SHORT, regularWeeksOf } from "@shared/career/rules";
 import { PlayerRanking } from "@/components/career/PlayerRanking";
 import { useLocation } from "wouter";
 import { VitaButton, saveEntryDraft, takeEntryReturn } from "@/components/legacy/match/common";
@@ -20,13 +21,13 @@ export function MslReports({ s, reports, onWatch }: { s: CareerState; reports: M
   if (!reports.length) return null;
   return (
     <div className="rounded-2xl bg-card border border-border p-3 space-y-1.5">
-      <div className="text-sm font-bold text-foreground">🎮 마이스타리그 · 우리 선수 경기</div>
+      <div className="text-sm font-bold text-foreground">🎮 개인리그 · 우리 선수 경기</div>
       {reports.map((r, i) => {
         const A = s.players[r.a], B = s.players[r.b];
         const mineWon = s.players[r.winner]?.team === s.myTeam;
         return (
           <button key={i} onClick={() => onWatch(r)} className="w-full flex items-center gap-1.5 text-xs rounded-lg px-1 py-1.5 hover:bg-muted/50">
-            <span className="text-muted-foreground w-24 truncate text-left">{r.label}</span>
+            <span className="text-muted-foreground w-24 truncate text-left">{r.league && r.league !== "mysl" ? <b className={r.league === "msl" ? "text-sky-300" : "text-orange-300"}>{INDIV_SHORT[r.league]} </b> : null}{r.label}</span>
             <span className={cn("flex-1 truncate text-right", r.winner === r.a ? "text-foreground font-bold" : "text-muted-foreground")}>{A?.name}</span>
             <span className="font-mono font-bold w-9 text-center">{r.sa}:{r.sb}</span>
             <span className={cn("flex-1 truncate text-left", r.winner === r.b ? "text-foreground font-bold" : "text-muted-foreground")}>{B?.name}</span>
@@ -277,7 +278,7 @@ function MatchTab({ s }: { s: CareerState }) {
         )}
         <MslReports s={s} reports={weekDone.mslReports ?? []} onWatch={setWatch} />
         {!m && !weekDone.mslReports?.length && <div className="rounded-2xl bg-card border border-border p-4 text-center text-sm text-muted-foreground">이번 주 일정이 끝났습니다.</div>}
-        <button onClick={() => navigate("/starleague")} className="w-full py-2.5 rounded-2xl bg-card border border-border text-sm font-bold text-foreground">🏆 마이스타리그 대진 보기</button>
+        <button onClick={() => navigate("/starleague")} className="w-full py-2.5 rounded-2xl bg-card border border-border text-sm font-bold text-foreground">🏆 개인리그 대진 보기</button>
         <button onClick={() => { setWv(null); setLegDone(null); }} className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-black">확인 · 다음 주로</button>
       </div>
     );
@@ -305,11 +306,13 @@ function MatchTab({ s }: { s: CareerState }) {
 
   if (!pending) {
     const weekMatches = s.matches.filter(m => m.week === s.week && !m.done);
+    const noMatch = s.phase === "regular" && !s.matches.some(m => m.week === s.week && m.stage === "regular");
     return (
       <div className="space-y-3">
         <div className="rounded-2xl bg-card border border-border p-4 text-center space-y-1">
-          <div className="text-2xl">📺</div>
-          <div className="font-bold text-foreground">이번 주 우리 팀 경기가 없습니다</div>
+          <div className="text-2xl">{noMatch ? "🚫" : "📺"}</div>
+          <div className="font-bold text-foreground">{noMatch ? "NO MATCH 주간 — 이번 주는 프로리그가 없습니다" : "이번 주 우리 팀 경기가 없습니다"}</div>
+          {noMatch && <div className="text-xs text-violet-300">개인리그 일정만 진행됩니다 · 선수 행동으로 컨디션·능력치를 챙기세요</div>}
           <div className="text-xs text-muted-foreground">
             {weekMatches.length ? weekMatches.map(m => `${STAGE_NAMES[m.stage]}: ${s.teams[m.a].name} vs ${s.teams[m.b].name}`).join(" / ") : "다음 일정으로 넘어갑니다"}
           </div>
@@ -428,7 +431,7 @@ export default function League() {
       <div className="text-center">
         <div className="text-lg font-black text-foreground">🏆 {s.season}시즌 {leagueName(myDiv(s))}</div>
         {isWinnersSeason(s.season) && <div className="mt-1 inline-block rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-300 text-[11px] font-bold px-2 py-0.5">⚔️ 위너스리그 시즌 · 이긴 선수는 질 때까지 계속 출전 (7전 4선승, 결승 9전 5선승)</div>}
-        <div className="text-xs text-muted-foreground">{s.phase === "regular" ? `정규시즌 ${s.week}주차 / 11` : s.phase === "postseason" ? "포스트시즌" : "시즌 종료"}</div>
+        <div className="text-xs text-muted-foreground">{s.phase === "regular" ? `정규시즌 ${s.week}주차 / ${regularWeeksOf(s)}` : s.phase === "postseason" ? "포스트시즌" : "시즌 종료"}</div>
       </div>
       <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-card border border-border">
         {([["match", "⚔️ 경기"], ["table", "📊 순위"], ["schedule", "📅 일정"]] as const).map(([k, l]) => (

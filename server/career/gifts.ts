@@ -1,7 +1,7 @@
 /**
  * 후원: 스폰서와 별개로 팬·기업이 보내는 선물. 매주 확률로 도착하고, 받기를 누르면 자금이나 소모품(한 종류 1~5개)이 들어온다
  */
-import type { CareerState, Gift } from "@shared/career/rules";
+import { OLD_REGULAR_WEEKS, regularWeeksOf, type CareerState, type Gift } from "@shared/career/rules";
 import { ITEMS, ITEM_BY_KEY, stackMax } from "@shared/career/items";
 import { standings } from "@shared/career/view";
 import { CareerError, news, rand, randInt } from "./core";
@@ -26,7 +26,8 @@ export function rollGift(s: CareerState) {
   const st = standings(s);
   const rank = st.findIndex(t => t.id === s.myTeam) + 1 || st.length;
   const rep = s.manager?.reputation ?? 50;
-  const chance = 0.22 + (1 - rank / Math.max(1, st.length)) * 0.12 + (rep - 50) / 500;
+  // 시즌이 길면 주마다 조금 덜 (한 시즌 기대 횟수는 비슷하게)
+  const chance = (0.22 + (1 - rank / Math.max(1, st.length)) * 0.12 + (rep - 50) / 500) * (OLD_REGULAR_WEEKS / regularWeeksOf(s));
   if (rand() >= chance) return;
   const id = s.nextGiftId ?? 1;
   s.nextGiftId = id + 1;

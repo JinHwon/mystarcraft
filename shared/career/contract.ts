@@ -2,7 +2,7 @@
  * 계약·연봉·출전 기대치 (서버·화면 공용, 결정적 계산)
  */
 import { FREE_AGENT_TEAM } from "./originalData";
-import { ageOf, askingPrice, gradeIndex, LEGACY_GRADES, totalOf, type BonusKey, type CareerState, type Contract, type CPlayer } from "./rules";
+import { ageOf, askingPrice, gradeIndex, LEGACY_GRADES, regularWeeksOf, totalOf, type BonusKey, type CareerState, type Contract, type CPlayer } from "./rules";
 import { rosterOf } from "./view";
 import { levelPerks, managerLevel } from "./mainSponsor";
 
@@ -96,8 +96,8 @@ export function contractScore(offer: Contract, demand: Contract): { score: numbe
 }
 
 /** 주급 (정규시즌 주마다) */
-export function weeklyWage(p: CPlayer): number {
-  return Math.round((p.contract?.salary ?? 0) / 11);
+export function weeklyWage(p: CPlayer, s?: { regularWeeks?: number }): number {
+  return Math.round((p.contract?.salary ?? 0) / regularWeeksOf(s ?? {}));
 }
 export function teamWages(s: CareerState, team: number): number {
   return rosterOf(s, team).reduce((sum, p) => sum + (p.contract?.salary ?? 0), 0);

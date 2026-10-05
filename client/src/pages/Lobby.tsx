@@ -1,5 +1,6 @@
 
 import { EventBanner } from "@/components/career/EventBanner";
+import { INDIV_SHORT, regularWeeksOf } from "@shared/career/rules";
 import { MSL_STAGE_NAMES } from "@shared/career/rules";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
@@ -125,7 +126,7 @@ function Office({ s }: { s: CareerState }) {
   const roster = rosterOf(s, s.myTeam);
   const readyAp = roster.filter(p => { const a = actionOf(p.action); return a && (p.ap ?? WEEKLY_AP) >= a.ap; }).length;
   const planned = roster.filter(p => p.action).length;
-  const phaseText = s.phase === "regular" ? `정규시즌 ${s.week}주차 / 11` : s.phase === "postseason" ? "포스트시즌" : "시즌 종료";
+  const phaseText = s.phase === "regular" ? `정규시즌 ${s.week}주차 / ${regularWeeksOf(s)}` : s.phase === "postseason" ? "포스트시즌" : "시즌 종료";
   const last = s.history[0];
 
   if (restart) return <TeamSelect onCancel={() => setRestart(false)} onStarted={() => setRestart(false)} />;
@@ -231,7 +232,7 @@ function Office({ s }: { s: CareerState }) {
         <Tile emoji="🤝" title="이적시장" desc={`무소속 ${rosterOf(s, FREE_AGENT_TEAM).length}명 영입·방출`} onClick={() => navigate("/transfer")} className="bg-gradient-to-br from-sky-500 to-blue-700 border-sky-300/40" />
         <Tile emoji="🏢" title="구단 운영" desc={`연봉·계약·제안${s.offers?.length ? ` · 제안 ${s.offers.length}` : ""}`} onClick={() => navigate("/club")} className="bg-gradient-to-br from-teal-500 to-cyan-800 border-teal-300/40" />
         <Tile emoji="🛒" title="아이템 상점" desc="장비·포션·경기 아이템" onClick={() => navigate("/shop")} className="bg-gradient-to-br from-rose-500 to-pink-700 border-rose-300/40" />
-        <Tile emoji="👑" title="마이스타리그" desc={s.msl ? MSL_STAGE_NAMES[s.msl.stage] : "1주차 개막"} onClick={() => navigate("/starleague")} className="bg-gradient-to-br from-indigo-500 to-slate-700 border-indigo-300/40" />
+        <Tile emoji="👑" title={s.msl2?.season === s.season ? `개인리그` : "마이스타리그"} desc={s.msl2?.season === s.season ? `MySL ${s.msl ? MSL_STAGE_NAMES[s.msl.stage] : "-"} · ${INDIV_SHORT[s.msl2.league ?? "msl"]} ${MSL_STAGE_NAMES[s.msl2.stage]}` : s.msl ? MSL_STAGE_NAMES[s.msl.stage] : "1주차 개막"} onClick={() => navigate("/starleague")} className="bg-gradient-to-br from-indigo-500 to-slate-700 border-indigo-300/40" />
         <Tile emoji="💰" title="재정 관리" desc={`보유 ${me.money.toLocaleString()}만 · 가계부`} onClick={() => navigate("/finance")} className="bg-gradient-to-br from-yellow-500 to-amber-700 border-yellow-300/40" />
       </div>
 

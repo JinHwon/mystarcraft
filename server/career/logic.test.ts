@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FINAL_SETS, PRO_SETS, totalOf, type CareerState, type CMatch } from "@shared/career/rules";
+import { FINAL_SETS, PRO_SETS, PRO_WEEK_PATTERN, totalOf, type CareerState, type CMatch } from "@shared/career/rules";
 import { CareerError, advanceWeek as advanceOnly, completeWeek, aiEntry, beginMatch, buyItem, equipItem, migrateCareer, useStockItem, myPendingMatch, newCareer, playLiveSet, proposeTrade, releasePlayer, rosterOf, scoutPlayer, setAction, standings, startNextSeason } from "./logic";
 
 /** 한 주 진행 (우리 선수가 조장인 조 지명식에서 멈추면 자동 지명으로 마저 진행) */
@@ -154,7 +154,8 @@ describe("2부 리그 (B팀)", () => {
     expect(s.teams.filter(t => t.div === 2)).toHaveLength(12);
     expect(kid.team).toBe(13);
     expect(kid.reserve).toBe(false);
-    expect(s.matches.filter(m => m.div === 2)).toHaveLength(9 * 12);
+    // 3주차부터 남은 라운드 (18주 일정: 1·2주에 3라운드)
+    expect(s.matches.filter(m => m.div === 2)).toHaveLength((22 - PRO_WEEK_PATTERN[0] - PRO_WEEK_PATTERN[1]) * 6);
     expect(s.teams.filter(t => t.div === 2).every(t => rosterOf(s, t.id).length >= 9)).toBe(true);
     // 두 번 해도 그대로
     migrateCareer(s);
@@ -216,14 +217,14 @@ describe("관전 화면용 경기 직전 상태·수입원·새 시즌 컨디션
     const { viewStateAt } = await import("../../client/src/components/legacy/match/viewState");
     const s = newCareer(4);
     let final: ReturnType<typeof advanceWeek> | undefined;
-    for (let w = 0; w < 16 && s.phase !== "offseason" && !final; w++) {
+    for (let w = 0; w < 25 && s.phase !== "offseason" && !final; w++) {
       const m = myPendingMatch(s);
       const r = advanceWeek(s, m ? aiEntry(s, s.myTeam, m.stage === "final" ? FINAL_SETS : PRO_SETS) : undefined);
-      if (r.mslReports.some(x => x.stage === "결승")) final = r;
+      if (r.mslReports.some(x => x.stage === "결승" && !x.league)) final = r;
     }
     expect(final).toBeDefined();
     const all = [...(final!.proReports ?? []), ...final!.mslReports];
-    const k = all.findIndex(x => (x as { stage: string }).stage === "결승");
+    const k = all.findIndex(x => (x as { stage: string; league?: string }).stage === "결승" && !(x as { league?: string }).league);
     const champ = s.msl!.champion!;
     const title = `${s.season}시즌 마이스타리그 우승`;
     expect(s.players[champ].titles).toContain(title);
@@ -1689,4 +1690,59 @@ describe("후원 · 시즌 후 이적 · 감독 이적 신청 · 스폰서 종�
       return;
     }
   });
+});
+
+describe("18주 시즌 · MSL/OSL", () => {
+  it("정규시즌 18주: 주마다 0~2경기 (NO MATCH 주 포함), 팀당 22경기, 개인리그 두 개가 끝까지 진행된다", async () => {
+    const { REGULAR_WEEKS, secondLeagueOf } = await import("@shared/career/rules");
+    const s = newCareer(0);
+    expect(s.regularWeeks).toBe(REGULAR_WEEKS);
+    const mine = (w: number) => s.matches.filter(m => m.week === w && m.div === 1 && (m.a === 0 || m.b === 0)).length;
+    for (let w = 1; w <= REGULAR_WEEKS; w++) expect(mine(w)).toBe(PRO_WEEK_PATTERN[w - 1]);
+    expect(s.matches.filter(m => m.a === 0 || m.b === 0)).toHaveLength(22);
+    expect(PRO_WEEK_PATTERN.some(c => c === 0)).toBe(true);
+    expect(s.msl2?.league).toBe(secondLeagueOf(1));
+    let guard = 0;
+    while (s.phase !== "offseason" && guard++ < 40) {
+      const m = myPendingMatch(s);
+      advanceWeek(s, m ? aiEntry(s, s.myTeam, m.stage === "final" ? FINAL_SETS : PRO_SETS) : undefined);
+    }
+    expect(s.phase).toBe("offseason");
+    expect(s.msl!.champion).toBeDefined();
+    expect(s.msl2!.champion).toBeDefined();
+    const h = s.history[0];
+    expect(h.indiv?.map(x => x.league).sort()).toEqual(["msl", "mysl"]);
+    expect(s.players[s.msl2!.champion!].titles?.some(t => t.includes("MSL 우승"))).toBe(true);
+    // 다음 시즌은 OSL
+    startNextSeason(s, { releaseExpiring: true });
+    expect(s.msl2?.league).toBe("osl");
+  }, 120_000);
+
+  it("예전 11주 세이브는 그 시즌을 11주 일정으로 마치고, 다음 시즌부터 18주", async () => {
+    const { scheduleDivision } = await import("./divisions");
+    const s = newCareer(0);
+    delete s.regularWeeks;
+    delete s.msl2;
+    delete s.msl!.v2;
+    s.matches = [];
+    scheduleDivision(s, 1);
+    scheduleDivision(s, 2);
+    expect(Math.max(...s.matches.map(m => m.week))).toBe(11);
+    let guard = 0;
+    while (s.phase === "regular" && guard++ < 20) {
+      const m = myPendingMatch(s);
+      advanceWeek(s, m ? aiEntry(s, s.myTeam, PRO_SETS) : undefined);
+    }
+    expect(s.week).toBe(12);
+    expect(s.msl2).toBeUndefined();
+    while (s.phase !== "offseason" && guard++ < 40) {
+      const m = myPendingMatch(s);
+      advanceWeek(s, m ? aiEntry(s, s.myTeam, m.stage === "final" ? FINAL_SETS : PRO_SETS) : undefined);
+    }
+    expect(s.msl!.champion).toBeDefined();
+    startNextSeason(s, { releaseExpiring: true });
+    expect(s.regularWeeks).toBe(18);
+    expect(s.msl!.v2).toBe(true);
+    expect(s.msl2).toBeDefined();
+  }, 120_000);
 });

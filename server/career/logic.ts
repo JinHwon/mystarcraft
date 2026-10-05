@@ -44,6 +44,10 @@ import {
   totalOf,
   type PlayerSnap,
   type IndivHonor,
+  secondLeagueOf,
+  REGULAR_WEEKS,
+  regularWeeksOf,
+  weekMoney,
   type TransferTiming,
 } from "@shared/career/rules";
 import {
@@ -67,7 +71,6 @@ import { activeSponsors } from "@shared/career/sponsor";
 export type { MslReport };
 
 const RACE: Record<string, Race> = { T: "terran", Z: "zerg", P: "protoss" };
-const REGULAR_WEEKS = 11;
 
 
 
@@ -107,6 +110,7 @@ export function newCareer(myTeam: number, difficulty: Difficulty = "normal"): Ca
   scheduleRegularSeason(s);
   // 개인리그 시드를 미리 정해 두어 일정표에서 볼 수 있게
   s.msl = createMsl(s);
+  if (s.msl.v2) s.msl2 = createMsl(s, secondLeagueOf(s.season)); else delete s.msl2;
   rollWeekBursts(s);
   news(s, `${s.teams[myTeam].name} 감독으로 부임했습니다. ${s.season}시즌 ${leagueName(myDiv(s))}가 곧 개막합니다!`);
   return s;
@@ -148,6 +152,8 @@ function ensureHeadToHead(s: CareerState) {
  * 6주차는 같은 상대와 두 번 붙는다 (원작 일정표와 같음). 1부·2부 같은 일정
  */
 function scheduleRegularSeason(s: CareerState) {
+  // 새 시즌은 18주 일정 (주마다 프로리그 0~2경기, 개인리그 2개)
+  s.regularWeeks = REGULAR_WEEKS;
   scheduleDivision(s, 1);
   scheduleDivision(s, 2);
 }
@@ -534,8 +540,10 @@ export { BENCH_DECAY_WEEKS };
  */
 export function benchDecay(s: CareerState) {
   const wk = `${s.season}-${s.week}`;
+  // NO MATCH 주(그 팀 경기가 없는 주)는 결장으로 치지 않음
+  const played = new Set(s.matches.filter(m => m.week === s.week && m.stage === "regular").flatMap(m => [m.a, m.b]));
   for (const p of activePlayers(s)) {
-    if (p.team === FREE_AGENT_TEAM) continue;
+    if (p.team === FREE_AGENT_TEAM || !played.has(p.team)) continue;
     if (p.lastProWeek === wk) continue;
     // 적응기간이라 못 나간 주는 결장으로 치지 않음
     if (adaptWeeksLeft(s, p)) { p.benchWeeks = 0; continue; }
@@ -571,7 +579,7 @@ function finishWeek(s: CareerState): WeekResult {
   const proReports = playOtherMatches(s);
   const { reports: mslReports, plans: mslPlans } = s.phase !== "offseason" ? runMslWeek(s) : { reports: [], plans: [] };
   // 다른 팀은 고정 후원금 (2부는 적게), 우리 팀은 고른 스폰서 (구단 운영 → 스폰서)
-  for (const t of proTeams(s)) if (t.id !== s.myTeam) t.money += t.div === 2 ? B_WEEKLY_SPONSOR : WEEKLY_SPONSOR;
+  for (const t of proTeams(s)) if (t.id !== s.myTeam) t.money += weekMoney(s, t.div === 2 ? B_WEEKLY_SPONSOR : WEEKLY_SPONSOR);
   weeklyClub(s);
   // 굿즈 판매 (모든 구단)
   if (s.phase !== "offseason") weeklyGoods(s);
@@ -769,7 +777,7 @@ const PLAYOFF: ReadonlyArray<CMatch["stage"]> = ["semi", "po", "final"];
  * 준PO 주에 승강전 (1부 11·12위 vs 2부 2·1위)도 함께
  */
 function progressSchedule(s: CareerState) {
-  if (s.phase === "regular" && s.week > REGULAR_WEEKS) {
+  if (s.phase === "regular" && s.week > regularWeeksOf(s)) {
     s.phase = "postseason";
     const st = standings(s, 1);
     // 포스트시즌은 한 주에 한 경기씩: 승강전 1 → 승강전 2 → 준플레이오프 → 플레이오프 → 결승
@@ -841,7 +849,9 @@ function finishSeason(s: CareerState, final: CMatch) {
   const moves = promoMoves(s);
   s.promo = { season: s.season, moves };
   const runnerUp = final.a === champion ? final.b : final.a;
-  const indiv: IndivHonor[] = msl?.champion !== undefined ? [{ league: "mysl", champion: msl.champion, runnerUp: msl.runnerUp, cTeam: s.players[msl.champion]?.team, rTeam: msl.runnerUp !== undefined ? s.players[msl.runnerUp]?.team : undefined }] : [];
+  const indiv: IndivHonor[] = [msl, s.msl2?.season === s.season ? s.msl2 : undefined].flatMap(x => x?.champion !== undefined
+    ? [{ league: x.league ?? "mysl", champion: x.champion, runnerUp: x.runnerUp, cTeam: s.players[x.champion]?.team, rTeam: x.runnerUp !== undefined ? s.players[x.runnerUp]?.team : undefined }]
+    : []);
   s.history.unshift({ season: s.season, champion, runnerUp, myRank, myResult: result, mslChampion: msl?.champion, mslRunnerUp: msl?.runnerUp, team: s.myTeam, myMsl: myMslOf(s, msl), div: myDiv(s), champion2, promo: moves, indiv });
   for (const p of rosterOf(s, champion)) p.titles = [...(p.titles ?? []), `${s.season}시즌 프로리그 우승`];
   if (champion2 !== undefined) for (const p of rosterOf(s, champion2)) p.titles = [...(p.titles ?? []), `${s.season}시즌 2부 리그 1위`];
@@ -907,6 +917,7 @@ export function startNextSeason(s: CareerState, opts: { releaseExpiring?: boolea
   scheduleRegularSeason(s);
   // 개인리그 시드를 미리 정해 두어 일정표에서 볼 수 있게 (지난 대회 성적은 createMsl 이 참고)
   s.msl = createMsl(s);
+  if (s.msl.v2) s.msl2 = createMsl(s, secondLeagueOf(s.season)); else delete s.msl2;
   rollWeekBursts(s);
   news(s, `${s.season}시즌 ${leagueName(myDiv(s))} 개막!`);
 }

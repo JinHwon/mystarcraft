@@ -2,10 +2,11 @@
  * 구단 운영: 재정 · 계약(재계약) · 받은 영입 제안 · 감독
  */
 import { useEffect, useMemo, useState } from "react";
+import { myDiv as myDivOf } from "@shared/career/view";
 import { useLocation, useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { AFTER_SEASON_FEE, OPERATING_COST, askingPrice, difficultyOf, totalOf, type CareerState, type Contract, type Gift, type TransferTiming } from "@shared/career/rules";
+import { AFTER_SEASON_FEE, B_OPERATING_COST, OPERATING_COST, regularWeeksOf, weekMoney, askingPrice, difficultyOf, totalOf, type CareerState, type Contract, type Gift, type TransferTiming } from "@shared/career/rules";
 import { ITEM_BY_KEY, itemImg } from "@shared/career/items";
 import { jobThreshold, playerDemand, teamWages } from "@shared/career/contract";
 import { SPONSOR_STYLE_NAMES, activeSponsors, maxSponsors, questLabel, questProgress, questRange, questReward, sponsorOfferCount, sponsorOffers, type Sponsor, type SponsorQuest } from "@shared/career/sponsor";
@@ -57,17 +58,18 @@ function weeklyFlow(s: CareerState) {
   const wages = teamWages(s, s.myTeam);
   const sponsors = activeSponsors(s);
   const spon = sponsors.reduce((a, x) => a + x.weekly, 0);
-  const wage = Math.round(wages / 11);
-  return { wages, sponsors, spon, wage, net: spon - wage - OPERATING_COST };
+  const wage = Math.round(wages / regularWeeksOf(s));
+  const op = weekMoney(s, myDivOf(s) === 2 ? B_OPERATING_COST : OPERATING_COST);
+  return { wages, sponsors, spon, wage, op, net: spon - wage - op };
 }
 
 function MoneyTab({ s }: { s: CareerState }) {
-  const { wages, sponsors, spon, wage, net } = weeklyFlow(s);
+  const { wages, sponsors, spon, wage, op, net } = weeklyFlow(s);
   const items = Object.entries(s.ledger?.season === s.season ? s.ledger.items : {}).sort((a, b) => b[1] - a[1]);
   const income = items.filter(([, v]) => v > 0).reduce((a, [, v]) => a + v, 0);
   const expense = items.filter(([, v]) => v < 0).reduce((a, [, v]) => a + v, 0);
   const peak = Math.max(1, ...items.map(([, v]) => Math.abs(v)));
-  const tiles: Array<[string, number, string]> = [["수입", spon, "#8fe07a"], ["지출", -(wage + OPERATING_COST), "#ff8a8a"], ["합계", net, net >= 0 ? "#8fe07a" : "#ff8a8a"]];
+  const tiles: Array<[string, number, string]> = [["수입", spon, "#8fe07a"], ["지출", -(wage + op), "#ff8a8a"], ["합계", net, net >= 0 ? "#8fe07a" : "#ff8a8a"]];
   return (
     <div className="space-y-2">
       {(s.debtWeeks ?? 0) > 0 && <Reply text={`⚠️ 적자 ${s.debtWeeks}주째! ${difficultyOf(s).debtWeeks - (s.debtWeeks ?? 0)}주 안에 흑자로 돌리지 못하면 구단이 해체됩니다`} />}
@@ -81,8 +83,8 @@ function MoneyTab({ s }: { s: CareerState }) {
           ))}
         </div>
         <div className="flex justify-between"><span className="text-neutral-400">서브 스폰서 후원금{spon ? ` (${sponsors.map(x => x.name).join("·")})` : " (없음)"}</span><span className="text-[#bff5c6]">+{spon}</span></div>
-        <div className="flex justify-between"><span className="text-neutral-400">연봉 (총 {wages.toLocaleString()}만 ÷ 11주)</span><span className="text-[#ffb8c8]">-{wage}</span></div>
-        <div className="flex justify-between"><span className="text-neutral-400">구단 운영비</span><span className="text-[#ffb8c8]">-{OPERATING_COST}</span></div>
+        <div className="flex justify-between"><span className="text-neutral-400">연봉 (총 {wages.toLocaleString()}만 ÷ {regularWeeksOf(s)}주)</span><span className="text-[#ffb8c8]">-{wage}</span></div>
+        <div className="flex justify-between"><span className="text-neutral-400">구단 운영비</span><span className="text-[#ffb8c8]">-{op}</span></div>
         <div className="text-[10.5px] text-neutral-500">경기 수당(주 2경기)은 메인 스폰서 계약: 승리 +{s.mainSponsor?.win ?? 0}, 패배 +{s.mainSponsor?.loss ?? 0} · 퀘스트·상금·보너스·이적료는 따로</div>
       </Panel>
       <Panel icon="📒" title={`${s.season}시즌 장부`} right={<>수입 <span className="text-[#bff5c6]">{income.toLocaleString()}</span> · 지출 <span className="text-[#ffb8c8]">{(-expense).toLocaleString()}</span></>}>

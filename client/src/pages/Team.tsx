@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { BENCH_DECAY_WEEKS, B_MAX_ROSTER, B_MIN_ROSTER, MAX_ROSTER, SQUAD_MIN, adaptWeeksLeft, ageOf, askingPrice, gradeColor, legacyGrade, youthGrowth, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
 import { DIV_NAMES, bTeamIdOf, divOf, myDiv, rosterOf, teamPower } from "@shared/career/view";
-import { PlayerPhoto } from "@/components/legacy/Legacy";
+import { PlayerPhoto, TitleChips } from "@/components/legacy/Legacy";
 import { popularity, potentialStars } from "@shared/career/contract";
 import { BONUS_NAMES, type BonusKey } from "@shared/career/rules";
 import { useCareer, useCareerUpdater } from "@/lib/career";
@@ -49,7 +49,7 @@ export function PlayerSheet({ s, player, onClose, actions }: { s: CareerState; p
             <div className="flex justify-center"><StatRadarChart stats={player.stats} grade={legacyGrade(totalOf(gearStats(player)))} gradeColor={s.teams[player.team].color} gradeTextColor={gradeColor(legacyGrade(totalOf(gearStats(player))))} size={200} maxValue={1000} /></div>
             <StatBars stats={player.stats} />
             {player.titles && player.titles.length > 0 && (
-              <div className="text-xs text-amber-300">🏆 {player.titles.join(" · ")}</div>
+              <TitleChips titles={player.titles} />
             )}
             <div className="rounded-xl bg-muted/50 p-2.5 text-xs space-y-0.5">
               <div>📄 계약: <b>{player.contract ? `남은 ${player.contract.years}시즌 · 연봉 ${player.contract.salary.toLocaleString()}만원` : "없음 (무소속)"}</b></div>

@@ -8,6 +8,9 @@
  */
 import { FREE_AGENT_TEAM, ORIG_TEAMS } from "@shared/career/originalData";
 import {
+  OLD_REGULAR_WEEKS,
+  PRO_WEEK_PATTERN,
+  regularWeeksOf,
   B_DEVELOPMENT_BONUS,
   B_DEVELOPMENT_BONUS_OTHER,
   B_MAX_ROSTER,
@@ -30,7 +33,6 @@ import { defaultContract } from "@shared/career/contract";
 import { CareerError, news, pickMaps, shuffle } from "./core";
 import { prospects } from "./generation";
 
-const REGULAR_WEEKS = 11;
 /** 무소속으로 남겨 둘 인원 (이적시장용) */
 const KEEP_FREE_AGENTS = 18;
 
@@ -77,11 +79,28 @@ export function scheduleDivision(s: CareerState, div: 1 | 2, fromWeek = 1) {
     rounds.push(pairs);
     list.splice(1, 0, list.pop()!);
   }
-  const weeks = Math.min(REGULAR_WEEKS, rounds.length);
-  for (let w = fromWeek - 1; w < weeks; w++) {
-    for (const [a, b] of rounds[w]) s.matches.push({ id: s.nextMatchId++, week: w + 1, leg: 1, stage: "regular", div, a, b, ...fmt(s, "regular") });
-    for (const [a, b] of rounds[weeks - 1 - w]) s.matches.push({ id: s.nextMatchId++, week: w + 1, leg: 2, stage: "regular", div, a: b, b: a, ...fmt(s, "regular") });
+  if (regularWeeksOf(s) === OLD_REGULAR_WEEKS) {
+    // 예전 11주 일정: 한 주 2경기
+    const weeks = Math.min(OLD_REGULAR_WEEKS, rounds.length);
+    for (let w = fromWeek - 1; w < weeks; w++) {
+      for (const [a, b] of rounds[w]) s.matches.push({ id: s.nextMatchId++, week: w + 1, leg: 1, stage: "regular", div, a, b, ...fmt(s, "regular") });
+      for (const [a, b] of rounds[weeks - 1 - w]) s.matches.push({ id: s.nextMatchId++, week: w + 1, leg: 2, stage: "regular", div, a: b, b: a, ...fmt(s, "regular") });
+    }
+    return;
   }
+  // 18주 일정: 라운드 순서는 그대로 (r라운드 · 거꾸로 라운드 홈·원정 바꿈), 주마다 0~2경기 (PRO_WEEK_PATTERN)
+  const seq: Array<Array<[number, number]>> = [];
+  for (let w = 0; w < rounds.length; w++) {
+    seq.push(rounds[w]);
+    seq.push(rounds[rounds.length - 1 - w].map(([a, b]) => [b, a] as [number, number]));
+  }
+  let k = 0;
+  PRO_WEEK_PATTERN.forEach((count, wi) => {
+    for (let leg = 1; leg <= count && k < seq.length; leg++, k++) {
+      if (wi + 1 < fromWeek) continue;
+      for (const [a, b] of seq[k]) s.matches.push({ id: s.nextMatchId++, week: wi + 1, leg: leg as 1 | 2, stage: "regular", div, a, b, ...fmt(s, "regular") });
+    }
+  });
 }
 
 /** 무소속 선수를 팀에 (리그 규정 충원: 이적료 없음, 기본 계약) */
