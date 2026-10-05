@@ -41,6 +41,40 @@ function PickList({ players, picked, onToggle, right, height = "max-h-[300px]" }
   );
 }
 
+/** 화면 아래에 붙어 있는 실행 칸 (스크롤하지 않고 바로 요청·영입) */
+function StickyBar({ children }: { children: React.ReactNode }) {
+  return <div className="sticky bottom-0 z-10 -mx-3 px-3 pt-2 pb-2 bg-black border-t-2 border-neutral-500 space-y-1.5 text-[12px]">{children}</div>;
+}
+
+/** 팀 고르기 (작은 로고, 한 줄에 8개) */
+function TeamPicker({ s, teams, value, onPick }: { s: CareerState; teams: CareerState["teams"]; value: number; onPick: (id: number) => void }) {
+  void s;
+  return (
+    <div className="grid grid-cols-8 gap-0.5">
+      {teams.map(t => (
+        <button key={t.id} onClick={() => onPick(t.id)} title={t.name} className={cn("p-0.5 border", value === t.id ? "border-[#ff6b6b] border-2" : "border-neutral-700")}>
+          <TeamLogo team={t} className="w-full h-[18px]" />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** 고른 선수 한 줄 요약 (자세히 누르면 사진·능력치) */
+function PickedLine({ p, s, extra }: { p: CPlayer; s: CareerState; extra?: string }) {
+  const [more, setMore] = useState(false);
+  return (
+    <>
+      <div className="flex items-center gap-1.5">
+        <span className="text-[13px] text-[#ffe45c] truncate">{p.name} ({R[p.race]})</span>
+        <span className="text-neutral-400 truncate flex-1">{s.teams[p.team]?.short ?? "무소속"} · {ageOf(p, s.season)}세 · 능력치 {totalOf(p.stats).toLocaleString()}{extra ? ` · ${extra}` : ""}</span>
+        <button onClick={() => setMore(!more)} className="border border-neutral-600 px-1.5 text-[11px] text-neutral-300 shrink-0">{more ? "접기" : "자세히"}</button>
+      </div>
+      {more && <PlayerPanel p={p} color="#ff9a9a" empty="" />}
+    </>
+  );
+}
+
 function Money({ s }: { s: CareerState }) {
   return (
     <div className="flex justify-between text-[12px] border border-neutral-600 px-2 py-1">
@@ -83,25 +117,20 @@ function BidTab({ s, focus }: { s: CareerState; /** 답이 온 요청에서 "이
   const pick = (x: CPlayer) => { setSel(x.id); setFee(priceOf(x)); setReply(null); };
   return (
     <div className="space-y-2">
-      <div className="text-center text-[12px] text-neutral-300">영입할 선수를 고르고 이적료를 제시하세요</div>
-      <div className="grid grid-cols-6 gap-1">
-        {teams.map(t => (
-          <button key={t.id} onClick={() => { setTeamId(t.id); setSel(undefined); setReply(null); }} className={cn("p-0.5 border", teamId === t.id ? "border-[#ff6b6b] border-2" : "border-neutral-700")}>
-            <TeamLogo team={t} className="w-full h-[26px]" />
-          </button>
-        ))}
-      </div>
-      <PickList players={theirs} picked={sel !== undefined ? [sel] : []} onToggle={pick} height="max-h-[200px]"
+      <div className="text-center text-[12px] text-neutral-300">팀 → 선수를 고르면 아래에서 바로 이적료를 제시합니다</div>
+      <TeamPicker s={s} teams={teams} value={teamId} onPick={id => { setTeamId(id); setSel(undefined); setReply(null); }} />
+      <PickList players={theirs} picked={sel !== undefined ? [sel] : []} onToggle={pick} height="max-h-[42vh]"
         right={x => `${x.wantsOut ? "이적희망 · " : ""}${priceOf(x).toLocaleString()}만${x.team === myB ? " (B팀 50%)" : ""}`} />
+      {!p && <div className="text-center text-[11px] text-neutral-500">선수를 고르세요 · 보유 금액 {s.teams[s.myTeam].money.toLocaleString()}만원</div>}
       {p && (
-        <>
-          <PlayerPanel p={p} color="#ff9a9a" empty="" />
-          <div className="text-[11px] text-neutral-400 text-center">현재 계약: <ContractText c={p.contract} />{p.wantsOut ? " · 이적을 희망하는 선수 (싸게 데려올 수 있음)" : ""}</div>
+        <StickyBar>
+          <PickedLine p={p} s={s} extra={`시세 ${priceOf(p).toLocaleString()}만`} />
+          <div className="text-[10.5px] text-neutral-400">현재 계약: <ContractText c={p.contract} />{p.wantsOut ? " · 이적 희망 (싸게 데려올 수 있음)" : ""}</div>
           {reply && <Reply {...reply} />}
           {!agreed ? (
-            <div className="border border-neutral-600 p-2 space-y-1.5 text-[12px]">
-              <div className="flex items-center justify-between"><span className="text-neutral-400">이적료 제시</span><FeeStepper value={fee} onChange={setFee} max={s.teams[s.myTeam].money} /></div>
-              <Money s={s} />
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-neutral-400"><span>이적료 제시</span><span className="text-[10.5px]">보유 {s.teams[s.myTeam].money.toLocaleString()}만</span></div>
+              <div className="flex justify-center"><FeeStepper value={fee} onChange={setFee} max={s.teams[s.myTeam].money} /></div>
               <button disabled={bid.isPending || !!waiting} onClick={() => bid.mutate({ playerId: p.id, fee })} className="w-full py-1.5 text-[13px] font-bold text-black border border-neutral-500 disabled:opacity-40" style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}>
                 {bid.isPending ? "보내는 중..." : waiting ? "요청을 보냈습니다 · 다음 주에 답이 옵니다" : direct ? "이적료 제시 (바로 협상)" : "영입 요청 보내기 (다음 주에 답)"}
               </button>
@@ -114,7 +143,7 @@ function BidTab({ s, focus }: { s: CareerState; /** 답이 온 요청에서 "이
                 onSubmit={c => contract.mutate({ playerId: p.id, salary: c.salary, years: c.years, minApps: c.minApps, bonus: c.bonus })} />
             </>
           )}
-        </>
+        </StickyBar>
       )}
     </div>
   );
@@ -149,15 +178,8 @@ function TradeTab({ s }: { s: CareerState }) {
 
   return (
     <div className="space-y-2">
-      <div className="text-center text-[12px] text-neutral-300">교환할 양측 선수 선택</div>
-      <div className="grid grid-cols-6 gap-1">
-        {teams.map(t => (
-          <button key={t.id} onClick={() => { setTeamId(t.id); setTake([]); }} className={cn("p-0.5 border", teamId === t.id ? "border-[#ff6b6b] border-2" : "border-neutral-700")}>
-            <TeamLogo team={t} className="w-full h-[26px]" />
-          </button>
-        ))}
-      </div>
-      <PlayerPanel p={view !== undefined ? s.players[view] : undefined} color={s.players[view ?? -1]?.team === s.myTeam ? "#8fd0ff" : "#ff9a9a"} empty="선수를 누르면 사진과 능력치가 보입니다" />
+      <div className="text-center text-[12px] text-neutral-300">교환할 양측 선수 선택 (각 5명까지)</div>
+      <TeamPicker s={s} teams={teams} value={teamId} onPick={id => { setTeamId(id); setTake([]); }} />
       <div className="grid grid-cols-2 gap-2">
         <div>
           <div className="text-[11px] text-[#8fd0ff] mb-0.5">우리 팀 (내줄 선수)</div>
@@ -168,9 +190,10 @@ function TradeTab({ s }: { s: CareerState }) {
           <PickList players={theirs} picked={take} onToggle={toggle(take, setTake)} />
         </div>
       </div>
-      <div className="border border-neutral-600 p-2 space-y-1.5 text-[12px]">
+      {view !== undefined && s.players[view] && <PickedLine p={s.players[view]} s={s} />}
+      <StickyBar>
         <div className="flex items-center justify-between gap-2">
-          <span className="text-neutral-400">현금 추가</span>
+          <span className="text-neutral-400">현금 추가 <span className="text-[10.5px]">(보유 {s.teams[s.myTeam].money.toLocaleString()}만)</span></span>
           <div className="flex items-center gap-1">
             {[-500, -100].map(d => <button key={d} onClick={() => setCash(c => Math.max(0, c + d))} className="border border-neutral-600 px-1.5 text-[11px]">{d}</button>)}
             <span className="w-20 text-center text-[#ffe45c]">{cash.toLocaleString()}만</span>
@@ -185,14 +208,13 @@ function TradeTab({ s }: { s: CareerState }) {
             <div className={cn("text-center", ev.get >= ev.need ? "text-[#bff5c6]" : "text-[#ffb8c8]")}>{ev.get >= ev.need ? "상대가 수락할 만한 조건입니다" : `${(ev.need - ev.get).toLocaleString()} 만큼 더 필요합니다`}</div>
           </>
         ) : <div className="text-center text-neutral-500">받을 선수를 고르세요</div>}
-      </div>
-      <Money s={s} />
       <button
         disabled={!take.length || trade.isPending}
         onClick={() => trade.mutate({ teamId, give, take, cash })}
         className="w-full py-2 text-[14px] font-bold text-black border border-neutral-500 disabled:opacity-40"
         style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}
       >{s.phase === "offseason" || (s.outbox ?? []).some(r => r.kind === "trade" && r.team === teamId && r.reply?.season === s.season && r.reply.week === s.week) ? "트레이드 제안 (바로 답)" : (s.outbox ?? []).some(r => r.kind === "trade" && r.team === teamId && !r.reply) ? "이미 제안함 · 다음 주에 답" : "트레이드 제안 (다음 주에 답)"}</button>
+      </StickyBar>
     </div>
   );
 }
@@ -226,18 +248,17 @@ function ScoutTab({ s }: { s: CareerState }) {
           </button>
         ))}
       </div>
-      <PlayerPanel p={p} color="#ffe45c" empty="영입할 선수를 고르세요" />
-      <PickList players={list} picked={sel !== undefined ? [sel] : []} onToggle={x => setSel(x.id)} right={x => `${ageOf(x, s.season)}세 ${potentialStars(x)} · ${scoutPrice(s, x).toLocaleString()}만`} height="max-h-[280px]" />
-      <div className="flex justify-between text-[12px] border border-neutral-600 px-2 py-1">
-        <span className="text-neutral-400">요구 금액 :</span><span className="text-[#ffb8c8]">{p ? `${price.toLocaleString()} 만원` : "-"}</span>
-      </div>
-      <Money s={s} />
+      <PickList players={list} picked={sel !== undefined ? [sel] : []} onToggle={x => setSel(x.id)} right={x => `${ageOf(x, s.season)}세 ${potentialStars(x)} · ${scoutPrice(s, x).toLocaleString()}만`} height="max-h-[50vh]" />
+      <StickyBar>
+      {p ? <PickedLine p={p} s={s} extra={`요구 ${price.toLocaleString()}만`} /> : <div className="text-center text-neutral-500">영입할 선수를 고르세요</div>}
+      <div className="flex justify-between"><span className="text-neutral-400">보유 금액</span><span className="text-[#ffe45c]">{s.teams[s.myTeam].money.toLocaleString()} 만원</span></div>
       <button
         disabled={!p || full || scout.isPending || s.teams[s.myTeam].money < price}
         onClick={() => p && scout.mutate({ playerId: p.id })}
         className="w-full py-2 text-[14px] font-bold text-black border border-neutral-500 disabled:opacity-40"
         style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}
       >{full ? `선수단이 가득 찼습니다 (${max}명)` : p && (s.outbox ?? []).some(r => r.kind === "scout" && r.player === p.id && !r.reply) ? "연락함 · 다음 주에 답" : s.phase === "offseason" ? "영입" : "영입 연락 (다음 주에 답)"}</button>
+      </StickyBar>
     </div>
   );
 }
@@ -255,17 +276,16 @@ function FireTab({ s }: { s: CareerState }) {
   return (
     <div className="space-y-2">
       <div className="text-center text-[12px] text-neutral-300">방출할 선수 선택 <span className="text-neutral-500">({mine.length}/{MAX_ROSTER}명)</span></div>
-      <PlayerPanel p={p} color="#8fd0ff" empty="방출할 선수를 고르세요" />
-      <PickList players={mine} picked={sel !== undefined ? [sel] : []} onToggle={x => setSel(x.id)} height="max-h-[300px]" />
-      <div className="flex justify-between text-[12px] border border-neutral-600 px-2 py-1">
-        <span className="text-neutral-400">방출 이득 :</span><span className="text-[#bff5c6]">{p ? `${gain.toLocaleString()} 만원` : "-"}</span>
-      </div>
+      <PickList players={mine} picked={sel !== undefined ? [sel] : []} onToggle={x => setSel(x.id)} height="max-h-[50vh]" />
+      <StickyBar>
+      {p ? <PickedLine p={p} s={s} extra={`방출 이득 ${gain.toLocaleString()}만`} /> : <div className="text-center text-neutral-500">방출할 선수를 고르세요</div>}
       <button
         disabled={!p || release.isPending}
         onClick={() => p && confirm(`${p.name} 선수를 방출할까요?`) && release.mutate({ playerId: p.id })}
         className="w-full py-2 text-[14px] font-bold text-black border border-neutral-500 disabled:opacity-40"
         style={{ background: "linear-gradient(#ffffff,#d6d6d6)" }}
       >방출</button>
+      </StickyBar>
     </div>
   );
 }

@@ -232,6 +232,7 @@ function summaryOf(s: CareerState) {
     mslTitles: s.players.reduce((n, p) => n + (p.team === s.myTeam ? (p.titles ?? []).filter(x => x.includes("스타리그") || x.includes("MSL")).length : 0), 0),
     gameOver: s.gameOver?.reason,
     lastLeagueAt: s.lastLeagueAt ?? null,
+    difficulty: s.difficulty ?? "normal",
   };
 }
 export type CareerSummary = ReturnType<typeof summaryOf>;
@@ -398,10 +399,10 @@ export const careerRouter = router({
   }),
 
   newGame: protectedProcedure
-    .input(z.object({ teamId: z.number().int() }))
+    .input(z.object({ teamId: z.number().int(), difficulty: z.enum(["easy", "normal", "hard"]).optional() }))
     .mutation(({ ctx, input }) => withLock(ctx.user.id, async () => {
       try {
-        const state = newCareer(input.teamId);
+        const state = newCareer(input.teamId, input.difficulty ?? "normal");
         save(ctx.user.id, state);
         return { state };
       } catch (e) {

@@ -39,10 +39,24 @@ export function Notifications({ s }: { s: CareerState }) {
     const id = setTimeout(() => {
       if (isAlertsPaused()) return;
       if (!first) {
-        for (const a of all) {
-          if (a.urgent && !toasted.current!.has(a.key) && !seen.has(a.key)) {
-            toast(`${a.icon} ${a.text}`, { action: { label: "보기", onClick: () => navigate(a.to) }, duration: 6000 });
-          }
+        const fresh = all.filter(a => a.urgent && !toasted.current!.has(a.key) && !seen.has(a.key));
+        if (fresh.length === 1) {
+          const a = fresh[0];
+          toast(`${a.icon} ${a.text}`, { id: "career-alerts", action: { label: "보기", onClick: () => navigate(a.to) }, cancel: { label: "닫기", onClick: () => toast.dismiss() }, duration: 6000 });
+        } else if (fresh.length > 1) {
+          // 여러 개가 한꺼번에 생기면 하나로 묶어서 (닫으면 한 번에 모두 닫힘)
+          toast(`🔔 새 알림 ${fresh.length}개`, {
+            id: "career-alerts",
+            description: (
+              <div className="space-y-0.5 mt-1">
+                {fresh.slice(0, 5).map(a => <div key={a.key} className="text-xs">{a.icon} {a.text}</div>)}
+                {fresh.length > 5 && <div className="text-xs opacity-70">외 {fresh.length - 5}개</div>}
+              </div>
+            ),
+            action: { label: "알림 보기", onClick: () => { setOpen(true); markAll(); } },
+            cancel: { label: "모두 닫기", onClick: () => toast.dismiss() },
+            duration: 9000,
+          });
         }
       }
       toasted.current = new Set([...(toasted.current ?? []), ...all.map(a => a.key)]);

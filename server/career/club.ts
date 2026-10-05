@@ -6,7 +6,7 @@ import { jobSigningFee } from "@shared/career/mainSponsor";
 import { FREE_AGENT_TEAM } from "@shared/career/originalData";
 import {
   AI_MIN_ROSTER,
-  DEBT_LIMIT_WEEKS,
+  difficultyOf,
   B_MAX_ROSTER,
   B_OPERATING_COST,
   B_ROSTER_TARGET,
@@ -59,7 +59,15 @@ export function book(s: CareerState, category: string, delta: number, note?: str
   if (list.length > CASHBOOK_MAX) list.splice(0, list.length - CASHBOOK_MAX);
 }
 /** 우리 구단 돈을 움직이고 기록 */
+/** 난이도 배율을 받지 않는 돈 (선수 거래·감독 계약금·구입 등은 그대로) */
+const UNSCALED = new Set(["이적료 수입", "이적료 지출", "육성 지원금", "방출", "트레이드", "영입", "아이템", "감독명 변경", "감독 영입 계약금"]);
 export function pay(s: CareerState, category: string, delta: number, note?: string) {
+  // 난이도: 수입·연봉·운영비
+  if (!UNSCALED.has(category)) {
+    const d = difficultyOf(s);
+    const k = delta > 0 ? d.income : category === "연봉" || category === "운영비" ? d.cost : 1;
+    if (k !== 1) delta = Math.round(delta * k);
+  }
   s.teams[s.myTeam].money += delta;
   book(s, category, delta, note);
 }
@@ -606,11 +614,11 @@ export function weeklyClub(s: CareerState) {
   // 자금 확인: 3주 연속 적자면 구단 해체
   if (me.money < 0) {
     s.debtWeeks = (s.debtWeeks ?? 0) + 1;
-    if (s.debtWeeks >= DEBT_LIMIT_WEEKS) {
+    if (s.debtWeeks >= difficultyOf(s).debtWeeks) {
       s.gameOver = { season: s.season, week: s.week, reason: "운영 자금이 바닥나 구단이 해체되었습니다" };
       news(s, `💀 ${s.gameOver.reason}`);
     } else {
-      news(s, `⚠️ 운영 자금이 부족합니다! ${DEBT_LIMIT_WEEKS - s.debtWeeks}주 안에 흑자로 돌리지 못하면 구단이 해체됩니다`);
+      news(s, `⚠️ 운영 자금이 부족합니다! ${difficultyOf(s).debtWeeks - s.debtWeeks}주 안에 흑자로 돌리지 못하면 구단이 해체됩니다`);
     }
   } else s.debtWeeks = 0;
 }

@@ -6,7 +6,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { B_MAX_ROSTER, B_MIN_ROSTER, MAX_ROSTER, SQUAD_MIN, adaptWeeksLeft, ageOf, askingPrice, gradeColor, legacyGrade, youthGrowth, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
+import { BENCH_DECAY_WEEKS, B_MAX_ROSTER, B_MIN_ROSTER, MAX_ROSTER, SQUAD_MIN, adaptWeeksLeft, ageOf, askingPrice, gradeColor, legacyGrade, youthGrowth, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
 import { DIV_NAMES, bTeamIdOf, divOf, myDiv, rosterOf, teamPower } from "@shared/career/view";
 import { PlayerPhoto } from "@/components/legacy/Legacy";
 import { popularity, potentialStars } from "@shared/career/contract";
@@ -55,7 +55,7 @@ export function PlayerSheet({ s, player, onClose, actions }: { s: CareerState; p
               <div>📄 계약: <b>{player.contract ? `남은 ${player.contract.years}시즌 · 연봉 ${player.contract.salary.toLocaleString()}만원` : "없음 (무소속)"}</b></div>
               {player.contract?.minApps ? <div>출전 보장: 시즌 {player.contract.minApps}경기 (이번 시즌 {player.sApps ?? 0}경기 출전)</div> : null}
               {player.contract?.bonus && Object.keys(player.contract.bonus).length > 0 && <div>보너스: {Object.entries(player.contract.bonus).map(([k, v]) => `${BONUS_NAMES[k as BonusKey]} ${v}만`).join(" · ")}</div>}
-              <div>인기 {popularity(player)} · 사기 {player.morale ?? 70}{player.wantsOut ? " · 😤 이적 희망" : ""}{adaptWeeksLeft(s, player) ? ` · 🧳 이적 적응기간 (프로리그 ${adaptWeeksLeft(s, player)}주 뒤 출전 가능)` : ""}</div>
+              <div>인기 {popularity(player)} · 사기 {player.morale ?? 70}{player.wantsOut ? " · 😤 이적 희망" : ""}{adaptWeeksLeft(s, player) ? ` · 🧳 이적 적응기간 (프로리그 ${adaptWeeksLeft(s, player)}주 뒤 출전 가능)` : ""}{(player.benchWeeks ?? 0) >= BENCH_DECAY_WEEKS ? ` · 📉 프로리그 ${player.benchWeeks}주 결장 (실전 감각 저하 중)` : ""}</div>
             </div>
             <div className="rounded-xl bg-muted/50 p-2.5 text-xs">
               <div className="font-bold mb-1">🛠️ 장착 장비 · 이번 시즌 포션 {player.potions ?? 0}회</div>
@@ -157,6 +157,8 @@ export default function Team() {
                 {div === 2 && <span className="text-[10px] text-amber-300">재능 {potentialStars(p)} · 성장 ×{youthGrowth(ageOf(p, s.season))}</span>}
                 {p.wantsOut && <span className="text-[10px] text-rose-300 font-bold">이적희망</span>}
                 {adaptWeeksLeft(s, p) > 0 && <span className="text-[10px] text-sky-300 font-bold">적응 {adaptWeeksLeft(s, p)}주</span>}
+                {(p.benchWeeks ?? 0) >= BENCH_DECAY_WEEKS && <span className="text-[10px] text-orange-300 font-bold">📉 결장 {p.benchWeeks}주</span>}
+                {(p.benchWeeks ?? 0) === BENCH_DECAY_WEEKS - 1 && s.phase === "regular" && <span className="text-[10px] text-yellow-300 font-bold">⏳ 결장 1주</span>}
               </div>
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                 <CondBadge cond={p.cond} />

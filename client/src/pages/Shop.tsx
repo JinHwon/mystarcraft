@@ -32,7 +32,7 @@ function Detail({ item, s }: { item: ItemDef; s: CareerState }) {
   const owned = s.inventory?.[item.key] ?? 0;
   return (
     <div className="border border-neutral-600 p-2.5 flex gap-3">
-      <ItemIcon item={item} size={74} />
+      <ItemIcon item={item} size={56} />
       <div className="flex-1 min-w-0 text-[12px] leading-[1.5]">
         <div className="text-[15px] text-[#ffe45c]">{item.name}</div>
         <div className="text-neutral-300">{item.desc[0]}<br />{item.desc[1]}</div>
@@ -124,25 +124,25 @@ function ShopScreen({ s }: { s: CareerState }) {
   const deltaText = msg?.delta ? Object.entries(msg.delta).filter(([, v]) => v).map(([k, v]) => `${STAT_LABELS[k as StatKey]} ${v! > 0 ? "+" : ""}${v}`).join(", ") : "";
 
   return (
-    <LegacyFrame season={s.season} onBack={close} onNext={doBuy} nextDisabled={!canBuy} nextLabel={buy.isPending ? "구입 중..." : isEquip && target !== undefined ? "구입·장착 (B)" : "구입 (B)"}>
+    <LegacyFrame season={s.season} onBack={close} onNext={doBuy} nextDisabled={!canBuy} nextLabel={buy.isPending ? "구입 중..." : `${isEquip && target !== undefined ? `${s.players[target].name} 구입·장착` : needsTarget && target !== undefined ? `${s.players[target].name}에게 사용` : "구입"} ${(item.price * (stackable ? qty : 1)).toLocaleString()}만`}>
       <div className="px-3 pt-2 pb-4 space-y-2">
         {fromEntry && (
           <button onClick={close} className="w-full border border-[#8fd0ff] text-[#8fd0ff] py-1.5 text-[13px]">◁ 엔트리 편성으로 돌아가기</button>
         )}
         <div className="text-center text-[16px] tracking-[0.3em] text-neutral-100">아이템 상점</div>
-        <div className="grid grid-cols-3 gap-1">
+        <div className="grid grid-cols-6 gap-0.5">
           {ITEM_CATS.map((c, i) => (
             <button key={c} onClick={() => { setCat(c); setKey(ITEMS.find(x => x.cat === c && !x.notForSale)!.key); setMsg(null); }}
               className={cn("text-[12px] py-1 border", cat === c ? "text-black border-white" : "text-neutral-200 border-neutral-600")}
               style={cat === c ? { background: "linear-gradient(#ffffff,#cfcfcf)" } : undefined}>
-              {c} ({i + 1})
+              {c}<span className="hidden min-[420px]:inline"> ({i + 1})</span>
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-4 min-[480px]:grid-cols-6 gap-1.5">
+        <div className="grid grid-cols-5 min-[480px]:grid-cols-7 gap-1">
           {list.map(it => (
             <button key={it.key} onClick={() => { setKey(it.key); setMsg(null); setQty(1); }} className={cn("flex flex-col items-center gap-0.5 p-1 border", key === it.key ? "border-[#ff6b6b] border-2" : "border-neutral-700")}>
-              <ItemIcon item={it} size={48} />
+              <ItemIcon item={it} size={36} />
               <span className="text-[10px] text-neutral-200 truncate w-full text-center">{it.name}</span>
               <span className="text-[9.5px] text-[#ffe45c]">{it.price.toLocaleString()}만</span>
               {isStackable(it) && (s.inventory?.[it.key] ?? 0) > 0 && <span className="text-[9px] text-[#bff5c6]">보유 {s.inventory![it.key]}</span>}
@@ -177,20 +177,20 @@ function ShopScreen({ s }: { s: CareerState }) {
                 : `선수를 고르고 구입하면 바로 장착됩니다 · ${SLOT_NAMES[slotOf(item) as EquipSlot]} 칸`}
               <div className="text-[10.5px] text-neutral-500">같은 장비를 끼고 있으면 사용 횟수가 더해지고, 다른 장비면 빼고 새 장비로 덮어씁니다</div>
             </div>
+            <TargetList s={s} item={item} sel={target} onSel={setTarget} />
             {owned > 0 && (
               <button disabled={target === undefined || equip.isPending || buy.isPending} onClick={doEquip}
                 className="w-full border border-[#8fe07a] text-[#bff5c6] py-1.5 text-[13px] disabled:opacity-40">
                 {equip.isPending ? "장착 중…" : target === undefined ? `보관함 ${owned}개 · 장착할 선수를 고르세요` : `보관함에서 ${s.players[target].name} 선수에게 장착 (보유 ${owned}개)`}
               </button>
             )}
-            <PlayerPanel p={target !== undefined ? s.players[target] : undefined} color="#8fd0ff" empty="장착할 선수를 고르세요" />
-            <TargetList s={s} item={item} sel={target} onSel={setTarget} />
+            {target !== undefined && <PlayerPanel p={s.players[target]} color="#8fd0ff" empty="" />}
           </>
         ) : needsTarget ? (
           <>
             <div className="text-center text-[12px] text-neutral-300">{item.kind === "equip" ? `선수를 선택하세요 · ${SLOT_NAMES[slotOf(item) as EquipSlot]} 칸에 장착` : "대상을 선택해 주세요"}</div>
-            <PlayerPanel p={target !== undefined ? s.players[target] : undefined} color="#8fd0ff" empty="아이템을 쓸 선수를 고르세요" />
             <TargetList s={s} item={item} sel={target} onSel={setTarget} />
+            {target !== undefined && <PlayerPanel p={s.players[target]} color="#8fd0ff" empty="" />}
           </>
         ) : (
           <div className="text-center text-[11px] text-neutral-400">경기 아이템은 엔트리 편성 때 세트마다 하나씩 쓸 수 있습니다<br />비타비타는 사 두었다가 엔트리 화면에서 선수에게 먹입니다 (컨디션 +3)<br />치어풀은 팔지 않습니다 — 선수 행동 "이벤트"(팬미팅)에서 인기가 많은 선수일수록 잘 받아옵니다 (보유 {s.inventory?.cheer ?? 0}개)</div>

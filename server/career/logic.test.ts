@@ -451,7 +451,7 @@ describe("원작 해설 중계", () => {
     expect(lines.length).toBeGreaterThan(10);
     // 모든 줄이 원작 문장 (앞의 "이름 선수" 만 붙음)
     // 포텐셜 폭발·컨디션 난조·경기 아이템 해설은 우리가 붙이는 문장이라 제외
-    for (const l of lines.filter(x => !/포텐셜이 터졌어요|컨디션 난조입니다|치어풀이 보이네요|노리고 나온 것 같은데요/.test(x.text))) {
+    for (const l of lines.filter(x => !/포텐셜이 터졌어요|컨디션 난조입니다|빌드에서 앞서며|치어풀이 보이네요|노리고 나온 것 같은데요/.test(x.text))) {
       const body = l.text.replace(new RegExp(`^(${names.join("|")})( 선수)?(, |\\.\\. | )?`), "").replace(/^선수[, ]*/, "").trim();
       expect([...all].some(x => x.endsWith(body) || body.endsWith(x))).toBe(true);
     }
@@ -1550,5 +1550,46 @@ describe("이적 요청은 다음 주에 답 · 적응기간 · 개인리그 컨
       expect(dl - dw).toBeGreaterThanOrEqual(0);
       expect(dl - dw).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+describe("난이도", () => {
+  it("초급은 시작 자금·수입이 많고, 고급은 적으며 비타비타가 경기 전 선수당 1개", async () => {
+    const { pay } = await import("./club");
+    const { useStockItem } = await import("./logic");
+    const easy = newCareer(0, "easy"), normal = newCareer(0), hard = newCareer(0, "hard");
+    expect(easy.teams[0].money).toBeGreaterThan(normal.teams[0].money);
+    expect(hard.teams[0].money).toBeLessThan(normal.teams[0].money);
+    for (const s of [easy, normal, hard]) { s.teams[0].money = 0; pay(s, "상금", 1000); pay(s, "연봉", -100); pay(s, "이적료 수입", 500); }
+    expect(easy.teams[0].money).toBe(1300 - 85 + 500);
+    expect(normal.teams[0].money).toBe(1000 - 100 + 500);
+    expect(hard.teams[0].money).toBe(800 - 115 + 500);
+    // 고급: 비타비타는 다음 경기 전까지 선수당 1개
+    const p = rosterOf(hard, 0)[0];
+    p.cond = 50;
+    hard.inventory = { vitavita: 10, vita_s: 5 };
+    const r = useStockItem(hard, "vitavita", p.id, 5);
+    expect(r.used).toBe(1);
+    expect(() => useStockItem(hard, "vita_s", p.id, 1)).toThrow(/1개까지/);
+    // 경기를 치르면 다시 먹일 수 있음
+    const { rerollAfterMatch } = await import("./core");
+    rerollAfterMatch(hard, [p.id]);
+    expect(useStockItem(hard, "vitavita", p.id, 1).used).toBe(1);
+    // 중급은 제한 없음
+    const q = rosterOf(normal, 0)[0];
+    q.cond = 50;
+    normal.inventory = { vitavita: 10 };
+    expect(useStockItem(normal, "vitavita", q.id, 5).used).toBe(5);
+  });
+
+  it("동족전은 능력치가 꽤 낮은 선수도 빌드가 맞으면 이긴다", async () => {
+    const { quickWin } = await import("./core");
+    const s = newCareer(0);
+    const ps = s.players.filter(p => p.team >= 0 && p.team < 12 && p.race === "zerg").sort((a, b) => totalOf(b.stats) - totalOf(a.stats));
+    const strong = ps[0], weak = ps[Math.floor(ps.length * 0.6)];
+    delete weak.slump; delete strong.slump; delete weak.burst; delete strong.burst;
+    let w = 0;
+    for (let i = 0; i < 400; i++) { weak.cond = 100; strong.cond = 100; if (quickWin(s, weak, strong, i % 10)) w++; }
+    expect(w).toBeGreaterThan(8);
   });
 });

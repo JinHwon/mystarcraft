@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { navigate } from "wouter/use-browser-location";
 import { cn } from "@/lib/utils";
 import { STAT_KEYS, STAT_LABELS, type StatKey } from "@shared/gameConstants";
-import { COND_MAX, burstLabel, burstOf, slumpOn, condMultiplier, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
+import { COND_MAX, burstLabel, burstOf, difficultyOf, slumpOn, condMultiplier, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
 import { ITEMS, ITEM_BY_KEY, SLOT_NAMES, gearCond, gearStats, matchCond, itemImg, setItemExtra, type EquipSlot, type StatExtra } from "@shared/career/items";
 import { trpc } from "@/lib/trpc";
 import { useCareerPatch } from "@/lib/career";
@@ -63,15 +63,22 @@ export function VitaButton({ s, pid }: { s: CareerState; pid: number }) {
   // 컨디션 전체 회복에 필요한 개수 (모자라면 가진 만큼)
   const per = ITEM_BY_KEY.vitavita.cond ?? 3;
   const need = Math.ceil((COND_MAX - p.cond) / per);
-  const n = Math.min(need, have);
+  // 고급 난이도: 경기 전 선수 한 명당 제한
+  const limit = difficultyOf(s).vitaPerMatch;
+  const left = limit === undefined ? Infinity : Math.max(0, limit - (p.vitaUsed ?? 0));
+  const n = Math.min(need, have, left);
+  const blocked = left <= 0;
+  // 다른 컨디션 회복 소모품 (미니 비타 · 비타비타 골드): 가진 것만
+  const extras = ITEMS.filter(it => it.kind === "stock" && it.key !== "vitavita" && (s.inventory?.[it.key] ?? 0) > 0);
   return (
+    <>
     <div className="flex items-center justify-between gap-1.5 mt-1.5 border border-neutral-600 px-2 py-1 text-[12px]">
       <span className="text-neutral-300 truncate">🥤 {msg ? `${msg} · 남은 ${have}개` : `비타비타 보유 ${have}개`}</span>
       {have > 0 ? (
         <span className="flex gap-1 shrink-0">
-          <button disabled={use.isPending || full} onClick={() => use.mutate({ key: "vitavita", target: pid })}
-            className={cn("border px-2 py-0.5", full ? "border-neutral-700 text-neutral-500" : "border-[#8fe07a] text-[#bff5c6]")}>
-            {full ? "컨디션 최대" : use.isPending ? "먹이는 중..." : "1개 먹이기"}
+          <button disabled={use.isPending || full || blocked} onClick={() => use.mutate({ key: "vitavita", target: pid })}
+            className={cn("border px-2 py-0.5", full || blocked ? "border-neutral-700 text-neutral-500" : "border-[#8fe07a] text-[#bff5c6]")}>
+            {full ? "컨디션 최대" : blocked ? `다음 경기 뒤 (${difficultyOf(s).name}: 경기 전 ${limit}개)` : use.isPending ? "먹이는 중..." : "1개 먹이기"}
           </button>
           {!full && n > 1 && (
             <button disabled={use.isPending} onClick={() => use.mutate({ key: "vitavita", target: pid, qty: n })}
@@ -84,6 +91,17 @@ export function VitaButton({ s, pid }: { s: CareerState; pid: number }) {
         <button onClick={navigateShop} className="shrink-0 border border-neutral-600 px-2 py-0.5 text-neutral-300">상점에서 사기</button>
       )}
     </div>
+    {extras.length > 0 && (
+      <div className="flex flex-wrap gap-1 mt-1 text-[11.5px]">
+        {extras.map(it => (
+          <button key={it.key} disabled={use.isPending || full || blocked} onClick={() => use.mutate({ key: it.key, target: pid })}
+            className={cn("border px-2 py-0.5", full || blocked ? "border-neutral-700 text-neutral-500" : "border-[#8fd0ff] text-[#cfe9ff]")}>
+            {it.name} (+{it.cond}) · {s.inventory![it.key]}개 · 1개 먹이기
+          </button>
+        ))}
+      </div>
+    )}
+    </>
   );
 }
 
