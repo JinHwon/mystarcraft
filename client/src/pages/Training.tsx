@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { STAT_LABELS, type StatKey } from "@shared/gameConstants";
 import type { ActionResult } from "../../../server/career/logic";
@@ -9,6 +9,11 @@ import { ACTIONS, WEEKLY_AP, actionOf, restNotNeeded, totalOf, type ActionKey, t
 import { rosterOf } from "@shared/career/view";
 import { useCareer, useCareerPatch, useCareerUpdater } from "@/lib/career";
 import { LegacyFrame, LegacyImg } from "@/components/legacy/Legacy";
+
+/** 이 선수가 이 행동을 할 수 있는지 (행동력 · 휴식은 컨디션 100% 미만) */
+function canPick(p: { ap?: number; cond: number }, k: ActionKey) {
+  return (p.ap ?? WEEKLY_AP) >= actionOf(k)!.ap && !(k === "rest" && p.cond >= 100);
+}
 
 /** 원작 그림 (휴식 · 특훈 · 팬미팅) */
 const ACTION_IMG: Record<ActionKey, string> = { rest: "Rest", train: "Train", event: "Event" };
@@ -21,6 +26,18 @@ const EFFECT: Record<ActionKey, string> = {
 const RACE = { terran: "T", zerg: "Z", protoss: "P" } as const;
 const BTN = "border border-neutral-500 text-black font-bold disabled:opacity-40";
 const BTN_BG = { background: "linear-gradient(#ffffff,#d6d6d6)" };
+
+/** 실행 결과 한 줄: 컨디션 변화 · 능력치 · 자금 · 치어풀 */
+function ResultLine({ r }: { r: ActionResult }) {
+  const stats = Object.entries(r.stats).filter(([, d]) => d);
+  return (
+    <span className="block truncate text-[9.5px] text-[#bff5c6]" title={stats.map(([k, d]) => `${STAT_LABELS[k as StatKey]} ${d! > 0 ? "+" : ""}${d}`).join(" · ")}>
+      ✓ {actionOf(r.action)?.name} · 컨디션 {r.cond[0]}→<b className={r.cond[1] >= r.cond[0] ? "text-[#bff5c6]" : "text-[#ffb8c8]"}>{r.cond[1]}</b>
+      {stats.length ? ` · ${stats.map(([k, d]) => `${STAT_LABELS[k as StatKey].slice(0, 2)}${d! > 0 ? "+" : ""}${d}`).join(" ")}` : ""}
+      {r.money ? ` · ${r.money > 0 ? "+" : ""}${r.money}만` : ""}{r.cheer ? " · 📣치어풀" : ""}
+    </span>
+  );
+}
 
 function ActionIcon({ k, size = 18 }: { k: ActionKey; size?: number }) {
   const a = actionOf(k)!;
@@ -59,12 +76,21 @@ export default function Training() {
   const clear = trpc.career.clearActions.useMutation({ onError: resync });
   const setAll = trpc.career.setAllActions.useMutation({ onError: resync });
   const careerPatch = useCareerPatch();
-  const [results, setResults] = useState<ActionResult[] | null>(null);
+  /** 방금 실행한 결과 (선수 이름 옆에 표시, 다음 실행 때 바뀜) */
+  const [results, setResults] = useState<Record<number, ActionResult>>({});
   const run = trpc.career.runActions.useMutation({
-    onSuccess: r => { careerPatch(r.diff); setResults(r.result.results); },
+    onSuccess: r => { careerPatch(r.diff); setResults(Object.fromEntries(r.result.results.map(x => [x.id, x]))); },
     onError: updater.onError,
   });
   const [brush, setBrush] = useState<ActionKey>("train");
+  // 행동력이 모자라거나(휴식은 컨디션 100%) 할 수 없는 행동이 지정돼 있으면 풀어 둠 (선택 자체가 안 되게)
+  const stale = (s ? rosterOf(s, s.myTeam) : []).filter(p => p.action && !canPick(p, p.action as ActionKey)).map(p => p.id);
+  useEffect(() => {
+    if (!stale.length || s?.live || setAll.isPending) return;
+    const set = new Set(stale);
+    patch(st => { for (const p of rosterOf(st, st.myTeam)) if (set.has(p.id)) p.action = null; });
+    setAll.mutate({ action: null, playerIds: stale });
+  }, [stale.join(",")]);
 
   if (loading) return <div className="p-6 text-muted-foreground">불러오는 중...</div>;
   if (!s) { navigate("/lobby"); return null; }
@@ -79,7 +105,7 @@ export default function Training() {
     setAction.mutate({ playerId: pid, action });
   };
   /** 이 행동을 실제로 할 수 있는 선수 (행동력이 충분하고, 휴식은 컨디션 100% 미만) */
-  const eligible = (k: ActionKey) => { const x = actionOf(k)!; return roster.filter(p => apOf(p) >= x.ap && !(k === "rest" && p.cond >= 100)); };
+  const eligible = (k: ActionKey) => roster.filter(p => canPick(p, k));
   const allOn = (k: ActionKey) => { const el = eligible(k); return el.length > 0 && el.every(p => p.action === k); };
   /** 전체 선택/해제: 할 수 있는 선수가 모두 이 행동이면 해제, 아니면 할 수 있는 선수만 지정 */
   const toggleAll = (k: ActionKey) => {
@@ -138,13 +164,16 @@ export default function Training() {
             <span>치어풀 <b className="text-[#ffe45c]">{cheer}</b>개</span>
             <span>보유 <b className="text-[#ffe45c]">{money.toLocaleString()}</b>만</span>
           </div>
-          <div className="flex gap-1 pt-0.5">
+          <div className="grid grid-cols-2 gap-1 pt-0.5">
             <button onClick={() => toggleAll(brush)} disabled={busy || (!eligible(brush).length && !allOn(brush))}
-              className={cn("flex-1 border py-0.5 text-[11px] disabled:opacity-40", allOn(brush) ? "border-[#ff8a8a] text-[#ffb8c8]" : "border-neutral-500")}>
+              className={cn("border py-1 text-[11.5px] disabled:opacity-40", allOn(brush) ? "border-[#ff8a8a] text-[#ffb8c8]" : "border-neutral-500")}>
               {allOn(brush) ? `전체 ${a.name} 해제` : `전체 선수 ${a.name} (${eligible(brush).length}명)`}
             </button>
-            <span className="flex-[2] text-[10px] text-neutral-500 self-center leading-tight">선수를 누르면 지정·해제 · 전체는 행동력이 되는 선수만{brush === "rest" ? " (컨디션 100% 제외)" : ""}</span>
+            <button onClick={() => run.mutate(undefined)} disabled={run.isPending || ready === 0 || busy} className={cn(BTN, "py-1 text-[12.5px]")} style={BTN_BG}>
+              {run.isPending ? "실행 중…" : `▶ 실행 (${ready}명)`}
+            </button>
           </div>
+          <div className="text-[10px] text-neutral-500 leading-tight">선수를 누르면 지정·해제 · 행동력이 모자란 선수{brush === "rest" ? "와 컨디션 100% 선수" : ""}는 고를 수 없습니다 (흐리게 표시)</div>
         </div>
 
         {/* 선수 목록 */}
@@ -157,10 +186,16 @@ export default function Training() {
             {roster.map(p => {
               const act = actionOf(p.action);
               const ok = canRun(p);
+              const pickable = canPick(p, brush);
               return (
-                <div key={p.id} className={cn("grid grid-cols-[minmax(0,1fr)_44px_92px_30px_34px] gap-1 items-center px-1.5 py-[3px] border-b border-neutral-900", p.action === brush && "bg-[#3a3a5a]/60")}>
-                  <button disabled={busy} onClick={() => choose(p.id, p.action === brush ? null : brush)} className="col-span-4 grid grid-cols-[minmax(0,1fr)_44px_92px_30px] gap-1 items-center text-left">
-                    <span className="truncate">{p.name} <span className="text-neutral-500">({RACE[p.race]})</span></span>
+                <div key={p.id} className={cn("grid grid-cols-[minmax(0,1fr)_44px_92px_30px_34px] gap-1 items-center px-1.5 py-[3px] border-b border-neutral-900", p.action === brush && "bg-[#3a3a5a]/60", !pickable && p.action !== brush && !results[p.id] && "opacity-40")}>
+                  <button disabled={busy || (!pickable && p.action !== brush)} onClick={() => choose(p.id, p.action === brush ? null : brush)}
+                    title={pickable ? undefined : brush === "rest" && p.cond >= 100 ? "컨디션 100% — 휴식할 필요가 없습니다" : `행동력 부족 (${a.name} ${a.ap} 필요)`}
+                    className="col-span-4 grid grid-cols-[minmax(0,1fr)_44px_92px_30px] gap-1 items-center text-left">
+                    <span className="min-w-0 leading-tight">
+                      <span className="block truncate">{p.name} <span className="text-neutral-500">({RACE[p.race]})</span></span>
+                      {results[p.id] && <ResultLine r={results[p.id]} />}
+                    </span>
                     <span className={cn("text-center", act && apOf(p) < act.ap ? "text-[#ff8a8a]" : "text-neutral-200")}>{apOf(p)}</span>
                     <span className="flex items-center gap-1">
                       <span className="flex-1 h-1.5 bg-neutral-800"><span className={cn("block h-full", p.cond >= 65 ? "bg-[#8fe07a]" : p.cond >= 40 ? "bg-[#f8e070]" : "bg-[#ff6b6b]")} style={{ width: `${p.cond}%` }} /></span>
@@ -180,32 +215,6 @@ export default function Training() {
           </div>
         </div>
 
-        {results && (
-          <div className="absolute inset-x-2 top-2 bottom-2 z-30 bg-black border-2 border-[#8fe07a]/70 flex flex-col">
-            <div className="shrink-0 flex items-center px-2 py-1.5 border-b border-neutral-700">
-              <span className="text-[#bff5c6] text-[13px] font-bold">✅ 선수 행동 결과</span>
-              <button onClick={() => setResults(null)} className="ml-auto border border-neutral-500 px-2 text-[12px]">닫기 ✕</button>
-            </div>
-            <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1.5">
-              {results.map(r => {
-                const p = s.players[r.id];
-                const x = actionOf(r.action);
-                return (
-                  <div key={r.id} className="border border-neutral-700 px-2 py-1">
-                    <div className="flex items-center gap-1.5">
-                      <ActionIcon k={r.action} size={22} /><b>{p.name}</b><span className="text-neutral-400">{x?.name}</span>
-                      <span className="ml-auto text-[11px]">컨디션 {r.cond[0]} → <b className={r.cond[1] >= r.cond[0] ? "text-[#bff5c6]" : "text-[#ffb8c8]"}>{r.cond[1]}</b> · 행동력 {r.ap}</span>
-                    </div>
-                    <div className="text-[10.5px] text-neutral-400">
-                      {Object.entries(r.stats).map(([k, d]) => `${STAT_LABELS[k as StatKey]} ${d! > 0 ? "+" : ""}${d}`).join(" · ") || "능력치 변화 없음"}
-                      {r.money ? ` · 자금 ${r.money > 0 ? "+" : ""}${r.money}만` : ""}{r.cheer ? " · 📣 치어풀 획득!" : ""}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
     </LegacyFrame>
   );
