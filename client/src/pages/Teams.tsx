@@ -2,6 +2,7 @@
  * 구단 정보: 모든 프로리그 구단의 성적·전력·선수단 보기 (?id=구단번호 로 바로 열기)
  */
 import { useMemo, useState } from "react";
+import { TeamHistory } from "@/components/career/TeamHistory";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { ageOf, gradeColor, legacyGrade, totalOf } from "@shared/career/rules";
@@ -106,6 +107,11 @@ export default function Teams() {
           {bTeam !== undefined && <button onClick={() => { select(bTeam); setPickDiv(divOf(s, bTeam)); }} className="block text-primary font-bold">B팀: {s.teams[bTeam].name} ({DIV_NAMES[divOf(s, bTeam)]}) ›</button>}
           {mslPlayers.length > 0 && <div>🎮 이번 시즌 개인리그: {mslPlayers.join(", ")}</div>}
         </div>
+      </div>
+
+      <div className="rounded-2xl bg-black border border-neutral-700 p-3">
+        <div className="text-sm font-bold text-[#ffe45c] mb-2">🏆 구단 이력</div>
+        <TeamHistory s={s} tid={tid} compact />
       </div>
 
       <div className="flex gap-1.5">

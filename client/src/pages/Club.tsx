@@ -17,9 +17,10 @@ import { LegacyFrame, TeamLogo } from "@/components/legacy/Legacy";
 import { PlayerPanel } from "@/components/legacy/LegacyMatch";
 import { ContractEditor, ContractText, FeeStepper, MoraleBar, Reply } from "@/components/legacy/Club";
 import { PlayerSheet } from "./Team";
+import { TeamHistory } from "@/components/career/TeamHistory";
 
 const R = { terran: "T", zerg: "Z", protoss: "P" } as const;
-type Tab = "sponsor" | "money" | "contracts" | "offers" | "manager";
+type Tab = "sponsor" | "money" | "contracts" | "offers" | "manager" | "history";
 
 function useMut() {
   const patch = useCareerPatch();
@@ -425,7 +426,7 @@ function ManagerTab({ s }: { s: CareerState }) {
   );
 }
 
-const TABS: Array<[Tab, string, string]> = [["sponsor", "스폰서", "🤝"], ["money", "재정", "💰"], ["contracts", "계약", "📝"], ["offers", "제안", "📨"], ["manager", "감독", "🎩"]];
+const TABS: Array<[Tab, string, string]> = [["sponsor", "스폰서", "🤝"], ["money", "재정", "💰"], ["contracts", "계약", "📝"], ["offers", "제안", "📨"], ["manager", "감독", "🎩"], ["history", "이력", "🏆"]];
 
 function MainSponsorCard({ s }: { s: CareerState }) {
   const { reply, done, fail } = useMut();
@@ -569,6 +570,27 @@ export default function Club() {
   return <ClubScreen s={s} />;
 }
 
+/** 구단 이력 + 감독 시즌별 성적 */
+function HistoryTab({ s }: { s: CareerState }) {
+  return (
+    <div className="space-y-2">
+      <Panel icon="🏆" title={`${s.teams[s.myTeam].name} 구단 이력`}>
+        <TeamHistory s={s} tid={s.myTeam} />
+      </Panel>
+      <Panel icon="🎩" title="감독 시즌별 성적" accent="#8fd0ff" bodyClass="space-y-0.5">
+        {!s.history.length && <div className="text-neutral-500">아직 끝난 시즌이 없습니다</div>}
+        {s.history.map(h => (
+          <div key={h.season} className="grid grid-cols-[48px_1fr_auto] gap-1.5 items-baseline">
+            <span className="text-neutral-400">{h.season}시즌</span>
+            <span className="truncate">{s.teams[h.team ?? s.myTeam]?.name} <span className="text-neutral-500">({h.div === 2 ? "2부 " : ""}{h.myRank}위)</span></span>
+            <span className={cn(h.myResult === "우승" || h.myResult === "승격" ? "text-[#ffe45c]" : h.myResult === "강등" ? "text-[#ffb8c8]" : "text-neutral-300")}>{h.myResult}{h.myMsl ? (h.myMsl === 1 ? " · 🥇" : " · 🥈") : ""}</span>
+          </div>
+        ))}
+      </Panel>
+    </div>
+  );
+}
+
 /** 머리글: 구단 로고·보유 금액·주간 손익·감독 */
 function ClubHeader({ s }: { s: CareerState }) {
   const me = s.teams[s.myTeam];
@@ -601,7 +623,7 @@ function ClubScreen({ s }: { s: CareerState }) {
     <LegacyFrame season={s.season} onBack={() => navigate("/lobby")} onNext={() => navigate("/lobby")} nextLabel="◁◁ 감독실">
       <div className="px-3 pt-2 pb-4">
         <ClubHeader s={s} />
-        <div className="grid grid-cols-5 gap-1 mb-2">
+        <div className="grid grid-cols-6 gap-1 mb-2">
           {TABS.map(([k, label, icon]) => (
             <button key={k} onClick={() => setTab(k)} className={cn("text-[11.5px] pt-0.5 pb-1 border relative flex flex-col items-center leading-tight", tab === k ? "text-black border-white font-bold" : "text-neutral-300 border-neutral-700 bg-neutral-900/60")}
               style={tab === k ? { background: "linear-gradient(#ffffff,#cfcfcf)" } : undefined}>
@@ -617,6 +639,7 @@ function ClubScreen({ s }: { s: CareerState }) {
         {tab === "contracts" && <ContractsTab s={s} />}
         {tab === "offers" && <OffersTab s={s} />}
         {tab === "manager" && <ManagerTab s={s} />}
+        {tab === "history" && <HistoryTab s={s} />}
       </div>
     </LegacyFrame>
   );

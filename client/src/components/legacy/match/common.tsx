@@ -44,7 +44,9 @@ export const navigateShop = () => {
 export const RIGHT_COLOR = "#ffb8c8";
 
 /** 경기 전 비타비타 먹이기 (사 둔 것을 사용, 컨디션 +3) */
-export function VitaButton({ s, pid }: { s: CareerState; pid: number }) {
+export function VitaButton({ s, pid, compact }: { s: CareerState; pid: number;
+  /** 엔트리 화면 맵 옆 작은 상자 */
+  compact?: boolean }) {
   const patch = useCareerPatch();
   const [msg, setMsg] = useState<string | null>(null);
   const use = trpc.career.useItem.useMutation({
@@ -70,6 +72,28 @@ export function VitaButton({ s, pid }: { s: CareerState; pid: number }) {
   const blocked = left <= 0;
   // 다른 컨디션 회복 소모품 (미니 비타 · 비타비타 골드): 가진 것만
   const extras = ITEMS.filter(it => it.kind === "stock" && it.key !== "vitavita" && (s.inventory?.[it.key] ?? 0) > 0);
+  if (compact) {
+    const dis = use.isPending || full || blocked;
+    return (
+      <div className="w-[104px] border border-neutral-600 px-1 py-0.5 text-[10px] space-y-0.5 leading-tight">
+        <div className="text-neutral-300 truncate" title={msg ?? undefined}>🥤 {p.name} {msg ? `→ ${p.cond}%` : ""}</div>
+        <div className="text-neutral-400">비타비타 {have}개</div>
+        {have > 0 ? (
+          <>
+            <button disabled={dis} onClick={() => use.mutate({ key: "vitavita", target: pid })} className={cn("w-full border py-[1px]", dis ? "border-neutral-700 text-neutral-500" : "border-[#8fe07a] text-[#bff5c6]")}>
+              {full ? "컨디션 최대" : blocked ? "다음 경기 뒤" : "1개 먹이기"}
+            </button>
+            {!full && n > 1 && <button disabled={use.isPending} onClick={() => use.mutate({ key: "vitavita", target: pid, qty: n })} className="w-full border border-[#ffe45c] text-[#ffe45c] py-[1px]">전체 회복 {n}개</button>}
+          </>
+        ) : <button onClick={navigateShop} className="w-full border border-neutral-600 py-[1px] text-neutral-300">상점에서 사기</button>}
+        {extras.map(it => (
+          <button key={it.key} disabled={dis} onClick={() => use.mutate({ key: it.key, target: pid })} className={cn("w-full border py-[1px] truncate", dis ? "border-neutral-700 text-neutral-500" : "border-[#8fd0ff] text-[#cfe9ff]")}>
+            {it.name} +{it.cond} ({s.inventory![it.key]})
+          </button>
+        ))}
+      </div>
+    );
+  }
   return (
     <>
     <div className="flex items-center justify-between gap-1.5 mt-1.5 border border-neutral-600 px-2 py-1 text-[12px]">
@@ -156,7 +180,9 @@ export function useSpeed(): [Speed, (s: Speed) => void] {
 }
 
 // ── 선수 정보 칸 (사진 + 컨디션 반영 능력치) ─────────────────────────────
-export function PlayerPanel({ p, color, empty, s }: { p?: CPlayer; color: string; empty: string; s?: CareerState }) {
+export function PlayerPanel({ p, color, empty, s, compact }: { p?: CPlayer; color: string; empty: string; s?: CareerState;
+  /** 좁은 화면용: 장비 칸을 사진 밑에 작게, 범례 줄 생략 */
+  compact?: boolean }) {
   if (!p) {
     return <div className="h-full min-h-[190px] border border-neutral-700 flex items-center justify-center text-[11px] text-neutral-500 text-center px-2">{empty}</div>;
   }
@@ -167,7 +193,12 @@ export function PlayerPanel({ p, color, empty, s }: { p?: CPlayer; color: string
   return (
     <div className="border border-neutral-700 px-1.5 pt-1.5 pb-1 flex flex-col items-center">
       <div className="flex items-start gap-2 w-full justify-center">
-        <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} titles={p.titles} size={50} />
+        {compact ? (
+          <div className="flex flex-col items-center gap-0.5 shrink-0">
+            <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} titles={p.titles} size={50} />
+            <EquipRow p={p} size={11} />
+          </div>
+        ) : <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} titles={p.titles} size={50} />}
         <div className="text-[11px] leading-[1.45] text-neutral-200 pt-0.5">
           <div className="text-[13px] font-bold" style={{ color }}>{p.name}</div>
           <div>{R[p.race]} · Lv.{p.level}</div>
@@ -177,9 +208,9 @@ export function PlayerPanel({ p, color, empty, s }: { p?: CPlayer; color: string
           {slump && <div className="font-bold text-[#8fb8ff]">😵 컨디션 난조! (다음 경기 컨디션 -40)</div>}
         </div>
       </div>
-      <div className="mt-1"><EquipRow p={p} /></div>
+      {!compact && <div className="mt-1"><EquipRow p={p} /></div>}
       <LegacyRadar stats={cs} base={p.stats} gear={gearStats(p)} level={p.level} size={92} />
-      <div className="text-[9px] text-neutral-500 -mt-1">회색 점선 = 원래 · 빨강 = 컨디션·장비{burst ? "·포텐셜" : ""}{slump ? "·난조" : ""} 반영</div>
+      <div className={cn("text-[9px] text-neutral-500 -mt-1", compact && "hidden")}>회색 점선 = 원래 · 빨강 = 컨디션·장비{burst ? "·포텐셜" : ""}{slump ? "·난조" : ""} 반영</div>
     </div>
   );
 }

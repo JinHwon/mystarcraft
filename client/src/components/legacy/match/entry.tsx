@@ -85,7 +85,9 @@ export function SideLabel({ lines, color }: { lines: [string, string]; color: st
 }
 
 /** 선수 목록 (s 가 있으면 컨디션·실전 능력치·포텐셜 폭발 표시) */
-export function RosterList({ players, onPick, selected, marks, s, blocked }: { players: CPlayer[]; onPick: (p: CPlayer) => void; selected?: number; marks?: Map<number, string>; s?: CareerState;
+export function RosterList({ players, onPick, selected, marks, s, blocked, dense }: { players: CPlayer[]; onPick: (p: CPlayer) => void; selected?: number; marks?: Map<number, string>; s?: CareerState;
+  /** 줄 간격을 좁게 (엔트리 화면을 스크롤 없이) */
+  dense?: boolean;
   /** 고를 수 없는 선수와 이유 (적응기간 등) */
   blocked?: Map<number, string>;
 }) {
@@ -98,7 +100,7 @@ export function RosterList({ players, onPick, selected, marks, s, blocked }: { p
           <button
             key={p.id}
             onClick={() => { if (!block) onPick(p); }}
-            className={cn("w-full flex items-center gap-1 px-1 py-[5px] text-left border-b border-neutral-800 last:border-b-0", s ? "text-[12px]" : "text-[13px]",
+            className={cn("w-full flex items-center gap-1 px-1 text-left", dense ? "py-[2px]" : "py-[5px]", " border-b border-neutral-800 last:border-b-0", s ? "text-[12px]" : "text-[13px]",
               block ? "text-neutral-500" : mark ? "text-[#ffe45c]" : "text-white", selected === p.id && "bg-[#3a3a5a]")}
           >
             <span className="truncate flex-1" title={block ?? benchTitle(p)}>{block ? "🧳" : ""}{(p.benchWeeks ?? 0) >= BENCH_DECAY_WEEKS ? "📉" : (p.benchWeeks ?? 0) === BENCH_DECAY_WEEKS - 1 ? "⏳" : ""}{s && burstOf(s, p) ? burstLabel(burstOf(s, p)!).icon : ""}{s && slumpOn(s, p) ? "😵" : ""}{p.name}<MslBadges titles={p.titles} size={11} className="ml-0.5 align-middle" /></span>
@@ -197,7 +199,7 @@ export function EntryScreen({ s, match, front, setFront, items, setItems, onSubm
 
   return (
     <LegacyFrame season={s.season} onBack={submitting ? undefined : onBack} onNext={valid && !submitting ? onSubmit : undefined} nextDisabled={!valid || submitting} nextLabel={submitting ? "경기 준비 중..." : undefined}>
-      <div className="px-2.5 pt-3 pb-4">
+      <div className="px-2.5 pt-2 pb-3">
         <div className="flex items-center justify-between">
           <TeamLogo team={s.teams[s.myTeam]} className="w-[70px] h-[40px]" />
           <div className="text-center">
@@ -207,67 +209,67 @@ export function EntryScreen({ s, match, front, setFront, items, setItems, onSubm
           <TeamLogo team={s.teams[oppId]} className="w-[70px] h-[40px]" />
         </div>
 
-        <div ref={topRef} className="flex justify-center mt-2.5 scroll-mt-2">
+        <div ref={topRef} className="flex justify-center items-center gap-2 mt-1.5 scroll-mt-2">
+          <div className="flex flex-col gap-1 shrink-0">
+            {([["recommend", "자동편성", "추천", "맵 종족 유불리·컨디션 순으로 자동 편성"], ["rotation", "자동편성", "빈도낮음", "이번 시즌 출전이 적은 선수로 자동 편성"]] as const).map(([mode, a, b, tip]) => (
+              <button key={mode} title={tip} onClick={() => { const e = autoEntry(s, match.maps, sets, mode).slice(0, n); setFront(e); setSlot(0); setViewMine(e[0]); }}
+                className="w-[50px] text-[9.5px] leading-tight border border-neutral-600 text-neutral-300 py-1">{a}<br />({b})</button>
+            ))}
+          </div>
           <MapInfo mapId={mapOf(slot)} size={54} hint={<span className="text-[9px] text-neutral-500">{slot + 1}세트 [↔Tab]</span>} />
+          {viewMine !== undefined && <VitaButton s={s} pid={viewMine} compact />}
         </div>
 
-        <div className="grid grid-cols-2 gap-2 mt-2.5">
-          <PlayerPanel s={s} p={viewMine !== undefined ? s.players[viewMine] : undefined} color="#8fd0ff" empty="우리 선수를 누르면 사진과 능력치가 보입니다" />
-          <PlayerPanel s={s} p={viewOpp !== undefined ? s.players[viewOpp] : undefined} color="#ff9a9a" empty="상대 선수를 누르면 사진과 컨디션이 보입니다" />
+        <div className="grid grid-cols-2 gap-2 mt-1.5">
+          <PlayerPanel compact s={s} p={viewMine !== undefined ? s.players[viewMine] : undefined} color="#8fd0ff" empty="우리 선수를 누르면 사진과 능력치가 보입니다" />
+          <PlayerPanel compact s={s} p={viewOpp !== undefined ? s.players[viewOpp] : undefined} color="#ff9a9a" empty="상대 선수를 누르면 사진과 컨디션이 보입니다" />
         </div>
-        {viewMine !== undefined && <VitaButton s={s} pid={viewMine} />}
 
-        <div className="grid grid-cols-[1fr_minmax(108px,0.9fr)_1fr] gap-1.5 mt-2.5 items-start">
+        <div className="grid grid-cols-[1fr_minmax(108px,0.9fr)_1fr] gap-1.5 mt-1.5 items-start">
           <div className="space-y-1">
-            <LegacyImg dir="기타" name="아군" className="w-full max-h-16 object-contain" fallback={<SideLabel lines={["MY TEAM", "PLAYER"]} color="#3aa0ff" />} />
-            <RosterList s={s} players={mine} onPick={assign} selected={viewMine} marks={marks} blocked={blocked} />
+            <div className="text-center italic font-black text-[10.5px] tracking-wider leading-none py-0.5" style={{ textShadow: "0 0 4px #3aa0ff, 0 0 8px #3aa0ff" }}>MY TEAM</div>
+            <RosterList dense s={s} players={mine} onPick={assign} selected={viewMine} marks={marks} blocked={blocked} />
             {blocked.size > 0 && <div className="text-[10px] text-neutral-500 leading-tight">🧳 회색 = 이적 적응기간 (프로리그 출전 불가, 개인리그는 가능)</div>}
             {mine.some(p => (p.benchWeeks ?? 0) >= BENCH_DECAY_WEEKS - 1) && <div className="text-[10px] text-neutral-500 leading-tight">📉 결장으로 실전 감각 저하 중 · ⏳ 이번 주도 못 나가면 저하</div>}
           </div>
 
-          <div className="space-y-1.5">
-            <div className="text-center text-[13px] text-neutral-100">&lt; V S &gt;</div>
-            <div className="text-center text-[10px] text-[#ffe45c]">{winners ? "위너스리그 · 선봉을 고르세요" : `${slot + 1}세트 선수를 고르세요`}</div>
+          <div className="space-y-1">
+            <div className="text-center text-[12px] text-neutral-100 leading-none py-0.5">&lt; V S &gt;</div>
+            <div className="text-center text-[10px] text-[#ffe45c] leading-tight">{winners ? "위너스리그 · 선봉을 고르세요" : `${slot + 1}세트 선수를 고르세요`}</div>
             {Array.from({ length: winners ? 1 : sets }, (_, i) => {
               const isAce = !winners && i === n;
               const p = !isAce && filled[i] !== undefined ? s.players[filled[i]!] : undefined;
               return (
-                <div key={i} className="space-y-0.5">
-                  <GrayBox onClick={() => { if (isAce) return; setSlot(i); if (p) setViewMine(p.id); }}>{mapView(mapOf(i)).name}</GrayBox>
-                  <button
-                    disabled={isAce}
-                    onClick={() => { setSlot(i); if (p) setViewMine(p.id); }}
-                    className={cn("w-full text-[12px] py-[5px] border truncate", slot === i && !isAce ? "border-[#ff6b6b] border-2" : "border-neutral-500", p ? "text-white" : "text-neutral-300")}
-                    style={{ background: "#111" }}
-                  >
-                    {isAce ? "ACE Card" : p ? nameRace(p) : "Select Player"}
-                  </button>
-                  {!isAce && (
-                    <button onClick={() => { setSlot(i); if (p) setViewMine(p.id); setPickFor(i); topRef.current?.scrollIntoView({ block: "start", behavior: "smooth" }); }} className="w-full flex items-center justify-center gap-1 text-[10px] py-[2px] border border-dashed border-neutral-600 text-neutral-400">
-                      {items[i] ? (
-                        <>
-                          <span className="w-4 h-4 bg-white inline-flex items-center justify-center overflow-hidden"><LegacyImg dir={itemImg(ITEM_BY_KEY[items[i].key]).dir} name={itemImg(ITEM_BY_KEY[items[i].key]).name} className="max-w-full max-h-full" fallback={null} /></span>
-                          <span className="text-[#ffe45c]">{ITEM_BY_KEY[items[i].key].name}{items[i].predict !== undefined ? ` → ${s.players[items[i].predict!]?.name}` : ""}</span>
-                        </>
-                      ) : "+ 아이템"}
+                <div key={i}>
+                  <GrayBox className="!py-0 !text-[11px]" onClick={() => { if (isAce) return; setSlot(i); if (p) setViewMine(p.id); }}>{mapView(mapOf(i)).name}</GrayBox>
+                  <div className="flex">
+                    <button
+                      disabled={isAce}
+                      onClick={() => { setSlot(i); if (p) setViewMine(p.id); }}
+                      className={cn("flex-1 min-w-0 text-[12px] py-[3px] border truncate", slot === i && !isAce ? "border-[#ff6b6b] border-2" : "border-neutral-500", p ? "text-white" : "text-neutral-300")}
+                      style={{ background: "#111" }}
+                    >
+                      {isAce ? "ACE Card" : p ? nameRace(p) : "Select Player"}
                     </button>
-                  )}
+                    {!isAce && (
+                      <button title={items[i] ? `${ITEM_BY_KEY[items[i].key].name}${items[i].predict !== undefined ? ` → ${s.players[items[i].predict!]?.name}` : ""}` : "경기 아이템"}
+                        onClick={() => { setSlot(i); if (p) setViewMine(p.id); setPickFor(i); topRef.current?.scrollIntoView({ block: "start", behavior: "smooth" }); }}
+                        className={cn("w-[26px] shrink-0 flex items-center justify-center border border-l-0 text-[13px]", items[i] ? "border-[#ffe45c] bg-white" : "border-dashed border-neutral-600 text-neutral-400")}>
+                        {items[i] ? <LegacyImg dir={itemImg(ITEM_BY_KEY[items[i].key]).dir} name={itemImg(ITEM_BY_KEY[items[i].key]).name} className="max-w-[20px] max-h-[20px]" fallback={<span className="text-black text-[9px]">템</span>} /> : "+"}
+                      </button>
+                    )}
+                  </div>
+                  {!isAce && items[i] && <div className="text-[9.5px] text-[#ffe45c] truncate leading-tight text-center">{ITEM_BY_KEY[items[i].key].name}{items[i].predict !== undefined ? ` → ${s.players[items[i].predict!]?.name}` : ""}</div>}
                 </div>
               );
             })}
-            <div className="text-[9px] text-neutral-500 text-center leading-tight">{winners ? <>이긴 선수는 질 때까지 계속 출전<br />지면 그때 다음 선수를 고릅니다<br />(진 선수는 다시 못 나옴)</> : <>ACE 결정전은 2:2 가 되면<br />그때 선수를 고릅니다</>}</div>
-            <div className="flex gap-1 pt-0.5">
-              {([["recommend", "자동편성(추천)"], ["rotation", "자동편성(빈도낮음)"]] as const).map(([mode, label]) => (
-                <button key={mode} onClick={() => { const e = autoEntry(s, match.maps, sets, mode).slice(0, n); setFront(e); setSlot(0); setViewMine(e[0]); }}
-                  className="flex-1 text-[10px] leading-tight border border-neutral-600 text-neutral-300 py-1.5">{label}</button>
-              ))}
-            </div>
-            <div className="text-[8.5px] text-neutral-500 text-center leading-tight">추천: 맵 종족 유불리·컨디션 순<br />빈도낮음: 이번 시즌 출전이 적은 선수</div>
+            <div className="text-[9px] text-neutral-500 text-center leading-tight">{winners ? <>이긴 선수는 질 때까지 계속 출전 · 지면 그때 다음 선수 (진 선수는 다시 못 나옴)</> : <>ACE 결정전은 동점이 되면 그때 고릅니다 · + 는 경기 아이템</>}</div>
+
           </div>
 
           <div className="space-y-1">
-            <LegacyImg dir="기타" name="적군" className="w-full max-h-16 object-contain" fallback={<SideLabel lines={["OTHER TEAM", "PLAYER"]} color="#ff3a3a" />} />
-            <RosterList s={s} players={theirs} onPick={p => setViewOpp(p.id)} selected={viewOpp} />
+            <div className="text-center italic font-black text-[10.5px] tracking-wider leading-none py-0.5" style={{ textShadow: "0 0 4px #ff3a3a, 0 0 8px #ff3a3a" }}>OTHER TEAM</div>
+            <RosterList dense s={s} players={theirs} onPick={p => setViewOpp(p.id)} selected={viewOpp} />
           </div>
         </div>
       </div>
