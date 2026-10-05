@@ -298,6 +298,10 @@ function MatchTab({ s }: { s: CareerState }) {
     );
   }
 
+  // 선수 행동을 이번 주에 아직 안 했는지 (관전만 하는 주에도 알림)
+  const actionsDone = s.myActionsWeek === `${s.season}-${s.week}` || !rosterOf(s, s.myTeam).some(p => (p.ap ?? 20) >= 10);
+  const actionsHint = !actionsDone && <p className="text-xs text-amber-300 px-1">이번 주 선수 행동을 아직 진행하지 않았습니다. <button onClick={() => navigate("/training")} className="underline font-bold">선수 행동 진행하기</button></p>;
+
   if (!pending) {
     const weekMatches = s.matches.filter(m => m.week === s.week && !m.done);
     return (
@@ -309,6 +313,7 @@ function MatchTab({ s }: { s: CareerState }) {
             {weekMatches.length ? weekMatches.map(m => `${STAGE_NAMES[m.stage]}: ${s.teams[m.a].name} vs ${s.teams[m.b].name}`).join(" / ") : "다음 일정으로 넘어갑니다"}
           </div>
         </div>
+        {actionsHint}
         <button onClick={() => advance.mutate({})} disabled={advance.isPending} className="w-full py-3.5 rounded-2xl bg-primary text-primary-foreground font-black">
           {advance.isPending ? "진행 중..." : "▶ 다음 주 진행 (관전)"}
         </button>
@@ -332,7 +337,6 @@ function MatchTab({ s }: { s: CareerState }) {
   const oppId = pending.a === s.myTeam ? pending.b : pending.a;
   const opp = s.teams[oppId];
   const filled = front.filter(x => x !== undefined && s.players[x]?.team === s.myTeam).length;
-  const actionsDone = s.myActionsWeek === `${s.season}-${s.week}` || !rosterOf(s, s.myTeam).some(p => (p.ap ?? 20) >= 10);
   return (
     <div className="space-y-3">
       <div className="rounded-2xl bg-card border border-border p-3.5">
@@ -346,7 +350,7 @@ function MatchTab({ s }: { s: CareerState }) {
         </div>
         <div className="mt-1 text-[11px] text-muted-foreground">{pending.winners ? `선봉 ${Math.min(filled, 1)}/1 · 이긴 선수는 질 때까지 계속, 지면 다음 선수를 고릅니다` : `엔트리 ${filled}/${sets - 1} · ACE 결정전 선수는 2:2 가 되면 고릅니다`}</div>
       </div>
-      {!actionsDone && <p className="text-xs text-amber-300 px-1">이번 주 선수 행동을 아직 진행하지 않았습니다. <button onClick={() => navigate("/training")} className="underline font-bold">선수 행동 진행하기</button></p>}
+      {actionsHint}
       <button onClick={openEntry} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black">
         ⚔️ 엔트리 편성 · 경기 시작
       </button>

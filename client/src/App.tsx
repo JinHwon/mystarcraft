@@ -130,7 +130,7 @@ function App() {
           <UpdateNotification />
           <UserWatcher />
           <ManagerNameGate />
-          <Toaster position="top-center" />
+          <Toaster position="top-center" closeButton />
           <div className="app-frame">
             <Router />
           </div>

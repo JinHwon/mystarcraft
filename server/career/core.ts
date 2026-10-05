@@ -252,7 +252,7 @@ export function rollForm(s: CareerState, p: CPlayer) {
 }
 /** 경기(프로리그 한 경기·개인리그 한 시리즈)를 마친 선수들은 다음 경기 상태를 새로 정함 */
 export function rerollAfterMatch(s: CareerState, ids: Iterable<number>) {
-  for (const id of new Set(ids)) { const p = s.players[id]; if (p && p.team >= 0) rollForm(s, p); }
+  for (const id of new Set(ids)) { const p = s.players[id]; if (p && p.team >= 0) { rollForm(s, p); delete p.vitaUsed; } }
 }
 /** 이번 주 상태(포텐셜 폭발 배율·컨디션 난조)를 세트 효과에 더함 */
 const withWeek = (s: CareerState, p: CPlayer, mod?: SetMods): SetMods | undefined => {
@@ -261,8 +261,26 @@ const withWeek = (s: CareerState, p: CPlayer, mod?: SetMods): SetMods | undefine
   return { ...mod, ...(burst ? { mul: (mod?.mul ?? 1) * burst } : {}), ...(slump ? { slump: true } : {}) };
 };
 
+/**
+ * 동족전: 초반 빌드 싸움으로 유불리가 갈림 → 세트마다 한쪽 경기력이 최대 25% 오르고 다른 쪽이 그만큼 내려감
+ * (대부분은 작은 차이, 가끔 크게) — 능력치가 낮은 선수도 빌드가 잘 맞으면 이길 수 있음
+ */
+export const MIRROR_SWING = 0.25;
+function mirrorEdge(a: CPlayer, b: CPlayer): number {
+  if (a.race !== b.race) return 0;
+  return (rand() + rand() - 1) * MIRROR_SWING;
+}
+function withEdge(mods: { a?: SetMods; b?: SetMods } | undefined, edge: number): { a?: SetMods; b?: SetMods } | undefined {
+  if (!edge) return mods;
+  return { a: { ...mods?.a, mul: (mods?.a?.mul ?? 1) * (1 + edge) }, b: { ...mods?.b, mul: (mods?.b?.mul ?? 1) * (1 - edge) } };
+}
+
 export function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, withHighlights: boolean, withTimeline = false, mods?: { a?: SetMods; b?: SetMods }): PlayedSet {
   const m = mapView(mapId);
+  // 동족전 빌드 유불리 (스나이핑 등 아이템 효과는 그대로 따로)
+  const edge = mirrorEdge(a, b);
+  const baseMods = mods;
+  mods = withEdge(mods, edge);
   const burst = { a: burstOf(s, a), b: burstOf(s, b) };
   const slump = { a: slumpOn(s, a), b: slumpOn(s, b) };
   let r = simulateSet(
@@ -292,7 +310,12 @@ export function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, w
       aWin = r.winnerId === a.id + 1;
     }
   }
-  const fx = afterSet(s, a, b, aWin, mods, r.content, r.duration);
+  const fx = afterSet(s, a, b, aWin, baseMods, r.content, r.duration);
+  // 중계: 동족전 초반 빌드 유불리
+  if (r.timeline && Math.abs(edge) >= 0.1) {
+    const lead = edge > 0 ? a : b;
+    r.timeline.lines.unshift({ t: 0, side: edge > 0 ? 1 : 2, text: `동족전 초반 빌드 싸움, ${lead.name} 선수가 빌드에서 앞서며 유리하게 출발합니다!` });
+  }
   // 중계: 포텐셜이 터진 선수 해설
   for (const [side, p] of [[1, a], [2, b]] as const) {
     const k = side === 1 ? "a" : "b";
@@ -318,6 +341,7 @@ function snipeSide(mods?: { a?: SetMods; b?: SetMods }): "a" | "b" | undefined {
 
 /** 빠른 판정 승패: 실전 능력치 차이와 맵 종족 상성으로 (a 가 이기면 true) */
 export function quickWin(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, mods?: { a?: SetMods; b?: SetMods }): boolean {
+  mods = withEdge(mods, mirrorEdge(a, b));
   const pa = totalOf(effStats(a, withWeek(s, a, mods?.a))), pb = totalOf(effStats(b, withWeek(s, b, mods?.b)));
   const adv = a.race === b.race ? 0 : (matchupValue(mapId, a.race, b.race) - 50) / 100;
   let pWin = 1 / (1 + Math.exp(-((pa - pb) / 450 + adv * 2.2)));

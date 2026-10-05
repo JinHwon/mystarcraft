@@ -7,7 +7,7 @@ import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ORIG_TEAMS, FREE_AGENT_TEAM } from "@shared/career/originalData";
-import { WEEKLY_AP, actionOf, totalOf, type CareerState } from "@shared/career/rules";
+import { DIFFICULTIES, WEEKLY_AP, actionOf, difficultyOf, totalOf, type CareerState, type Difficulty } from "@shared/career/rules";
 import { leagueName, myDiv, myPendingMatch, rosterOf, standings, teamPower, STAGE_NAMES } from "@shared/career/view";
 import { useCareer, useCareerUpdater } from "@/lib/career";
 import { RaceBadge, TeamBadge } from "@/components/career/Bits";
@@ -32,6 +32,7 @@ function TeamSelect({ onCancel, onStarted }: { onCancel?: () => void; /** 시작
   const [, navigate] = useLocation();
   const preview = useMemo(() => previewWorld(), []);
   const [picked, setPicked] = useState<number | null>(null);
+  const [difficulty, setDifficulty] = useState<Difficulty>("normal");
   const start = trpc.career.newGame.useMutation({
     ...updater,
     onSuccess: r => { updater.onSuccess(r); toast.success(`${r.state.teams[r.state.myTeam]?.name ?? ""} 감독 부임!`); onStarted?.(); navigate("/lobby"); window.scrollTo(0, 0); },
@@ -44,6 +45,16 @@ function TeamSelect({ onCancel, onStarted }: { onCancel?: () => void; /** 시작
         <h1 className="text-2xl font-black text-foreground mt-1">감독을 맡을 팀을 고르세요</h1>
         <p className="text-sm text-muted-foreground">2010 시즌 12개 프로게임단 · 선수 230명 · 2부 리그 B팀 12개</p>
       </div>
+      <div className="text-sm font-bold text-foreground">🎚️ 난이도</div>
+      <div className="grid grid-cols-3 gap-1.5 -mt-2">
+        {(["easy", "normal", "hard"] as const).map(d => (
+          <button key={d} onClick={() => setDifficulty(d)}
+            className={cn("rounded-xl border-2 py-2 text-sm font-black", difficulty === d ? "border-amber-400 bg-amber-500/15 text-foreground" : "border-border bg-card text-muted-foreground")}>
+            {DIFFICULTIES[d].name}
+          </button>
+        ))}
+      </div>
+      <p className="text-[11px] text-muted-foreground -mt-2">{DIFFICULTIES[difficulty].desc} · 감독 랭킹은 난이도별로도 볼 수 있습니다</p>
       <div className="text-sm font-bold text-foreground">🏆 1부 리그</div>
       <div className="grid grid-cols-2 gap-2.5">
         {ORIG_TEAMS.filter(t => t.id !== FREE_AGENT_TEAM).map(t => {
@@ -78,10 +89,10 @@ function TeamSelect({ onCancel, onStarted }: { onCancel?: () => void; /** 시작
       </div>
       <button
         disabled={picked === null || start.isPending}
-        onClick={() => picked !== null && start.mutate({ teamId: picked })}
+        onClick={() => picked !== null && start.mutate({ teamId: picked, difficulty })}
         className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black text-base disabled:opacity-40 active:scale-[0.99]"
       >
-        {picked === null ? "팀을 선택하세요" : `${preview.teams[picked]?.name} 감독으로 시작`}
+        {picked === null ? "팀을 선택하세요" : `${preview.teams[picked]?.name} 감독으로 시작 (${DIFFICULTIES[difficulty].name})`}
       </button>
       {onCancel && <button onClick={onCancel} className="w-full py-2 text-sm text-muted-foreground">취소</button>}
     </div>
@@ -165,7 +176,7 @@ function Office({ s }: { s: CareerState }) {
             <div className="text-xs text-white/70">{s.season}시즌 · {phaseText}</div>
             <div className="text-xl font-black text-white truncate">{me.name}</div>
             <div className="text-xs text-white/80">{me.wins}승 {me.losses}패 · 세트 {me.setWins}:{me.setLosses} · <b>{myDiv(s) === 2 ? "2부 " : ""}{rank}위</b></div>
-            <div className="text-[11px] text-yellow-200/90 font-bold">🎓 감독 Lv.{s.manager?.level ?? 1} · 평판 {s.manager?.reputation ?? 50}</div>
+            <div className="text-[11px] text-yellow-200/90 font-bold">🎓 감독 Lv.{s.manager?.level ?? 1} · 평판 {s.manager?.reputation ?? 50} · 난이도 {difficultyOf(s).name}</div>
           </div>
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2 text-center">

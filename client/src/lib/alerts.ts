@@ -2,7 +2,7 @@
  * 감독에게 알릴 일 (영입 제안·감독 제의·자금 위기·이적 희망 등) — 상단 알림과 감독실이 함께 씀
  * key 는 내용이 바뀌면 달라져서 새 알림으로 잡힌다 (제안이 새로 오면 다시 알림)
  */
-import { DEBT_LIMIT_WEEKS, type CareerState } from "@shared/career/rules";
+import { BENCH_DECAY_WEEKS, difficultyOf, type CareerState } from "@shared/career/rules";
 import { activeSponsors, maxSponsors } from "@shared/career/sponsor";
 import { rosterOf } from "@shared/career/view";
 
@@ -21,7 +21,7 @@ export function careerAlerts(s: CareerState): CareerAlert[] {
   const me = s.teams[s.myTeam];
   if (!me || s.gameOver) return out;
   if ((s.debtWeeks ?? 0) > 0 || me.money < 0) {
-    out.push({ key: `debt-${s.season}-${s.week}`, icon: "⚠️", text: `운영 자금 적자 ${s.debtWeeks ?? 0}주째 — ${DEBT_LIMIT_WEEKS}주 연속이면 구단 해체`, to: "/finance", urgent: true });
+    out.push({ key: `debt-${s.season}-${s.week}`, icon: "⚠️", text: `운영 자금 적자 ${s.debtWeeks ?? 0}주째 — ${difficultyOf(s).debtWeeks}주 연속이면 구단 해체`, to: "/finance", urgent: true });
   }
   if (s.weekHold?.msl) out.push({ key: `msl-${s.season}-${s.week}`, icon: "🎮", text: "이번 주 개인리그 경기 전 — 컨디션·아이템을 챙기고 진행하세요", to: "/league", urgent: true });
   else if (s.weekHold) out.push({ key: `nom-${s.season}`, icon: "🎤", text: "마이스타리그 조 지명식 — 우리 선수가 지명할 차례입니다", to: "/league", urgent: true });
@@ -39,6 +39,14 @@ export function careerAlerts(s: CareerState): CareerAlert[] {
   }
   for (const o of s.jobOffers ?? []) {
     out.push({ key: `job-${s.season}-${o.team}`, icon: "🤵", text: `${s.teams[o.team]?.name}에서 감독 제의 (계약금 ${o.fee.toLocaleString()}만원)`, to: "/club?tab=manager", urgent: true });
+  }
+  // 프로리그 결장: 1주째면 경고, 2주 이상이면 실전 감각 저하 중 (능력치 하락)
+  if (s.phase === "regular") {
+    const roster = rosterOf(s, s.myTeam);
+    const decaying = roster.filter(p => (p.benchWeeks ?? 0) >= BENCH_DECAY_WEEKS);
+    const warn = roster.filter(p => (p.benchWeeks ?? 0) === BENCH_DECAY_WEEKS - 1);
+    if (decaying.length) out.push({ key: `bench-${s.season}-${s.week}-${decaying.map(p => p.id).join(",")}`, icon: "📉", text: `실전 감각 저하 중 (프로리그 ${BENCH_DECAY_WEEKS}주 이상 결장 · 능력치 하락): ${decaying.map(p => `${p.name}(${p.benchWeeks}주)`).join(", ")}`, to: "/team", urgent: true });
+    if (warn.length) out.push({ key: `benchwarn-${s.season}-${s.week}-${warn.map(p => p.id).join(",")}`, icon: "⏳", text: `이번 주도 프로리그에 못 나가면 실전 감각이 떨어집니다: ${warn.map(p => p.name).join(", ")}`, to: "/league" });
   }
   const wantOut = rosterOf(s, s.myTeam).filter(p => p.wantsOut);
   if (wantOut.length) out.push({ key: `out-${wantOut.map(p => p.id).join(",")}`, icon: "😤", text: `이적 희망: ${wantOut.map(p => p.name).join(", ")}`, to: "/team", urgent: true });

@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { CondBadge, RaceBadge, TeamBadge } from "@/components/career/Bits";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { PlayerPhoto } from "@/components/legacy/Legacy";
-import { ageOf, gradeColor, legacyGrade, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
+import { DIFFICULTIES, ageOf, gradeColor, legacyGrade, totalOf, type CareerState, type CPlayer, type Difficulty } from "@shared/career/rules";
 import { gearStats } from "@shared/career/items";
 import { PlayerSheet } from "./Team";
 
@@ -20,7 +20,11 @@ const SORTS: Array<{ key: string; label: string; value: (r: Row) => number; show
   { key: "value", label: "구단 가치", value: r => r.clubValue, show: r => `${r.clubValue.toLocaleString()}만` },
   { key: "titles", label: "우승", value: r => r.proTitles * 1000 + r.mslTitles * 100 + r.level, show: r => `🏆${r.proTitles}` },
   { key: "power", label: "전력", value: r => r.power, show: r => r.power.toLocaleString() },
+  { key: "login", label: "최근 접속", value: r => r.lastSignedIn ?? 0, show: r => ago(r.lastSignedIn) },
+  { key: "played", label: "최근 플레이", value: r => r.lastLeagueAt ?? 0, show: r => ago(r.lastLeagueAt) },
 ];
+const DIFFS: Array<["all" | Difficulty, string]> = [["all", "전체"], ["easy", DIFFICULTIES.easy.name], ["normal", DIFFICULTIES.normal.name], ["hard", DIFFICULTIES.hard.name]];
+const DIFF_COLOR: Record<Difficulty, string> = { easy: "text-emerald-300 border-emerald-400/50", normal: "text-sky-300 border-sky-400/50", hard: "text-rose-300 border-rose-400/50" };
 
 /** "3분 전"·"2시간 전"·"5일 전" */
 function ago(ms: number | null | undefined): string {
@@ -38,19 +42,25 @@ const when = (ms: number | null | undefined) => (ms ? new Date(ms).toLocaleStrin
 export default function Ranking() {
   const q = trpc.career.ranking.useQuery(undefined, { staleTime: 60_000 });
   const [sort, setSort] = useState("level");
+  const [diff, setDiff] = useState<"all" | Difficulty>("all");
   const [open, setOpen] = useState<number | null>(null);
   const [roster, setRoster] = useState<Row | null>(null);
   const cur = SORTS.find(x => x.key === sort)!;
-  const rows = [...(q.data?.rows ?? [])].sort((a, b) => cur.value(b) - cur.value(a));
+  const rows = [...(q.data?.rows ?? [])].filter(r => diff === "all" || (r.difficulty ?? "normal") === diff).sort((a, b) => cur.value(b) - cur.value(a));
   const myRank = rows.findIndex(r => r.userId === q.data?.me) + 1;
 
   return (
     <div className="p-4 space-y-3">
       <div className="rounded-2xl bg-card border border-border p-3.5">
         <div className="font-black text-foreground">🏅 감독 랭킹</div>
-        <div className="text-xs text-muted-foreground mt-0.5">가입한 감독 {rows.length}명{myRank ? ` · 내 순위 ${myRank}위` : ""} · 1분마다 갱신</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{diff === "all" ? "가입한 감독" : `${DIFFICULTIES[diff].name} 감독`} {rows.length}명{myRank ? ` · 내 순위 ${myRank}위` : ""} · 1분마다 갱신</div>
       </div>
       <div className="grid grid-cols-4 gap-1 p-1 rounded-xl bg-card border border-border">
+        {DIFFS.map(([k, label]) => (
+          <button key={k} onClick={() => setDiff(k)} className={cn("py-2 rounded-lg text-xs font-bold", diff === k ? "bg-amber-500 text-black" : "text-muted-foreground")}>{label}</button>
+        ))}
+      </div>
+      <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-card border border-border">
         {SORTS.map(x => (
           <button key={x.key} onClick={() => setSort(x.key)} className={cn("py-2 rounded-lg text-xs font-bold", sort === x.key ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{x.label}</button>
         ))}
@@ -67,6 +77,7 @@ export default function Ranking() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="font-bold text-foreground truncate">{r.name}</span>
+                    <span className={cn("text-[10px] font-bold border rounded px-1", DIFF_COLOR[r.difficulty ?? "normal"])}>{DIFFICULTIES[r.difficulty ?? "normal"].name}</span>
                     {mine && <span className="text-[10px] text-primary font-bold">나</span>}
                   </div>
                   <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">

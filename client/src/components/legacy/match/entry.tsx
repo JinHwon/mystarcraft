@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
-import { adaptWeeksLeft, burstLabel, burstOf, slumpOn, matchFormatName, matchSets, totalOf, type CareerState, type CMatch, type CPlayer } from "@shared/career/rules";
+import { BENCH_DECAY_WEEKS, adaptWeeksLeft, burstLabel, burstOf, slumpOn, matchFormatName, matchSets, totalOf, type CareerState, type CMatch, type CPlayer } from "@shared/career/rules";
 import { STAGE_NAMES, mapView, proRosterOf, rosterOf } from "@shared/career/view";
 import { ITEM_BY_KEY, gearCond, itemImg, matchCond } from "@shared/career/items";
 import { GrayBox, LEGACY_FONT, LegacyFrame, LegacyImg, MapInfo, MslBadges, TeamLogo } from "../Legacy";
@@ -101,7 +101,7 @@ export function RosterList({ players, onPick, selected, marks, s, blocked }: { p
             className={cn("w-full flex items-center gap-1 px-1 py-[5px] text-left border-b border-neutral-800 last:border-b-0", s ? "text-[12px]" : "text-[13px]",
               block ? "text-neutral-500" : mark ? "text-[#ffe45c]" : "text-white", selected === p.id && "bg-[#3a3a5a]")}
           >
-            <span className="truncate flex-1" title={block}>{block ? "🧳" : ""}{s && burstOf(s, p) ? burstLabel(burstOf(s, p)!).icon : ""}{s && slumpOn(s, p) ? "😵" : ""}{p.name}<MslBadges titles={p.titles} size={11} className="ml-0.5 align-middle" /></span>
+            <span className="truncate flex-1" title={block ?? benchTitle(p)}>{block ? "🧳" : ""}{(p.benchWeeks ?? 0) >= BENCH_DECAY_WEEKS ? "📉" : (p.benchWeeks ?? 0) === BENCH_DECAY_WEEKS - 1 ? "⏳" : ""}{s && burstOf(s, p) ? burstLabel(burstOf(s, p)!).icon : ""}{s && slumpOn(s, p) ? "😵" : ""}{p.name}<MslBadges titles={p.titles} size={11} className="ml-0.5 align-middle" /></span>
             <span className="text-[11px] text-neutral-400">{mark ?? ""}</span>
             <span>({R[p.race]})</span>
             {s && (
@@ -118,6 +118,14 @@ export function RosterList({ players, onPick, selected, marks, s, blocked }: { p
 }
 
 export type ItemPlan = Record<number, { key: string; predict?: number }>;
+
+/** 결장 상태 설명 (📉 감각 저하 중 · ⏳ 이번 주도 못 나가면 저하) */
+export function benchTitle(p: CPlayer): string | undefined {
+  const n = p.benchWeeks ?? 0;
+  if (n >= BENCH_DECAY_WEEKS) return `프로리그 ${n}주 결장 — 실전 감각 저하 중 (능력치 하락)`;
+  if (n === BENCH_DECAY_WEEKS - 1) return "프로리그 1주 결장 — 이번 주도 못 나가면 실전 감각 저하";
+  return undefined;
+}
 
 /** 이적 적응기간이라 이번 주 프로리그에 못 나가는 우리 선수 (엔트리를 못 짤 만큼 많으면 없음) */
 export function adaptBlocked(s: CareerState): Map<number, string> {
@@ -213,7 +221,8 @@ export function EntryScreen({ s, match, front, setFront, items, setItems, onSubm
           <div className="space-y-1">
             <LegacyImg dir="기타" name="아군" className="w-full max-h-16 object-contain" fallback={<SideLabel lines={["MY TEAM", "PLAYER"]} color="#3aa0ff" />} />
             <RosterList s={s} players={mine} onPick={assign} selected={viewMine} marks={marks} blocked={blocked} />
-            {blocked.size > 0 && <div className="text-[10px] text-neutral-500 leading-tight">회색 = 이적 적응기간 (프로리그 출전 불가, 개인리그는 가능)</div>}
+            {blocked.size > 0 && <div className="text-[10px] text-neutral-500 leading-tight">🧳 회색 = 이적 적응기간 (프로리그 출전 불가, 개인리그는 가능)</div>}
+            {mine.some(p => (p.benchWeeks ?? 0) >= BENCH_DECAY_WEEKS - 1) && <div className="text-[10px] text-neutral-500 leading-tight">📉 결장으로 실전 감각 저하 중 · ⏳ 이번 주도 못 나가면 저하</div>}
           </div>
 
           <div className="space-y-1.5">

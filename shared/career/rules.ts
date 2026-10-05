@@ -34,6 +34,31 @@ export const OPERATING_COST = 60;
 export const WAGE_WEEKS = 11;
 /** 적자가 이만큼 연속되면 구단 해체 */
 export const DEBT_LIMIT_WEEKS = 3;
+
+// ── 난이도 ──────────────────────────────────────────────────────
+export type Difficulty = "easy" | "normal" | "hard";
+export interface DifficultyRule {
+  name: string;
+  /** 시작 자금 배율 */
+  startMoney: number;
+  /** 구단 수입 배율 (경기 수당·스폰서·상금·관중·굿즈·이벤트 등, 선수 판매 대금은 제외) */
+  income: number;
+  /** 연봉·운영비 배율 */
+  cost: number;
+  /** 적자 몇 주 연속이면 구단 해체 */
+  debtWeeks: number;
+  /** 경기 전(다음 경기를 치를 때까지) 선수 한 명당 비타비타 개수 제한 (없으면 무제한) */
+  vitaPerMatch?: number;
+  /** 다른 팀이 경기 아이템을 쓰는 빈도 배율 */
+  aiItem: number;
+  desc: string;
+}
+export const DIFFICULTIES: Record<Difficulty, DifficultyRule> = {
+  easy: { name: "초급", startMoney: 1.6, income: 1.3, cost: 0.85, debtWeeks: 5, aiItem: 0.6, desc: "시작 자금 1.6배 · 수입 1.3배 · 연봉·운영비 15% 할인 · 적자 5주까지 버팀 · 다른 팀 아이템 덜 씀" },
+  normal: { name: "중급", startMoney: 1, income: 1, cost: 1, debtWeeks: 3, aiItem: 1, desc: "기본 난이도 (지금까지의 규칙)" },
+  hard: { name: "고급", startMoney: 0.6, income: 0.8, cost: 1.15, debtWeeks: 2, vitaPerMatch: 1, aiItem: 1.4, desc: "시작 자금 0.6배 · 수입 0.8배 · 연봉·운영비 15% 증가 · 적자 2주면 해체 · 비타비타는 경기 전 선수당 1개 · 다른 팀 아이템 더 씀" },
+};
+export const difficultyOf = (s: { difficulty?: Difficulty }): DifficultyRule => DIFFICULTIES[s.difficulty ?? "normal"];
 export const START_MONEY = 3000;
 export const WEEKLY_SPONSOR = 100;
 export const MATCH_MONEY = { win: 120, lose: 30 };
@@ -79,6 +104,9 @@ export function condMultiplier(cond: number): number {
   }
   return COND_CURVE[COND_CURVE.length - 1][1];
 }
+
+/** 프로리그 연속 결장이 이 주 수 이상이면 매주 능력치가 줄어듦 (실전 감각 저하) */
+export const BENCH_DECAY_WEEKS = 2;
 
 /** 시즌 중 영입한 선수의 프로리그 적응기간 (주) */
 export const ADAPT_WEEKS = 2;
@@ -156,6 +184,8 @@ export interface CPlayer {
   burst?: { week: string; mul: number };
   /** 시즌 중 새로 온 선수: until 주 전까지 프로리그 출전 불가 (적응기간, 개인리그는 가능) */
   newcomer?: { season: number; until: number };
+  /** 다음 경기 전까지 먹은 비타비타 개수 (고급 난이도 제한) */
+  vitaUsed?: number;
   /** 컨디션 난조인 주 (시즌-주): 그 주 경기 컨디션 -40 (최저 10) */
   slump?: string;
   /** 우승 경력 */
@@ -562,6 +592,8 @@ export interface CareerState {
   offerLog?: OfferLog[];
   /** 우리가 보낸 영입 요청·트레이드·스카웃 (시즌 중엔 다음 주에 상대가 답함) */
   outbox?: OutRequest[];
+  /** 난이도 (없으면 중급) */
+  difficulty?: Difficulty;
   /** 이적료 합의된 영입 대상 (선수 → 합의 내용, 이번 주만 유효) */
   agreements?: Record<number, { team: number; fee: number; season: number; week: number }>;
   /** 이번 주 협상 횟수 (키: 선수-종류) */

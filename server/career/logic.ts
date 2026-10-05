@@ -8,6 +8,9 @@ import {
   AI_MIN_ROSTER,
   ActionKey,
   CareerState,
+  DIFFICULTIES,
+  difficultyOf,
+  type Difficulty,
   type OutRequest,
   CMatch,
   COND_MAX,
@@ -34,6 +37,7 @@ import {
   ageOf,
   askingPrice,
   adaptWeeksLeft,
+  BENCH_DECAY_WEEKS,
   burstOf,
   condMultiplier,
   snapOf,
@@ -69,7 +73,7 @@ export { rosterOf, proTeams, standings, myPendingMatch };
 
 // ── 새 게임 ─────────────────────────────────────────────────────
 
-export function newCareer(myTeam: number): CareerState {
+export function newCareer(myTeam: number, difficulty: Difficulty = "normal"): CareerState {
   const teams = initialTeams();
   if (!teams[myTeam] || myTeam === FREE_AGENT_TEAM) throw new CareerError("팀을 선택해주세요");
   const players = initialPlayers(() => COND_MAX);
@@ -88,7 +92,10 @@ export function newCareer(myTeam: number): CareerState {
     history: [],
     mapPool: drawMapPool(),
     condScale: 100,
+    ...(difficulty !== "normal" ? { difficulty } : {}),
   };
+  // 난이도: 시작 자금
+  teams[myTeam].money = Math.round((teams[myTeam].money * DIFFICULTIES[difficulty].startMoney) / 10) * 10;
   // 2부 B팀 선수 채우기 (무소속 유망주 + 신예)
   fillBRosters(s, true);
   ensureClub(s);
@@ -334,10 +341,11 @@ const youthOf = (m: CMatch) => m.stage === "regular" && m.div === 2;
  * 스나이핑은 35% 확률로 적중해 이길 확률 65% 이상
  */
 const AI_ITEM_CHANCE: Record<CMatch["stage"], number> = { regular: 0.12, promo: 0.3, semi: 0.3, po: 0.3, final: 0.45 };
+const aiItemChance = (s: CareerState, m: CMatch) => AI_ITEM_CHANCE[m.stage] * difficultyOf(s).aiItem;
 /** 우리 팀처럼 경기 전에 정할 수 있는 세트에만 아이템 (위너스리그는 1세트, 일반 경기는 ACE 결정전 전까지) */
 const itemSetAllowed = (m: CMatch, i: number) => (m.winners ? i === 0 : i < setsOf(m) - 1);
 function aiSetItem(s: CareerState, team: number, m: CMatch, setIdx: number): { key: string; mod: SetMods; sniped?: boolean } | undefined {
-  if (team === s.myTeam || !itemSetAllowed(m, setIdx) || rand() >= AI_ITEM_CHANCE[m.stage]) return undefined;
+  if (team === s.myTeam || !itemSetAllowed(m, setIdx) || rand() >= aiItemChance(s, m)) return undefined;
   const t = s.teams[team];
   if (rand() < 0.15) return { key: "cheer", mod: { all: ITEM_BY_KEY.cheer.all } };
   const options = ["memo", "gum", "sniping", "ceremony"].filter(k => freeMoney(s, team) >= ITEM_BY_KEY[k].price + 1500);
@@ -514,8 +522,7 @@ export function advanceWeek(s: CareerState, myEntry?: number[]): WeekResult {
   return { ...endWeek(s, last?.id), broadcast };
 }
 
-/** 연속 결장이 이 주 수 이상이면 매주 능력치가 줄어듦 */
-export const BENCH_DECAY_WEEKS = 2;
+export { BENCH_DECAY_WEEKS };
 /**
  * 프로리그 결장 감각 저하 (정규시즌 주 마무리): 이번 주 프로리그에 안 나온 선수는 결장 주 수 +1,
  * 2주 이상 연속이면 매주 능력치 3개가 2~5씩 줄어듦 (오래 쉴수록 조금 더, 훈련으로 오르는 것보다 큼). 무소속은 제외
@@ -577,7 +584,7 @@ function finishWeek(s: CareerState): WeekResult {
   // 다른 구단은 여유 자금으로 주전 선수 아이템 구입
   if (s.phase !== "offseason") aiShopping(s);
   // 우리 선수 행동력: 매주 20 (최대 40까지 모임)
-  for (const p of rosterOf(s, s.myTeam)) p.ap = playerAp(p) + WEEKLY_AP;
+  for (const p of rosterOf(s, s.myTeam)) { p.ap = playerAp(p) + WEEKLY_AP; delete p.vitaUsed; }
   pruneHighlights(s);
   s.week++;
   rollWeekBursts(s);
@@ -699,7 +706,7 @@ export function playLiveSet(s: CareerState, ace?: number): LiveSetResult {
   let sniped = false;
   if (plan && (s.inventory?.[plan.key] ?? 0) > 0) {
     s.inventory![plan.key]--;
-    if (plan.key === "cheer") mod.all = ITEM_BY_KEY.cheer.all;
+    if (ITEM_BY_KEY[plan.key]?.all) mod.all = ITEM_BY_KEY[plan.key].all;
     if (plan.key === "gum") mod.gum = true;
     if (ITEM_BY_KEY[plan.key]?.setBonus) mod.bonus = ITEM_BY_KEY[plan.key].setBonus;
     if (plan.key === "sniping" && plan.predict === live.opp[i]) { mod.snipe = true; sniped = true; }
@@ -1017,12 +1024,21 @@ export function useStockItem(s: CareerState, key: string, target: number, qty = 
   const p = s.players[target];
   if (!p || p.team !== s.myTeam) throw new CareerError("대상을 선택해 주세요");
   if (p.cond >= COND_MAX) throw new CareerError("컨디션이 최대 입니다");
+  // 고급 난이도: 비타비타는 경기 전(다음 경기까지) 선수 한 명당 제한
+  // 컨디션 회복 소모품(비타비타 등) 모두 합쳐서 셈
+  const limit = difficultyOf(s).vitaPerMatch;
+  if (limit !== undefined) {
+    const left = limit - (p.vitaUsed ?? 0);
+    if (left <= 0) throw new CareerError(`${difficultyOf(s).name} 난이도: 컨디션 회복 아이템(비타비타 등)은 경기 전 선수 한 명당 ${limit}개까지입니다 (${p.name} 선수는 다음 경기를 치른 뒤 다시)`);
+    qty = Math.min(qty, left);
+  }
   let used = 0;
   while (used < qty && p.cond < COND_MAX && (s.inventory![key] ?? 0) > 0) {
     s.inventory![key]--;
     p.cond = clampCond(p.cond + (it.cond ?? 0));
     used++;
   }
+  if (limit !== undefined) p.vitaUsed = (p.vitaUsed ?? 0) + used;
   return { message: used > 1 ? `${used}개 사용했습니다` : "아이템을 사용했습니다", used };
 }
 

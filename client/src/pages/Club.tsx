@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { DEBT_LIMIT_WEEKS, OPERATING_COST, askingPrice, totalOf, type CareerState, type Contract } from "@shared/career/rules";
+import { OPERATING_COST, askingPrice, difficultyOf, totalOf, type CareerState, type Contract } from "@shared/career/rules";
 import { jobThreshold, playerDemand, teamWages } from "@shared/career/contract";
 import { activeSponsors, maxSponsors, questLabel, questProgress, questRange, questReward, sponsorOfferCount, sponsorOffers, type SponsorQuest } from "@shared/career/sponsor";
 import { SPONSOR_STRETCH, TERM_NAMES, levelPerks, mainSponsorName, managerExpNeed, managerLevel, sponsorBudget, sponsorFactors, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
@@ -48,7 +48,7 @@ function MoneyTab({ s }: { s: CareerState }) {
         <span className="text-neutral-400">보유 금액</span>
         <span className={cn("text-[18px]", me.money < 0 ? "text-[#ff6b6b]" : "text-[#ffe45c]")}>{me.money.toLocaleString()} 만원</span>
       </div>
-      {(s.debtWeeks ?? 0) > 0 && <Reply text={`⚠️ 적자 ${s.debtWeeks}주째! ${DEBT_LIMIT_WEEKS - (s.debtWeeks ?? 0)}주 안에 흑자로 돌리지 못하면 구단이 해체됩니다`} />}
+      {(s.debtWeeks ?? 0) > 0 && <Reply text={`⚠️ 적자 ${s.debtWeeks}주째! ${difficultyOf(s).debtWeeks - (s.debtWeeks ?? 0)}주 안에 흑자로 돌리지 못하면 구단이 해체됩니다`} />}
       <div className="border border-neutral-600 p-2 space-y-0.5">
         <div className="text-[#ffe45c] mb-1">매주 고정 수입·지출</div>
         <div className="flex justify-between"><span className="text-neutral-400">서브 스폰서 후원금{spon ? ` (${sponsors.map(x => x.name).join("·")})` : " (없음)"}</span><span className="text-[#bff5c6]">+{spon}</span></div>
