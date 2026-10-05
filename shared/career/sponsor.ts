@@ -3,12 +3,12 @@
  * 퀘스트 목표를 올리면 보상이 커지고, 낮추면 줄어든다
  */
 import { FREE_AGENT_TEAM } from "./originalData";
-import { totalOf, type CareerState } from "./rules";
+import { ageOf, totalOf, type CareerState, type Race } from "./rules";
 import { myDiv, rosterOf, standings } from "./view";
 import { seeded } from "./contract";
 import { levelPerks, managerLevel } from "./mainSponsor";
 
-export type QuestKind = "teamWins" | "setWins" | "playerWins" | "playerApps" | "rank" | "mslRo16";
+export type QuestKind = "teamWins" | "setWins" | "playerWins" | "playerApps" | "rank" | "mslRo16" | "mslRo8" | "raceWins" | "youthApps";
 export interface SponsorQuest {
   kind: QuestKind;
   /** 기본 목표 (조정의 기준) */
@@ -17,15 +17,27 @@ export interface SponsorQuest {
   /** 기본 목표일 때 보상 */
   baseReward: number;
   player?: number;
+  /** raceWins: 이 종족 우리 선수들의 시즌 승수 합 */
+  race?: Race;
   done?: boolean;
 }
+/** 제의 종류: 후원금형 · 균형형 · 퀘스트형 · 계약금형(계약 때 한 번에) · 승리수당형(프로리그 이길 때마다) */
+export type SponsorStyle = "weekly" | "balanced" | "quest" | "signing" | "winBonus";
+export const SPONSOR_STYLE_NAMES: Record<SponsorStyle, string> = { weekly: "후원금형", balanced: "균형형", quest: "퀘스트형", signing: "계약금형", winBonus: "승리수당형" };
 export interface Sponsor {
   name: string;
   weekly: number;
   quests: SponsorQuest[];
+  style?: SponsorStyle;
+  /** 계약하자마자 받는 계약금 */
+  signing?: number;
+  /** 프로리그 경기를 이길 때마다 받는 수당 */
+  winBonus?: number;
 }
 
-const NAMES = ["블루전자", "넥스트통신", "하이퍼PC방", "에이스음료", "스타치킨", "우주항공", "번개택배", "코스모게임즈", "라이트닝카드", "초코바이츠"];
+const NAMES = ["블루전자", "넥스트통신", "하이퍼PC방", "에이스음료", "스타치킨", "우주항공", "번개택배", "코스모게임즈", "라이트닝카드", "초코바이츠",
+  "드래곤마우스", "제로콜라", "한빛보험", "은하은행", "썬더모바일", "미르패션", "레드불꽃에너지", "아크로자동차", "별빛베이커리", "스텔라호텔"];
+const RACE_KO: Record<Race, string> = { terran: "테란", zerg: "저그", protoss: "프로토스" };
 
 /** 목표를 얼마나 올리고 내릴 수 있는지 */
 export function questRange(q: SponsorQuest): [number, number] {
@@ -47,6 +59,9 @@ export function questLabel(s: CareerState, q: SponsorQuest, target = q.target): 
     case "playerApps": return `${p?.name ?? "?"} 선수 프로리그 ${target}경기 출전`;
     case "rank": return `정규시즌 ${target}위 이내`;
     case "mslRo16": return `개인리그 16강에 우리 선수 ${target}명`;
+    case "mslRo8": return `개인리그 8강에 우리 선수 ${target}명`;
+    case "raceWins": return `우리 ${RACE_KO[q.race ?? "terran"]} 선수들 시즌 합계 ${target}승`;
+    case "youthApps": return `21세 이하 선수 프로리그 출전 합계 ${target}경기`;
   }
 }
 
@@ -64,9 +79,18 @@ export function questProgress(s: CareerState, q: SponsorQuest): { now: number; d
       // 순위 퀘스트는 정규시즌이 끝나야 판정
       return { now: rank, done: s.phase !== "regular" && rank <= q.target };
     }
-    case "mslRo16": {
-      const ro16 = s.msl?.season === s.season ? s.msl.bracket.find(b => b.round === "ro16") : undefined;
-      const n = ro16 ? new Set(ro16.series.flatMap(x => [x.a, x.b]).filter(id => s.players[id]?.team === s.myTeam)).size : 0;
+    case "mslRo16":
+    case "mslRo8": {
+      const round = s.msl?.season === s.season ? s.msl.bracket.find(b => b.round === (q.kind === "mslRo16" ? "ro16" : "ro8")) : undefined;
+      const n = round ? new Set(round.series.flatMap(x => [x.a, x.b]).filter(id => s.players[id]?.team === s.myTeam)).size : 0;
+      return { now: n, done: n >= q.target };
+    }
+    case "raceWins": {
+      const n = rosterOf(s, s.myTeam).filter(x => x.race === q.race).reduce((a, x) => a + x.sWins, 0);
+      return { now: n, done: n >= q.target };
+    }
+    case "youthApps": {
+      const n = rosterOf(s, s.myTeam).filter(x => ageOf(x, s.season) <= 21).reduce((a, x) => a + (x.sApps ?? 0), 0);
       return { now: n, done: n >= q.target };
     }
   }
@@ -98,6 +122,18 @@ export function sponsorOfferCount(s: CareerState): { count: number; basis: strin
   return { count: Math.max(1, Math.min(myDiv(s) === 2 ? 4 : 10, Math.round(raw))), basis };
 }
 
+/** 우리 팀에 가장 많은 종족 선수들의 시즌 승수 퀘스트 */
+function raceQuest(s: CareerState, r: number): SponsorQuest[] {
+  const roster = rosterOf(s, s.myTeam);
+  const races: Race[] = ["terran", "zerg", "protoss"];
+  const counts = races.map(x => roster.filter(p => p.race === x).length);
+  const pick = races.filter((_, i) => counts[i] >= 3);
+  if (!pick.length) return [];
+  const race = pick[Math.floor(r * pick.length)];
+  const base = Math.max(6, Math.round(counts[races.indexOf(race)] * 3));
+  return [{ kind: "raceWins", base, target: base, baseReward: 300, race }];
+}
+
 const teamPowerOf = (s: CareerState, team: number) => rosterOf(s, team).map(p => totalOf(p.stats)).sort((a, b) => b - a).slice(0, 6).reduce((a, b) => a + b, 0);
 
 /** 이번 시즌 스폰서 제의 (팀 전력에 맞춰 목표를 정함). 최대 3곳과 계약 */
@@ -120,17 +156,25 @@ export function sponsorOffers(s: CareerState): Sponsor[] {
       ...(young ? [{ kind: "playerApps" as const, base: 6, target: 6, baseReward: 200, player: young.id }] : []),
       { kind: "rank", base: Math.max(2, Math.min(6, rank || 6)), target: Math.max(2, Math.min(6, rank || 6)), baseReward: 350 },
       { kind: "mslRo16", base: 1, target: 1, baseReward: 300 },
+      { kind: "mslRo8", base: 1, target: 1, baseReward: 450 },
+      ...raceQuest(s, r(3)),
+      ...(roster.some(x => ageOf(x, s.season) <= 21) ? [{ kind: "youthApps" as const, base: 8, target: 8, baseReward: 250 }] : []),
     ];
     // 제의마다 퀘스트 2~3개, 후원금이 많으면 퀘스트 보상은 적게 (3곳까지 계약하므로 한 곳 금액은 예전 한 곳보다 작게)
     const nq = r(20) < 0.5 ? 2 : 3;
     const quests = pool.map((q, i) => ({ q, o: r(10 + i) })).sort((a, b) => a.o - b.o).slice(0, nq).map(x => x.q);
     const perk = levelPerks(managerLevel(s)).sponsor;
-    const style = Math.floor(r(0) * 3); // 0 후원금형 · 1 균형형 · 2 퀘스트형
+    const styles: SponsorStyle[] = ["weekly", "balanced", "quest", "signing", "winBonus"];
+    const style = styles[Math.floor(r(0) * styles.length)];
+    const si = { weekly: 0, balanced: 1, quest: 2, signing: 3, winBonus: 4 }[style];
     // 2부 스폰서는 규모가 작음
     const scale = myDiv(s) === 2 ? 0.7 : 1;
-    const weekly = Math.round([42, 30, 20][style] * (0.85 + r(21) * 0.3) * perk * scale);
-    const mul = [0.45, 0.65, 0.9][style] * perk * scale;
-    out.push({ name, weekly, quests: quests.map(q => ({ ...q, baseReward: Math.round((q.baseReward * mul) / 10) * 10 })) });
+    const jitter = 0.85 + r(21) * 0.3;
+    const weekly = Math.round([42, 30, 20, 12, 14][si] * jitter * perk * scale);
+    const mul = [0.45, 0.65, 0.9, 0.55, 0.55][si] * perk * scale;
+    const extra: Partial<Sponsor> = style === "signing" ? { signing: Math.round((260 * jitter * perk * scale) / 10) * 10 }
+      : style === "winBonus" ? { winBonus: Math.round(18 * jitter * perk * scale) } : {};
+    out.push({ name, weekly, style, ...extra, quests: quests.map(q => ({ ...q, baseReward: Math.round((q.baseReward * mul) / 10) * 10 })) });
   }
   return out;
 }

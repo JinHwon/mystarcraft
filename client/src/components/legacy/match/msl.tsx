@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { burstLabel, burstOf, slumpOn, MSL_PLAN, totalOf, type CareerState, type CMatch, type CPlayer, type MslGroup, type MslSeries } from "@shared/career/rules";
-import { STAGE_NAMES, activePlayers, mapView } from "@shared/career/view";
+import { STAGE_NAMES, activePlayers, divTeams, mapView } from "@shared/career/view";
 import { gearCond, gearStats, matchCond } from "@shared/career/items";
 import { trpc } from "@/lib/trpc";
 import { useCareerPatch } from "@/lib/career";
@@ -558,14 +558,15 @@ function MslPreview({ s, planIdx }: { s: CareerState; planIdx: number }) {
 }
 
 /** 포스트시즌 주별 프로리그 일정 (12주부터) */
-const POST_WEEKS = ["준플레이오프 · 승강전", "플레이오프", "결승"];
+const POST_WEEKS = ["승강전 1경기", "승강전 2경기", "준플레이오프", "플레이오프", "결승"];
 
 /** 원작 "정규 시즌 일정" 화면: 주마다 프로리그 2경기 + 개인리그 일정 */
 export function ScheduleScreen({ s, onClose }: { s: CareerState; onClose: () => void }) {
   const [viewPlan, setViewPlan] = useState<number | null>(null);
   const me = s.teams[s.myTeam];
-  // 정규시즌 11주 + 포스트시즌 (12주 준PO·승강전, 13주 PO, 14주 결승)
-  const weeks = Math.max(11 + POST_WEEKS.length, ...s.matches.map(m => m.week));
+  // 정규시즌 11주 + 포스트시즌 (한 주에 한 경기: 승강전 1·2 → 준PO → PO → 결승, 2부가 없으면 승강전 없음)
+  const post = divTeams(s, 2).length ? POST_WEEKS : POST_WEEKS.slice(2);
+  const weeks = Math.max(11 + post.length, ...s.matches.map(m => m.week));
   const mine = (w: number) => s.matches.filter(m => m.week === w && (m.a === s.myTeam || m.b === s.myTeam)).sort((a, b) => (a.leg ?? 1) - (b.leg ?? 1));
   const Cell = ({ m }: { m?: CMatch }) => {
     if (!m) return <div className="h-9 border-r border-neutral-600" />;
@@ -585,7 +586,7 @@ export function ScheduleScreen({ s, onClose }: { s: CareerState; onClose: () => 
   const PostCell = ({ w }: { w: number }) => {
     const list = s.matches.filter(m => m.week === w && m.stage !== "regular").sort((a, b) => (a.div ?? 1) - (b.div ?? 1) || a.id - b.id);
     if (!list.length) {
-      const plan = POST_WEEKS[w - 12];
+      const plan = post[w - 12];
       return <div className="col-span-2 min-h-9 flex items-center px-1.5 text-[11px] text-neutral-400">{plan ? `${plan} (대진 미정)` : ""}</div>;
     }
     return (

@@ -5,15 +5,16 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { OPERATING_COST, askingPrice, difficultyOf, totalOf, type CareerState, type Contract } from "@shared/career/rules";
+import { AFTER_SEASON_FEE, OPERATING_COST, askingPrice, difficultyOf, totalOf, type CareerState, type Contract, type Gift, type TransferTiming } from "@shared/career/rules";
+import { ITEM_BY_KEY, itemImg } from "@shared/career/items";
 import { jobThreshold, playerDemand, teamWages } from "@shared/career/contract";
-import { activeSponsors, maxSponsors, questLabel, questProgress, questRange, questReward, sponsorOfferCount, sponsorOffers, type SponsorQuest } from "@shared/career/sponsor";
+import { SPONSOR_STYLE_NAMES, activeSponsors, maxSponsors, questLabel, questProgress, questRange, questReward, sponsorOfferCount, sponsorOffers, type Sponsor, type SponsorQuest } from "@shared/career/sponsor";
 import { SPONSOR_STRETCH, TERM_NAMES, levelPerks, mainSponsorName, managerExpNeed, managerLevel, sponsorBudget, sponsorFactors, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
 import { proTeams, rosterOf, teamPower } from "@shared/career/view";
 import { useCareer, useCareerPatch } from "@/lib/career";
 import { ManagerNameBox } from "@/components/ManagerName";
 import type { CareerDiff } from "@shared/career/diff";
-import { LegacyFrame, TeamLogo } from "@/components/legacy/Legacy";
+import { LegacyFrame, LegacyImg, TeamLogo } from "@/components/legacy/Legacy";
 import { PlayerPanel } from "@/components/legacy/LegacyMatch";
 import { ContractEditor, ContractText, FeeStepper, MoraleBar, Reply } from "@/components/legacy/Club";
 import { PlayerSheet } from "./Team";
@@ -173,6 +174,7 @@ function OffersTab({ s }: { s: CareerState }) {
     onSuccess: r => { setBusy(null); done(r); },
     onError: e => { setBusy(null); utils.career.get.invalidate(); fail(e); },
   });
+  const [timings, setTimings] = useState<Record<number, TransferTiming>>({});
   const act = (offerId: number, action: "accept" | "reject" | "counter", fee?: number) => {
     setBusy(`${offerId}:${action}`);
     // 반대는 결과가 정해져 있으므로 바로 목록에서 뺌 (서버 응답은 뒤에서)
@@ -180,7 +182,8 @@ function OffersTab({ s }: { s: CareerState }) {
       utils.career.get.setData(undefined, old => (old?.state ? { state: { ...old.state, offers: (old.state.offers ?? []).filter(x => x.id !== offerId) } } : old));
       setReply({ text: "거절했습니다", ok: false });
     }
-    respond.mutate({ offerId, action, fee });
+    const o = (s.offers ?? []).find(x => x.id === offerId);
+    respond.mutate({ offerId, action, fee, timing: s.phase === "offseason" ? "now" : timings[offerId] ?? o?.timing ?? "now" });
   };
   const label = (id: number, action: string, text: string) => (busy === `${id}:${action}` ? "처리 중…" : text);
   const [fees, setFees] = useState<Record<number, number>>({});
@@ -193,6 +196,7 @@ function OffersTab({ s }: { s: CareerState }) {
     <div className="space-y-2">
       <PlayerSheet s={s} player={open !== null ? s.players[open] : null} onClose={() => setOpen(null)} />
       {reply && <Reply {...reply} />}
+      <PendingMoves s={s} />
       <ListingsBox s={s} />
       <RaiseRequest s={s} />
       <JoinRequests s={s} />
@@ -200,7 +204,10 @@ function OffersTab({ s }: { s: CareerState }) {
       {offers.map(o => {
         const p = s.players[o.player], t = s.teams[o.team];
         // 역제안 금액: 직접 고친 값 → 지난번 우리 역제안 → 처음엔 제시액의 130% (상대가 다시 불러도 우리 금액은 그대로)
-        const fee = fees[o.id] ?? o.myCounter ?? Math.round((o.fee * 1.3) / 10) * 10;
+        const when: TransferTiming = s.phase === "offseason" ? "now" : timings[o.id] ?? o.timing ?? "now";
+        const k = when === "after" ? AFTER_SEASON_FEE : 1;
+        const shown = Math.round((o.fee * k) / 10) * 10;
+        const fee = fees[o.id] ?? o.myCounter ?? Math.round((shown * 1.3) / 10) * 10;
         const price = priceOf(o.player);
         const rivals = offers.filter(x => x.player === o.player).length;
         return (
@@ -210,13 +217,22 @@ function OffersTab({ s }: { s: CareerState }) {
               <div className="flex-1">
                 <div><b>{t.name}</b> → <button onClick={() => setOpen(p.id)} className="text-[#8fd0ff] underline underline-offset-2">{p.name} ({R[p.race]}) ⓘ</button>{rivals > 1 && <span className="text-[10.5px] text-[#ffb84d]"> · 경쟁 제안 {rivals}건</span>}</div>
                 {o.byPlayer && <div className="text-[10.5px] text-[#ffb84d]">🙋 {p.name} 선수가 {t.name} 이적을 원합니다 (거절하면 사기 하락)</div>}
-                <div className="text-neutral-400">제시 금액 <b className="text-[#ffe45c] text-[14px]">{o.fee.toLocaleString()}만원</b>{o.status === "countered" ? " (역제안 받음)" : ""}</div>
+                <div className="text-neutral-400">제시 금액 <b className="text-[#ffe45c] text-[14px]">{shown.toLocaleString()}만원</b>{when === "after" ? " (시즌 후)" : ""}{o.status === "countered" ? " (역제안 받음)" : ""}</div>
+                {o.timing === "after" && <div className="text-[10.5px] text-[#8fd0ff]">📅 {t.name}은(는) 시즌이 끝난 뒤 데려가길 원합니다</div>}
                 {(() => { const v = askingPrice(p, s.season); const r = Math.round((o.fee / Math.max(1, v)) * 100); return <div className="text-[10.5px] text-neutral-400">현 시세 <b className="text-neutral-200">{v.toLocaleString()}만원</b> · 제시액은 시세의 <span className={r >= 100 ? "text-[#bff5c6]" : r >= 80 ? "text-[#ffe45c]" : "text-[#ffb8c8]"}>{r}%</span>{o.myCounter ? ` · 내 역제안 ${o.myCounter.toLocaleString()}만원` : ""}</div>; })()}
                 {price !== undefined && <div className={cn("text-[10.5px]", o.fee >= price ? "text-[#bff5c6]" : "text-neutral-500")}>이적시장 희망가 {price.toLocaleString()}만원{o.fee >= price ? " 이상 제시" : ` (희망가의 ${Math.round((o.fee / price) * 100)}%)`}</div>}
               </div>
               <MoraleBar p={p} />
             </div>
             <div className="text-[10.5px] text-neutral-500">연봉 {p.contract?.salary ?? 0}만 · 능력치 {totalOf(p.stats).toLocaleString()}</div>
+            {s.phase !== "offseason" && (
+              <div className="grid grid-cols-2 gap-1 text-[11px]">
+                {([["now", `즉시 이적 · ${(Math.round(o.fee / 10) * 10).toLocaleString()}만`], ["after", `시즌 후 이적 · ${(Math.round((o.fee * AFTER_SEASON_FEE) / 10) * 10).toLocaleString()}만`]] as const).map(([kk, l]) => (
+                  <button key={kk} onClick={() => setTimings({ ...timings, [o.id]: kk })} className={cn("border py-0.5", when === kk ? "border-[#ffe45c] text-[#ffe45c]" : "border-neutral-700 text-neutral-400")}>{l}</button>
+                ))}
+              </div>
+            )}
+            {when === "after" && <div className="text-[10.5px] text-neutral-500">시즌 후 이적: 이적료는 지금 받고, 선수는 시즌이 끝날 때까지 우리 팀에서 뛴 뒤 옮깁니다</div>}
             <div className="flex items-center justify-between gap-1">
               <span className="text-neutral-400">역제안</span>
               <FeeStepper value={fee} onChange={v => setFees({ ...fees, [o.id]: v })} />
@@ -298,6 +314,27 @@ function JoinRequests({ s }: { s: CareerState }) {
   );
 }
 
+/** 시즌이 끝나면 옮기기로 합의한 선수 (나갈 선수 · 들어올 선수) */
+function PendingMoves({ s }: { s: CareerState }) {
+  const list = (s.pendingMoves ?? []).filter(m => m.season === s.season && (m.from === s.myTeam || m.to === s.myTeam));
+  if (!list.length) return null;
+  return (
+    <Panel icon="📅" title="시즌 후 이적 예정" accent="#8fd0ff" right={`${list.length}명`}>
+      {list.map(m => {
+        const p = s.players[m.player];
+        const out = m.from === s.myTeam;
+        return (
+          <div key={m.player} className="flex items-center gap-2">
+            <span className={cn("text-[11px] px-1 border", out ? "border-[#ffb8c8] text-[#ffb8c8]" : "border-[#bff5c6] text-[#bff5c6]")}>{out ? "나감" : "합류"}</span>
+            <span className="flex-1 truncate">{p?.name} <span className="text-neutral-400">{out ? `→ ${s.teams[m.to]?.name}` : `← ${s.teams[m.from]?.name}`} · {m.fee.toLocaleString()}만원 {out ? "받음" : "지급"}</span></span>
+          </div>
+        );
+      })}
+      <div className="text-[10px] text-neutral-500">이적료는 합의 때 이미 주고받았고, 시즌이 끝나 새 시즌이 시작될 때 선수가 옮깁니다. 나갈 선수는 그때까지 우리 팀에서 뜁니다</div>
+    </Panel>
+  );
+}
+
 /** 이적시장에 내놓은 우리 선수 (희망가 수정·내리기) */
 function ListingsBox({ s }: { s: CareerState }) {
   const { reply, done, fail } = useMut();
@@ -361,6 +398,8 @@ function ManagerTab({ s }: { s: CareerState }) {
   const { reply, done, fail } = useMut();
   const accept = trpc.career.acceptJob.useMutation({ onSuccess: r => { done(r); if (!(r.result as { pending?: boolean }).pending) navigate("/lobby"); }, onError: fail });
   const respond = trpc.career.respondJob.useMutation({ onSuccess: done, onError: fail });
+  const apply = trpc.career.requestJob.useMutation({ onSuccess: done, onError: fail });
+  const cancel = trpc.career.cancelJob.useMutation({ onSuccess: done, onError: fail });
   const [asks, setAsks] = useState<Record<number, number>>({});
   const rep = s.manager?.reputation ?? 50;
   const lv = managerLevel(s), exp = s.manager?.exp ?? 0, need = managerExpNeed(lv);
@@ -387,8 +426,13 @@ function ManagerTab({ s }: { s: CareerState }) {
       <ManagerNameBox />
       {reply && <Reply {...reply} />}
       <Panel icon="✉️" title="받은 감독 제의" accent="#8fe07a">
-        {s.pendingJob && <div className="border border-[#8fe07a] p-1.5 mb-1 text-[#bff5c6]">✅ {s.teams[s.pendingJob.team].name} 감독 제의 수락 — 이번 시즌이 끝나면 옮깁니다 (영입 계약금 {s.pendingJob.fee.toLocaleString()}만)</div>}
-        {!(s.jobOffers ?? []).length && !s.pendingJob && <div className="text-neutral-500">없음 (시즌 중에도 가끔, 시즌이 끝나면 평판에 따라 제의가 옵니다)</div>}
+        {s.pendingJob && (
+          <div className="border border-[#8fe07a] p-1.5 mb-1 text-[#bff5c6] space-y-1">
+            <div>✅ {s.teams[s.pendingJob.team].name} 감독 이적 합의 — 이번 시즌이 끝나면 옮깁니다 (영입 계약금 {s.pendingJob.fee.toLocaleString()}만)</div>
+            <button disabled={cancel.isPending} onClick={() => confirm(`${s.teams[s.pendingJob!.team].name} 감독 이적 합의를 취소하고 지금 팀에 남을까요?`) && cancel.mutate()} className="w-full border border-[#ff6b6b] text-[#ffb8c8] py-0.5 text-[11.5px]">합의 취소 (시즌이 끝나기 전까지 가능)</button>
+          </div>
+        )}
+        {!(s.jobOffers ?? []).length && !s.pendingJob && <div className="text-neutral-500">없음 (시즌 중에도 가끔, 시즌이 끝나면 평판에 따라 제의가 옵니다 · 아래 목록에서 직접 이적 신청도 할 수 있습니다)</div>}
         {(s.jobOffers ?? []).map(o => {
           const t = s.teams[o.team];
           const ask = asks[o.team] ?? Math.round((o.fee * 1.2) / 10) * 10;
@@ -398,7 +442,7 @@ function ManagerTab({ s }: { s: CareerState }) {
               <div className="flex items-center gap-2">
                 <TeamLogo team={t} className="w-[52px] h-[30px]" />
                 <span className="flex-1">{t.name} <span className="text-neutral-500">전력 {teamPower(s, o.team).toLocaleString()}</span>
-                  <span className="block text-[10.5px] text-[#bff5c6]">영입 계약금 <b className="text-[#ffe45c]">{o.fee.toLocaleString()}만</b>{o.status === "countered" ? " (협상됨)" : ""} · 구단 자금 {t.money.toLocaleString()}만 · 협상 {o.tries}/3</span></span>
+                  <span className="block text-[10.5px] text-[#bff5c6]">영입 계약금 <b className="text-[#ffe45c]">{o.fee.toLocaleString()}만</b>{o.status === "countered" ? " (협상됨)" : ""} · 구단 자금 {t.money.toLocaleString()}만{o.applied ? " · 이적 신청" : ""}{o.tries ? ` · 협상 ${o.tries}회` : ""}</span></span>
               </div>
               <div className="flex items-center justify-between gap-1">
                 <span className="text-neutral-400 text-[11.5px]">원하는 계약금</span>
@@ -415,12 +459,21 @@ function ManagerTab({ s }: { s: CareerState }) {
         })}
         {(s.manager?.teams?.length ?? 0) > 1 && <div className="text-[10.5px] text-neutral-500 pt-1">맡았던 팀: {s.manager!.teams!.map(id => s.teams[id]?.name).join(" → ")}</div>}
       </Panel>
-      <Panel icon="📊" title="팀별 제의에 필요한 평판" accent="#9a9a9a" bodyClass="space-y-0.5">
-        {ranked.map((t, i) => (
-          <div key={t.id} className={cn("flex justify-between text-[11.5px]", t.id === s.myTeam && "text-[#8fd0ff]")}>
-            <span>{i + 1}. {t.name}{t.div === 2 ? <span className="text-neutral-500"> (2부)</span> : null}</span><span className={rep >= jobThreshold(i) ? "text-[#bff5c6]" : "text-neutral-500"}>{rep >= jobThreshold(i) ? "✔ " : ""}{jobThreshold(i)}</span>
-          </div>
-        ))}
+      <Panel icon="📊" title="감독 이적 신청 · 구단별 필요한 평판" accent="#9a9a9a" bodyClass="space-y-0.5">
+        {ranked.map((t, i) => {
+          const applied = s.jobApplied?.[t.id] === s.season;
+          const offered = (s.jobOffers ?? []).some(o => o.team === t.id);
+          return (
+            <div key={t.id} className={cn("flex items-center gap-1.5 text-[11.5px] py-[1px]", t.id === s.myTeam && "text-[#8fd0ff]")}>
+              <span className="flex-1 truncate">{i + 1}. {t.name}{t.div === 2 ? <span className="text-neutral-500"> (2부)</span> : null}</span>
+              <span className={cn("w-10 text-right", rep >= jobThreshold(i) ? "text-[#bff5c6]" : "text-neutral-500")}>{rep >= jobThreshold(i) ? "✔ " : ""}{jobThreshold(i)}</span>
+              {t.id === s.myTeam ? <span className="w-[58px] text-center text-[10px]">우리 팀</span>
+                : <button disabled={apply.isPending || applied || offered || !!s.pendingJob} onClick={() => confirm(`${t.name}에 감독 이적을 신청할까요? (구단마다 시즌에 한 번)`) && apply.mutate({ teamId: t.id })}
+                    className="w-[58px] border border-neutral-600 text-[10.5px] py-[1px] disabled:opacity-40">{offered ? "제의 옴" : applied ? "신청함" : "이적 신청"}</button>}
+            </div>
+          );
+        })}
+        <div className="text-[10px] text-neutral-500 pt-1">평판이 기준에 가까우면 구단이 영입 계약금을 제시합니다 (기준보다 조금 낮아도 가끔 받아 줌). 계약금은 횟수 제한 없이 협상할 수 있고, 시즌 중에 합의하면 시즌이 끝날 때 옮기며 그 전까지는 취소할 수 있습니다</div>
       </Panel>
     </div>
   );
@@ -505,6 +558,49 @@ function QuestRow({ s, q }: { s: CareerState; q: SponsorQuest }) {
   );
 }
 
+/** 후원: 도착한 선물 받기 + 최근 받은 기록 */
+function GiftBox({ s }: { s: CareerState }) {
+  const { reply, done, fail } = useMut();
+  const claim = trpc.career.claimGift.useMutation({ onSuccess: done, onError: fail });
+  const gifts = s.gifts ?? [];
+  const log = (s.giftLog ?? []).slice(0, 4);
+  if (!gifts.length && !log.length && !reply) return null;
+  const what = (g: Gift) => g.money ? <><span className="text-[15px]">💰</span> <b className="text-[#ffe45c]">{g.money.toLocaleString()}만원</b></>
+    : <><span className="inline-flex w-5 h-5 bg-white items-center justify-center align-middle overflow-hidden"><LegacyImg dir={itemImg(ITEM_BY_KEY[g.item!.key]).dir} name={itemImg(ITEM_BY_KEY[g.item!.key]).name} className="max-w-full max-h-full" fallback={<span className="text-black text-[9px]">🎁</span>} /></span> <b className="text-[#ffe45c]">{ITEM_BY_KEY[g.item!.key]?.name} {g.item!.qty}개</b></>;
+  return (
+    <Panel icon="🎁" title="후원" accent="#ff9ad5" right={gifts.length ? `도착 ${gifts.length}건` : "팬·기업이 보내는 선물"}>
+      {reply && <Reply {...reply} />}
+      {gifts.map(g => (
+        <div key={g.id} className="flex items-center gap-2 border border-[#ff9ad5]/40 bg-[#ff9ad5]/5 px-2 py-1.5">
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] text-neutral-400 truncate">{g.from} · {g.season}시즌 {g.week}주</div>
+            <div className="text-[12.5px]">{g.money || g.item ? "🎁 선물 상자" : ""}</div>
+          </div>
+          <button disabled={claim.isPending} onClick={() => claim.mutate({ id: g.id })} className="shrink-0 px-3 py-1 text-[12.5px] font-bold text-black border border-neutral-500" style={{ background: "linear-gradient(#ffe0f2,#ff9ad5)" }}>{claim.isPending && claim.variables?.id === g.id ? "여는 중…" : "받기"}</button>
+        </div>
+      ))}
+      {log.length > 0 && (
+        <div className="space-y-0.5">
+          <div className="text-[10.5px] text-neutral-500">최근 받은 후원</div>
+          {log.map(g => <div key={g.id} className="text-[11.5px] text-neutral-300 truncate">{what(g)} <span className="text-neutral-500">· {g.from}</span></div>)}
+        </div>
+      )}
+      <div className="text-[10px] text-neutral-500">한 주가 끝날 때 가끔 도착합니다 (성적·평판이 좋을수록 자주). 자금이나 소모품 한 종류 1~5개 — 열어 봐야 압니다. 최대 3건까지 쌓입니다</div>
+    </Panel>
+  );
+}
+
+/** 계약금형 · 승리수당형 조건 */
+function SponsorExtra({ sp, done }: { sp: Sponsor; done?: boolean }) {
+  if (!sp.signing && !sp.winBonus) return null;
+  return (
+    <div className="flex flex-wrap gap-1 text-[11px]">
+      {sp.signing ? <span className="border border-[#ffe45c]/60 text-[#ffe45c] px-1.5">💵 계약금 {sp.signing.toLocaleString()}만{done ? " (받음)" : " (계약 즉시)"}</span> : null}
+      {sp.winBonus ? <span className="border border-[#8fe07a]/60 text-[#bff5c6] px-1.5">⚔️ 프로리그 승리마다 +{sp.winBonus}만</span> : null}
+    </div>
+  );
+}
+
 function SponsorTab({ s }: { s: CareerState }) {
   const { reply, done, fail } = useMut();
   const choose = trpc.career.chooseSponsor.useMutation({ onSuccess: done, onError: fail });
@@ -518,6 +614,7 @@ function SponsorTab({ s }: { s: CareerState }) {
   const left = offers.filter(o => !mine.some(x => x.name === o.name));
   return (
     <div className="space-y-2 text-[12.5px]">
+      <GiftBox s={s} />
       <MainSponsorCard s={s} />
       <div className="flex items-center gap-2 pt-1">
         <span className="text-[#ffe45c] text-[13px] font-bold">🤝 서브 스폰서</span>
@@ -526,6 +623,7 @@ function SponsorTab({ s }: { s: CareerState }) {
       </div>
       {mine.map(sp => (
         <Panel key={sp.name} icon="✅" title={sp.name} accent="#8fe07a" right={`후원금 주 ${sp.weekly}만원`}>
+          <SponsorExtra sp={sp} done />
           {sp.quests.map((q, i) => <QuestRow key={i} s={s} q={q} />)}
         </Panel>
       ))}
@@ -537,7 +635,8 @@ function SponsorTab({ s }: { s: CareerState }) {
             퀘스트 목표를 올리면 보상이 커지고, 낮추면 줄어듭니다.
           </div>
           {left.map(o => (
-            <Panel key={o.name} icon="📄" title={o.name} accent="#c8c8c8" right={<>후원금 주 <b className="text-[#ffe45c] text-[12px]">{o.weekly}</b>만원</>}>
+            <Panel key={o.name} icon="📄" title={<>{o.name} {o.style && <span className="text-[10px] font-normal border border-neutral-600 px-1 text-neutral-300 align-middle">{SPONSOR_STYLE_NAMES[o.style]}</span>}</>} accent="#c8c8c8" right={<>후원금 주 <b className="text-[#ffe45c] text-[12px]">{o.weekly}</b>만원</>}>
+              <SponsorExtra sp={o} />
               {o.quests.map((q, i) => {
                 const [lo, hi] = questRange(q);
                 const row = targets[o.name] ?? o.quests.map(x => x.target);
@@ -630,6 +729,7 @@ function ClubScreen({ s }: { s: CareerState }) {
               <span className="text-[15px]">{icon}</span>
               {label}
               {k === "offers" && (s.offers?.length ?? 0) + (s.joinRequests?.length ?? 0) + (s.raiseRequest ? 1 : 0) > 0 && <span className="absolute -top-1.5 -right-1 bg-[#ff4d4d] text-white text-[9px] rounded-full px-1">{(s.offers?.length ?? 0) + (s.joinRequests?.length ?? 0) + (s.raiseRequest ? 1 : 0)}</span>}
+              {k === "sponsor" && (s.gifts?.length ?? 0) > 0 && <span className="absolute -top-1.5 -right-1 bg-[#ff4d9d] text-white text-[9px] rounded-full px-1">🎁{s.gifts!.length}</span>}
               {k === "manager" && (s.jobOffers?.length ?? 0) > 0 && <span className="absolute -top-1.5 -right-1 bg-[#ff4d4d] text-white text-[9px] rounded-full px-1">{s.jobOffers!.length}</span>}
             </button>
           ))}

@@ -44,6 +44,7 @@ import {
   totalOf,
   type PlayerSnap,
   type IndivHonor,
+  type TransferTiming,
 } from "@shared/career/rules";
 import {
   type SetMods,
@@ -59,8 +60,10 @@ import { applyPromo, ensureDivisions, fillBRosters, fmt, promoMoves, rosterLimit
 import { createMsl, mslDueThisWeek, mslPlayersThisWeek, nominationPending, runMslWeek, type MslReport } from "./msl";
 import { ITEM_BY_KEY, isStackable, matchCond, packOf, slotOf, stackMax } from "@shared/career/items";
 import { ensurePotential, retirements, rookies } from "./generation";
+import { midweekMarket } from "./club";
 import { addManagerExp, bidPlayer, mainSponsorPay, book, ensureClub, newSeasonClub, pay, seasonEndClub, weeklyClub } from "./club";
 import { EVENT_INCOME_MAX, cheerChance, defaultContract, eventCondCost, eventIncome, popularity, scoutPrice } from "@shared/career/contract";
+import { activeSponsors } from "@shared/career/sponsor";
 export type { MslReport };
 
 const RACE: Record<string, Race> = { T: "terran", Z: "zerg", P: "protoss" };
@@ -69,7 +72,7 @@ const REGULAR_WEEKS = 11;
 
 
 
-import { rosterOf, proRosterOf, proTeams, standings, myPendingMatch, evaluateTrade, activePlayers, divOf, divTeams, leagueName, myDiv } from "@shared/career/view";
+import { pendingMoveOf, rosterOf, proRosterOf, proTeams, standings, myPendingMatch, evaluateTrade, activePlayers, divOf, divTeams, leagueName, myDiv } from "@shared/career/view";
 export { rosterOf, proTeams, standings, myPendingMatch };
 
 // ── 새 게임 ─────────────────────────────────────────────────────
@@ -312,6 +315,7 @@ function recordMatch(s: CareerState, m: CMatch, entryA: number[], entryB: number
     const [my, their] = m.a === s.myTeam ? [sa, sb] : [sb, sa];
     const stageName = m.stage === "regular" ? `${m.week}주차 ${m.leg ?? 1}경기` : ({ semi: "준플레이오프", po: "플레이오프", final: "결승", promo: "승강전" } as const)[m.stage];
     mainSponsorPay(s, won ? "win" : "loss", won ? "스폰서 승리 수당" : "스폰서 패배 수당", `${stageName} vs ${oppTeam.name} ${my}:${their}`);
+    if (won) for (const sp of activeSponsors(s)) if (sp.winBonus) pay(s, "스폰서", sp.winBonus, `${sp.name} 승리 수당`);
     addManagerExp(s, won ? 30 : 10);
   }
   // 출전 기록 (사기·출전 보장 조건)
@@ -744,7 +748,12 @@ export function playLiveSet(s: CareerState, ace?: number): LiveSetResult {
     recordMatch(s, m, entryA, entryB, live.sets);
     delete s.live;
     // 이번 주 우리 경기가 더 남았으면 (한 주 2경기) 주를 넘기지 않음
-    if (myPendingMatch(s)) return { set, matchOver: true, playedMatchId: m.id, needAce: false };
+    // 주중: 경기가 끝나면 다른 구단의 제안·선수 요청이 오고, 경기 전에 보낸 요청에 답이 옴
+    if (myPendingMatch(s)) {
+      midweekMarket(s);
+      answerRequests(s, true);
+      return { set, matchOver: true, playedMatchId: m.id, needAce: false };
+    }
     const week = endWeek(s, m.id);
     return { set, matchOver: true, playedMatchId: m.id, week, needAce: false };
   }
@@ -763,8 +772,8 @@ function progressSchedule(s: CareerState) {
   if (s.phase === "regular" && s.week > REGULAR_WEEKS) {
     s.phase = "postseason";
     const st = standings(s, 1);
-    s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "semi", div: 1, a: st[2].id, b: st[3].id, ...fmt(s, "semi") });
-    schedulePromo(s);
+    // 포스트시즌은 한 주에 한 경기씩: 승강전 1 → 승강전 2 → 준플레이오프 → 플레이오프 → 결승
+    if (!schedulePromo(s, 0)) s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "semi", div: 1, a: st[2].id, b: st[3].id, ...fmt(s, "semi") });
     regularSeasonPrize(s);
     const mine = standings(s);
     const myRank = mine.findIndex(t => t.id === s.myTeam) + 1;
@@ -776,10 +785,13 @@ function progressSchedule(s: CareerState) {
     return;
   }
   if (s.phase !== "postseason") return;
-  const last = s.matches.filter(m => PLAYOFF.includes(m.stage) && m.done).sort((a, b) => b.id - a.id)[0];
+  const last = s.matches.filter(m => (PLAYOFF.includes(m.stage) || m.stage === "promo") && m.done).sort((a, b) => b.id - a.id)[0];
   if (!last || s.matches.some(m => !m.done)) return;
   const st = standings(s, 1);
-  if (last.stage === "semi") {
+  if (last.stage === "promo") {
+    const n = s.matches.filter(m => m.stage === "promo").length;
+    if (n >= 2 || !schedulePromo(s, 1)) s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "semi", div: 1, a: st[2].id, b: st[3].id, ...fmt(s, "semi") });
+  } else if (last.stage === "semi") {
     s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "po", div: 1, a: st[1].id, b: last.winner!, ...fmt(s, "po") });
   } else if (last.stage === "po") {
     s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "final", div: 1, a: st[0].id, b: last.winner!, ...fmt(s, "final") });
@@ -924,6 +936,7 @@ export function releasePlayer(s: CareerState, pid: number) {
   const p = s.players[pid];
   if (!p || p.team !== s.myTeam) throw new CareerError("우리 팀 선수가 아닙니다");
   if (s.live) throw new CareerError("경기 중에는 방출할 수 없습니다");
+  if (pendingMoveOf(s, pid)) throw new CareerError("시즌이 끝나면 다른 팀으로 옮기기로 한 선수입니다 (이적료를 이미 받음)");
   if (rosterOf(s, s.myTeam).length <= rosterLimits(s, s.myTeam).min) throw new CareerError(`선수단은 최소 ${rosterLimits(s, s.myTeam).min}명을 유지해야 합니다`);
   const gain = Math.round(askingPrice(p, s.season) * 0.2 / 10) * 10;
   pay(s, "방출", gain, p.name);
@@ -1057,6 +1070,7 @@ function checkTrade(s: CareerState, teamId: number, myIds: number[], theirIds: n
   if (!theirIds.length) throw new CareerError("받을 선수를 선택해주세요");
   if (myIds.some(id => s.players[id]?.team !== s.myTeam || s.players[id]?.reserve)) throw new CareerError("우리 1부 선수만 트레이드할 수 있습니다");
   if (theirIds.some(id => s.players[id]?.team !== teamId)) throw new CareerError("상대 팀 선수가 아닙니다");
+  if ([...myIds, ...theirIds].some(id => pendingMoveOf(s, id))) throw new CareerError("시즌 후 이적이 정해진 선수는 트레이드할 수 없습니다");
   const me = s.teams[s.myTeam];
   if (me.money < cash) throw new CareerError("자금이 부족합니다");
   const myAfter = rosterOf(s, s.myTeam).length - myIds.length + theirIds.length;
@@ -1095,14 +1109,15 @@ const pendingReq = (s: CareerState, kind: OutRequest["kind"], match: (r: OutRequ
   (s.outbox ?? []).find(r => r.kind === kind && !r.reply && match(r));
 
 function queueRequest(s: CareerState, r: Omit<OutRequest, "id" | "season" | "week">, text: string) {
-  s.outbox = [...(s.outbox ?? []), { ...r, id: (s.nextOfferId = (s.nextOfferId ?? 1) + 1), season: s.season, week: s.week }];
-  news(s, `📨 ${text} — 다음 주에 답이 옵니다`);
-  return { result: "sent" as const, message: `${text}. 다음 주에 답이 오면 이어서 협상할 수 있습니다 (요청 진행 상황은 이적 화면 위쪽)` };
+  s.outbox = [...(s.outbox ?? []), { ...r, id: (s.nextOfferId = (s.nextOfferId ?? 1) + 1), season: s.season, week: s.week, day: myMatchesThisWeek(s) }];
+  const when = myMatchesLeftThisWeek(s) > 0 ? "우리 팀 다음 경기가 끝나면" : "다음 주에";
+  news(s, `📨 ${text} — ${when} 답이 옵니다`);
+  return { result: "sent" as const, message: `${text}. ${when} 답이 오면 이어서 협상할 수 있습니다 (요청 진행 상황은 이적 화면 위쪽)` };
 }
 
 /** 영입 요청: 비시즌이거나 이번 주에 답이 온 선수면 바로 협상, 아니면 요청을 보내고 다음 주에 답 */
-export function requestBid(s: CareerState, pid: number, fee: number) {
-  if (s.phase === "offseason" || answeredThisWeek(s, "bid", r => r.player === pid)) return bidPlayer(s, pid, fee);
+export function requestBid(s: CareerState, pid: number, fee: number, timing: TransferTiming = "now") {
+  if (s.phase === "offseason" || answeredThisWeek(s, "bid", r => r.player === pid)) return bidPlayer(s, pid, fee, timing);
   const p = s.players[pid];
   if (!p || p.team === s.myTeam || p.team === FREE_AGENT_TEAM) throw new CareerError("다른 팀 선수만 영입 요청할 수 있습니다");
   if (pendingReq(s, "bid", r => r.player === pid)) throw new CareerError("이미 영입 요청을 보낸 선수입니다 (다음 주에 답이 옵니다)");
@@ -1110,7 +1125,7 @@ export function requestBid(s: CareerState, pid: number, fee: number) {
   const { max } = rosterLimits(s, s.myTeam);
   if (rosterOf(s, s.myTeam).length >= max) throw new CareerError(`선수단은 최대 ${max}명입니다`);
   if (s.teams[s.myTeam].money < fee) throw new CareerError("소지금이 부족합니다");
-  return queueRequest(s, { kind: "bid", team: p.team, player: pid, fee }, `${s.teams[p.team].name}에 ${p.name} 선수 영입 요청 (이적료 ${fee.toLocaleString()}만원)`);
+  return queueRequest(s, { kind: "bid", team: p.team, player: pid, fee, ...(timing === "after" ? { timing } : {}) }, `${s.teams[p.team].name}에 ${p.name} 선수 영입 요청 (이적료 ${fee.toLocaleString()}만원${timing === "after" ? " · 시즌 후 이적" : ""})`);
 }
 
 /** 트레이드 제안: 비시즌이거나 이번 주에 그 구단의 답이 왔으면 바로, 아니면 다음 주에 답 */
@@ -1143,16 +1158,30 @@ export function cancelRequest(s: CareerState, id: number) {
   return { ok: true };
 }
 
-/** 주가 바뀌면 지난주에 보낸 요청에 답이 옴 (지난 답은 정리) */
-export function answerRequests(s: CareerState) {
+/** 이번 주 우리 팀이 치른 프로리그 경기 수 */
+function myMatchesThisWeek(s: CareerState) {
+  return s.matches.filter(m => m.done && m.week === s.week && (m.a === s.myTeam || m.b === s.myTeam)).length;
+}
+function myMatchesLeftThisWeek(s: CareerState) {
+  return s.matches.filter(m => !m.done && m.week === s.week && (m.a === s.myTeam || m.b === s.myTeam)).length;
+}
+
+/**
+ * 보낸 요청에 답이 옴 (지난 답은 정리)
+ * - 주가 바뀔 때: 지난주에 보낸 요청
+ * - midweek (우리 경기가 끝날 때): 그 경기 전에 보낸 요청
+ */
+export function answerRequests(s: CareerState, midweek = false) {
   const now = (r: OutRequest) => r.season === s.season && r.week === s.week;
-  s.outbox = (s.outbox ?? []).filter(r => !r.reply || (r.reply.season === s.season && r.reply.week === s.week));
-  for (const r of s.outbox) {
-    if (r.reply || now(r)) continue;
+  const played = myMatchesThisWeek(s);
+  if (!midweek) s.outbox = (s.outbox ?? []).filter(r => !r.reply || (r.reply.season === s.season && r.reply.week === s.week));
+  for (const r of s.outbox ?? []) {
+    if (r.reply) continue;
+    if (now(r) && !(midweek && (r.day ?? played) < played)) continue;
     let reply: Omit<NonNullable<OutRequest["reply"]>, "season" | "week">;
     try {
       if (r.kind === "bid") {
-        const res = bidPlayer(s, r.player!, r.fee ?? 0) as { result: string; message: string; fee?: number };
+        const res = bidPlayer(s, r.player!, r.fee ?? 0, r.timing ?? "now") as { result: string; message: string; fee?: number };
         reply = { ok: res.result === "agreed", result: res.result, message: res.message, fee: res.fee };
       } else if (r.kind === "trade") {
         proposeTrade(s, r.team, r.give ?? [], r.take ?? [], r.cash ?? 0);

@@ -110,7 +110,9 @@ export function fillBRosters(s: CareerState, initial = false) {
   }
   const total = [...need.values()].reduce((a, b) => a + b, 0);
   if (!total) return;
-  const free = () => s.players.filter(p => p.team === FREE_AGENT_TEAM);
+  // 우리가 영입 연락을 보내 답을 기다리는 무소속 선수는 남겨 둠
+  const contacted = new Set((s.outbox ?? []).filter(r => r.kind === "scout" && !r.reply).map(r => r.player));
+  const free = () => s.players.filter(p => p.team === FREE_AGENT_TEAM && !contacted.has(p.id));
   const short = total + KEEP_FREE_AGENTS - free().length;
   if (short > 0) prospects(s, short);
   // 어린 선수 우선 (2부는 육성 리그), 같은 나이면 강한 순
@@ -163,12 +165,17 @@ export function ensureDivisions(s: CareerState) {
 }
 
 /** 정규시즌 뒤 승강전: 1부 11위 vs 2부 2위, 1부 12위 vs 2부 1위 */
-export function schedulePromo(s: CareerState) {
+/**
+ * 승강전 한 경기 (포스트시즌에 한 주에 한 경기씩): 0 = 1부 11위 vs 2부 2위, 1 = 1부 12위 vs 2부 1위
+ * 2부가 없으면 false
+ */
+export function schedulePromo(s: CareerState, idx: 0 | 1): boolean {
   const st1 = standings(s, 1), st2 = standings(s, 2);
-  if (st1.length < 4 || st2.length < 2) return;
-  const pairs: Array<[number, number]> = [[st1[st1.length - 2].id, st2[1].id], [st1[st1.length - 1].id, st2[0].id]];
-  for (const [a, b] of pairs) s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "promo", div: 1, a, b, ...fmt(s, "promo") });
-  news(s, `⚔️ 승강전: ${pairs.map(([a, b]) => `${s.teams[a].name}(1부) vs ${s.teams[b].name}(2부)`).join(" / ")}`);
+  if (st1.length < 4 || st2.length < 2) return false;
+  const [a, b] = idx === 0 ? [st1[st1.length - 2].id, st2[1].id] : [st1[st1.length - 1].id, st2[0].id];
+  s.matches.push({ id: s.nextMatchId++, week: s.week, stage: "promo", div: 1, a, b, ...fmt(s, "promo") });
+  news(s, `⚔️ 승강전 ${idx + 1}경기: ${s.teams[a].name}(1부) vs ${s.teams[b].name}(2부)`);
+  return true;
 }
 
 /** 승강전 결과 (2부 팀이 이기면 올라가고 1부 팀이 내려감) */

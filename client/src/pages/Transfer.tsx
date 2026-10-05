@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { FREE_AGENT_TEAM } from "@shared/career/originalData";
-import { B_MAX_ROSTER, MAX_ROSTER, ageOf, askingPrice, totalOf, type CareerState, type CPlayer } from "@shared/career/rules";
+import { AFTER_SEASON_FEE, B_MAX_ROSTER, MAX_ROSTER, ageOf, askingPrice, totalOf, type CareerState, type CPlayer, type TransferTiming } from "@shared/career/rules";
 import { bTeamIdOf, evaluateTrade, myDiv, proTeams, rosterOf } from "@shared/career/view";
 import { useCareer, useCareerPatch, useCareerUpdater } from "@/lib/career";
 import type { CareerDiff } from "@shared/career/diff";
@@ -91,11 +91,12 @@ function BidTab({ s, focus }: { s: CareerState; /** 답이 온 요청에서 "이
   const lastReply = focused ? (s.outbox ?? []).find(r => r.kind === "bid" && r.player === focused.id && r.reply) : undefined;
   const [fee, setFee] = useState(lastReply?.reply?.fee ?? lastReply?.fee ?? 0);
   const [reply, setReply] = useState<{ text: string; ok: boolean } | null>(null);
+  const [timing, setTiming] = useState<TransferTiming>("now");
   const theirs = useMemo(() => rosterOf(s, teamId).sort(byTotal), [s, teamId]);
   const p = sel !== undefined ? s.players[sel] : undefined;
   const deal = p ? s.agreements?.[p.id] : undefined;
   const agreed = !!deal && deal.season === s.season && deal.week === s.week && deal.team === p!.team;
-  // 시즌 중엔 요청을 보내고 다음 주에 답이 옴 (답이 온 주에는 바로 협상)
+  // 시즌 중엔 요청을 보내고 우리 다음 경기 뒤(또는 다음 주)에 답이 옴 (답이 온 주에는 바로 협상)
   const waiting = p ? (s.outbox ?? []).find(r => r.kind === "bid" && r.player === p.id && !r.reply) : undefined;
   const talking = p ? (s.outbox ?? []).some(r => r.kind === "bid" && r.player === p.id && r.reply?.season === s.season && r.reply.week === s.week) : false;
   const direct = s.phase === "offseason" || talking;
@@ -112,7 +113,8 @@ function BidTab({ s, focus }: { s: CareerState; /** 답이 온 요청에서 "이
   // 우리 구단 B팀 선수는 시세의 절반에 데려올 수 있음
   const myB = bTeamIdOf(s, s.myTeam);
   const priceOf = (x: CPlayer) => Math.round((askingPrice(x, s.season) * (x.team === myB ? 0.5 : 1)) / 10) * 10;
-  const pick = (x: CPlayer) => { setSel(x.id); setFee(priceOf(x)); setReply(null); };
+  const pick = (x: CPlayer) => { setSel(x.id); setFee(Math.round((priceOf(x) * (timing === "after" ? AFTER_SEASON_FEE : 1)) / 10) * 10); setReply(null); };
+  const canAfter = s.phase !== "offseason";
   return (
     <>
       <TeamPicker teams={teams} value={teamId} onPick={id => { setTeamId(id); setSel(undefined); setReply(null); }} />
@@ -134,17 +136,25 @@ function BidTab({ s, focus }: { s: CareerState; /** 답이 온 요청에서 "이
           <div className="text-center text-neutral-500 py-1">선수를 고르면 여기서 바로 이적료를 제시합니다 · 보유 {money(s).toLocaleString()}만</div>
         ) : !agreed ? (
           <>
+            {canAfter && (
+              <div className="grid grid-cols-2 gap-1 text-[11px]">
+                {([["now", "즉시 이적"], ["after", `시즌 후 이적 (약 ${Math.round((1 - AFTER_SEASON_FEE) * 100)}% 싸게)`]] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => { setTiming(k); setFee(Math.round((priceOf(p) * (k === "after" ? AFTER_SEASON_FEE : 1)) / 10) * 10); }}
+                    className={cn("border py-0.5", timing === k ? "border-[#ffe45c] text-[#ffe45c]" : "border-neutral-700 text-neutral-400")}>{l}</button>
+                ))}
+              </div>
+            )}
             <div className="flex items-center justify-between gap-1">
               <span className="text-neutral-400 shrink-0">이적료</span>
               <FeeStepper value={fee} onChange={setFee} max={money(s)} />
             </div>
-            <button disabled={bid.isPending || !!waiting} onClick={() => bid.mutate({ playerId: p.id, fee })} className={BTN} style={BTN_BG}>
-              {bid.isPending ? "보내는 중..." : waiting ? "요청 보냄 · 다음 주에 답이 옵니다" : direct ? `${p.name} 이적료 제시 (바로 협상)` : `${p.name} 영입 요청 (다음 주에 답)`}
+            <button disabled={bid.isPending || !!waiting} onClick={() => bid.mutate({ playerId: p.id, fee, timing: canAfter ? timing : "now" })} className={BTN} style={BTN_BG}>
+              {bid.isPending ? "보내는 중..." : waiting ? "요청 보냄 · 답을 기다리는 중" : direct ? `${p.name} 이적료 제시 (바로 협상)` : `${p.name} 영입 요청 (다음 경기 뒤 답)`}
             </button>
           </>
         ) : (
           <>
-            <div className="text-center text-[11.5px] text-[#bff5c6]">이적료 {deal!.fee.toLocaleString()}만원 합의 · 이번 주 안에 선수와 계약하세요</div>
+            <div className="text-center text-[11.5px] text-[#bff5c6]">이적료 {deal!.fee.toLocaleString()}만원 합의{deal!.timing === "after" ? " (시즌 후 합류)" : ""} · 이번 주 안에 선수와 계약하세요</div>
             <ContractEditor player={p} demand={playerDemand(s, p, s.myTeam)} pending={contract.isPending}
               onSubmit={c => contract.mutate({ playerId: p.id, salary: c.salary, years: c.years, minApps: c.minApps, bonus: c.bonus })} />
           </>
@@ -171,7 +181,7 @@ function TradeTab({ s }: { s: CareerState }) {
     onSuccess: r => {
       updater.onSuccess(r);
       const res = r.result as { result?: string; message?: string };
-      if (res.result === "sent") toast.info(res.message ?? "트레이드를 제안했습니다. 다음 주에 답이 옵니다");
+      if (res.result === "sent") toast.info(res.message ?? "트레이드를 제안했습니다. 우리 다음 경기가 끝나면 답이 옵니다");
       else toast.success("트레이드 성사!");
       setGive([]); setTake([]); setCash(0);
     },
@@ -218,7 +228,7 @@ function TradeTab({ s }: { s: CareerState }) {
           </>
         ) : <div className="text-center text-neutral-500 text-[11px]">받을 선수를 고르세요 · 보유 {money(s).toLocaleString()}만</div>}
         <button disabled={!take.length || trade.isPending || waiting} onClick={() => trade.mutate({ teamId, give, take, cash })} className={BTN} style={BTN_BG}>
-          {s.phase === "offseason" || answered ? "트레이드 제안 (바로 답)" : waiting ? "이미 제안함 · 다음 주에 답" : "트레이드 제안 (다음 주에 답)"}
+          {s.phase === "offseason" || answered ? "트레이드 제안 (바로 답)" : waiting ? "이미 제안함 · 답 대기" : "트레이드 제안 (다음 경기 뒤 답)"}
         </button>
       </Actions>
     </>
@@ -235,7 +245,7 @@ function ScoutTab({ s }: { s: CareerState }) {
     onSuccess: r => {
       updater.onSuccess(r);
       const res = r.result as { result: string; message?: string; price?: number };
-      if (res.result === "sent") toast.info(res.message ?? "영입 연락을 보냈습니다. 다음 주에 답이 옵니다");
+      if (res.result === "sent") toast.info(res.message ?? "영입 연락을 보냈습니다. 우리 다음 경기가 끝나면 답이 옵니다");
       else toast.success(`영입 완료! (${(res.price ?? 0).toLocaleString()}만원)`);
       setSel(undefined);
     },
@@ -263,7 +273,7 @@ function ScoutTab({ s }: { s: CareerState }) {
       <Actions>
         <div className="flex justify-between"><span className="text-neutral-400">요구 금액 <b className="text-[#ffb8c8]">{p ? `${price.toLocaleString()}만` : "-"}</b></span><span className="text-neutral-400">보유 <b className="text-[#ffe45c]">{money(s).toLocaleString()}만</b></span></div>
         <button disabled={!p || full || scout.isPending || money(s) < price || contacted} onClick={() => p && scout.mutate({ playerId: p.id })} className={BTN} style={BTN_BG}>
-          {full ? `선수단이 가득 찼습니다 (${max}명)` : contacted ? "연락함 · 다음 주에 답" : !p ? "선수를 고르세요" : s.phase === "offseason" ? `${p.name} 영입` : `${p.name} 영입 연락 (다음 주에 답)`}
+          {full ? `선수단이 가득 찼습니다 (${max}명)` : contacted ? "연락함 · 답 대기" : !p ? "선수를 고르세요" : s.phase === "offseason" ? `${p.name} 영입` : `${p.name} 영입 연락 (다음 경기 뒤 답)`}
         </button>
       </Actions>
     </>
@@ -370,7 +380,7 @@ function Outbox({ s, onTalk }: { s: CareerState; onTalk: (pid: number) => void }
           <div className="flex items-center gap-1">
             <span className="text-[10.5px] text-neutral-400 shrink-0">{KIND_LABEL[r.kind]}</span>
             <span className="truncate flex-1">{what(r)}</span>
-            {!r.reply && <span className="text-[10.5px] text-[#ffe45c] shrink-0">답 대기 · 다음 주</span>}
+            {!r.reply && <span className="text-[10.5px] text-[#ffe45c] shrink-0">답 대기 · 다음 경기 뒤</span>}
             {!r.reply && <button disabled={cancel.isPending} onClick={() => cancel.mutate({ id: r.id })} className="border border-neutral-600 px-1.5 text-[10.5px] text-neutral-300 shrink-0">취소</button>}
           </div>
           {r.reply && (
@@ -383,7 +393,7 @@ function Outbox({ s, onTalk }: { s: CareerState; onTalk: (pid: number) => void }
           )}
         </div>
       ))}
-      <div className="text-[10px] text-neutral-500">시즌 중에는 요청을 보낸 다음 주에 답이 오고, 답이 온 주에는 바로 이어서 협상할 수 있습니다 (비시즌은 바로 답)</div>
+      <div className="text-[10px] text-neutral-500">시즌 중에는 요청을 보낸 뒤 우리 팀 다음 경기가 끝나면(그 주 경기가 없으면 다음 주에) 답이 오고, 답이 온 주에는 바로 이어서 협상할 수 있습니다 (비시즌은 바로 답)</div>
     </div>
   );
 }

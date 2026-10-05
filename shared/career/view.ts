@@ -117,3 +117,6 @@ export function teamHonors(s: CareerState, tid: number): TeamHonorRow[] {
   }
   return out;
 }
+
+/** 시즌 끝에 옮기기로 한 선수 (이적료는 이미 주고받음) */
+export const pendingMoveOf = (s: CareerState, pid: number) => (s.pendingMoves ?? []).find(m => m.player === pid && m.season === s.season);
