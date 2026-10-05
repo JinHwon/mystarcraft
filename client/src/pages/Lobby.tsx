@@ -1,5 +1,5 @@
 
-import { EVENT_INFO, type CareerEventType } from "@shared/career/events";
+import { EventBanner } from "@/components/career/EventBanner";
 import { MSL_STAGE_NAMES } from "@shared/career/rules";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
@@ -117,7 +117,6 @@ function Office({ s }: { s: CareerState }) {
   const updater = useCareerUpdater();
   const { canInstall, install } = useInstallPrompt();
   const [restart, setRestart] = useState(false);
-  const events = trpc.event.listActive.useQuery(undefined, { staleTime: 5 * 60_000 });
   const nextSeason = trpc.career.nextSeason.useMutation({ ...updater, onSuccess: r => { updater.onSuccess(r); toast.success(`${(r.diff.set.season as number | undefined) ?? s.season + 1}시즌 개막!`); } });
   const me = s.teams[s.myTeam];
   const st = standings(s);
@@ -151,14 +150,7 @@ function Office({ s }: { s: CareerState }) {
 
   return (
     <div className="p-4 space-y-4">
-      {(events.data ?? []).length > 0 && (
-        <div className="rounded-2xl bg-emerald-500/10 border border-emerald-400/40 p-3 space-y-1">
-          {events.data!.map(e => {
-            const info = EVENT_INFO[e.type as CareerEventType];
-            return <div key={e.id} className="text-xs text-foreground">{info?.icon ?? "🎉"} <b>{e.name}</b> — {info?.desc ?? e.description}</div>;
-          })}
-        </div>
-      )}
+      <EventBanner />
       {alerts.length > 0 && (
         <div className="rounded-2xl bg-amber-500/10 border border-amber-400/40 p-2 space-y-0.5">
           {alerts.map(a => (

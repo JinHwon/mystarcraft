@@ -158,6 +158,8 @@ function afterSet(s: CareerState, a: CPlayer, b: CPlayer, aWin: boolean, mods?: 
   w.wins++; w.sWins++; l.losses++; l.sLosses++;
   w.vs = { ...w.vs, [l.race]: [(w.vs?.[l.race]?.[0] ?? 0) + 1, w.vs?.[l.race]?.[1] ?? 0] };
   l.vs = { ...l.vs, [w.race]: [l.vs?.[w.race]?.[0] ?? 0, (l.vs?.[w.race]?.[1] ?? 0) + 1] };
+  w.sVs = { ...w.sVs, [l.race]: [(w.sVs?.[l.race]?.[0] ?? 0) + 1, w.sVs?.[l.race]?.[1] ?? 0] };
+  l.sVs = { ...l.sVs, [w.race]: [l.sVs?.[w.race]?.[0] ?? 0, (l.sVs?.[w.race]?.[1] ?? 0) + 1] };
   if (w.team === s.myTeam) w.h2h = { ...w.h2h, [l.id]: [(w.h2h?.[l.id]?.[0] ?? 0) + 1, w.h2h?.[l.id]?.[1] ?? 0] };
   if (l.team === s.myTeam) l.h2h = { ...l.h2h, [w.id]: [l.h2h?.[w.id]?.[0] ?? 0, (l.h2h?.[w.id]?.[1] ?? 0) + 1] };
   // 컨디션 유지 이벤트: 우리 선수는 지치지 않음

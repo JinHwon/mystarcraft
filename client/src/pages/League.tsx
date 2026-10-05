@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { PlayerRanking } from "@/components/career/PlayerRanking";
 import { useLocation } from "wouter";
 import { VitaButton, saveEntryDraft, takeEntryReturn } from "@/components/legacy/match/common";
 import { trpc } from "@/lib/trpc";
@@ -360,6 +361,20 @@ function MatchTab({ s }: { s: CareerState }) {
 }
 
 function TableTab({ s }: { s: CareerState }) {
+  const [who, setWho] = useState<"team" | "player">("team");
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-card border border-border">
+        {([["team", "🏢 구단 순위"], ["player", "👤 선수 순위"]] as const).map(([k, l]) => (
+          <button key={k} onClick={() => setWho(k)} className={cn("py-1.5 rounded-lg text-sm font-bold", who === k ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{l}</button>
+        ))}
+      </div>
+      {who === "team" ? <TeamTable s={s} /> : <PlayerRanking s={s} />}
+    </div>
+  );
+}
+
+function TeamTable({ s }: { s: CareerState }) {
   const [div, setDiv] = useState<1 | 2>(myDiv(s));
   const st = standings(s, div);
   const [, navigate] = useLocation();

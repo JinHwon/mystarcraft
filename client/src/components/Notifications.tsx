@@ -4,6 +4,7 @@
  * - 최근 소식(뉴스)도 함께
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { EventBanner } from "@/components/career/EventBanner";
 import { useLocation } from "wouter";
 import { Bell } from "lucide-react";
 import { toast } from "sonner";
@@ -85,6 +86,7 @@ export function Notifications({ s }: { s: CareerState }) {
           <SheetHeader className="px-1 pt-1">
             <SheetTitle className="text-left text-base">🔔 알림</SheetTitle>
           </SheetHeader>
+          <EventBanner className="mx-1" />
           <div className="space-y-1.5 px-1">
             {alerts.length === 0 && <div className="text-sm text-muted-foreground py-2">확인할 일이 없습니다</div>}
             {alerts.map(a => (

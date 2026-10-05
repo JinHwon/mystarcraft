@@ -2,7 +2,7 @@
  * 커리어 상태에서 화면용 정보를 뽑는 함수들 (서버·클라이언트 공용, 게임 엔진과 무관)
  */
 import { ORIG_MAPS, FREE_AGENT_TEAM } from "./originalData";
-import type { CareerState, CMatch, CPlayer, Race } from "./rules";
+import type { CareerState, CMatch, CPlayer, IndivHonor, IndivLeague, Race } from "./rules";
 import { B_TEAM_OFFSET, MIN_ROSTER, TRADE_ACE_PREMIUM, TRADE_PREMIUM, adaptWeeksLeft, totalOf, tradeValue } from "./rules";
 
 /** 선수단 */
@@ -94,4 +94,26 @@ export function headToHead(p: CPlayer, o: CPlayer): [number, number] {
   if (mine) return mine;
   const theirs = o.h2h?.[p.id];
   return theirs ? [theirs[1], theirs[0]] : [0, 0];
+}
+
+/** 구단 이력: 프로리그 우승·준우승, 2부 1위, 승강, 개인리그 우승·준우승 배출 */
+export interface TeamHonorRow { season: number; kind: "pro" | "proRunnerUp" | "div2" | "up" | "down" | "indiv"; league?: IndivLeague; place?: 1 | 2; player?: number }
+export function teamHonors(s: CareerState, tid: number): TeamHonorRow[] {
+  const out: TeamHonorRow[] = [];
+  for (const h of s.history) {
+    if (h.champion === tid) out.push({ season: h.season, kind: "pro" });
+    if (h.runnerUp === tid) out.push({ season: h.season, kind: "proRunnerUp" });
+    if (h.champion2 === tid) out.push({ season: h.season, kind: "div2" });
+    for (const m of h.promo ?? []) {
+      if (m.up === tid) out.push({ season: h.season, kind: "up" });
+      if (m.down === tid) out.push({ season: h.season, kind: "down" });
+    }
+    // 예전 기록은 소속 팀이 없어서 지금 소속으로 본다
+    const indiv: IndivHonor[] = h.indiv ?? (h.mslChampion !== undefined ? [{ league: "mysl", champion: h.mslChampion, runnerUp: h.mslRunnerUp }] : []);
+    for (const x of indiv) {
+      if ((x.cTeam ?? s.players[x.champion]?.team) === tid) out.push({ season: h.season, kind: "indiv", league: x.league, place: 1, player: x.champion });
+      if (x.runnerUp !== undefined && (x.rTeam ?? s.players[x.runnerUp]?.team) === tid) out.push({ season: h.season, kind: "indiv", league: x.league, place: 2, player: x.runnerUp });
+    }
+  }
+  return out;
 }

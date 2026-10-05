@@ -8,7 +8,7 @@ import { STAGE_NAMES, activePlayers, mapView } from "@shared/career/view";
 import { gearCond, gearStats, matchCond } from "@shared/career/items";
 import { trpc } from "@/lib/trpc";
 import { useCareerPatch } from "@/lib/career";
-import { GrayBox, LegacyFrame, LegacyImg, LegacyRadar, PlayerPhoto, TeamLogo } from "../Legacy";
+import { GrayBox, LegacyFrame, LegacyImg, LegacyRadar, MapInfo, PlayerPhoto, TeamLogo } from "../Legacy";
 import { R, condStats, nameRace, useSpeed } from "./common";
 import { Broadcast, PlayerCard } from "./broadcast";
 import { type MslReportView } from "./proleague";
@@ -46,6 +46,45 @@ export function SeriesViewer({ s: latest, report, onClose, onExit, stateAt }: { 
   );
 }
 
+/** 이 맵에서 a 종족이 b 종족을 상대로 이길 확률(%) — 맵 상성표 기준, 동족전은 50 */
+export function mapRaceVs(mapId: number, a: CPlayer["race"], b: CPlayer["race"]) {
+  if (a === b) return 50;
+  const m = mapView(mapId);
+  const pair: Record<string, number> = { "terran-zerg": m.tvz, "zerg-protoss": m.zvp, "protoss-terran": m.pvt };
+  const v = pair[`${a}-${b}`];
+  return v !== undefined ? v : 100 - pair[`${b}-${a}`];
+}
+
+/** 경기 전 라운드별 맵: 누르면 맵 정보와 두 선수의 그 맵 상성 (프로리그 세트 미리보기처럼) */
+function RoundMaps({ r, lp, rp }: { r: MslReportView; lp: CPlayer; rp: CPlayer }) {
+  const [view, setView] = useState<number | null>(null);
+  const mapOf = (k: number) => r.sets[k]?.mapId ?? r.maps?.[k];
+  const vm = view !== null ? mapOf(view) : undefined;
+  return (
+    <div className="mt-3 space-y-1">
+      {Array.from({ length: r.bestOf }, (_, k) => {
+        const mapId = mapOf(k);
+        const rate = (p: CPlayer, o: CPlayer) => (mapId !== undefined ? mapRaceVs(mapId, p.race, o.race) : undefined);
+        const tone = (v?: number) => (v === undefined || v === 50 ? "text-neutral-500" : v > 50 ? "text-[#bff5c6]" : "text-[#ffb8c8]");
+        return (
+          <div key={k} className="grid grid-cols-[1fr_96px_1fr] items-center gap-1.5 text-[12px]">
+            <span className={cn("text-center", tone(rate(lp, rp)))}>{k + 1}세트{rate(lp, rp) !== undefined ? ` · ${rate(lp, rp)}%` : ""}</span>
+            <GrayBox active={view === k} onClick={() => mapId !== undefined && setView(view === k ? null : k)}>{mapId !== undefined ? mapView(mapId).name : "미정"}</GrayBox>
+            <span className={cn("text-center", tone(rate(rp, lp)))}>{rate(rp, lp) !== undefined ? `${rate(rp, lp)}%` : "?"}</span>
+          </div>
+        );
+      })}
+      {view !== null && vm !== undefined ? (
+        <div className="border border-neutral-500 p-2 mt-1.5">
+          <div className="flex items-center text-[12px] mb-1"><span className="text-[#ffe45c]">{view + 1}세트 맵 정보</span><button onClick={() => setView(null)} className="ml-auto border border-neutral-600 px-1.5 text-[11px]">닫기 ✕</button></div>
+          <div className="flex justify-center"><MapInfo mapId={vm} size={60} /></div>
+          <div className="text-center text-[11px] text-neutral-300 mt-1">{lp.name} {mapRaceVs(vm, lp.race, rp.race)}% : {mapRaceVs(vm, rp.race, lp.race)}% {rp.name} (맵 종족 상성)</div>
+        </div>
+      ) : <div className="text-center text-[10.5px] text-neutral-500">맵을 누르면 맵 정보가 보입니다 · % = 그 맵에서 종족 상성</div>}
+    </div>
+  );
+}
+
 /** 다전제 라운드별 결과 (정해진 판수만큼 모두 표시, 치르지 않은 판은 "-") */
 export function SeriesBoard({ s, start, report, played, leftIsA, onNext, onClose, nextLabel }: {
   s: CareerState; report: MslReportView; played: number; leftIsA: boolean; onNext: () => void; onClose: () => void; nextLabel: string;
@@ -57,6 +96,10 @@ export function SeriesBoard({ s, start, report, played, leftIsA, onNext, onClose
   for (const x of report.sets.slice(0, played)) ((x.winner === "a") === leftIsA ? sl++ : sr++);
   const over = played >= report.sets.length;
   const need = Math.ceil(report.bestOf / 2);
+  /** 누른 라운드 (맵 정보 · 그 맵에서 두 선수 상성) */
+  const [view, setView] = useState<number | null>(null);
+  const viewMap = view !== null ? report.sets[view]?.mapId ?? report.maps?.[view] : undefined;
+  const viewSet = view !== null && view < played ? report.sets[view] : undefined;
   return (
     <LegacyFrame season={s.season} onBack={onClose} onNext={onNext} nextLabel={nextLabel}>
       <div className="px-3 pt-3 pb-4">
@@ -88,12 +131,38 @@ export function SeriesBoard({ s, start, report, played, leftIsA, onNext, onClose
             return (
               <div key={k} className={cn("grid grid-cols-[1fr_104px_1fr] items-center gap-1.5 text-[12px] px-1 py-[3px]", k === played - 1 && "border border-neutral-300")}>
                 <span className={cn("text-center", leftWon === true ? "text-[#ffe45c]" : "text-neutral-500")}>{x ? (leftWon ? "WIN" : "LOSE") : skipped ? "-" : "?"}</span>
-                <GrayBox>{k + 1}R · {mapId !== undefined ? mapView(mapId).name : "미정"}</GrayBox>
+                <GrayBox active={view === k} onClick={() => mapId !== undefined && setView(view === k ? null : k)}>{k + 1}R · {mapId !== undefined ? mapView(mapId).name : "미정"}</GrayBox>
                 <span className={cn("text-center", leftWon === false ? "text-[#ffe45c]" : "text-neutral-500")}>{x ? (leftWon ? "LOSE" : "WIN") : skipped ? "-" : "?"}</span>
               </div>
             );
           })}
         </div>
+        {view !== null && viewMap !== undefined ? (
+          <div className="mt-2 border border-neutral-500 p-2 space-y-1.5">
+            <div className="flex items-center text-[12px]">
+              <span className="text-[#ffe45c]">{view + 1}라운드 맵 정보</span>
+              <button onClick={() => setView(null)} className="ml-auto border border-neutral-600 px-1.5 text-[11px]">닫기 ✕</button>
+            </div>
+            <div className="flex justify-center"><MapInfo mapId={viewMap} size={60} /></div>
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-[12px]">
+              {[lp, rp].map((p, k) => {
+                const o = k === 0 ? rp : lp;
+                const v = mapRaceVs(viewMap, p.race, o.race);
+                return (
+                  <div key={p.id} className={cn("flex items-center gap-1.5", k === 1 ? "order-3 flex-row-reverse text-right" : "")}>
+                    <PlayerPhoto id={p.photoOf ?? p.id} name={p.name} size={34} />
+                    <div className="leading-tight">
+                      <div className={cn(p.team === s.myTeam && "text-[#8fd0ff]")}>{nameRace(p)}</div>
+                      <div className="text-[10.5px] text-neutral-400">실전 {totalOf(condStats(p, s)).toLocaleString()} · 컨디션 {matchCond(p, s)}%</div>
+                      <div className={cn("text-[11px]", v > 50 ? "text-[#bff5c6]" : v < 50 ? "text-[#ffb8c8]" : "text-neutral-300")}>맵 상성 {v}%</div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="order-2 text-center text-[11px] text-neutral-400">{viewSet ? <span className="text-[#ffe45c]">{s.players[viewSet.winner === "a" ? viewSet.a : viewSet.b]?.name} 승</span> : view < played || over ? "-" : "예정"}</div>
+            </div>
+          </div>
+        ) : <div className="text-center text-[10.5px] text-neutral-500 mt-2">라운드(맵)를 누르면 맵 정보와 두 선수의 맵 상성이 보입니다</div>}
         <div className="text-center text-[11px] text-neutral-500 mt-3">{over ? `${s.players[report.winner]?.name} 승리${report.bestOf > report.sets.length ? ` (${report.sets.length}세트에서 결정, 남은 라운드는 치르지 않음)` : ""}` : `${sl > sr ? lp.name : sr > sl ? rp.name : "동점"}${sl !== sr ? " 앞섬" : ""} · Next 로 다음 세트`}</div>
       </div>
     </LegacyFrame>
@@ -263,18 +332,7 @@ export function MslFlow({ s, reports, plans = [], flat, onDone, onClose, start =
             </div>
           ))}
         </div>
-        <div className="mt-3 space-y-1">
-          {Array.from({ length: r.bestOf }, (_, k) => {
-            const mapId = r.sets[k]?.mapId ?? r.maps?.[k];
-            return (
-              <div key={k} className="grid grid-cols-[1fr_96px_1fr] items-center gap-1.5 text-[12px]">
-                <span className="text-center">{k + 1}세트</span>
-                <GrayBox>{mapId !== undefined ? mapView(mapId).name : "미정"}</GrayBox>
-                <span className="text-center text-neutral-500">?</span>
-              </div>
-            );
-          })}
-        </div>
+        <RoundMaps r={r} lp={lp} rp={rp} />
         <div className="text-center text-[11px] text-neutral-500 mt-3">Next 로 관전 · ✕ 로 이번 주 개인리그 건너뛰기</div>
       </div>
     </LegacyFrame>

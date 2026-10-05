@@ -5,12 +5,29 @@ import type { ActionResult } from "../../../server/career/logic";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { eventIncome, popularity } from "@shared/career/contract";
-import { ACTIONS, WEEKLY_AP, actionOf, ageOf, restNotNeeded, totalOf, type ActionKey, type CareerState } from "@shared/career/rules";
+import { ACTIONS, WEEKLY_AP, actionOf, restNotNeeded, totalOf, type ActionKey, type CareerState } from "@shared/career/rules";
 import { rosterOf } from "@shared/career/view";
 import { useCareer, useCareerPatch, useCareerUpdater } from "@/lib/career";
-import { CondBadge, RaceBadge } from "@/components/career/Bits";
+import { LegacyFrame, LegacyImg } from "@/components/legacy/Legacy";
 
-/** 선수 행동: 행동력을 써서 선수마다 이번 주 행동을 정한다 (한 주가 지나갈 때 적용) */
+/** 원작 그림 (휴식 · 특훈 · 팬미팅) */
+const ACTION_IMG: Record<ActionKey, string> = { rest: "Rest", train: "Train", event: "Event" };
+const ACTION_ORDER: ActionKey[] = ["rest", "train", "event"];
+const EFFECT: Record<ActionKey, string> = {
+  rest: "컨디션 +5 · 능력치 변화 없음",
+  train: "능력치 ↑ · 컨디션 -3~5",
+  event: "구단 자금(인기 많을수록, 최대 150만) · 치어풀 확률 · 컨디션 -3~5 · 능력치 조금 ↓",
+};
+const RACE = { terran: "T", zerg: "Z", protoss: "P" } as const;
+const BTN = "border border-neutral-500 text-black font-bold disabled:opacity-40";
+const BTN_BG = { background: "linear-gradient(#ffffff,#d6d6d6)" };
+
+function ActionIcon({ k, size = 18 }: { k: ActionKey; size?: number }) {
+  const a = actionOf(k)!;
+  return <LegacyImg dir="기타" name={ACTION_IMG[k]} className="object-cover inline-block" style={{ width: size, height: size }} fallback={<span style={{ fontSize: size * 0.8 }}>{a.emoji}</span>} />;
+}
+
+/** 선수 행동: 행동(붓)을 고르고 선수를 누르면 그 행동이 지정된다. 실행하면 바로 적용 */
 export default function Training() {
   const { state: s, loading } = useCareer();
   const [, navigate] = useLocation();
@@ -41,138 +58,143 @@ export default function Training() {
   });
   const clear = trpc.career.clearActions.useMutation({ onError: resync });
   const setAll = trpc.career.setAllActions.useMutation({ onError: resync });
-  const chooseAll = (action: ActionKey) => {
-    patch(st => { for (const p of rosterOf(st, st.myTeam)) p.action = action; });
-    setAll.mutate({ action });
-  };
   const careerPatch = useCareerPatch();
   const [results, setResults] = useState<ActionResult[] | null>(null);
   const run = trpc.career.runActions.useMutation({
-    onSuccess: r => { careerPatch(r.diff); setResults(r.result.results); window.scrollTo(0, 0); },
+    onSuccess: r => { careerPatch(r.diff); setResults(r.result.results); },
     onError: updater.onError,
   });
-  const choose = (pid: number, action: ActionKey | null) => {
-    patch(st => { st.players[pid].action = action; });
-    setAction.mutate({ playerId: pid, action });
-  };
+  const [brush, setBrush] = useState<ActionKey>("train");
 
   if (loading) return <div className="p-6 text-muted-foreground">불러오는 중...</div>;
   if (!s) { navigate("/lobby"); return null; }
   const roster = rosterOf(s, s.myTeam).sort((a, b) => totalOf(b.stats) - totalOf(a.stats));
   const apOf = (p: (typeof roster)[number]) => p.ap ?? WEEKLY_AP;
+  const canRun = (p: (typeof roster)[number]) => { const a = actionOf(p.action); return !!a && apOf(p) >= a.ap && !restNotNeeded(p); };
   // 컨디션 100% 선수의 휴식은 실행에서 자동으로 빠짐
-  const ready = roster.filter(p => { const a = actionOf(p.action); return a && apOf(p) >= a.ap && !restNotNeeded(p); }).length;
-  const planned = roster.filter(p => p.action).length;
+  const ready = roster.filter(canRun).length;
+  const busy = !!s.live;
+  const choose = (pid: number, action: ActionKey | null) => {
+    patch(st => { st.players[pid].action = action; });
+    setAction.mutate({ playerId: pid, action });
+  };
+  const chooseAll = (action: ActionKey) => {
+    patch(st => { for (const p of rosterOf(st, st.myTeam)) p.action = action; });
+    setAll.mutate({ action });
+  };
+  const a = actionOf(brush)!;
+  const withBrush = roster.filter(p => p.action === brush);
+  const cheer = s.inventory?.cheer ?? 0;
+  const money = s.teams[s.myTeam].money;
 
   return (
-    <div className="p-4 space-y-3">
-      {results && (
-        <div className="rounded-2xl bg-emerald-500/10 border border-emerald-400/40 p-3.5 space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className="font-black text-foreground">✅ 선수 행동 결과</span>
-            <button onClick={() => setResults(null)} className="text-xs text-muted-foreground">닫기 ✕</button>
-          </div>
-          {results.map(r => {
-            const p = s.players[r.id];
-            const a = ACTIONS.find(x => x.key === r.action);
+    <LegacyFrame season={s.season} onBack={() => navigate("/lobby")}
+      bottom={
+        <div className="flex gap-2">
+          <button onClick={() => navigate("/lobby")} className={cn(BTN, "px-3 py-1 text-[13px]")} style={BTN_BG}>◁◁ 감독실</button>
+          <button onClick={() => run.mutate(undefined)} disabled={run.isPending || ready === 0 || busy} className={cn(BTN, "px-4 py-1 text-[14px] min-w-[150px]")} style={BTN_BG}>
+            {run.isPending ? "실행 중…" : `실행 (${ready}명)`}
+          </button>
+        </div>
+      }>
+      <div className="relative h-full flex flex-col gap-1.5 px-3 pt-2 pb-3 text-[12px]">
+        <div className="shrink-0 flex items-center">
+          <span className="flex-1 text-center text-[16px] tracking-[0.3em] text-neutral-100 pl-16">선 수 행 동</span>
+          <button onClick={() => auto.mutate()} disabled={auto.isPending || busy} className="border border-neutral-600 px-1.5 text-[11px] text-neutral-200">자동</button>
+          <button onClick={() => { patch(st => { for (const p of rosterOf(st, st.myTeam)) p.action = null; }); clear.mutate(); }} disabled={busy} className="ml-1 border border-neutral-600 px-1.5 text-[11px] text-neutral-200">초기화</button>
+        </div>
+
+        {/* 행동 고르기 (원작의 1 휴식 · 2 특훈 · 3 팬미팅) */}
+        <div className="shrink-0 grid grid-cols-3 gap-2 px-1">
+          {ACTION_ORDER.map((k, i) => {
+            const x = actionOf(k)!;
+            const n = roster.filter(p => p.action === k).length;
             return (
-              <div key={r.id} className="text-xs text-foreground border-t border-border/60 pt-1.5">
-                <div className="flex items-center gap-1.5">
-                  <span>{a?.emoji}</span><b>{p.name}</b><span className="text-muted-foreground">{a?.name}</span>
-                  <span className="ml-auto">컨디션 {r.cond[0]}% → <b className={r.cond[1] >= r.cond[0] ? "text-emerald-300" : "text-rose-300"}>{r.cond[1]}%</b> · 행동력 {r.ap}</span>
-                </div>
-                <div className="text-[11px] text-muted-foreground">
-                  {Object.entries(r.stats).map(([k, d]) => `${STAT_LABELS[k as StatKey]} ${d! > 0 ? "+" : ""}${d}`).join(" · ") || "능력치 변화 없음"}
-                  {r.money ? ` · 자금 ${r.money > 0 ? "+" : ""}${r.money}만` : ""}{r.cheer ? " · 📣 치어풀 획득!" : ""}
-                </div>
-              </div>
+              <button key={k} onClick={() => setBrush(k)} className="flex flex-col items-center">
+                <span className="text-[10px] leading-none border border-neutral-500 px-1 mb-0.5">{i + 1}</span>
+                <span className={cn("block p-[2px] border-2", brush === k ? "border-[#ff8a8a]" : "border-transparent")}>
+                  <LegacyImg dir="기타" name={ACTION_IMG[k]} className="block w-[72px] h-[72px] object-cover" fallback={<span className="flex w-[72px] h-[72px] items-center justify-center text-[30px] bg-neutral-800">{x.emoji}</span>} />
+                </span>
+                <span className={cn("text-[11px] mt-0.5", brush === k ? "text-white" : "text-neutral-400")}>{x.name} · {x.ap}{n ? <span className="text-[#ffe45c]"> ({n}명)</span> : null}</span>
+              </button>
             );
           })}
         </div>
-      )}
-      <div className="rounded-2xl bg-card border border-border p-3.5">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-xs text-muted-foreground">행동 가능한 선수</div>
-            <div className="text-2xl font-black text-emerald-300">{ready} <span className="text-xs text-muted-foreground">/ {planned}명</span></div>
-          </div>
-          <div className="flex gap-1.5">
-            <button onClick={() => { patch(st => { for (const p of rosterOf(st, st.myTeam)) p.action = null; }); clear.mutate(); }} disabled={!!s.live} className="px-2.5 py-2 rounded-xl bg-muted border border-border text-foreground text-xs font-bold whitespace-nowrap">↺ 초기화</button>
-            <button onClick={() => auto.mutate()} disabled={auto.isPending} className="px-2.5 py-2 rounded-xl bg-primary/20 border border-primary/40 text-primary text-xs font-bold whitespace-nowrap">🤖 자동 배정</button>
-          </div>
-        </div>
-        <div className="mt-2.5 grid grid-cols-3 gap-1.5">
-          {ACTIONS.map(a => (
-            <button key={a.key} onClick={() => chooseAll(a.key)} disabled={!!s.live}
-              className="rounded-xl py-1.5 text-xs font-bold border border-border bg-muted/50 text-foreground">전체 {a.emoji} {a.name}</button>
-          ))}
-        </div>
-        <button onClick={() => run.mutate(undefined)} disabled={run.isPending || ready === 0 || !!s.live}
-          className="mt-2.5 w-full py-3 rounded-xl font-black text-sm bg-gradient-to-r from-emerald-500 to-teal-600 text-white disabled:opacity-50">
-          {run.isPending ? "진행 중..." : ready ? `▶ 행동을 정한 선수 모두 실행 (${ready}명)` : "실행할 수 있는 선수가 없습니다 (행동력은 매주 선수마다 +20)"}
-        </button>
-        <div className="mt-2 grid grid-cols-3 gap-1.5">
-          {ACTIONS.map(a => (
-            <div key={a.key} className="rounded-lg bg-muted/60 px-1.5 py-1.5 text-center">
-              <div className="text-lg leading-none">{a.emoji}</div>
-              <div className="text-[11px] font-bold text-foreground mt-0.5">{a.name}</div>
-              <div className="text-[10px] text-muted-foreground">행동력 {a.ap}</div>
-              <div className="text-[9.5px] text-muted-foreground/80 leading-tight mt-0.5">{a.key === "train" ? "능력치↑ 컨디션 -3~5" : a.key === "rest" ? "컨디션 +5" : "자금(인기 많을수록 많이, 최대 150만)·치어풀 · 컨디션 -3~5 · 능력치 조금↓"}</div>
-            </div>
-          ))}
-        </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">선수마다 행동력이 따로 있습니다. 매주 선수마다 20씩 받고, 쓰지 않은 행동력은 시즌 동안 계속 쌓입니다 (새 시즌에 20부터 다시). 선수 카드에서 행동을 고르고 그 선수의 "실행"을 누르면 바로 적용되고, 위 버튼은 행동을 정한 선수를 한꺼번에 실행합니다. 한 주가 끝나면 모든 선수 컨디션이 10% 회복됩니다. 경기를 뛰면 컨디션이 떨어지니(이기면 0~3%, 지면 1~6% — 실력 차이·경기 길이에 따라) 휴식도 챙기세요. 능력치는 경기와 훈련으로만 오르내립니다.</p>
-      </div>
 
-      <div className="space-y-2">
-        {roster.map(p => (
-          <div key={p.id} className="rounded-2xl bg-card border border-border p-3">
-            <div className="flex items-center gap-2">
-              <RaceBadge race={p.race} />
-              <span className="font-bold text-foreground">{p.name}</span>
-              <span className="text-[11px] text-muted-foreground">Lv.{p.level} · {ageOf(p, s.season)}세 · {totalOf(p.stats).toLocaleString()}</span>
-              <span className="ml-auto rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-black px-2 py-0.5 text-[11px]">⚡ 행동력 {apOf(p)}</span>
-            </div>
-            <div className="mt-1.5 flex items-center gap-2 text-xs">
-              <span className="text-muted-foreground">컨디션</span>
-              <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden"><div className={cn("h-full", p.cond >= 65 ? "bg-emerald-400" : p.cond >= 40 ? "bg-amber-400" : "bg-rose-400")} style={{ width: `${p.cond}%` }} /></div>
-              <CondBadge cond={p.cond} />
-            </div>
-            <div className="mt-2 grid grid-cols-3 gap-1.5">
-              {ACTIONS.map(a => {
-                const active = p.action === a.key;
-                const affordable = apOf(p) >= a.ap;
-                return (
-                  <button
-                    key={a.key}
-                    disabled={!!s.live}
-                    onClick={() => choose(p.id, active ? null : (a.key as ActionKey))}
-                    className={cn("rounded-xl py-2 text-xs font-bold border transition-colors",
-                      active ? "bg-primary text-primary-foreground border-primary" : affordable ? "bg-muted/50 border-border text-foreground" : "bg-muted/30 border-border text-muted-foreground/50")}
-                  >
-                    {a.emoji} {a.name} <span className="text-[10px] opacity-70">{a.ap}</span>
-                    {a.key === "event" && <span className="block text-[10px] font-normal opacity-80">약 {Math.round(eventIncome(p))}만 · 인기 {popularity(p)}</span>}
+        {/* 고른 행동 설명 (원작 오른쪽 아래 상자) */}
+        <div className="shrink-0 border-2 border-neutral-600 px-2 py-1.5 space-y-0.5">
+          <div className="text-center text-[14px] text-white">{a.key === "rest" ? "휴식을 취합니다" : a.key === "train" ? "특별 훈련을 합니다" : "팬미팅을 합니다"}</div>
+          <div className="text-center text-[10.5px] text-neutral-400">{EFFECT[a.key]}</div>
+          <div className="grid grid-cols-3 text-center text-[11px] pt-0.5">
+            <span>소모 행동력 <b className="text-[#ffe45c]">{a.ap * withBrush.length}</b></span>
+            <span>치어풀 <b className="text-[#ffe45c]">{cheer}</b>개</span>
+            <span>보유 <b className="text-[#ffe45c]">{money.toLocaleString()}</b>만</span>
+          </div>
+          <div className="flex gap-1 pt-0.5">
+            <button onClick={() => chooseAll(brush)} disabled={busy} className="flex-1 border border-neutral-500 py-0.5 text-[11px]">전체 선수 {a.name}</button>
+            <span className="flex-[2] text-[10px] text-neutral-500 self-center leading-tight">선수를 누르면 이 행동이 지정됩니다 (다시 누르면 해제)</span>
+          </div>
+        </div>
+
+        {/* 선수 목록 */}
+        <div className="flex-1 min-h-0 border-2 border-neutral-300 flex flex-col">
+          <div className="shrink-0 grid grid-cols-[minmax(0,1fr)_44px_92px_30px_34px] gap-1 px-1.5 py-1 text-[11px] text-neutral-300 border-b border-neutral-700">
+            <span>선수들</span><span className="text-center">행동력</span><span className="text-center">컨디션</span><span className="text-center">행동</span><span />
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {roster.map(p => {
+              const act = actionOf(p.action);
+              const ok = canRun(p);
+              return (
+                <div key={p.id} className={cn("grid grid-cols-[minmax(0,1fr)_44px_92px_30px_34px] gap-1 items-center px-1.5 py-[3px] border-b border-neutral-900", p.action === brush && "bg-[#3a3a5a]/60")}>
+                  <button disabled={busy} onClick={() => choose(p.id, p.action === brush ? null : brush)} className="col-span-4 grid grid-cols-[minmax(0,1fr)_44px_92px_30px] gap-1 items-center text-left">
+                    <span className="truncate">{p.name} <span className="text-neutral-500">({RACE[p.race]})</span></span>
+                    <span className={cn("text-center", act && apOf(p) < act.ap ? "text-[#ff8a8a]" : "text-neutral-200")}>{apOf(p)}</span>
+                    <span className="flex items-center gap-1">
+                      <span className="flex-1 h-1.5 bg-neutral-800"><span className={cn("block h-full", p.cond >= 65 ? "bg-[#8fe07a]" : p.cond >= 40 ? "bg-[#f8e070]" : "bg-[#ff6b6b]")} style={{ width: `${p.cond}%` }} /></span>
+                      <span className="w-7 text-right text-[11px]">{p.cond}</span>
+                    </span>
+                    <span className="flex justify-center">{act ? <ActionIcon k={act.key} /> : <span className="text-neutral-700">-</span>}</span>
                   </button>
+                  <button onClick={() => run.mutate({ playerId: p.id })} disabled={!ok || run.isPending || busy} title={restNotNeeded(p) ? "컨디션 100% — 휴식 필요 없음" : "이 선수만 실행"}
+                    className="text-[10px] border border-neutral-500 py-0.5 disabled:opacity-25 disabled:border-neutral-800">▶</button>
+                </div>
+              );
+            })}
+          </div>
+          <div className="shrink-0 px-1.5 py-1 text-[10px] text-neutral-500 border-t border-neutral-800 leading-snug">
+            {a.key === "event" ? `팬미팅 예상 수익: ${roster.filter(p => p.action === "event").map(p => `${p.name} 약 ${Math.round(eventIncome(p))}만(인기 ${popularity(p)})`).join(" · ") || "지정된 선수 없음"} · ` : ""}
+            행동력은 매주 선수마다 +{WEEKLY_AP} (시즌 동안 쌓임) · 한 주가 끝나면 컨디션 10% 회복
+          </div>
+        </div>
+
+        {results && (
+          <div className="absolute inset-x-2 top-2 bottom-2 z-30 bg-black border-2 border-[#8fe07a]/70 flex flex-col">
+            <div className="shrink-0 flex items-center px-2 py-1.5 border-b border-neutral-700">
+              <span className="text-[#bff5c6] text-[13px] font-bold">✅ 선수 행동 결과</span>
+              <button onClick={() => setResults(null)} className="ml-auto border border-neutral-500 px-2 text-[12px]">닫기 ✕</button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1.5">
+              {results.map(r => {
+                const p = s.players[r.id];
+                const x = actionOf(r.action);
+                return (
+                  <div key={r.id} className="border border-neutral-700 px-2 py-1">
+                    <div className="flex items-center gap-1.5">
+                      <ActionIcon k={r.action} size={22} /><b>{p.name}</b><span className="text-neutral-400">{x?.name}</span>
+                      <span className="ml-auto text-[11px]">컨디션 {r.cond[0]} → <b className={r.cond[1] >= r.cond[0] ? "text-[#bff5c6]" : "text-[#ffb8c8]"}>{r.cond[1]}</b> · 행동력 {r.ap}</span>
+                    </div>
+                    <div className="text-[10.5px] text-neutral-400">
+                      {Object.entries(r.stats).map(([k, d]) => `${STAT_LABELS[k as StatKey]} ${d! > 0 ? "+" : ""}${d}`).join(" · ") || "능력치 변화 없음"}
+                      {r.money ? ` · 자금 ${r.money > 0 ? "+" : ""}${r.money}만` : ""}{r.cheer ? " · 📣 치어풀 획득!" : ""}
+                    </div>
+                  </div>
                 );
               })}
             </div>
-            {(() => {
-              const a = actionOf(p.action);
-              const can = !!a && apOf(p) >= a.ap && !s.live && !restNotNeeded(p);
-              return (
-                <button onClick={() => run.mutate({ playerId: p.id })} disabled={!can || run.isPending}
-                  className="mt-1.5 w-full py-2 rounded-xl text-xs font-black bg-emerald-600 text-white disabled:bg-muted disabled:text-muted-foreground">
-                  {!a ? "행동을 고르세요" : restNotNeeded(p) ? "컨디션 100% — 휴식은 건너뜁니다 (행동력 그대로)" : apOf(p) < a.ap ? `행동력 부족 (${a.name} ${a.ap} 필요)` : `▶ ${p.name} ${a.name} 실행 (행동력 ${apOf(p)} → ${apOf(p) - a.ap})`}
-                </button>
-              );
-            })()}
           </div>
-        ))}
+        )}
       </div>
-
-      <button onClick={() => navigate("/league")} className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black">
-        🏆 경기 일정으로 →
-      </button>
-    </div>
+    </LegacyFrame>
   );
 }

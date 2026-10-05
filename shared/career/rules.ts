@@ -192,6 +192,8 @@ export interface CPlayer {
   titles?: string[];
   /** 종족별 통산 전적 [승, 패] */
   vs?: Partial<Record<Race, [number, number]>>;
+  /** 종족별 이번 시즌 전적 [승, 패] */
+  sVs?: Partial<Record<Race, [number, number]>>;
   /** 상대 선수별 전적 [승, 패] (우리 팀 선수만 기록 — 상대 쪽은 뒤집어서 본다) */
   h2h?: Record<number, [number, number]>;
   /** 장착 장비 (남은 경기 수) */
@@ -225,6 +227,12 @@ export interface CPlayer {
   /** 신인으로 등장한 시즌 */
   rookie?: number;
 }
+
+/** 개인리그 종류: 마이스타리그(매 시즌) · MSL · OSL (2시즌마다 번갈아) */
+export type IndivLeague = "mysl" | "msl" | "osl";
+export const INDIV_NAMES: Record<IndivLeague, string> = { mysl: "마이스타리그", msl: "MBC게임 스타리그(MSL)", osl: "온게임넷 스타리그(OSL)" };
+export const INDIV_SHORT: Record<IndivLeague, string> = { mysl: "마이스타리그", msl: "MSL", osl: "OSL" };
+export interface IndivHonor { league: IndivLeague; champion: number; runnerUp?: number; cTeam?: number; rTeam?: number }
 
 /** 보너스 조건: 프로리그 우승 · 개인리그 우승 · 다승왕 · 시즌 다승 10위 안 */
 export type BonusKey = "proTitle" | "mslTitle" | "mostWins" | "topRank";
@@ -574,6 +582,8 @@ export interface CareerState {
   history: Array<{
     season: number; champion: number; myRank: number; myResult: string; mslChampion?: number; mslRunnerUp?: number; /** 그 시즌 우리(감독) 팀 */ team?: number; /** 우리 팀 선수가 개인리그 1 우승·2 준우승 */ myMsl?: 1 | 2;
     /** 그 시즌 우리 팀 리그 */ div?: 1 | 2; /** 2부 1위 */ champion2?: number; /** 승강전 결과 (올라간 팀 → 내려간 팀) */ promo?: Array<{ up: number; down: number }>;
+    /** 프로리그 준우승 팀 */ runnerUp?: number;
+    /** 개인리그 우승·준우승 (그때 소속 팀) */ indiv?: IndivHonor[];
   }>;
   /** 이번 시즌 마이스타리그 */
   msl?: MslState;

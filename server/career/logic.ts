@@ -43,6 +43,7 @@ import {
   snapOf,
   totalOf,
   type PlayerSnap,
+  type IndivHonor,
 } from "@shared/career/rules";
 import {
   type SetMods,
@@ -827,7 +828,9 @@ function finishSeason(s: CareerState, final: CMatch) {
   const champion2 = s.matches.some(m => m.div === 2 && m.done) ? standings(s, 2)[0]?.id : undefined;
   const moves = promoMoves(s);
   s.promo = { season: s.season, moves };
-  s.history.unshift({ season: s.season, champion, myRank, myResult: result, mslChampion: msl?.champion, mslRunnerUp: msl?.runnerUp, team: s.myTeam, myMsl: myMslOf(s, msl), div: myDiv(s), champion2, promo: moves });
+  const runnerUp = final.a === champion ? final.b : final.a;
+  const indiv: IndivHonor[] = msl?.champion !== undefined ? [{ league: "mysl", champion: msl.champion, runnerUp: msl.runnerUp, cTeam: s.players[msl.champion]?.team, rTeam: msl.runnerUp !== undefined ? s.players[msl.runnerUp]?.team : undefined }] : [];
+  s.history.unshift({ season: s.season, champion, runnerUp, myRank, myResult: result, mslChampion: msl?.champion, mslRunnerUp: msl?.runnerUp, team: s.myTeam, myMsl: myMslOf(s, msl), div: myDiv(s), champion2, promo: moves, indiv });
   for (const p of rosterOf(s, champion)) p.titles = [...(p.titles ?? []), `${s.season}시즌 프로리그 우승`];
   if (champion2 !== undefined) for (const p of rosterOf(s, champion2)) p.titles = [...(p.titles ?? []), `${s.season}시즌 2부 리그 1위`];
   news(s, `🏆 ${s.season}시즌 마이프로리그 우승: ${s.teams[champion].name}!${champion2 !== undefined ? ` 2부 1위: ${s.teams[champion2].name}.` : ""} 우리 팀 최종 성적: ${result}${prize ? ` (상금 ${prize.toLocaleString()}만원)` : ""}`);
@@ -858,7 +861,7 @@ export function startNextSeason(s: CareerState, opts: { releaseExpiring?: boolea
     const age = ageOf(p, s.season);
     if (age <= 21) gainStats(p, 3, 8, 25);
     else if (age <= 24) gainStats(p, 2, 3, 12);
-    p.sWins = 0; p.sLosses = 0;
+    p.sWins = 0; p.sLosses = 0; p.sVs = undefined;
     p.potions = 0;
     // 선수 행동력은 시즌마다 새로 (쌓인 건 시즌 동안만)
     if (p.team === s.myTeam) p.ap = WEEKLY_AP;
