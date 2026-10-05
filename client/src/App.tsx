@@ -15,6 +15,7 @@ import { ManagerNameGate } from "./components/ManagerName";
 import { useCareerRevWatch } from "./lib/career";
 import GameLayout from "./components/GameLayout";
 import { UpdateNotification } from "./components/UpdateNotification";
+import { NewVersionWatcher } from "./components/NewVersionWatcher";
 
 /**
  * 게임 화면은 들어갈 때 불러온다 (첫 화면 번들을 작게).
@@ -128,6 +129,7 @@ function App() {
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <UpdateNotification />
+          <NewVersionWatcher />
           <UserWatcher />
           <ManagerNameGate />
           <Toaster position="top-center" closeButton />
