@@ -228,6 +228,9 @@ export interface CPlayer {
   rookie?: number;
 }
 
+/** 후원: 자금 또는 소모품 한 종류 1~5개 (매주 확률로 도착, 받기를 눌러야 들어옴) */
+export interface Gift { id: number; from: string; money?: number; item?: { key: string; qty: number }; season: number; week: number }
+
 /** 개인리그 종류: 마이스타리그(매 시즌) · MSL · OSL (2시즌마다 번갈아) */
 export type IndivLeague = "mysl" | "msl" | "osl";
 export const INDIV_NAMES: Record<IndivLeague, string> = { mysl: "마이스타리그", msl: "MBC게임 스타리그(MSL)", osl: "온게임넷 스타리그(OSL)" };
@@ -267,6 +270,10 @@ export interface OutRequest {
   cash?: number;
   season: number;
   week: number;
+  /** 보낼 때까지 그 주에 우리 팀이 치른 경기 수 (다음 경기가 끝나면 답이 옴) */
+  day?: number;
+  /** 영입 요청의 이적 시점 */
+  timing?: TransferTiming;
   /** 상대의 답 (온 주) */
   reply?: { ok: boolean; result: string; message: string; fee?: number; season: number; week: number };
 }
@@ -289,7 +296,16 @@ export interface TransferOffer {
   byPlayer?: boolean;
   /** 우리가 마지막으로 부른 역제안 금액 (상대가 다시 역제안해도 그대로 보여줌) */
   myCounter?: number;
+  /** 상대가 원하는 이적 시점 (없으면 즉시) — 금액은 즉시 이적 기준 */
+  timing?: TransferTiming;
 }
+
+/** 이적 시점: 즉시 이적 · 시즌 종료 후 이적 (이적료는 지금 주고받고 선수는 시즌이 끝나면 옮김) */
+export type TransferTiming = "now" | "after";
+/** 시즌 후 이적이면 이적료를 이만큼만 (원 소속 팀이 시즌 끝까지 쓰므로) */
+export const AFTER_SEASON_FEE = 0.88;
+/** 시즌 끝에 옮길 선수 (이적료는 합의 때 이미 주고받음) */
+export interface PendingMove { player: number; from: number; to: number; fee: number; season: number; contract?: Contract }
 
 /** 다른 팀 선수가 우리 팀으로 오고 싶다는 요청 (수락하면 그 이적료·선수 요구 조건으로 바로 계약) */
 export interface JoinRequest {
@@ -364,6 +380,8 @@ export interface JobOffer {
   max: number;
   tries: number;
   status: "pending" | "countered";
+  /** 감독이 먼저 이적을 신청해서 온 제의 */
+  applied?: boolean;
 }
 
 export interface CTeam {
@@ -605,7 +623,9 @@ export interface CareerState {
   /** 난이도 (없으면 중급) */
   difficulty?: Difficulty;
   /** 이적료 합의된 영입 대상 (선수 → 합의 내용, 이번 주만 유효) */
-  agreements?: Record<number, { team: number; fee: number; season: number; week: number }>;
+  agreements?: Record<number, { team: number; fee: number; season: number; week: number; timing?: TransferTiming }>;
+  /** 시즌이 끝나면 옮기기로 합의한 이적 */
+  pendingMoves?: PendingMove[];
   /** 이번 주 협상 횟수 (키: 선수-종류) */
   tries?: Record<string, number>;
   triesWeek?: string;
@@ -617,6 +637,8 @@ export interface CareerState {
   jobOffers?: JobOffer[];
   /** 시즌 중에 수락한 감독 제의: 시즌이 끝나면 이 팀으로 옮김 */
   pendingJob?: { team: number; fee: number; season: number };
+  /** 이번 시즌 감독 이적을 신청한 구단 (구단 → 시즌) */
+  jobApplied?: Record<number, number>;
   /** 다른 팀 선수의 입단 요청 */
   joinRequests?: JoinRequest[];
   /** 우리 스타 선수의 연봉 인상(재계약) 요구 (한 번에 한 명, 2주 안에 답하지 않으면 거절로 봄) */
@@ -651,6 +673,11 @@ export interface CareerState {
   myActionsWeek?: string;
   /** 보유 경기 아이템 (츄잉껌·세레모니·스나이핑·치어풀) */
   inventory?: Record<string, number>;
+  /** 도착한 후원 (받기 전) */
+  gifts?: Gift[];
+  nextGiftId?: number;
+  /** 받은 후원 기록 (최근 순, 최대 20건) */
+  giftLog?: Gift[];
   /** 진행 중인 우리 경기 (세트마다 하나씩 진행, 2:2 면 ACE 결정전 선수를 그때 고름) */
   live?: LiveMatch;
 }

@@ -16,6 +16,8 @@ import { diffOf, jsonOf, snapshot, type Snapshot } from "./diff";
 import { nominate } from "./msl";
 import { ACTIONS, type ActionKey } from "@shared/career/rules";
 import { negotiateMainSponsor, pay, pruneOffers } from "./club";
+import { claimGift } from "./gifts";
+import { cancelPendingJob, requestJob } from "./club";
 import { acceptJob, chooseSponsor, listPlayer, negotiateContract, respondJob, respondJoin, respondOffer, respondRaise, unlistPlayer } from "./club";
 import { sendToB } from "./divisions";
 import {
@@ -512,8 +514,8 @@ export const careerRouter = router({
 
   /** 받은 영입 제안: 수락·거절·역제안(금액) */
   respondOffer: protectedProcedure
-    .input(z.object({ offerId: z.number().int(), action: z.enum(["accept", "reject", "counter"]), fee: z.number().int().min(0).max(1_000_000).optional() }))
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => respondOffer(s, input.offerId, input.action, input.fee))),
+    .input(z.object({ offerId: z.number().int(), action: z.enum(["accept", "reject", "counter"]), fee: z.number().int().min(0).max(1_000_000).optional(), timing: z.enum(["now", "after"]).optional() }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => respondOffer(s, input.offerId, input.action, input.fee, input.timing))),
 
   /** 스타 선수의 연봉 인상 요구: 수락·역제안·거절 */
   respondRaise: protectedProcedure
@@ -527,8 +529,8 @@ export const careerRouter = router({
 
   /** 다른 팀 선수 영입 요청 (이적료 제시) */
   bid: protectedProcedure
-    .input(z.object({ playerId: z.number().int(), fee: z.number().int().min(0).max(1_000_000) }))
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => requestBid(s, input.playerId, input.fee))),
+    .input(z.object({ playerId: z.number().int(), fee: z.number().int().min(0).max(1_000_000), timing: z.enum(["now", "after"]).optional() }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => requestBid(s, input.playerId, input.fee, input.timing))),
 
   /** 계약 협상 (영입 합의 후 또는 재계약) */
   contract: protectedProcedure
@@ -556,11 +558,21 @@ export const careerRouter = router({
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => acceptJob(s, input.teamId))),
 
   /** 스폰서 선택 (퀘스트 목표 조정). 제의 이름으로 고른다 */
+  claimGift: protectedProcedure
+    .input(z.object({ id: z.number().int() }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => claimGift(s, input.id))),
   chooseSponsor: protectedProcedure
     .input(z.object({ name: z.string().min(1).max(40), targets: z.array(z.number().int()).max(5) }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => chooseSponsor(s, input.name, input.targets))),
 
   /** 감독 제의 거절·계약금 역제안 */
+  /** 감독이 다른 구단에 이적 신청 */
+  requestJob: protectedProcedure
+    .input(z.object({ teamId: z.number().int() }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => requestJob(s, input.teamId))),
+  /** 시즌 중 합의한 감독 이적 취소 (시즌이 끝나기 전) */
+  cancelJob: protectedProcedure
+    .mutation(({ ctx }) => mutate(ctx.user.id, s => cancelPendingJob(s))),
   respondJob: protectedProcedure
     .input(z.object({ teamId: z.number().int(), action: z.enum(["reject", "counter"]), fee: z.number().int().min(0).max(1_000_000).optional() }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => respondJob(s, input.teamId, input.action, input.fee))),

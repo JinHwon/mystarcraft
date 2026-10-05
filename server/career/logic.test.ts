@@ -82,10 +82,13 @@ describe("2부 리그 (B팀)", () => {
     let guard = 0;
     let promo: CMatch[] = [];
     while (s.phase !== "offseason" && guard++ < 30) {
-      if (s.phase === "postseason" && !promo.length) {
+      // 포스트시즌은 한 주에 한 경기: 승강전 1 (11위 vs 2부 2위) → 승강전 2 (12위 vs 2부 1위) → 준PO …
+      if (s.phase === "postseason" && promo.length < 2) {
         const st1 = standings(s, 1), st2 = standings(s, 2);
+        const now = s.matches.filter(x => x.week === s.week && x.stage !== "regular");
+        expect(now).toHaveLength(1);
         promo = s.matches.filter(x => x.stage === "promo");
-        expect(promo.map(x => [x.a, x.b])).toEqual([[st1[10].id, st2[1].id], [st1[11].id, st2[0].id]]);
+        expect(promo.map(x => [x.a, x.b])).toEqual([[st1[10].id, st2[1].id], [st1[11].id, st2[0].id]].slice(0, promo.length));
       }
       const m = myPendingMatch(s);
       advanceWeek(s, m ? aiEntry(s, s.myTeam, m.stage === "final" ? FINAL_SETS : PRO_SETS) : undefined);
@@ -632,7 +635,7 @@ describe("구단 운영", () => {
     expect(t.manager).toMatchObject({ level: 3, exp: 40, reputation: 70, teams: [4, 0] });
   });
 
-  it("감독 제의 계약금 역제안: 한도 안이면 합의, 너무 높으면 철회 · 옮겨도 감독 레벨 유지", async () => {
+  it("감독 제의 계약금 역제안: 한도 안이면 합의, 계속 협상 가능 · 옮겨도 감독 레벨 유지", async () => {
     const { respondJob, acceptJob } = await import("./club");
     const s = newCareer(4);
     s.phase = "offseason";
@@ -646,8 +649,11 @@ describe("구단 운영", () => {
     const r2 = respondJob(s, 0, "counter", 1400);
     expect(r2.result).toBe("agreed");
     expect(s.myTeam).toBe(4);
-    // 너무 높으면 철회
-    expect(respondJob(s, 1, "counter", 5000).result).toBe("withdrawn");
+    // 너무 높게 불러도 제의는 남고 (횟수 제한 없이 계속 협상), 구단은 조금만 올림
+    for (let i = 0; i < 5; i++) expect(respondJob(s, 1, "counter", 5000).result).toBe("countered");
+    expect(s.jobOffers.find(o => o.team === 1)!.fee).toBeLessThanOrEqual(1200);
+    expect(s.jobOffers.find(o => o.team === 1)!.fee).toBeGreaterThan(1000);
+    respondJob(s, 1, "reject");
     expect(s.jobOffers.map(o => o.team)).toEqual([0]);
     const money = s.teams[0].money;
     acceptJob(s, 0);
@@ -826,12 +832,12 @@ describe("이적시장 등록·여러 제안·제안 기록", () => {
     const p = rosterOf(s, 0).sort((a, b) => b.level - a.level)[0];
     // 시세의 절반이면 거의 모든 구단이 관심
     listPlayer(s, p.id, Math.round(askingPrice(p, s.season) * 0.5));
-    for (let i = 0; i < 3 && (s.offers ?? []).filter(o => o.player === p.id).length < 2; i++) weeklyClub(s);
+    for (let i = 0; i < 8 && (s.offers ?? []).filter(o => o.player === p.id).length < 2; i++) weeklyClub(s);
     const mine = s.offers!.filter(o => o.player === p.id);
     expect(mine.length).toBeGreaterThanOrEqual(2);
     expect(mine.every(o => o.listed)).toBe(true);
     expect(new Set(mine.map(o => o.team)).size).toBe(mine.length);
-    const r = respondOffer(s, mine[0].id, "accept");
+    const r = respondOffer(s, mine[0].id, "accept", undefined, "now");
     expect(r.result).toBe("sold");
     expect(p.team).toBe(mine[0].team);
     expect((s.offers ?? []).some(o => o.player === p.id)).toBe(false);
@@ -1591,5 +1597,96 @@ describe("난이도", () => {
     let w = 0;
     for (let i = 0; i < 400; i++) { weak.cond = 100; strong.cond = 100; if (quickWin(s, weak, strong, i % 10)) w++; }
     expect(w).toBeGreaterThan(8);
+  });
+});
+
+describe("후원 · 시즌 후 이적 · 감독 이적 신청 · 스폰서 종류", () => {
+  it("후원을 받으면 자금이나 소모품(1~5개)이 들어온다", async () => {
+    const { claimGift } = await import("./gifts");
+    const s = newCareer(0);
+    s.gifts = [{ id: 1, from: "익명의 팬", money: 120, season: 1, week: 1 }, { id: 2, from: "팬클럽", item: { key: "vitavita", qty: 4 }, season: 1, week: 1 }];
+    const money = s.teams[0].money;
+    claimGift(s, 1);
+    expect(s.teams[0].money).toBeGreaterThan(money);
+    const before = s.inventory?.vitavita ?? 0;
+    claimGift(s, 2);
+    expect(s.inventory!.vitavita).toBe(before + 4);
+    expect(s.gifts).toHaveLength(0);
+    expect(s.giftLog!.map(g => g.id)).toEqual([2, 1]);
+    expect(() => claimGift(s, 2)).toThrow(CareerError);
+  });
+
+  it("시즌 후 이적: 이적료는 바로 받고 선수는 새 시즌에 옮긴다 (그 전엔 방출·트레이드 불가)", async () => {
+    const { respondOffer } = await import("./club");
+    const { AFTER_SEASON_FEE } = await import("@shared/career/rules");
+    const s = newCareer(0);
+    const p = rosterOf(s, 0)[0];
+    s.teams[3].money = 50_000;
+    s.offers = [{ id: 7, player: p.id, team: 3, fee: 1000, max: 1500, season: 1, week: 1, tries: 0, status: "pending" }];
+    const money = s.teams[0].money;
+    const r = respondOffer(s, 7, "accept", undefined, "after");
+    expect(r.result).toBe("sold");
+    expect(p.team).toBe(0);
+    expect(s.teams[0].money).toBe(money + Math.round((1000 * AFTER_SEASON_FEE) / 10) * 10);
+    expect(() => releasePlayer(s, p.id)).toThrow(/시즌이 끝나면/);
+    s.phase = "offseason";
+    startNextSeason(s, { releaseExpiring: false });
+    // 새 시즌에 3번 구단으로 옮김 (그 뒤 비시즌 이적시장에서 또 움직일 수는 있음)
+    if (p.retired === undefined) {
+      expect(p.team).not.toBe(0);
+      expect(s.news.some(n => n.text.includes(`${p.name} 선수가 ${s.teams[3].name}`))).toBe(true);
+    }
+    expect(s.pendingMoves ?? []).toHaveLength(0);
+  });
+
+  it("시즌 후 합류 영입: 이적료를 내고 새 시즌에 우리 팀으로 온다", async () => {
+    const { bidPlayer, negotiateContract } = await import("./club");
+    const { playerDemand } = await import("@shared/career/contract");
+    const s = newCareer(0);
+    s.teams[0].money = 100_000;
+    const target = rosterOf(s, 3).sort((a, b) => totalOf(b.stats) - totalOf(a.stats))[4];
+    expect(bidPlayer(s, target.id, 50_000, "after").result).toBe("agreed");
+    const d = playerDemand(s, target, 0);
+    expect(negotiateContract(s, target.id, { salary: d.salary * 2, years: 2 }).result).toBe("signed");
+    expect(target.team).toBe(3);
+    expect(s.pendingMoves).toHaveLength(1);
+    s.phase = "offseason";
+    startNextSeason(s, { releaseExpiring: false });
+    if (target.retired === undefined) {
+      expect(target.team).toBe(0);
+      expect(target.contract?.years).toBe(2);
+      expect(s.news.some(n => n.text.includes(`${target.name} 선수가 우리 팀에 합류`))).toBe(true);
+    }
+  });
+
+  it("감독 이적 신청: 평판이 되면 구단이 계약금을 제시하고, 시즌 중 합의는 취소할 수 있다", async () => {
+    const { requestJob, acceptJob, cancelPendingJob } = await import("./club");
+    const s = newCareer(4);
+    s.manager = { reputation: 100, teams: [4] };
+    const r = requestJob(s, 0);
+    expect(r.result).toBe("countered");
+    expect(s.jobOffers!.find(o => o.team === 0)?.applied).toBe(true);
+    expect(() => requestJob(s, 0)).toThrow(CareerError);
+    acceptJob(s, 0);
+    expect(s.pendingJob?.team).toBe(0);
+    cancelPendingJob(s);
+    expect(s.pendingJob).toBeUndefined();
+    expect(s.myTeam).toBe(4);
+    s.manager.reputation = 0;
+    expect(requestJob(s, 1).result).toBe("rejected");
+  });
+
+  it("계약금형 스폰서는 계약하자마자 계약금을 준다", async () => {
+    const { chooseSponsor } = await import("./club");
+    const { sponsorOffers } = await import("@shared/career/sponsor");
+    for (let team = 0; team < 12; team++) {
+      const s = newCareer(team);
+      const o = sponsorOffers(s).find(x => x.signing);
+      if (!o) continue;
+      const money = s.teams[team].money;
+      chooseSponsor(s, o.name, o.quests.map(q => q.target));
+      expect(s.teams[team].money).toBeGreaterThan(money);
+      return;
+    }
   });
 });
