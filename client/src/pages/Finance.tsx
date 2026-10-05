@@ -2,6 +2,7 @@
  * 재정 관리 (가계부): 현재 자금, 시즌 수입·지출, 주차별 거래 내역(항목·내용·금액·잔액)
  */
 import { useMemo, useState } from "react";
+import { regularWeeksOf, weekMoney } from "@shared/career/rules";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { B_OPERATING_COST, OPERATING_COST, type CareerState, type CashEntry } from "@shared/career/rules";
@@ -23,9 +24,10 @@ function Summary({ s, entries }: { s: CareerState; entries: CashEntry[] }) {
   const wages = teamWages(s, s.myTeam);
   const sponsor = activeSponsors(s).reduce((a, x) => a + x.weekly, 0);
   const div = myDiv(s);
-  const op = div === 2 ? B_OPERATING_COST : OPERATING_COST;
+  const op = weekMoney(s, div === 2 ? B_OPERATING_COST : OPERATING_COST);
   const goods = goodsAmount(s, s.myTeam);
-  const weekly = sponsor + goods - Math.round(wages / 11) - op;
+  const wage = Math.round(wages / regularWeeksOf(s));
+  const weekly = sponsor + goods - wage - op;
   return (
     <div className="rounded-2xl bg-card border border-border p-3.5 space-y-2">
       <div className="flex items-baseline justify-between">
@@ -38,7 +40,7 @@ function Summary({ s, entries }: { s: CareerState; entries: CashEntry[] }) {
         <div className="rounded-xl bg-muted/60 py-1.5"><div className="text-[10px] text-muted-foreground">손익</div><div className={cn("font-bold", tone(income + expense))}>{won(income + expense)}</div></div>
       </div>
       <div className="text-[11px] text-muted-foreground">
-        매주 고정: 스폰서 +{sponsor} · 굿즈 +{goods} · 연봉 -{Math.round(wages / 11)} (정규시즌) · 운영비 -{op} → <b className={tone(weekly)}>{won(weekly)}만원</b> (경기 수당·관중 수입 제외)
+        매주 고정: 스폰서 +{sponsor} · 굿즈 +{goods} · 연봉 -{wage} (정규시즌) · 운영비 -{op} → <b className={tone(weekly)}>{won(weekly)}만원</b> (경기 수당·관중 수입 제외)
       </div>
       <div className="rounded-xl bg-muted/40 p-2 text-[11px] text-muted-foreground space-y-0.5">
         <div className="font-bold text-foreground">💡 구단 수입원 (팬 인기 {Math.round(fanPower(s, s.myTeam))}/100 — 인기 선수가 많을수록 ↑)</div>

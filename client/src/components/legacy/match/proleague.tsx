@@ -1,6 +1,7 @@
 /**
  * 마이프로리그 경기 진행: 우리 경기(세트마다 서버 진행)와 포스트시즌 관전
  */
+import type { IndivLeague } from "@shared/career/rules";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { burstLabel, burstOf, slumpOn, MATCH_MONEY, matchSets, type CareerState, type CMatch, type PlayerSnap } from "@shared/career/rules";
@@ -146,7 +147,7 @@ export function ProSeriesFlow({ s: latest, reports, onDone, onClose, start, onPr
     </LegacyFrame>
   );
 }
-export type MslReportView = { stage: string; label: string; a: number; b: number; sa: number; sb: number; winner: number; bestOf: number; sets: BroadcastSet[]; maps?: number[]; pre?: Record<number, PlayerSnap> };
+export type MslReportView = { stage: string; label: string; a: number; b: number; sa: number; sb: number; winner: number; bestOf: number; sets: BroadcastSet[]; maps?: number[]; pre?: Record<number, PlayerSnap>; /** 대회 (없으면 마이스타리그) */ league?: IndivLeague };
 
 /** 마지막 세트까지 서버에서 끝났지만 아직 다 보지 못하고 나간 경기 (다시 들어오면 이어서) */
 export type HeldFinish = { matchId: number; set: BroadcastSet; week: WeekDone | null; ace?: number };

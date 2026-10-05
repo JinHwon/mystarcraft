@@ -3,7 +3,7 @@
  * 퀘스트 목표를 올리면 보상이 커지고, 낮추면 줄어든다
  */
 import { FREE_AGENT_TEAM } from "./originalData";
-import { ageOf, totalOf, type CareerState, type Race } from "./rules";
+import { ageOf, totalOf, weekMoney, type CareerState, type Race } from "./rules";
 import { myDiv, rosterOf, standings } from "./view";
 import { seeded } from "./contract";
 import { levelPerks, managerLevel } from "./mainSponsor";
@@ -170,7 +170,8 @@ export function sponsorOffers(s: CareerState): Sponsor[] {
     // 2부 스폰서는 규모가 작음
     const scale = myDiv(s) === 2 ? 0.7 : 1;
     const jitter = 0.85 + r(21) * 0.3;
-    const weekly = Math.round([42, 30, 20, 12, 14][si] * jitter * perk * scale);
+    // 주 후원금은 시즌 길이에 맞춰 (한 시즌 합계가 비슷하게)
+    const weekly = weekMoney(s, [42, 30, 20, 12, 14][si] * jitter * perk * scale);
     const mul = [0.45, 0.65, 0.9, 0.55, 0.55][si] * perk * scale;
     const extra: Partial<Sponsor> = style === "signing" ? { signing: Math.round((260 * jitter * perk * scale) / 10) * 10 }
       : style === "winBonus" ? { winBonus: Math.round(18 * jitter * perk * scale) } : {};

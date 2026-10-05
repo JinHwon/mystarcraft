@@ -7,6 +7,9 @@ import { FREE_AGENT_TEAM } from "@shared/career/originalData";
 import {
   AI_MIN_ROSTER,
   AFTER_SEASON_FEE,
+  OLD_REGULAR_WEEKS,
+  regularWeeksOf,
+  weekMoney,
   type TransferTiming,
   difficultyOf,
   B_MAX_ROSTER,
@@ -580,10 +583,10 @@ export function weeklyClub(s: CareerState) {
   const mine = rosterOf(s, s.myTeam);
   // 연봉 (정규시즌 동안 나눠 지급) + 운영비
   if (s.phase === "regular") {
-    const wages = mine.reduce((sum, p) => sum + weeklyWage(p), 0);
+    const wages = mine.reduce((sum, p) => sum + weeklyWage(p, s), 0);
     pay(s, "연봉", -wages, `선수 ${mine.length}명 주급`);
   }
-  pay(s, "운영비", myDiv(s) === 2 ? -B_OPERATING_COST : -OPERATING_COST, myDiv(s) === 2 ? "2부 운영비" : undefined);
+  pay(s, "운영비", -weekMoney(s, myDiv(s) === 2 ? B_OPERATING_COST : OPERATING_COST), myDiv(s) === 2 ? "2부 운영비" : undefined);
   // 스폰서 후원금·퀘스트
   for (const sp of activeSponsors(s)) pay(s, "스폰서", sp.weekly, `${sp.name} 주간 후원금`);
   checkSponsor(s);
@@ -619,8 +622,10 @@ export function weeklyClub(s: CareerState) {
   // 새 영입 제안 (다른 팀 → 우리 선수), 선수가 먼저 원하는 이적·입단 요청, 시즌 중 감독 제의
   if (s.phase !== "offseason") {
     // 주중(우리 경기 뒤)에도 절반 확률로 오므로 주말에는 나머지 절반
-    weeklyOffers(s, 0.6);
-    weeklyPlayerRequests(s, 0.6);
+    // 시즌이 길어진 만큼 주마다 조금 덜
+    const f = OLD_REGULAR_WEEKS / regularWeeksOf(s);
+    weeklyOffers(s, 0.6 * f);
+    weeklyPlayerRequests(s, 0.6 * f);
     weeklyJobOffer(s);
     weeklyRaiseRequest(s);
   }
@@ -649,11 +654,13 @@ export function seasonEndClub(s: CareerState, myResult: string, champion: number
   const mostWins = ranking[0];
   const top10 = new Set(ranking.slice(0, 10).map(p => p.id));
   const msl = s.msl?.season === s.season ? s.msl : undefined;
+  // 이번 시즌 개인리그 우승자 (마이스타리그 · MSL/OSL)
+  const champs = [msl?.champion, s.msl2?.season === s.season ? s.msl2.champion : undefined].filter((x): x is number => x !== undefined);
   for (const p of mine) {
     const b = p.contract?.bonus ?? {};
     const earned: Array<[BonusKey, number]> = [];
     if (b.proTitle && champion === s.myTeam) earned.push(["proTitle", b.proTitle]);
-    if (b.mslTitle && msl?.champion === p.id) earned.push(["mslTitle", b.mslTitle]);
+    if (b.mslTitle && champs.includes(p.id)) earned.push(["mslTitle", b.mslTitle]);
     if (b.mostWins && mostWins?.id === p.id) earned.push(["mostWins", b.mostWins]);
     if (b.topRank && top10.has(p.id)) earned.push(["topRank", b.topRank]);
     for (const [k, v] of earned) {
@@ -676,7 +683,7 @@ export function seasonEndClub(s: CareerState, myResult: string, champion: number
   // 감독 평판
   const m = s.manager ?? (s.manager = { reputation: 50 });
   const delta = ({ 우승: 20, 준우승: 12, 플레이오프: 7, 준플레이오프: 4, 승격: 10, "2부 우승": 5, 잔류: -2, 강등: -15 } as Record<string, number>)[myResult] ?? (myResult.startsWith("2부") ? -3 : -6);
-  const mslBonus = msl?.champion !== undefined && s.players[msl.champion]?.team === s.myTeam ? 5 : 0;
+  const mslBonus = champs.filter(id => s.players[id]?.team === s.myTeam).length * 5;
   m.reputation = Math.max(0, Math.min(100, m.reputation + delta + mslBonus));
 
   // 시즌 중에 수락한 감독 제의: 이제 옮김

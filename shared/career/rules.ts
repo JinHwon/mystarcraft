@@ -499,6 +499,7 @@ export type MslStage = "pc" | "dual" | "nom" | "group" | "ro16" | "ro8" | "ro4" 
 /**
  * 주차별 개인리그 일정 (원작 정규 시즌 일정표): PC방 예선 → 듀얼(3주) → 조지명식 → 32강(2주) → 16강(2주) → 8강(2주) → 4강·결승(포스트시즌)
  */
+/** 예전 11주 시즌의 마이스타리그 일정 */
 export const MSL_PLAN: Array<{ week: number; stage: Exclude<MslStage, "done">; part: number; label: string }> = [
   { week: 1, stage: "pc", part: 0, label: "PC방 예선전" },
   { week: 2, stage: "dual", part: 0, label: "듀얼토너먼트" },
@@ -514,7 +515,63 @@ export const MSL_PLAN: Array<{ week: number; stage: Exclude<MslStage, "done">; p
   { week: 12, stage: "ro4", part: 0, label: "4강" },
   { week: 13, stage: "final", part: 0, label: "결승" },
 ];
+export type PlanStep = { week: number; stage: Exclude<MslStage, "done">; part: number; label: string };
+
+// ── 시즌 일정 (18주) ─────────────────────────────────────────────
+/** 예전 시즌 길이 (이 길이로 만든 세이브는 그 시즌을 그대로 마침) */
+export const OLD_REGULAR_WEEKS = 11;
+/** 정규시즌 주 수 */
+export const REGULAR_WEEKS = 18;
+/**
+ * 주별 프로리그 경기 수 (0 = NO MATCH 주, 1·2경기) — 합이 22 (12팀 2라운드 풀리그)
+ * NO MATCH 주에는 개인리그만 열린다 (5주 조 지명식 등)
+ */
+export const PRO_WEEK_PATTERN = [2, 1, 2, 1, 0, 2, 1, 1, 2, 0, 1, 2, 1, 1, 0, 2, 1, 2];
+export const regularWeeksOf = (s: { regularWeeks?: number }) => s.regularWeeks ?? OLD_REGULAR_WEEKS;
+/** 주 단위 금액(연봉·운영비·후원금·굿즈): 시즌이 길어져도 한 시즌 합계가 예전(11주)과 같게 */
+export const weekMoney = (s: { regularWeeks?: number }, v: number) => Math.round((v * OLD_REGULAR_WEEKS) / regularWeeksOf(s));
+
+/** 마이스타리그 18주 일정 (조 지명식은 NO MATCH 주) */
+export const MYSL_PLAN: PlanStep[] = [
+  { week: 1, stage: "pc", part: 0, label: "PC방 예선전" },
+  { week: 2, stage: "dual", part: 0, label: "듀얼토너먼트" },
+  { week: 3, stage: "dual", part: 1, label: "듀얼토너먼트" },
+  { week: 4, stage: "dual", part: 2, label: "듀얼토너먼트" },
+  { week: 5, stage: "nom", part: 0, label: "조지명식" },
+  { week: 6, stage: "group", part: 0, label: "32강" },
+  { week: 8, stage: "group", part: 1, label: "32강" },
+  { week: 9, stage: "ro16", part: 0, label: "16강" },
+  { week: 11, stage: "ro16", part: 1, label: "16강" },
+  { week: 12, stage: "ro8", part: 0, label: "8강" },
+  { week: 14, stage: "ro8", part: 1, label: "8강" },
+  { week: 16, stage: "ro4", part: 0, label: "4강" },
+  { week: 18, stage: "final", part: 0, label: "결승" },
+];
+/** MSL·OSL 일정 (조는 추첨 — 지명식 없음, 결승은 포스트시즌 첫 주) */
+export const SECOND_PLAN: PlanStep[] = [
+  { week: 2, stage: "pc", part: 0, label: "예선전" },
+  { week: 3, stage: "dual", part: 0, label: "듀얼토너먼트" },
+  { week: 6, stage: "dual", part: 1, label: "듀얼토너먼트" },
+  { week: 7, stage: "dual", part: 2, label: "듀얼토너먼트" },
+  { week: 8, stage: "group", part: 0, label: "32강" },
+  { week: 10, stage: "group", part: 1, label: "32강" },
+  { week: 11, stage: "ro16", part: 0, label: "16강" },
+  { week: 13, stage: "ro16", part: 1, label: "16강" },
+  { week: 15, stage: "ro8", part: 0, label: "8강" },
+  { week: 16, stage: "ro8", part: 1, label: "8강" },
+  { week: 17, stage: "ro4", part: 0, label: "4강" },
+  { week: 19, stage: "final", part: 0, label: "결승" },
+];
+/** 대회 일정표: 예전 세이브의 마이스타리그는 11주 일정 */
+export const planOf = (m: { league?: IndivLeague; v2?: boolean }): PlanStep[] => (m.league && m.league !== "mysl" ? SECOND_PLAN : m.v2 ? MYSL_PLAN : MSL_PLAN);
 /** 단계가 시작하는 주 */
+export const stageWeek = (m: { league?: IndivLeague; v2?: boolean }, stage: Exclude<MslStage, "done">) => planOf(m).find(x => x.stage === stage)?.week;
+/** 2시즌마다 번갈아: 홀수 시즌 MSL, 짝수 시즌 OSL */
+export const secondLeagueOf = (season: number): IndivLeague => (season % 2 ? "msl" : "osl");
+/** 일정표 번호 → (대회, 번호): 두 번째 대회는 100부터 */
+export const SECOND_PLAN_BASE = 100;
+export const decodePlan = (n: number): { second: boolean; idx: number } => (n >= SECOND_PLAN_BASE ? { second: true, idx: n - SECOND_PLAN_BASE } : { second: false, idx: n });
+/** 단계가 시작하는 주 (예전 11주 일정) */
 export const MSL_WEEK: Record<Exclude<MslStage, "done">, number> = { pc: 1, dual: 2, nom: 5, group: 6, ro16: 8, ro8: 10, ro4: 12, final: 13 };
 export const MSL_STAGE_NAMES: Record<MslStage, string> = {
   pc: "PC방 예선", dual: "듀얼 토너먼트", nom: "조 지명식", group: "32강", ro16: "16강", ro8: "8강", ro4: "4강", final: "결승", done: "종료",
@@ -578,8 +635,12 @@ export interface MslState {
   placements: Record<number, string>;
   champion?: number;
   runnerUp?: number;
-  /** 다음에 치를 일정 (MSL_PLAN 번호) */
+  /** 다음에 치를 일정 (그 대회 일정표 번호 — planOf) */
   planIdx?: number;
+  /** 대회 (없으면 마이스타리그) */
+  league?: IndivLeague;
+  /** 18주 시즌 일정 (없으면 예전 11주 일정) */
+  v2?: boolean;
 }
 
 export interface CareerState {
@@ -605,6 +666,10 @@ export interface CareerState {
   }>;
   /** 이번 시즌 마이스타리그 */
   msl?: MslState;
+  /** 이번 시즌 두 번째 개인리그 (홀수 시즌 MSL · 짝수 시즌 OSL) */
+  msl2?: MslState;
+  /** 이번 시즌 정규시즌 주 수 (없으면 예전 11주) */
+  regularWeeks?: number;
   /** 마지막으로 리그를 진행한 때 (경기·주 진행·다음 시즌, ms) — 감독 랭킹 표시용 */
   lastLeagueAt?: number;
   /** 이번 시즌 승강전 결과 (다음 시즌 시작 때 리그를 바꿈) */

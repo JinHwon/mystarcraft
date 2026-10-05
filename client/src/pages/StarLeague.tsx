@@ -4,7 +4,8 @@
 import { useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { MSL_WEEK, type CareerState, type CPlayer, type MslGroup, type MslSeries, type MslStage, type MslState } from "@shared/career/rules";
+import { INDIV_SHORT, stageWeek, type CareerState, type CPlayer, type MslGroup, type MslSeries, type MslStage, type MslState } from "@shared/career/rules";
+import { LeagueLogo } from "@/components/legacy/match/msl";
 import { useCareer } from "@/lib/career";
 import { LegacyFrame, LegacyImg, PlayerPhoto } from "@/components/legacy/Legacy";
 
@@ -91,8 +92,8 @@ function PcTab({ s, m }: { s: CareerState; m: MslState }) {
     m.seeds.includes(id) ? "시드" : m.pcQualifiers.includes(id) ? "예선 통과" : dualIds.has(id) ? "듀얼 직행" : passed(m, "pc") ? "예선 탈락" : "예선 참가";
   return (
     <>
-      <Title logo="PC방">PC방 예선 토너먼트</Title>
-      <Status m={m} st="pc" week={MSL_WEEK.pc} />
+      <Title logo={m.league && m.league !== "mysl" ? undefined : "PC방"}>{m.league && m.league !== "mysl" ? `${INDIV_SHORT[m.league]} 예선 토너먼트` : "PC방 예선 토너먼트"}</Title>
+      <Status m={m} st="pc" week={stageWeek(m, "pc")} />
       {passed(m, "pc") && (
         <>
           <div className="text-center text-[12px] text-neutral-300 mb-1">참가 {m.pcEntrants}명 · 단판 토너먼트</div>
@@ -116,7 +117,14 @@ function PcTab({ s, m }: { s: CareerState; m: MslState }) {
 
 function StarLeagueScreen({ s }: { s: CareerState }) {
   const [, navigate] = useLocation();
-  const m = s.msl;
+  // 이번 시즌 개인리그: 마이스타리그 + (18주 시즌이면) MSL 또는 OSL
+  const second = s.msl2?.season === s.season ? s.msl2 : undefined;
+  const [which, setWhich] = useState<"mysl" | "second">(() => (new URLSearchParams(window.location.search).get("league") === "second" && second ? "second" : "mysl"));
+  const m = which === "second" && second ? second : s.msl;
+  const league = m?.league ?? "mysl";
+  const NAME = INDIV_SHORT[league];
+  const LOGO = league === "mysl" ? "MySL" : undefined;
+  const wk = (st: Exclude<MslStage, "done">) => (m ? stageWeek(m, st) : undefined);
   const defaultTab = (): Tab => {
     if (!m) return "pc";
     const map: Record<MslStage, Tab> = { pc: "pc", dual: "dual", nom: "nom", group: "group", ro16: "ro16", ro8: "ro8", ro4: "ro4", final: "final", done: "final" };
@@ -128,13 +136,13 @@ function StarLeagueScreen({ s }: { s: CareerState }) {
 
   let body: ReactNode = null;
   if (!m) {
-    body = <div className="text-center text-[13px] text-neutral-400 mt-10">이번 시즌 마이스타리그는 1주차에 시작합니다.</div>;
+    body = <div className="text-center text-[13px] text-neutral-400 mt-10">이번 시즌 {NAME}는 곧 시작합니다.</div>;
   } else if (tab === "pc") body = <PcTab s={s} m={m} />;
   else if (tab === "dual") {
     body = (
       <>
         <Title logo="DT">듀얼 토너먼트</Title>
-        <Status m={m} st="dual" week={MSL_WEEK.dual} />
+        <Status m={m} st="dual" week={wk("dual")} />
         <div className="grid grid-cols-1 min-[480px]:grid-cols-2 gap-2">{m.duals.map(g => <GroupBox key={g.name} s={s} g={g} prefix="듀얼" />)}</div>
         {!m.duals.length && <div className="text-center text-[12px] text-neutral-500">PC방 예선이 끝나면 조가 편성됩니다</div>}
       </>
@@ -142,8 +150,8 @@ function StarLeagueScreen({ s }: { s: CareerState }) {
   } else if (tab === "nom") {
     body = (
       <>
-        <Title>마이스타리그 조 지명식</Title>
-        <Status m={m} st="nom" week={MSL_WEEK.nom} />
+        <Title>{league === "mysl" ? `${NAME} 조 지명식` : `${NAME} 32강 조 추첨`}</Title>
+        <Status m={m} st="nom" week={league === "mysl" ? wk("nom") : wk("group")} />
         <div className="border border-neutral-600 p-2 mb-2">
           <div className="text-[13px] text-[#ffe45c] mb-1">시드 선수 →</div>
           <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[12px]">{m.seeds.map(id => <Name key={id} s={s} id={id} />)}</div>
@@ -169,20 +177,20 @@ function StarLeagueScreen({ s }: { s: CareerState }) {
   } else if (tab === "group") {
     body = (
       <>
-        <Title logo="MySL">마이스타리그 32강</Title>
-        <Status m={m} st="group" week={MSL_WEEK.group} />
+        <Title logo={LOGO}>{`${NAME} 32강`}</Title>
+        <Status m={m} st="group" week={wk("group")} />
         <div className="grid grid-cols-1 min-[480px]:grid-cols-2 gap-2">{m.groups.map(g => <GroupBox key={g.name} s={s} g={g} prefix="32강" />)}</div>
-        {!m.groups.length && <div className="text-center text-[12px] text-neutral-500">조 지명식 후 편성됩니다</div>}
+        {!m.groups.length && <div className="text-center text-[12px] text-neutral-500">{league === "mysl" ? "조 지명식 후 편성됩니다" : "듀얼 토너먼트가 끝나면 추첨으로 편성됩니다"}</div>}
       </>
     );
   } else {
     const round = tab as "ro16" | "ro8" | "ro4" | "final";
     const size = { ro16: 8, ro8: 4, ro4: 2, final: 1 }[round];
-    const title = { ro16: "마이스타리그 16강", ro8: "마이스타리그 8강", ro4: "마이스타리그 4강", final: "마이스타리그 결승" }[round];
+    const title = `${NAME} ${{ ro16: "16강", ro8: "8강", ro4: "4강", final: "결승" }[round]}`;
     body = (
       <>
-        <Title logo="MySL">{title}</Title>
-        <Status m={m} st={round} week={MSL_WEEK[round]} />
+        <Title logo={LOGO}>{title}</Title>
+        <Status m={m} st={round} week={wk(round)} />
         <Knockout s={s} m={m} round={round} size={size} />
         {round === "final" && m.champion !== undefined && (
           <div className="flex flex-col items-center mt-4 gap-1">
@@ -200,12 +208,22 @@ function StarLeagueScreen({ s }: { s: CareerState }) {
   return (
     <LegacyFrame season={s.season} onBack={() => navigate("/league")} onNext={next} nextLabel="Next ▷▷">
       <div className="px-3 pt-2 pb-4">
+        {second && (
+          <div className="grid grid-cols-2 gap-1 mb-2">
+            {([["mysl", s.msl], ["second", second]] as const).map(([k, x]) => (
+              <button key={k} onClick={() => setWhich(k)} className={cn("border py-1 flex items-center justify-center gap-1.5", which === k ? "border-[#ffe45c] bg-neutral-900" : "border-neutral-700 opacity-70")}>
+                <LeagueLogo league={x?.league ?? "mysl"} className="h-6 object-contain" />
+                {k === "mysl" && <span className="text-[12px]">마이스타리그</span>}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="grid grid-cols-4 gap-1 mb-2">
           {TABS.map(([k, label]) => (
             <button key={k} onClick={() => setTab(k)}
               className={cn("text-[12px] py-1 border", tab === k ? "bg-white text-black border-white" : "text-neutral-200 border-neutral-600")}
               style={tab === k ? { background: "linear-gradient(#ffffff,#cfcfcf)" } : undefined}>
-              {label}
+              {k === "nom" && league !== "mysl" ? "조 추첨" : label}
             </button>
           ))}
         </div>

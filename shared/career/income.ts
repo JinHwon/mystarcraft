@@ -5,7 +5,7 @@
  * - 중계권 분배금: 시즌 시작 때 리그가 나눠 줌
  * - 정규시즌 순위 상금: 정규시즌이 끝나면
  */
-import type { CareerState, CMatch } from "./rules";
+import { weekMoney, type CareerState, type CMatch } from "./rules";
 import { popularity } from "./contract";
 import { divOf, rosterOf } from "./view";
 
@@ -27,7 +27,7 @@ export function gateAmount(s: CareerState, team: number, stage: CMatch["stage"] 
 /** 주간 굿즈 판매: 1부 20 + 인기 × 0.6, 2부 10 + 인기 × 0.3 */
 export function goodsAmount(s: CareerState, team: number): number {
   const fans = fanPower(s, team);
-  return r10(divOf(s, team) === 2 ? 10 + fans * 0.3 : 20 + fans * 0.6);
+  return r10(weekMoney(s, divOf(s, team) === 2 ? 10 + fans * 0.3 : 20 + fans * 0.6));
 }
 
 /** 중계권 분배금 (시즌 시작) */
