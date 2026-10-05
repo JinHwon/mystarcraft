@@ -438,12 +438,13 @@ export const careerRouter = router({
     .input(z.object({ pick: z.number().int().optional() }).optional())
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => nominate(s, input?.pick))),
 
-  /** 우리 선수 전원 같은 행동으로 지정 (훈련·휴식·이벤트) */
+  /** 우리 선수 여러 명(없으면 전원) 같은 행동으로 지정하거나 해제 (action null) */
   setAllActions: protectedProcedure
-    .input(z.object({ action: z.enum(actionKeys) }))
+    .input(z.object({ action: z.enum(actionKeys).nullable(), playerIds: z.array(z.number().int()).max(60).optional() }))
     .mutation(({ ctx, input }) => mutateLite(ctx.user.id, s => {
       if (s.live) throw new CareerError("경기 중에는 행동을 바꿀 수 없습니다");
-      for (const p of rosterOf(s, s.myTeam)) setAction(s, p.id, input.action as ActionKey);
+      const ids = input.playerIds ? new Set(input.playerIds) : undefined;
+      for (const p of rosterOf(s, s.myTeam)) if (!ids || ids.has(p.id)) setAction(s, p.id, input.action as ActionKey | null);
       return { ok: true };
     })),
 

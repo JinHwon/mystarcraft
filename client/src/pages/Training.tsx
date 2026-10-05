@@ -78,9 +78,17 @@ export default function Training() {
     patch(st => { st.players[pid].action = action; });
     setAction.mutate({ playerId: pid, action });
   };
-  const chooseAll = (action: ActionKey) => {
-    patch(st => { for (const p of rosterOf(st, st.myTeam)) p.action = action; });
-    setAll.mutate({ action });
+  /** 이 행동을 실제로 할 수 있는 선수 (행동력이 충분하고, 휴식은 컨디션 100% 미만) */
+  const eligible = (k: ActionKey) => { const x = actionOf(k)!; return roster.filter(p => apOf(p) >= x.ap && !(k === "rest" && p.cond >= 100)); };
+  const allOn = (k: ActionKey) => { const el = eligible(k); return el.length > 0 && el.every(p => p.action === k); };
+  /** 전체 선택/해제: 할 수 있는 선수가 모두 이 행동이면 해제, 아니면 할 수 있는 선수만 지정 */
+  const toggleAll = (k: ActionKey) => {
+    const off = allOn(k);
+    const ids = (off ? roster.filter(p => p.action === k) : eligible(k)).map(p => p.id);
+    if (!ids.length) return;
+    const set = new Set(ids);
+    patch(st => { for (const p of rosterOf(st, st.myTeam)) if (set.has(p.id)) p.action = off ? null : k; });
+    setAll.mutate({ action: off ? null : k, playerIds: ids });
   };
   const a = actionOf(brush)!;
   const withBrush = roster.filter(p => p.action === brush);
@@ -131,16 +139,20 @@ export default function Training() {
             <span>보유 <b className="text-[#ffe45c]">{money.toLocaleString()}</b>만</span>
           </div>
           <div className="flex gap-1 pt-0.5">
-            <button onClick={() => chooseAll(brush)} disabled={busy} className="flex-1 border border-neutral-500 py-0.5 text-[11px]">전체 선수 {a.name}</button>
-            <span className="flex-[2] text-[10px] text-neutral-500 self-center leading-tight">선수를 누르면 이 행동이 지정됩니다 (다시 누르면 해제)</span>
+            <button onClick={() => toggleAll(brush)} disabled={busy || (!eligible(brush).length && !allOn(brush))}
+              className={cn("flex-1 border py-0.5 text-[11px] disabled:opacity-40", allOn(brush) ? "border-[#ff8a8a] text-[#ffb8c8]" : "border-neutral-500")}>
+              {allOn(brush) ? `전체 ${a.name} 해제` : `전체 선수 ${a.name} (${eligible(brush).length}명)`}
+            </button>
+            <span className="flex-[2] text-[10px] text-neutral-500 self-center leading-tight">선수를 누르면 지정·해제 · 전체는 행동력이 되는 선수만{brush === "rest" ? " (컨디션 100% 제외)" : ""}</span>
           </div>
         </div>
 
         {/* 선수 목록 */}
         <div className="flex-1 min-h-0 border-2 border-neutral-300 flex flex-col">
-          <div className="shrink-0 grid grid-cols-[minmax(0,1fr)_44px_92px_30px_34px] gap-1 px-1.5 py-1 text-[11px] text-neutral-300 border-b border-neutral-700">
-            <span>선수들</span><span className="text-center">행동력</span><span className="text-center">컨디션</span><span className="text-center">행동</span><span />
-          </div>
+          <button disabled={busy} onClick={() => toggleAll(brush)} title={`전체 ${a.name} 선택/해제`}
+            className="shrink-0 grid grid-cols-[minmax(0,1fr)_44px_92px_30px_34px] gap-1 px-1.5 py-1 text-[11px] text-neutral-300 border-b border-neutral-700 text-left active:bg-neutral-900">
+            <span>선수들 <span className="text-[9.5px] text-neutral-500">{allOn(brush) ? "· 눌러서 전체 해제" : "· 눌러서 전체 선택"}</span></span><span className="text-center">행동력</span><span className="text-center">컨디션</span><span className="text-center">행동</span><span />
+          </button>
           <div className="flex-1 min-h-0 overflow-y-auto">
             {roster.map(p => {
               const act = actionOf(p.action);
