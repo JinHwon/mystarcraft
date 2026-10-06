@@ -13,7 +13,7 @@ import type { Race } from "@shared/career/rules";
 import {
   CONCEPTS, DAY_SLOTS, DOW, GRADE_COLOR, RACE_NAMES, ROOKIE_PRICE, STATUS_NAMES, TIERS, TIER_ORDER, VITA_PER_DAY, CLAN_BY_ID, LADDER_REQ, eventReq,
   courageDays, dateText, draftDay, ladderGrade, sumStats, ymd, type RookieState, type Tier,
-  mapUnd, MAP_UND_MAX,
+  mapUnd, MAP_UND_MAX, oppLabel, withTag,
 } from "@shared/rookie/model";
 import type { PlayedGame } from "../../../server/rookie/logic";
 import { useRookie, useRookieSync, type RookieToday } from "@/lib/rookie";
@@ -81,6 +81,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
   const rest = m.rest.useMutation(sync);
   const stream = m.stream.useMutation(sync);
   const allowance = m.allowance.useMutation(sync);
+  const partTime = m.partTime.useMutation(sync);
   const next = m.nextDay.useMutation(sync);
   const courage = m.courage.useMutation(done("커리지 매치", r => <PlaceLine place={(r as { place: number }).place} />));
   const draft = m.draft.useMutation(done("드래프트", r => <div className="text-center text-[13px] text-[#ffe45c]">{(r as { rank: number; team?: number }).rank}위{(r as { team?: number }).team !== undefined ? ` → ${ORIG_TEAMS[(r as { team: number }).team].name} 지명!` : ""}</div>));
@@ -93,7 +94,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
   const [batchKind, setBatchKind] = useState<BatchResult["kind"] | null>(null);
   const [batchRes, setBatchRes] = useState<BatchResult | null>(null);
   const batchM = m.batch.useMutation({ onSuccess: r => { sync.onSuccess(r); setBatchRes(r.result as BatchResult); }, onError: sync.onError });
-  const busy = [ladder, rest, stream, allowance, next, courage, draft, internal, clanPractice, proleague, promo, tryout, playEvent, batchM].some(x => x.isPending);
+  const busy = [ladder, rest, stream, allowance, partTime, next, courage, draft, internal, clanPractice, proleague, promo, tryout, playEvent, batchM].some(x => x.isPending);
   // 오늘 행동을 다 쓰면 경기 화면(공방·경기·클랜 탭)에서 홈으로
   const noneLeft = s.used >= DAY_SLOTS;
   useEffect(() => {
@@ -116,7 +117,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
         <PlayerPhoto id={-1} name={s.name} size={52} src={s.photo} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 min-w-0">
-            <span className="font-black text-base text-white truncate">{s.name}</span>
+            <span className="font-black text-base text-white truncate">{withTag(s.name, s.clan ? CLAN_BY_ID[s.clan.id]?.tag : undefined)}</span>
             <span className="text-[10px] rounded-full px-1.5 py-0.5 bg-white/10 text-white whitespace-nowrap">{RACE_NAMES[s.race].slice(0, 1)} · {CONCEPTS[s.concept].name}</span>
             <TitleBadge id={s.title} className="hidden min-[380px]:inline" />
           </div>
@@ -191,6 +192,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
   const life: Act[] = [
     { icon: "💤", label: "휴식", desc: s.cond >= 100 ? "가득 참" : "컨디션 +12", onClick: () => rest.mutate(), disabled: busy || left < 1 || s.cond >= 100 },
     { icon: "📺", label: "방송", desc: "별풍선 · 행동 2", onClick: () => stream.mutate(), disabled: busy || left < 2 },
+    { icon: "💼", label: "알바", desc: "돈 벌기 · 행동 3", onClick: () => partTime.mutate(), disabled: busy || left < 3, hide: s.status === "pro" },
     { icon: "💵", label: "용돈", desc: s.allowanceDay !== undefined && s.day - s.allowanceDay < 7 ? `${7 - (s.day - s.allowanceDay)}일 뒤` : "주 1회", onClick: () => allowance.mutate(), disabled: busy || left < 1 || (s.allowanceDay !== undefined && s.day - s.allowanceDay < 7), hide: s.status === "pro" },
   ];
   const shortcuts: Act[] = [
@@ -307,7 +309,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
             ], 2)}
             <div className="rounded-2xl bg-card border border-border p-3 space-y-2">
               <LevelBar s={s} />
-              <div className="text-[10.5px] text-muted-foreground">레벨이 오를 때마다 능력치가 조금 오르고 성장 한계가 +20 늘어납니다. 공방은 조금, 래더·대회·클랜 가입·입단·우승은 경험치를 많이 줍니다.</div>
+              <div className="text-[10.5px] text-muted-foreground">레벨이 오를 때마다 능력치가 조금 오르고 성장 한계가 +40 늘어납니다. 공방은 조금, 래더·대회·클랜 가입·입단·우승은 경험치를 많이 줍니다.</div>
               <GrowthChart s={s} cap={today.cap} />
             </div>
             <StatsCard s={s} />
@@ -480,7 +482,7 @@ function LobbyView({ s, onPlayed, onBatch }: { s: RookieState; onPlayed: (g: Pla
             <div className="flex items-center gap-3">
               <PlayerPhoto id={opp.pro ? opp.pro.id : -1} name={opp.name} size={44} />
               <div className="flex-1 min-w-0">
-                <div className="font-black text-foreground truncate">{opp.name} <span className="text-xs text-muted-foreground">({RACE_NAMES[opp.race]})</span></div>
+                <div className="font-black text-foreground truncate">{oppLabel(opp)} <span className="text-xs text-muted-foreground">({RACE_NAMES[opp.race]})</span></div>
                 <div className="text-xs text-muted-foreground">{TIERS[s.lobby!.tier].name}방 · {ORIG_MAPS[s.lobby!.mapId][0]} · 실력 {strengthText(sumStats(opp.stats), sumStats(s.stats))}</div>
                 {bonus > 1 && <div className="text-[11px] text-rose-300 font-bold">불리한 종족전 연습 · 성장 ×{bonus.toFixed(2)}</div>}
               </div>
