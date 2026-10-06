@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { INDIV_SHORT, regularWeeksOf } from "@shared/career/rules";
 import { PlayerRanking } from "@/components/career/PlayerRanking";
+import { PlayerMarket } from "@/components/career/PlayerMarket";
 import { useLocation } from "wouter";
 import { VitaButton, saveEntryDraft, takeEntryReturn } from "@/components/legacy/match/common";
 import { trpc } from "@/lib/trpc";
@@ -372,15 +373,15 @@ function MatchTab({ s }: { s: CareerState }) {
 }
 
 function TableTab({ s }: { s: CareerState }) {
-  const [who, setWho] = useState<"team" | "player">("team");
+  const [who, setWho] = useState<"team" | "player" | "market">("team");
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-card border border-border">
-        {([["team", "🏢 구단 순위"], ["player", "👤 선수 순위"]] as const).map(([k, l]) => (
+      <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-card border border-border">
+        {([["team", "🏢 구단 순위"], ["player", "👤 선수 순위"], ["market", "💰 선수 시세"]] as const).map(([k, l]) => (
           <button key={k} onClick={() => setWho(k)} className={cn("py-1.5 rounded-lg text-sm font-bold", who === k ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{l}</button>
         ))}
       </div>
-      {who === "team" ? <TeamTable s={s} /> : <PlayerRanking s={s} />}
+      {who === "team" ? <TeamTable s={s} /> : who === "player" ? <PlayerRanking s={s} /> : <PlayerMarket s={s} />}
     </div>
   );
 }

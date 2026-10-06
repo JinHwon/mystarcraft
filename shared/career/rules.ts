@@ -282,6 +282,12 @@ export interface OutRequest {
   reply?: { ok: boolean; result: string; message: string; fee?: number; season: number; week: number };
 }
 
+/** 선수 시세·능력치 기록 (주마다 한 번): keys = 시즌*100+주 (주 0 = 시즌 시작), 선수마다 f 번째 기록부터 시세(10만원 단위)·능력치 합 */
+export interface MarketHist {
+  keys: number[];
+  p: Record<number, { f: number; v: number[]; t: number[] }>;
+}
+
 export interface TransferOffer {
   id: number;
   player: number;
@@ -692,6 +698,8 @@ export interface CareerState {
   /** 난이도 (없으면 중급) */
   difficulty?: Difficulty;
   /** 이적료 합의된 영입 대상 (선수 → 합의 내용, 이번 주만 유효) */
+  /** 선수 시세 기록 (서버에만 있고 화면에는 선수를 눌렀을 때 따로 받음) */
+  mkt?: MarketHist;
   agreements?: Record<number, { team: number; fee: number; season: number; week: number; timing?: TransferTiming }>;
   /** 시즌이 끝나면 옮기기로 합의한 이적 */
   pendingMoves?: PendingMove[];

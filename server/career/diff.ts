@@ -31,7 +31,8 @@ export function diffOf(before: Snapshot, s: CareerState): CareerDiff & { after: 
     if (rec[k] === undefined) { if (before.keys.has(k)) d.del.push(k); continue; }
     const j = JSON.stringify(rec[k]);
     after.keys.set(k, j);
-    if (before.keys.get(k) !== j) d.set[k] = rec[k];
+    // mkt(시세 기록)는 저장만 하고 화면에는 보내지 않음
+    if (before.keys.get(k) !== j && k !== "mkt") d.set[k] = rec[k];
   }
   for (const k of ARRAY_KEYS) {
     const arr = s[k] as unknown[], old = before.arrays[k] ?? [];

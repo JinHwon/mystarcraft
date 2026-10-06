@@ -3,7 +3,7 @@ import { applyDiff } from "@shared/career/diff";
 import { advanceWeek, beginMatch, newCareer, playLiveSet, rosterOf } from "./logic";
 import { diffOf, jsonOf, snapshot } from "./diff";
 
-/** 서버 변경분을 적용한 결과가 서버 세이브와 같은지 (해설 빼고 비교) */
+/** 서버 변경분을 적용한 결과가 서버 세이브와 같은지 (해설·시세 기록(mkt, 화면에는 안 보냄) 빼고 비교) */
 function roundTrip(s: ReturnType<typeof newCareer>, fn: () => void) {
   const client = structuredClone(s);
   const before = snapshot(s);
@@ -13,7 +13,7 @@ function roundTrip(s: ReturnType<typeof newCareer>, fn: () => void) {
   expect(jsonOf(s, after)).toBe(JSON.stringify(s));
   expect(after).toEqual(snapshot(s));
   const next = applyDiff(client, JSON.parse(JSON.stringify(d)));
-  const strip = (x: unknown) => JSON.parse(JSON.stringify(x, (k, v) => (k === "timeline" ? undefined : v)));
+  const strip = (x: unknown) => JSON.parse(JSON.stringify(x, (k, v) => (k === "timeline" || k === "mkt" ? undefined : v)));
   expect(strip(next)).toEqual(strip(s));
   return JSON.stringify(d).length;
 }

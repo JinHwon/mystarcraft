@@ -1576,6 +1576,27 @@ describe("이적 요청은 다음 주에 답 · 적응기간 · 개인리그 컨
     }
   });
 
+  it("선수 시세·능력치가 주마다 기록되고, 화면으로 보내는 변경분에는 빠진다", async () => {
+    const { marketSeries, marketDeltas, recordMarket } = await import("./logic");
+    const { snapshot, diffOf } = await import("./diff");
+    const s = newCareer(0);
+    expect(s.mkt?.keys).toEqual([s.season * 100]);
+    const p = rosterOf(s, 0)[0];
+    const before = snapshot(s);
+    advanceWeek(s, aiEntry(s, s.myTeam, PRO_SETS));
+    const d = diffOf(before, s);
+    expect(d.set.mkt).toBeUndefined();
+    expect(s.mkt!.keys.length).toBe(2);
+    const series = marketSeries(s, p.id);
+    expect(series).toHaveLength(2);
+    expect(series[1].total).toBe(totalOf(p.stats));
+    expect(typeof marketDeltas(s)[p.id]).toBe("number");
+    // 오래된 기록은 정리 (최근 40주)
+    for (let i = 1; i <= 70; i++) recordMarket(s, 900 + i);
+    expect(s.mkt!.keys.length).toBe(40);
+    expect(marketSeries(s, p.id)).toHaveLength(40);
+  });
+
   it("비시즌엔 영입 요청·스카웃이 바로 처리된다", async () => {
     const { requestScout } = await import("./logic");
     const s = newCareer(0);
