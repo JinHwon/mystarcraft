@@ -53,7 +53,7 @@ import {
 } from "@shared/career/rules";
 import {
   type SetMods,
-  CareerError, addExp, clampCond, freeMoney, markNewcomer, rollWeekBursts, rerollAfterMatch, quickSet, clampStat, drawMapPool, gainStats, news, pickMaps, playSet, rand, randInt, shuffle, STAGE_GROWTH, withStageGrowth,
+  CareerError, addSeasonH2h, addExp, clampCond, freeMoney, markNewcomer, rollWeekBursts, rerollAfterMatch, quickSet, clampStat, drawMapPool, gainStats, news, pickMaps, playSet, rand, randInt, shuffle, STAGE_GROWTH, withStageGrowth,
   type PlayedSet,
 } from "./core";
 export { CareerError };
@@ -139,6 +139,15 @@ export function migrateCareer(s: CareerState) {
 
 /** 상대 전적 기록이 생기기 전 세이브: 이번 시즌 치른 프로리그 세트로 채움 */
 function ensureHeadToHead(s: CareerState) {
+  // 시즌별 전적이 생기기 전 세이브: 이번 시즌 프로리그 세트로 채움 (지난 시즌은 기록이 없음)
+  if (!s.players.some(p => p.h2hS) && s.matches.some(m => m.sets?.length)) {
+    for (const m of s.matches) for (const x of m.sets ?? []) {
+      const [w, l] = x.winner === "a" ? [s.players[x.a], s.players[x.b]] : [s.players[x.b], s.players[x.a]];
+      if (!w || !l) continue;
+      if (w.team === s.myTeam) addSeasonH2h(s, w, l.id, 0);
+      if (l.team === s.myTeam) addSeasonH2h(s, l, w.id, 1);
+    }
+  }
   if (s.players.some(p => p.h2h)) return;
   for (const m of s.matches) for (const x of m.sets ?? []) {
     const [w, l] = x.winner === "a" ? [s.players[x.a], s.players[x.b]] : [s.players[x.b], s.players[x.a]];
@@ -1134,7 +1143,12 @@ function queueRequest(s: CareerState, r: Omit<OutRequest, "id" | "season" | "wee
 
 /** 영입 요청: 비시즌이거나 이번 주에 답이 온 선수면 바로 협상, 아니면 요청을 보내고 다음 주에 답 */
 export function requestBid(s: CareerState, pid: number, fee: number, timing: TransferTiming = "now") {
-  if (s.phase === "offseason" || answeredThisWeek(s, "bid", r => r.player === pid)) return bidPlayer(s, pid, fee, timing);
+  if (s.phase === "offseason" || answeredThisWeek(s, "bid", r => r.player === pid)) {
+    const res = bidPlayer(s, pid, fee, timing);
+    // 이어서 협상을 시작했으니 지난 답장은 정리 (새 결과가 화면에 나옴)
+    s.outbox = (s.outbox ?? []).filter(r => !(r.kind === "bid" && r.player === pid && r.reply));
+    return res;
+  }
   const p = s.players[pid];
   if (!p || p.team === s.myTeam || p.team === FREE_AGENT_TEAM) throw new CareerError("다른 팀 선수만 영입 요청할 수 있습니다");
   if (pendingReq(s, "bid", r => r.player === pid)) throw new CareerError("이미 영입 요청을 보낸 선수입니다 (다음 주에 답이 옵니다)");
@@ -1168,9 +1182,10 @@ export function requestScout(s: CareerState, pid: number) {
   return queueRequest(s, { kind: "scout", team: FREE_AGENT_TEAM, player: pid }, `무소속 ${p.name} 선수에게 영입 연락 (${price.toLocaleString()}만원)`);
 }
 
+/** 보낸 요청 취소 (답이 오기 전) 또는 온 답 닫기 (구단 운영 화면에서 확인한 답장) */
 export function cancelRequest(s: CareerState, id: number) {
-  const r = (s.outbox ?? []).find(x => x.id === id && !x.reply);
-  if (!r) throw new CareerError("이미 답이 왔거나 없는 요청입니다");
+  const r = (s.outbox ?? []).find(x => x.id === id);
+  if (!r) throw new CareerError("이미 처리된 요청입니다");
   s.outbox = s.outbox!.filter(x => x !== r);
   return { ok: true };
 }

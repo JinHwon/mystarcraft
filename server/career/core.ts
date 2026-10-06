@@ -148,6 +148,15 @@ export function withStageGrowth<T>(mul: number, fn: () => T, youth = false): T {
   try { return fn(); } finally { stageGrowth = prev; youthMode = prevYouth; }
 }
 
+/** 시즌별 상대 전적에 한 판 더하기 (i: 0 = 승, 1 = 패) */
+export function addSeasonH2h(s: CareerState, p: CPlayer, oppId: number, i: 0 | 1) {
+  const season = { ...(p.h2hS?.[s.season] ?? {}) };
+  const rec: [number, number] = [...(season[oppId] ?? [0, 0])] as [number, number];
+  rec[i]++;
+  season[oppId] = rec;
+  p.h2hS = { ...p.h2hS, [s.season]: season };
+}
+
 function afterSet(s: CareerState, a: CPlayer, b: CPlayer, aWin: boolean, mods?: { a?: SetMods; b?: SetMods }, content?: [SetContent, SetContent], duration = 0): { a: PlayerFx; b: PlayerFx } {
   const snap = (p: CPlayer) => ({ cond: p.cond, stats: { ...p.stats }, level: p.level });
   const before = { a: snap(a), b: snap(b) };
@@ -162,6 +171,8 @@ function afterSet(s: CareerState, a: CPlayer, b: CPlayer, aWin: boolean, mods?: 
   l.sVs = { ...l.sVs, [w.race]: [l.sVs?.[w.race]?.[0] ?? 0, (l.sVs?.[w.race]?.[1] ?? 0) + 1] };
   if (w.team === s.myTeam) w.h2h = { ...w.h2h, [l.id]: [(w.h2h?.[l.id]?.[0] ?? 0) + 1, w.h2h?.[l.id]?.[1] ?? 0] };
   if (l.team === s.myTeam) l.h2h = { ...l.h2h, [w.id]: [l.h2h?.[w.id]?.[0] ?? 0, (l.h2h?.[w.id]?.[1] ?? 0) + 1] };
+  if (w.team === s.myTeam) addSeasonH2h(s, w, l.id, 0);
+  if (l.team === s.myTeam) addSeasonH2h(s, l, w.id, 1);
   // 컨디션 유지 이벤트: 우리 선수는 지치지 않음
   // 포텐셜 폭발(예: 114%)도 떨어진 컨디션만큼 줄어듦 (100% 이하가 되면 끝)
   const burstBefore = { a: burstOf(s, a), b: burstOf(s, b) };

@@ -916,6 +916,11 @@ export function bidPlayer(s: CareerState, pid: number, fee: number, timing: Tran
 }
 const seeded2 = (a: number, b: number) => ((a * 9301 + b * 49297) % 233280) / 233280;
 
+/** 영입을 마치면 그 선수에 대한 영입 요청·답장은 정리 */
+function clearBidRequests(s: CareerState, pid: number) {
+  if (s.outbox) s.outbox = s.outbox.filter(r => !(r.kind === "bid" && r.player === pid));
+}
+
 // ── 계약 협상 (영입 합의 후, 또는 우리 선수 재계약) ─────────────────────
 export function negotiateContract(s: CareerState, pid: number, offer: Contract, opts: { promote?: boolean } = {}) {
   const p = s.players[pid];
@@ -947,12 +952,14 @@ export function negotiateContract(s: CareerState, pid: number, offer: Contract, 
         s.pendingMoves = [...(s.pendingMoves ?? []), { player: p.id, from: p.team, to: s.myTeam, fee: deal!.fee, season: s.season, contract: { ...c, years: offer.years + 1 } }];
         logOffer(s, { player: p.id, team: p.team, fee: deal!.fee, dir: "in", result: "signed", note: `시즌 후 합류 · 연봉 ${c.salary.toLocaleString()}만원 · ${offer.years}년` });
         delete s.agreements![pid];
+        clearBidRequests(s, pid);
         news(s, `📅 ${p.name} 선수 영입 합의! 시즌이 끝나면 합류합니다 (이적료 ${deal!.fee.toLocaleString()}만원 지급, 연봉 ${c.salary.toLocaleString()}만원)`);
         return { result: "signed" as const, message: `${p.name}: "시즌 끝나고 뵙겠습니다!" (시즌 후 합류 계약 성사)` };
       }
       logOffer(s, { player: p.id, team: p.team, fee: deal!.fee, dir: "in", result: "signed", note: `연봉 ${c.salary.toLocaleString()}만원 · ${offer.years}년` });
       moveTo(s, p, s.myTeam, c);
       delete s.agreements![pid];
+      clearBidRequests(s, pid);
       news(s, `✍️ ${p.name} 선수 영입! (이적료 ${deal!.fee.toLocaleString()}만원, 연봉 ${c.salary.toLocaleString()}만원)`);
       return { result: "signed" as const, message: `${p.name}: "잘 부탁드립니다!" (계약 성사)` };
     }

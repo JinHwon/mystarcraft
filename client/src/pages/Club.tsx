@@ -198,6 +198,7 @@ function OffersTab({ s }: { s: CareerState }) {
     <div className="space-y-2">
       <PlayerSheet s={s} player={open !== null ? s.players[open] : null} onClose={() => setOpen(null)} />
       {reply && <Reply {...reply} />}
+      <MyRequests s={s} />
       <PendingMoves s={s} />
       <ListingsBox s={s} />
       <RaiseRequest s={s} />
@@ -249,6 +250,72 @@ function OffersTab({ s }: { s: CareerState }) {
       })}
       <OfferHistory s={s} />
     </div>
+  );
+}
+
+/** 우리가 보낸 영입·트레이드·스카웃 요청: 온 답장(거절 포함)을 여기서 처리 */
+function MyRequests({ s }: { s: CareerState }) {
+  const { reply, setReply, done, fail } = useMut();
+  const cancel = trpc.career.cancelRequest.useMutation({ onSuccess: done, onError: fail });
+  const bid = trpc.career.bid.useMutation({ onSuccess: done, onError: fail });
+  const contract = trpc.career.contract.useMutation({ onSuccess: done, onError: fail });
+  const [fees, setFees] = useState<Record<number, number>>({});
+  const list = (s.outbox ?? []).filter(r => !r.reply || (r.reply.season === s.season && r.reply.week === s.week));
+  // 이적료는 합의했고 이번 주 안에 선수와 계약만 남은 영입
+  const deals = Object.entries(s.agreements ?? {})
+    .map(([pid, d]) => ({ p: s.players[Number(pid)], d }))
+    .filter(x => x.p && x.p.team !== s.myTeam && x.d.season === s.season && x.d.week === s.week && x.d.team === x.p.team);
+  const dealOf = (pid?: number) => deals.some(x => x.p.id === pid);
+  const shown = list.filter(r => !(r.kind === "bid" && r.reply?.result === "agreed" && dealOf(r.player)));
+  if (!shown.length && !deals.length) return reply ? <Reply {...reply} /> : null;
+  const what = (r: NonNullable<CareerState["outbox"]>[number]) =>
+    r.kind === "trade" ? `${s.teams[r.team]?.name} · ${(r.take ?? []).map(id => s.players[id]?.name).join(", ")} ⇄ ${(r.give ?? []).map(id => s.players[id]?.name).join(", ") || "현금"}${r.cash ? ` + ${r.cash.toLocaleString()}만` : ""}`
+      : r.kind === "scout" ? `무소속 ${s.players[r.player!]?.name}` : `${s.teams[r.team]?.name} ${s.players[r.player!]?.name} · ${(r.fee ?? 0).toLocaleString()}만`;
+  const KIND = { bid: "영입 요청", trade: "트레이드", scout: "스카웃" } as const;
+  const replies = shown.filter(r => r.reply).length;
+  return (
+    <Panel icon="📬" title="내가 보낸 요청" accent="#8fe07a" right={replies ? `답장 ${replies}건` : `답 대기 ${shown.length}건`}>
+      {reply && <Reply {...reply} />}
+      {deals.map(({ p, d }) => (
+        <div key={p.id} className="border border-[#8fe07a]/60 p-1.5 space-y-1">
+          <div className="text-[11.5px] text-[#bff5c6]">✅ {s.teams[d.team]?.name}과(와) {p.name} 이적료 {d.fee.toLocaleString()}만원 합의{d.timing === "after" ? " (시즌 후 합류)" : ""} · 이번 주 안에 선수와 계약하세요</div>
+          <ContractEditor player={p} demand={playerDemand(s, p, s.myTeam)} pending={contract.isPending}
+            onSubmit={c => contract.mutate({ playerId: p.id, salary: c.salary, years: c.years, minApps: c.minApps, bonus: c.bonus })} />
+        </div>
+      ))}
+      {shown.map(r => {
+        const rr = r.reply;
+        const counter = rr?.result === "countered" && r.kind === "bid" && r.player !== undefined && s.players[r.player]?.team !== s.myTeam;
+        const fee = fees[r.id] ?? rr?.fee ?? r.fee ?? 0;
+        return (
+          <div key={r.id} className="border border-neutral-700 p-1.5 space-y-1">
+            <div className="flex items-center gap-1">
+              <span className="text-[10.5px] text-neutral-400 shrink-0">{KIND[r.kind]}</span>
+              <span className="truncate flex-1">{what(r)}</span>
+              {!rr && <span className="text-[10.5px] text-[#ffe45c] shrink-0">답 대기</span>}
+              {!rr && <button disabled={cancel.isPending} onClick={() => cancel.mutate({ id: r.id })} className="border border-neutral-600 px-1.5 text-[10.5px] text-neutral-300 shrink-0">취소</button>}
+            </div>
+            {rr && <div className={cn("text-[11.5px]", rr.ok ? "text-[#bff5c6]" : rr.result === "countered" ? "text-[#ffe45c]" : "text-[#ffb8c8]")}>📬 {rr.message}</div>}
+            {counter && (
+              <>
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-neutral-400">이적료</span>
+                  <FeeStepper value={fee} onChange={v => setFees({ ...fees, [r.id]: v })} max={s.teams[s.myTeam].money} />
+                </div>
+                <div className="grid grid-cols-2 gap-1">
+                  <button disabled={bid.isPending} onClick={() => bid.mutate({ playerId: r.player!, fee, timing: r.timing ?? "now" })} className="border border-[#8fe07a] text-[#bff5c6] py-1">{bid.isPending ? "처리 중…" : "이 금액으로 제시"}</button>
+                  <button disabled={cancel.isPending} onClick={() => { setReply({ text: "협상을 접었습니다", ok: false }); cancel.mutate({ id: r.id }); }} className="border border-[#ff6b6b] text-[#ffb8c8] py-1">접기</button>
+                </div>
+              </>
+            )}
+            {rr && !counter && (
+              <button disabled={cancel.isPending} onClick={() => cancel.mutate({ id: r.id })} className="w-full border border-neutral-500 text-neutral-200 py-0.5 text-[11.5px]">확인</button>
+            )}
+          </div>
+        );
+      })}
+      <div className="text-[10px] text-neutral-500">시즌 중에는 요청을 보낸 뒤 우리 팀 다음 경기가 끝나면 답이 옵니다. 답장은 이번 주 안에 처리하세요 (주가 바뀌면 사라집니다)</div>
+    </Panel>
   );
 }
 
@@ -713,6 +780,10 @@ function ClubHeader({ s }: { s: CareerState }) {
   );
 }
 
+/** 제안 탭 배지: 받은 제안 + 입단 요청 + 연봉 요구 + 내가 보낸 요청에 온 답장 */
+const offerBadge = (s: CareerState) =>
+  (s.offers?.length ?? 0) + (s.joinRequests?.length ?? 0) + (s.raiseRequest ? 1 : 0) + (s.outbox ?? []).filter(r => r.reply && r.reply.season === s.season && r.reply.week === s.week).length;
+
 function ClubScreen({ s }: { s: CareerState }) {
   const [, navigate] = useLocation();
   // ?tab=offers 처럼 알림에서 바로 그 탭으로
@@ -730,7 +801,7 @@ function ClubScreen({ s }: { s: CareerState }) {
               style={tab === k ? { background: "linear-gradient(#ffffff,#cfcfcf)" } : undefined}>
               <span className="text-[15px]">{icon}</span>
               {label}
-              {k === "offers" && (s.offers?.length ?? 0) + (s.joinRequests?.length ?? 0) + (s.raiseRequest ? 1 : 0) > 0 && <span className="absolute -top-1.5 -right-1 bg-[#ff4d4d] text-white text-[9px] rounded-full px-1">{(s.offers?.length ?? 0) + (s.joinRequests?.length ?? 0) + (s.raiseRequest ? 1 : 0)}</span>}
+              {k === "offers" && offerBadge(s) > 0 && <span className="absolute -top-1.5 -right-1 bg-[#ff4d4d] text-white text-[9px] rounded-full px-1">{offerBadge(s)}</span>}
               {k === "sponsor" && (s.gifts?.length ?? 0) > 0 && <span className="absolute -top-1.5 -right-1 bg-[#ff4d9d] text-white text-[9px] rounded-full px-1">🎁{s.gifts!.length}</span>}
               {k === "manager" && (s.jobOffers?.length ?? 0) > 0 && <span className="absolute -top-1.5 -right-1 bg-[#ff4d4d] text-white text-[9px] rounded-full px-1">{s.jobOffers!.length}</span>}
             </button>
