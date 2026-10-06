@@ -13,6 +13,7 @@ import type { Race } from "@shared/career/rules";
 import {
   CONCEPTS, DAY_SLOTS, DOW, GRADE_COLOR, RACE_NAMES, ROOKIE_PRICE, STATUS_NAMES, TIERS, TIER_ORDER, VITA_PER_DAY, CLAN_BY_ID, LADDER_REQ, eventReq,
   courageDays, dateText, draftDay, ladderGrade, sumStats, ymd, type RookieState, type Tier,
+  mapUnd, MAP_UND_MAX,
 } from "@shared/rookie/model";
 import type { PlayedGame } from "../../../server/rookie/logic";
 import { useRookie, useRookieSync, type RookieToday } from "@/lib/rookie";
@@ -76,6 +77,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
   });
   const m = trpc.rookie;
   const ladder = m.ladder.useMutation(done("래더 결과"));
+  const ladderMaps = m.ladderMaps.useMutation(sync);
   const rest = m.rest.useMutation(sync);
   const stream = m.stream.useMutation(sync);
   const allowance = m.allowance.useMutation(sync);
@@ -276,6 +278,22 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
             {banners}
             {section("⚔️ 경기", <span className="text-[10.5px] text-muted-foreground">⏩ = 남은 행동만큼 한 번에</span>)}
             {playRows}
+            <div className="rounded-2xl bg-card border border-border p-2.5 space-y-1.5">
+              <div className="flex justify-between items-center text-[12px] font-black text-foreground"><span>🗺️ 이번 달 래더 맵</span><span className="text-[10.5px] text-muted-foreground font-normal">매달 새로 5개 · 눌러서 제외/포함</span></div>
+              <div className="grid grid-cols-1 gap-1">
+                {today.ladderMaps.maps.map(id => {
+                  const on = today.ladderMaps.sel.includes(id), w = weakest(id, s.race), u = mapUnd(s, id);
+                  return (
+                    <button key={id} onClick={() => ladderMaps.mutate({ sel: on ? today.ladderMaps.sel.filter(x => x !== id) : [...today.ladderMaps.sel, id] })} className={cn("flex items-center gap-2 rounded-lg border px-2 py-1 text-left", on ? "border-primary bg-primary/15" : "border-border bg-muted/20 opacity-60")}>
+                      <span className="text-[12px] font-bold text-foreground flex-1 truncate">{on ? "✅" : "⬜"} {ORIG_MAPS[id][0]}</span>
+                      <span className={cn("text-[10px]", w.pct < 50 ? "text-rose-300" : "text-muted-foreground")}>{w.pct < 50 ? `vs${RACE_NAMES[w.vs].slice(0, 1)} ${w.pct}%` : "무난"}</span>
+                      <span className="text-[10px] text-amber-300 shrink-0">이해도 {u}/{MAP_UND_MAX}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="text-[10.5px] text-muted-foreground">래더는 고른 맵 중 하나가 무작위로 나옵니다. 맵에 많이 나갈수록 이해도가 올라 불리한 종족전의 승률이 올라가요 (최대 {MAP_UND_MAX}).</div>
+            </div>
             {today.ladderLock && <div className="text-[11px] text-muted-foreground px-1">🔒 래더 조건: 경기 {LADDER_REQ.games}판 이상 · 능력치 합 {LADDER_REQ.total.toLocaleString()} 이상</div>}
             {section("🏆 대회")}
             {actGrid([{ icon: "🏆", label: "대회 일정·신청", desc: `예정 ${s.events.filter(e => e.day >= s.day && !e.result).length}개 · 3위까지 상금`, onClick: () => open("events") }], 2)}
@@ -442,13 +460,13 @@ function LobbyView({ s, onPlayed, onBatch }: { s: RookieState; onPlayed: (g: Pla
           {maps.map(m => (
             <button key={m.i} onClick={() => setMapId(m.i)} className={cn("rounded-lg border px-2 py-1 text-left", mapId === m.i ? "border-primary bg-primary/15" : "border-border bg-muted/20")}>
               <div className="text-[12px] font-bold text-foreground truncate">{m.name}</div>
-              <div className={cn("text-[10px]", m.w.pct < 50 ? "text-rose-300" : "text-muted-foreground")}>{m.w.pct < 50 ? `vs${RACE_NAMES[m.w.vs].slice(0, 1)} ${m.w.pct}% · 성장↑` : "불리한 종족전 없음"}</div>
+              <div className={cn("text-[10px]", m.w.pct < 50 ? "text-rose-300" : "text-muted-foreground")}>{m.w.pct < 50 ? `vs${RACE_NAMES[m.w.vs].slice(0, 1)} ${m.w.pct}% · 성장↑` : "불리한 종족전 없음"} · 이해도 {mapUnd(s, m.i)}</div>
             </button>
           ))}
           {!maps.length && <div className="col-span-2 text-xs text-muted-foreground text-center py-3">찾는 맵이 없습니다</div>}
         </div>
         <div className="rounded-xl bg-black p-2 flex justify-center"><MapInfo mapId={mapId} size={56} /></div>
-        <div className="text-[10.5px] text-muted-foreground">내 종족이 불리한 종족전으로 연습하면 능력치가 더 잘 오릅니다 (최대 1.6배).</div>
+        <div className="text-[10.5px] text-muted-foreground">내 종족이 불리한 종족전으로 연습하면 능력치가 더 잘 오릅니다 (최대 1.6배). 같은 맵에 많이 나갈수록 맵 이해도(최대 55)가 올라 불리함도 줄어듭니다.</div>
       </div>
       <div className="grid grid-cols-2 gap-2">
         <button onClick={() => find.mutate({ tier, mapId })} disabled={find.isPending || s.used >= DAY_SLOTS} className="py-2.5 rounded-2xl border border-primary text-primary font-black disabled:opacity-40">🔍 한 판 매칭</button>

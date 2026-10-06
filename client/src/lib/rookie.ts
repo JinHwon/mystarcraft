@@ -2,7 +2,7 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { ACH_BY_ID, type RookieState } from "@shared/rookie/model";
 
-export type RookieToday = { courage: boolean; draft: boolean; proleague: boolean; promo: boolean; events: number[]; status: string; grade: string; cap: number; ladderLock: string | null; clanRank: number };
+export type RookieToday = { courage: boolean; draft: boolean; proleague: boolean; promo: boolean; events: number[]; status: string; grade: string; cap: number; ladderLock: string | null; ladderMaps: { month: number; maps: number[]; sel: number[] }; clanRank: number };
 
 /** 선수 키우기 세이브 */
 export function useRookie() {

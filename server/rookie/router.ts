@@ -102,6 +102,7 @@ export const rookieRouter = router({
   kick: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.kickLobby(s))),
   playLobby: p.mutation(({ ctx }) => mutate(ctx.user.id, s => ({ games: [L.playLobby(s)] }))),
   ladder: p.mutation(({ ctx }) => mutate(ctx.user.id, s => ({ games: [L.playLadder(s)] }))),
+  ladderMaps: p.input(z.object({ sel: z.array(z.number().int()).min(1).max(5) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.setLadderMaps(s, input.sel))),
   rest: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.rest(s))),
   stream: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.stream(s))),
   allowance: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.allowance(s))),
