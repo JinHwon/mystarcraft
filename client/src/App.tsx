@@ -1,3 +1,4 @@
+import { useRookieAccess } from "@/lib/rookie";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -49,6 +50,7 @@ const StarLeague = page(() => import("./pages/StarLeague"));
 const Shop = page(() => import("./pages/Shop"));
 const Club = page(() => import("./pages/Club"));
 const Finance = page(() => import("./pages/Finance"));
+const Rookie = page(() => import("./pages/Rookie"));
 
 const PageLoading = () => (
   <div className="flex items-center justify-center py-20" role="status" aria-label="불러오는 중">
@@ -90,6 +92,20 @@ const GAME_PAGES: Array<[string, () => React.JSX.Element]> = [
   ["/admin/events", withLayout(adminOnly(AdminEvents))],
 ];
 
+/** 선수 키우기 모드: 감독 모드 화면 틀 없이 (로그인 필요) */
+function RookiePage() {
+  const { isAuthenticated, loading } = useAuth();
+  if (loading) return <PageLoading />;
+  if (!isAuthenticated) return <Redirect to="/login" />;
+  return <RookieGate />;
+}
+function RookieGate() {
+  const access = useRookieAccess();
+  if (access.loading) return <PageLoading />;
+  if (!access.allowed) return <div className="p-6 text-center text-muted-foreground space-y-3"><div className="text-3xl">🎮</div><div>선수 키우기 모드는 아직 준비 중입니다</div><a href="/lobby" className="text-primary font-bold">← 돌아가기</a></div>;
+  return <Suspense fallback={<PageLoading />}><Rookie /></Suspense>;
+}
+
 /** 없앤 "내 선수 육성" 모드의 옛 주소 (북마크 대비) */
 const OLD_PATHS = ["/create-player", "/profile", "/practice", "/game-results", "/events"];
 
@@ -99,6 +115,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/login" component={Login} />
       {GAME_PAGES.map(([path, Page]) => <Route key={path} path={path} component={Page} />)}
+      <Route path="/rookie" component={RookiePage} />
       {OLD_PATHS.map(p => (
         <Route key={p} path={p}><Redirect to="/lobby" /></Route>
       ))}

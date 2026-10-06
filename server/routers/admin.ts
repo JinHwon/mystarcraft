@@ -2,9 +2,16 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
 import { getUserById, isConfiguredAdmin, updateUserRole } from "../db";
+import { ROOKIE_OPEN_KEY, rookieOpen, setSetting } from "../settings";
 
 /** 사용자 계정 관리 (커리어 세이브 관리는 career.admin* 에 있음) */
 export const adminRouter = router({
+  /** 선수 키우기 모드 공개 여부 */
+  rookieOpen: adminProcedure.query(async () => ({ open: await rookieOpen() })),
+  setRookieOpen: adminProcedure.input(z.object({ open: z.boolean() })).mutation(async ({ input }) => {
+    await setSetting(ROOKIE_OPEN_KEY, input.open ? "1" : "0");
+    return { open: input.open };
+  }),
   updateUserRole: adminProcedure
     .input(z.object({ userId: z.number().int(), role: z.enum(["admin", "user"]) }))
     .mutation(async ({ ctx, input }) => {

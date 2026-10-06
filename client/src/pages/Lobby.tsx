@@ -1,4 +1,5 @@
 
+import { useRookieAccess } from "@/lib/rookie";
 import { EventBanner } from "@/components/career/EventBanner";
 import { INDIV_SHORT, regularWeeksOf } from "@shared/career/rules";
 import { MSL_STAGE_NAMES } from "@shared/career/rules";
@@ -115,6 +116,7 @@ function Tile({ emoji, title, desc, badge, onClick, className }: { emoji: string
 
 function Office({ s }: { s: CareerState }) {
   const [, navigate] = useLocation();
+  const rookie = useRookieAccess();
   const updater = useCareerUpdater();
   const { canInstall, install } = useInstallPrompt();
   const [restart, setRestart] = useState(false);
@@ -152,6 +154,11 @@ function Office({ s }: { s: CareerState }) {
   return (
     <div className="p-4 space-y-4">
       <EventBanner />
+      {rookie.allowed && <button onClick={() => navigate("/rookie")} className="w-full rounded-2xl border border-sky-400/40 p-3 flex items-center gap-3 text-left" style={{ background: "linear-gradient(135deg, rgba(56,189,248,0.18), rgba(56,189,248,0.04))" }}>
+        <span className="text-2xl">🎮</span>
+        <span className="flex-1"><b className="text-sm text-foreground">선수 키우기 모드</b> {rookie.open ? <span className="text-[10px] rounded-full bg-sky-500 text-white px-1.5 py-0.5 font-black">NEW</span> : <span className="text-[10px] rounded-full bg-amber-500 text-black px-1.5 py-0.5 font-black">관리자 테스트</span>}<span className="block text-[11px] text-muted-foreground">내 선수를 만들어 아마추어 → 준프로 → 프로게이머로</span></span>
+        <span className="text-sky-300 font-bold">›</span>
+      </button>}
       {alerts.length > 0 && (
         <div className="rounded-2xl bg-amber-500/10 border border-amber-400/40 p-2 space-y-0.5">
           {alerts.map(a => (

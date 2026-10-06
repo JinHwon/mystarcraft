@@ -1,3 +1,4 @@
+import { useRookieAccess } from "@/lib/rookie";
 import { useLocation } from "wouter";
 import { useEffect, useState } from "react";
 import {
@@ -45,6 +46,7 @@ const NAV: NavItem[] = [
   { path: "/transfer", label: "이적시장", icon: Handshake },
   { path: "/records", label: "기록", icon: ScrollText },
   { path: "/ranking", label: "감독 랭킹", icon: Medal },
+  { path: "/rookie", label: "🎮 선수 키우기 모드", icon: Zap },
 ];
 const ADMIN_NAV: NavItem[] = [
   { path: "/admin", label: "관리자 패널", icon: Settings },
@@ -58,7 +60,9 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
   const [menuOpen, setMenuOpen] = useState(false);
   const { user, isAuthenticated, loading, logout } = useAuth();
   const [location, navigate] = useLocation();
-  const items = user?.role === "admin" ? [...NAV, ...ADMIN_NAV] : NAV;
+  const rookie = useRookieAccess();
+  const nav = rookie.allowed ? NAV.map(n => (n.path === "/rookie" && !rookie.open ? { ...n, label: "🎮 선수 키우기 (관리자 테스트)" } : n)) : NAV.filter(n => n.path !== "/rookie");
+  const items = user?.role === "admin" ? [...nav, ...ADMIN_NAV] : nav;
   const { state: s } = useCareer();
 
   useEffect(() => {

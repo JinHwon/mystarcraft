@@ -88,6 +88,31 @@ function EditPanel({ userId, onDone }: { userId: number; onDone: () => void }) {
   );
 }
 
+/** 선수 키우기 모드 공개/비공개 */
+function RookieSwitch() {
+  const utils = trpc.useUtils();
+  const q = trpc.admin.rookieOpen.useQuery();
+  const set = trpc.admin.setRookieOpen.useMutation({
+    onSuccess: r => { utils.admin.rookieOpen.setData(undefined, r); utils.rookie.access.invalidate(); toast.success(r.open ? "선수 키우기 모드를 모든 사용자에게 공개했습니다" : "선수 키우기 모드를 관리자 전용으로 닫았습니다"); },
+    onError: e => toast.error(e.message),
+  });
+  const open = !!q.data?.open;
+  return (
+    <div className={cn("rounded-2xl border p-3.5 flex items-center gap-3", open ? "bg-emerald-500/10 border-emerald-400/50" : "bg-card border-border")}>
+      <span className="text-2xl">🎮</span>
+      <div className="flex-1 min-w-0">
+        <div className="font-black text-foreground">선수 키우기 모드</div>
+        <div className="text-xs text-muted-foreground">{q.isLoading ? "불러오는 중..." : open ? "공개 중 · 모든 사용자가 쓸 수 있습니다" : "비공개 · 관리자만 테스트할 수 있습니다"}</div>
+      </div>
+      <button disabled={q.isLoading || set.isPending}
+        onClick={() => confirm(open ? "선수 키우기 모드를 닫을까요? (일반 사용자는 메뉴가 사라지고 들어갈 수 없습니다. 기록은 남아 있습니다)" : "선수 키우기 모드를 모든 사용자에게 공개할까요?") && set.mutate({ open: !open })}
+        className={cn("shrink-0 rounded-xl px-3 py-2 text-sm font-black disabled:opacity-40", open ? "border border-rose-400/60 text-rose-300" : "bg-emerald-600 text-white")}>
+        {open ? "닫기" : "공개하기"}
+      </button>
+    </div>
+  );
+}
+
 export default function Admin() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
@@ -112,6 +137,8 @@ export default function Admin() {
         </div>
         <button onClick={() => navigate("/admin/events")} className="mt-2 w-full py-2 rounded-xl bg-primary/20 border border-primary/40 text-primary text-sm font-bold">📅 이벤트 관리</button>
       </div>
+
+      <RookieSwitch />
 
       {sel !== null && <EditPanel userId={sel} onDone={() => setSel(null)} />}
 
