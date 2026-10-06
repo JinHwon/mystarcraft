@@ -316,7 +316,9 @@ export function LiveMatch({ s, playSet, pending, onFinished, onClose, held, onHo
                 <button onClick={() => setView(null)} className="ml-2 border border-neutral-500 px-1.5 text-neutral-200">이번 세트로</button>
               </div>
             )}
-            {isAce && !results[i] ? (
+            {winners && !results[i] && i > idx ? (
+              <div className="text-center text-[12px] text-neutral-300 my-6">아직 치르지 않은 세트입니다 — 출전 선수는 앞 세트 결과에 따라 정해집니다</div>
+            ) : isAce && !results[i] ? (
               <div className="text-center text-[12px] text-[#ffe45c] my-6">{sl}:{sr} — ACE 결정전! 다음 화면에서 출전 선수를 고릅니다</div>
             ) : winners && !results[i] && (!lp || !rp) ? (
               <div className="text-center text-[12px] text-[#ffe45c] my-6">
