@@ -25,7 +25,7 @@ const seriesKey = (label: string) => label.replace(/ \d+세트$/, "");
 export function MatchViewer({ s, games, title, extra, onClose }: { s: RookieState; games: PlayedGame[]; title?: string; extra?: ReactNode; onClose: () => void }) {
   const [i, setI] = useState(0);
   const [speed, setSpeed] = useSpeed();
-  const fake = { season: ymd(s.day).y - 2009, week: 1, myTeam: -1, teams: [], players: [], matches: [] } as unknown as CareerState;
+  const fake = { season: ymd(s.day).y - 2025, week: 1, myTeam: -1, teams: [], players: [], matches: [] } as unknown as CareerState;
   const me = asPlayer({ name: s.name, race: s.race, stats: s.stats }, ME_ID, { photoUrl: s.photo, photoOf: -1 });
   if (i < games.length) {
     const g = games[i];
@@ -47,7 +47,7 @@ export function MatchViewer({ s, games, title, extra, onClose }: { s: RookieStat
   for (const g of games) for (const [k, v] of Object.entries(g.fx.stats)) sum[k as StatKey] = (sum[k as StatKey] ?? 0) + (v ?? 0);
   const ladder = games.filter(g => g.fx.ladder);
   return (
-    <LegacyFrame season={ymd(s.day).y - 2009} onBack={onClose} onNext={onClose} nextLabel="확인 ▷▷">
+    <LegacyFrame season={ymd(s.day).y - 2025} onBack={onClose} onNext={onClose} nextLabel="확인 ▷▷">
       <div className="px-3 pt-4 pb-4 text-white space-y-2">
         <div className="text-center text-[16px] tracking-[0.25em]">{title ?? "경기 결과"}</div>
         <div className="text-center text-[22px] font-black"><span className="text-[#bff5c6]">{w}승</span> <span className="text-[#ffb8c8]">{games.length - w}패</span></div>

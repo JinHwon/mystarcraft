@@ -45,8 +45,8 @@ export function rollStats(concept: Concept, rnd: () => number = Math.random): St
 }
 
 // ── 날짜 ───────────────────────────────────────────────────────
-/** 날짜는 2010-01-04 부터 하루씩 (day 0 = 시작일) */
-export const START_DATE = Date.UTC(2010, 0, 4);
+/** 날짜는 2026-01-05 (월) 부터 하루씩 (day 0 = 시작일) */
+export const START_DATE = Date.UTC(2026, 0, 5);
 export const dateOf = (day: number) => new Date(START_DATE + day * 86_400_000);
 export const ymd = (day: number) => { const d = dateOf(day); return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate(), dow: d.getUTCDay() }; };
 export const dayOf = (y: number, m: number, d: number) => Math.round((Date.UTC(y, m - 1, d) - START_DATE) / 86_400_000);
