@@ -1545,6 +1545,37 @@ describe("이적 요청은 다음 주에 답 · 적응기간 · 개인리그 컨
     expect(fa.benchWeeks ?? 0).toBe(0);
   });
 
+  it("보낸 요청에 답이 오면 알림이 뜨고, 구단 운영 화면에서 닫을 수 있다 (거절 포함)", async () => {
+    const { requestBid, cancelRequest } = await import("./logic");
+    const { careerAlerts } = await import("../../client/src/lib/alerts");
+    const s = newCareer(0);
+    s.teams[0].money = 100_000;
+    const target = rosterOf(s, 3).sort((a, b) => totalOf(b.stats) - totalOf(a.stats))[3];
+    requestBid(s, target.id, 1);
+    expect(careerAlerts(s).some(a => a.key.startsWith("reply-"))).toBe(false);
+    advanceWeek(s, aiEntry(s, s.myTeam, PRO_SETS));
+    const req = s.outbox!.find(x => x.kind === "bid")!;
+    expect(req.reply?.ok).toBe(false);
+    const alert = careerAlerts(s).find(a => a.key === `reply-${req.id}`);
+    expect(alert?.to).toBe("/club?tab=offers");
+    cancelRequest(s, req.id);
+    expect(s.outbox!.some(x => x.id === req.id)).toBe(false);
+    expect(careerAlerts(s).some(a => a.key === `reply-${req.id}`)).toBe(false);
+    expect(() => cancelRequest(s, req.id)).toThrow(/처리/);
+  });
+
+  it("내 선수의 상대 전적이 통산과 시즌별로 쌓인다", () => {
+    const s = newCareer(0);
+    advanceWeek(s, aiEntry(s, s.myTeam, PRO_SETS));
+    const mine = rosterOf(s, 0).filter(p => p.h2hS);
+    expect(mine.length).toBeGreaterThan(0);
+    for (const p of mine) {
+      const sum = (r?: Record<number, [number, number]>) => Object.values(r ?? {}).reduce((a, [w, l]) => a + w + l, 0);
+      expect(sum(p.h2hS![s.season])).toBe(sum(p.h2h));
+      expect(sum(p.h2hS![s.season])).toBe(p.sWins + p.sLosses);
+    }
+  });
+
   it("비시즌엔 영입 요청·스카웃이 바로 처리된다", async () => {
     const { requestScout } = await import("./logic");
     const s = newCareer(0);

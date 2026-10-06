@@ -51,6 +51,7 @@ export function PlayerSheet({ s, player, onClose, actions }: { s: CareerState; p
             {player.titles && player.titles.length > 0 && (
               <TitleChips titles={player.titles} />
             )}
+            {player.team === s.myTeam && <H2HBox s={s} player={player} />}
             <div className="rounded-xl bg-muted/50 p-2.5 text-xs space-y-0.5">
               <div>📄 계약: <b>{player.contract ? `남은 ${player.contract.years}시즌 · 연봉 ${player.contract.salary.toLocaleString()}만원` : "없음 (무소속)"}</b></div>
               {player.contract?.minApps ? <div>출전 보장: 시즌 {player.contract.minApps}경기 (이번 시즌 {player.sApps ?? 0}경기 출전)</div> : null}
@@ -82,6 +83,52 @@ export function PlayerSheet({ s, player, onClose, actions }: { s: CareerState; p
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** 상대 선수별 전적: 통산 또는 시즌별 (우리 팀 선수만 기록) */
+function H2HBox({ s, player }: { s: CareerState; player: CPlayer }) {
+  const seasons = Object.keys(player.h2hS ?? {}).map(Number).sort((a, b) => b - a);
+  const [scope, setScope] = useState<"all" | number>("all");
+  const [open, setOpen] = useState(false);
+  const rec = scope === "all" ? player.h2h : player.h2hS?.[scope];
+  const rows = Object.entries(rec ?? {})
+    .map(([id, r]) => ({ o: s.players[Number(id)], w: r[0], l: r[1] }))
+    .filter(x => x.o && x.w + x.l > 0)
+    .sort((a, b) => b.w + b.l - (a.w + a.l) || b.w - a.w);
+  const total = rows.reduce((acc, x) => [acc[0] + x.w, acc[1] + x.l], [0, 0]);
+  return (
+    <div className="rounded-xl bg-muted/50 p-2.5 text-xs">
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between font-bold">
+        <span>⚔️ 상대 전적</span>
+        <span className="text-muted-foreground font-normal">{open ? "접기 ▲" : "펼치기 ▼"}</span>
+      </button>
+      {open && (
+        <div className="mt-1.5 space-y-1.5">
+          <div className="flex flex-wrap gap-1">
+            {(["all", ...seasons] as const).map(k => (
+              <button key={k} onClick={() => setScope(k)} className={cn("rounded-full border px-2 py-0.5", scope === k ? "bg-primary text-primary-foreground border-primary font-bold" : "border-border text-muted-foreground")}>{k === "all" ? "통산" : `${k}시즌${k === s.season ? " (이번)" : ""}`}</button>
+            ))}
+          </div>
+          {rows.length ? (
+            <>
+              <div className="text-muted-foreground">{scope === "all" ? "통산" : `${scope}시즌`} 상대 {rows.length}명 · <b className="text-foreground">{total[0]}승 {total[1]}패</b> ({Math.round((total[0] / Math.max(1, total[0] + total[1])) * 100)}%)</div>
+              <div className="max-h-56 overflow-y-auto rounded-lg border border-border divide-y divide-border/60">
+                {rows.map(x => (
+                  <div key={x.o.id} className="flex items-center gap-1.5 px-2 py-1">
+                    <RaceBadge race={x.o.race} />
+                    <span className="flex-1 truncate font-bold text-foreground">{x.o.name}</span>
+                    <span className="text-[10.5px] text-muted-foreground truncate max-w-[72px]">{s.teams[x.o.team]?.short ?? "무소속"}</span>
+                    <span className="w-[62px] text-right tabular-nums"><b className={x.w >= x.l ? "text-emerald-300" : "text-muted-foreground"}>{x.w}</b>승 <b className={x.l > x.w ? "text-rose-300" : "text-muted-foreground"}>{x.l}</b>패</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : <div className="text-muted-foreground py-1">{scope === "all" ? "아직 맞붙은 상대가 없습니다" : "이 시즌에는 기록된 맞대결이 없습니다"}</div>}
+          <div className="text-[10px] text-muted-foreground">전적 기록은 이 기능이 생긴 뒤의 경기부터 시즌별로 쌓입니다 (이전 시즌 경기는 통산에만 포함될 수 있습니다)</div>
+        </div>
+      )}
+    </div>
   );
 }
 
