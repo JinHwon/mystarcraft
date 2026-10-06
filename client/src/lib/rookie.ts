@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import type { RookieState } from "@shared/rookie/model";
+import { ACH_BY_ID, type RookieState } from "@shared/rookie/model";
 
 export type RookieToday = { courage: boolean; draft: boolean; proleague: boolean; promo: boolean; events: number[]; status: string; grade: string; cap: number };
 
@@ -14,7 +14,14 @@ export function useRookie() {
 export function useRookieSync() {
   const utils = trpc.useUtils();
   return {
-    onSuccess: (r: { state: RookieState; today: RookieToday }) => utils.rookie.get.setData(undefined, { state: r.state, today: r.today }),
+    onSuccess: (r: { state: RookieState; today: RookieToday; gained?: string[] }) => {
+      utils.rookie.get.setData(undefined, { state: r.state, today: r.today });
+      // 새 업적
+      for (const id of r.gained ?? []) {
+        const a = ACH_BY_ID[id];
+        if (a) toast.success(`${a.icon} 업적 달성: ${a.name}`, { description: `칭호 「${a.title}」 획득 · 인지도 +10` });
+      }
+    },
     onError: (e: { message: string }) => toast.error(e.message),
   };
 }

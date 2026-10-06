@@ -123,4 +123,89 @@ describe("선수 키우기", () => {
     L.useItem(s, "m1");
     expect(s.equip.mouse?.left).toBe(60);
   });
+
+  it("라이벌: 같이 성장하고 래더·대회에서 만남", () => {
+    const s = mk();
+    const start = sumStats(s.rival.stats);
+    expect(Math.abs(start - sumStats(s.stats))).toBeLessThan(500);
+    for (let d = 0; d < 120; d++) L.nextDay(s);
+    expect(sumStats(s.rival.stats)).toBeGreaterThan(start + 300);
+    let met = 0;
+    for (let i = 0; i < 200 && met === 0; i++) {
+      if (s.used >= DAY_SLOTS) L.nextDay(s);
+      s.cond = 100;
+      L.playLadder(s);
+      met = s.rival.w + s.rival.l;
+    }
+    expect(met).toBeGreaterThan(0);
+  });
+
+  it("슬럼프: 연패하면 빠지고, 다음 날 지나면 풀림 · 각성은 능력치를 올림", () => {
+    const s = mk();
+    s.streak = -5;
+    s.form = { kind: "slump", until: s.day + 1 };
+    const slow = L.effective(s);
+    delete s.form;
+    const normal = L.effective(s);
+    expect(sumStats(slow)).toBeLessThan(sumStats(normal));
+    s.form = { kind: "slump", until: s.day };
+    L.nextDay(s);
+    expect(s.form).toBeUndefined();
+  });
+
+  it("멘토 과외: 돈을 내고 고른 능력치가 오름, 하루 한 번", () => {
+    const s = mk();
+    s.money = 100;
+    const m = L.mentorsFor(s, "control")[0];
+    const before = s.stats.control;
+    L.mentor(s, "control", m.id);
+    expect(s.stats.control).toBeGreaterThan(before);
+    expect(s.money).toBe(80);
+    expect(() => L.mentor(s, "control", m.id)).toThrow(/하루/);
+  });
+
+  it("팬카페: 좋은 일이 있으면 글이 올라오고 회원이 늚", () => {
+    const s = mk();
+    s.stats = Object.fromEntries(Object.keys(s.stats).map(k => [k, 600])) as typeof s.stats;
+    for (let i = 0; i < 6; i++) L.stream(s), L.nextDay(s);
+    s.fame = 300;
+    L.nextDay(s);
+    expect(s.fanCafe.members).toBeGreaterThan(0);
+    expect(s.fanCafe.posts.length).toBeGreaterThan(0);
+  });
+
+  it("연봉 협상: 계약 끝나면 협상, 세 번 넘게 밀어붙이면 FA, FA 기간 지나면 준프로", () => {
+    const s = mk();
+    s.status = "pro";
+    s.team = { team: 2, squad: 1, joined: 0, salary: 120, monthW: 0, monthL: 0, contractUntil: s.day };
+    L.nextDay(s);
+    expect(s.nego).toBeDefined();
+    const offer = s.nego!.offer;
+    expect(L.negotiate(s, offer).result).toBe("signed");
+    expect(s.team.salary).toBe(offer);
+    // 다시: 무리한 요구 3번 → 결렬
+    s.team.contractUntil = s.day;
+    L.nextDay(s);
+    let r: string = "";
+    for (let i = 0; i < 3 && s.nego; i++) r = L.negotiate(s, 9999).result;
+    expect(r).toBe("fa");
+    expect(s.team).toBeUndefined();
+    expect(s.fa).toBeDefined();
+    s.offers = [];
+    for (let d = 0; d < 32 && s.fa; d++) { L.nextDay(s); s.offers = []; }
+    expect(s.status).toBe("semipro");
+  });
+
+  it("업적: 달성하면 기록되고 칭호를 달 수 있음", () => {
+    const s = mk();
+    s.record.w = 1;
+    s.money = 1500;
+    const got = L.checkAchievements(s);
+    expect(got).toContain("first_win");
+    expect(got).toContain("rich");
+    expect(L.checkAchievements(s)).toEqual([]);
+    L.setTitle(s, "rich");
+    expect(s.title).toBe("rich");
+    expect(() => L.setTitle(s, "ladder_s")).toThrow(L.RookieError);
+  });
 });

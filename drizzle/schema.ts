@@ -305,9 +305,20 @@ export const rookieCareers = mysqlTable("rookie_careers", {
 	id: int().autoincrement().notNull().primaryKey(),
 	userId: int().notNull(),
 	state: longtext().notNull(),
+	// 랭킹 보드용 요약 (저장할 때마다 갱신)
+	name: varchar({ length: 20 }).default("").notNull(),
+	race: varchar({ length: 10 }).default("terran").notNull(),
+	status: varchar({ length: 10 }).default("amateur").notNull(),
+	team: int(),
+	ladder: int().default(1500).notNull(),
+	total: int().default(0).notNull(),
+	fame: int().default(0).notNull(),
+	badges: int().default(0).notNull(),
+	title: varchar({ length: 30 }),
 	createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
 	uniqueIndex("rookie_careers_userId_unique").on(table.userId),
+	index("rookie_careers_ladder_idx").on(table.ladder),
 ]);

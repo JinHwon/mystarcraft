@@ -3,12 +3,12 @@
  */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { rookieCareers } from "../../drizzle/schema";
-import { STAT_KEYS } from "@shared/gameConstants";
-import { CONCEPTS, TIERS, type Concept, type RookieState, type Tier } from "@shared/rookie/model";
+import { STAT_KEYS, type StatKey } from "@shared/gameConstants";
+import { ACH_BY_ID, CONCEPTS, RANK_SORTS, TIERS, sumStats, type Concept, type RankSort, type RookieState, type Tier } from "@shared/rookie/model";
 import * as L from "./logic";
 
 const cache = new Map<number, RookieState>();
@@ -29,7 +29,7 @@ async function load(userId: number): Promise<RookieState | null> {
   if (hit) return hit;
   const rows = await (await db()).select().from(rookieCareers).where(eq(rookieCareers.userId, userId)).limit(1);
   if (!rows[0]) return null;
-  const s = JSON.parse(rows[0].state) as RookieState;
+  const s = L.upgrade(JSON.parse(rows[0].state) as RookieState);
   cache.set(userId, s);
   if (cache.size > 300) cache.delete(cache.keys().next().value!);
   return s;
@@ -37,9 +37,13 @@ async function load(userId: number): Promise<RookieState | null> {
 async function save(userId: number, s: RookieState) {
   const d = await db();
   const json = JSON.stringify(s);
+  const summary = {
+    state: json, name: s.name, race: s.race, status: s.fa ? "fa" : s.status, team: s.team?.team ?? null, ladder: s.ladder.score,
+    total: sumStats(s.stats), fame: s.fame, badges: Object.keys(s.achievements).length, title: s.title ? ACH_BY_ID[s.title]?.title ?? null : null,
+  };
   const rows = await d.select({ id: rookieCareers.id }).from(rookieCareers).where(eq(rookieCareers.userId, userId)).limit(1);
-  if (rows[0]) await d.update(rookieCareers).set({ state: json }).where(eq(rookieCareers.id, rows[0].id));
-  else await d.insert(rookieCareers).values({ userId, state: json });
+  if (rows[0]) await d.update(rookieCareers).set(summary).where(eq(rookieCareers.id, rows[0].id));
+  else await d.insert(rookieCareers).values({ userId, ...summary });
   cache.set(userId, s);
 }
 
@@ -51,8 +55,9 @@ function mutate<T>(userId: number, fn: (s: RookieState) => T) {
     const backup = JSON.stringify(s);
     try {
       const result = fn(s);
+      const gained = L.checkAchievements(s);
       await save(userId, s);
-      return { result, state: s, today: L.todayInfo(s) };
+      return { result, state: s, today: L.todayInfo(s), gained };
     } catch (e) {
       cache.set(userId, JSON.parse(backup) as RookieState);
       if (e instanceof L.RookieError) throw new TRPCError({ code: "BAD_REQUEST", message: e.message });
@@ -102,5 +107,24 @@ export const rookieRouter = router({
   proleague: p.mutation(({ ctx }) => mutate(ctx.user.id, s => ({ games: [L.playProleague(s)] }))),
   requestTransfer: p.input(z.object({ team: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.requestTransfer(s, input.team))),
   acceptOffer: p.input(z.object({ team: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.acceptOffer(s, input.team))),
+  mentor: p.input(z.object({ stat: z.enum(STAT_KEYS as unknown as [StatKey, ...StatKey[]]), pro: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.mentor(s, input.stat, input.pro))),
+  negotiate: p.input(z.object({ ask: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.negotiate(s, input.ask))),
+  acceptNego: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.acceptNego(s))),
+  setTitle: p.input(z.object({ id: z.string().nullable() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.setTitle(s, input.id))),
+  /** 랭킹 보드: 다른 유저들의 키운 선수 (상위 50 + 내 순위) */
+  ranking: p.input(z.object({ sort: z.enum(Object.keys(RANK_SORTS) as [RankSort, ...RankSort[]]) })).query(async ({ ctx, input }) => {
+    const d = await db();
+    const col = rookieCareers[input.sort];
+    const cols = { userId: rookieCareers.userId, name: rookieCareers.name, race: rookieCareers.race, status: rookieCareers.status, team: rookieCareers.team, ladder: rookieCareers.ladder, total: rookieCareers.total, fame: rookieCareers.fame, badges: rookieCareers.badges, title: rookieCareers.title };
+    const rows = await d.select(cols).from(rookieCareers).orderBy(desc(col), rookieCareers.id).limit(50);
+    const mine = await d.select(cols).from(rookieCareers).where(eq(rookieCareers.userId, ctx.user.id)).limit(1);
+    let myRank: number | null = null;
+    if (mine[0]) {
+      const [{ n }] = await d.select({ n: sql<number>`count(*)` }).from(rookieCareers).where(sql`${col} > ${mine[0][input.sort]}`);
+      myRank = Number(n) + 1;
+    }
+    const strip = ({ userId, ...r }: (typeof rows)[number]) => ({ ...r, me: userId === ctx.user.id });
+    return { rows: rows.map(strip), me: mine[0] ? strip(mine[0]) : null, myRank };
+  }),
   nextDay: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.nextDay(s))),
 });

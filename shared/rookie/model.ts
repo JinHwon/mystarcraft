@@ -106,6 +106,8 @@ export interface Opp {
   semipro?: boolean;
   /** 래더 점수 (래더 상대) */
   ladder?: number;
+  /** 라이벌 */
+  rival?: boolean;
 }
 
 const NICK_A = ["불꽃", "질럿", "저글링", "마린", "드랍", "캐리어", "벌처", "뮤탈", "하이템플러", "탱크", "럴커", "스카웃", "레이스", "울트라", "다크", "옵저버", "커세어", "디파일러", "아비터", "고스트"];
@@ -164,7 +166,34 @@ export interface RookieTeam {
   /** 프로리그 출전 · 전적 */
   proW?: number;
   proL?: number;
+  /** 계약 끝나는 날 (그 다음 날 연봉 협상) */
+  contractUntil?: number;
 }
+
+/** 같은 시기에 시작한 라이벌 (AI, 같이 성장) */
+export interface Rival {
+  name: string;
+  race: Race;
+  concept: Concept;
+  stats: Stats;
+  status: Status;
+  team?: number;
+  squad?: 1 | 2;
+  semiproUntil?: number;
+  /** 나와의 상대 전적 (내 기준) */
+  w: number;
+  l: number;
+}
+/** 슬럼프 · 각성 */
+export interface Form { kind: "slump" | "awake"; until: number }
+export interface FanPost { day: number; author: string; text: string; likes: number; src: "cafe" | "sns"; mood: "good" | "bad" | "neutral" }
+/** 연봉 협상 (구단 제시액 · 남은 협상 · 기한) */
+export interface Nego { offer: number; rounds: number; until: number; max: number; old: number }
+export interface Counts {
+  lobbyW: number; ladderW: number; proBeaten: number; eventWins: number; proW: number;
+  mentors: number; rivalW: number; awakenings: number; bestStreak: number; raises: number;
+}
+export const emptyCounts = (): Counts => ({ lobbyW: 0, ladderW: 0, proBeaten: 0, eventWins: 0, proW: 0, mentors: 0, rivalW: 0, awakenings: 0, bestStreak: 0, raises: 0 });
 
 export interface RookieState {
   version: 1;
@@ -218,7 +247,55 @@ export interface RookieState {
   doneDays: number[];
   /** 게임 오버 (은퇴 등) */
   retired?: string;
+  rival: Rival;
+  /** 연승(+) · 연패(-) */
+  streak: number;
+  form?: Form;
+  /** 마지막 멘토 과외 날 */
+  mentorDay?: number;
+  fanCafe: { members: number; posts: FanPost[] };
+  /** 업적 (id → 달성한 날) */
+  achievements: Record<string, number>;
+  /** 이름 옆에 다는 칭호 (업적 id) */
+  title?: string;
+  counts: Counts;
+  nego?: Nego;
+  /** 자유계약 (FA): 이 날까지 구단을 못 찾으면 준프로로 */
+  fa?: { until: number };
 }
+
+// ── 업적 · 칭호 ─────────────────────────────────────────────────
+export interface Achievement { id: string; name: string; desc: string; title: string; icon: string; check: (s: RookieState) => boolean }
+export const ACHIEVEMENTS: Achievement[] = [
+  { id: "first_win", icon: "🐣", name: "첫 승리", desc: "아무 경기에서나 처음 이기기", title: "새내기", check: s => s.record.w >= 1 },
+  { id: "lobby_100", icon: "🎮", name: "공방 100승", desc: "공방에서 100번 이기기", title: "공방 터줏대감", check: s => s.counts.lobbyW >= 100 },
+  { id: "streak_10", icon: "🔥", name: "10연승", desc: "10판 연속으로 이기기", title: "연승 머신", check: s => s.counts.bestStreak >= 10 },
+  { id: "ladder_a", icon: "🅰️", name: "래더 A", desc: "래더 2000점 달성", title: "래더 강자", check: s => s.ladder.best >= 2000 },
+  { id: "ladder_s", icon: "👑", name: "래더 S", desc: "래더 2200점 달성", title: "래더 황제", check: s => s.ladder.best >= 2200 },
+  { id: "beat_pro", icon: "🎯", name: "프로 사냥", desc: "래더에서 프로게이머 꺾기", title: "프로 사냥꾼", check: s => s.counts.proBeaten >= 1 },
+  { id: "event_win", icon: "🏆", name: "첫 대회 우승", desc: "이벤트 대회에서 우승", title: "동네 챔피언", check: s => s.counts.eventWins >= 1 },
+  { id: "event_3", icon: "🏅", name: "대회 3관왕", desc: "이벤트 대회 3번 우승", title: "대회 사냥꾼", check: s => s.counts.eventWins >= 3 },
+  { id: "courage", icon: "🎓", name: "커리지 매치 우승", desc: "준프로 자격 얻기", title: "준프로", check: s => s.titles.some(t => t.includes("커리지 매치 우승")) },
+  { id: "pro", icon: "🏢", name: "프로 입단", desc: "프로 구단에 입단", title: "프로게이머", check: s => s.titles.some(t => t.includes("입단")) },
+  { id: "squad1", icon: "⬆️", name: "1군 승격", desc: "승강전에서 이겨 1군으로", title: "1군 멤버", check: s => s.team?.squad === 1 },
+  { id: "pl_10", icon: "🏟️", name: "프로리그 10승", desc: "프로리그에서 10번 이기기", title: "에이스", check: s => s.counts.proW >= 10 },
+  { id: "viewers_500", icon: "📺", name: "인기 방송", desc: "방송 시청자 500명", title: "인기 BJ", check: s => s.stream.best >= 500 },
+  { id: "cafe_1000", icon: "💌", name: "팬카페 1000명", desc: "팬카페 회원 1000명", title: "스타", check: s => s.fanCafe.members >= 1000 },
+  { id: "rival_10", icon: "⚡", name: "라이벌 제압", desc: "라이벌을 10번 이기기", title: "라이벌 킬러", check: s => s.counts.rivalW >= 10 },
+  { id: "awaken", icon: "🦅", name: "각성", desc: "슬럼프를 이겨내고 각성", title: "불사조", check: s => s.counts.awakenings >= 1 },
+  { id: "mentor_10", icon: "📚", name: "모범생", desc: "멘토 과외 10번", title: "모범생", check: s => s.counts.mentors >= 10 },
+  { id: "raise", icon: "💼", name: "연봉 인상", desc: "연봉 협상에서 월급 올리기", title: "협상의 달인", check: s => s.counts.raises >= 1 },
+  { id: "rich", icon: "💰", name: "부자 게이머", desc: "돈 1000만원 모으기", title: "재벌 게이머", check: s => s.money >= 1000 },
+  { id: "stat_5000", icon: "💪", name: "괴물 신인", desc: "능력치 합 5000", title: "괴물 신인", check: s => sumStats(s.stats) >= 5000 },
+];
+export const ACH_BY_ID = Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, a])) as Record<string, Achievement>;
+
+/** 멘토 과외 가격 (만원): 같은 팀 선배는 싸게 */
+export const MENTOR_PRICE = { outside: 20, teammate: 8 };
+
+/** 랭킹 보드 정렬 기준 */
+export const RANK_SORTS = { ladder: "래더", total: "능력치", fame: "인지도", badges: "업적" } as const;
+export type RankSort = keyof typeof RANK_SORTS;
 
 /** 지금 성장 한계 */
 export function capOf(s: Pick<RookieState, "status" | "team">): number {

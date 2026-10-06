@@ -18,8 +18,9 @@ import { LegacyImg, LegacyRadar, MapInfo, PlayerPhoto, TeamLogo } from "@/compon
 import { RookieCreate } from "@/components/rookie/Create";
 import { MatchViewer } from "@/components/rookie/MatchViewer";
 import { RookieCalendar } from "@/components/rookie/Calendar";
+import { AchView, FanView, FormBadge, MentorView, NegoBox, RankView, RivalCard, TitleBadge } from "@/components/rookie/Extras";
 
-type View = "home" | "lobby" | "events" | "shop" | "team" | "calendar" | "log";
+type View = "home" | "lobby" | "events" | "shop" | "team" | "calendar" | "log" | "mentor" | "fans" | "ach" | "rank";
 const PRO_TEAMS = ORIG_TEAMS.filter(t => t.id < 12);
 const price = (key: string) => Math.max(1, Math.round((ITEM_BY_KEY[key]?.price ?? 0) * ROOKIE_PRICE));
 
@@ -86,10 +87,11 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <span className="font-black text-lg text-white truncate">{s.name}</span>
-            <span className="text-[10px] rounded-full px-1.5 py-0.5 bg-white/10 text-white">{RACE_NAMES[s.race]} · {CONCEPTS[s.concept].name}</span>
+            <span className="text-[10px] rounded-full px-1.5 py-0.5 bg-white/10 text-white whitespace-nowrap">{RACE_NAMES[s.race]} · {CONCEPTS[s.concept].name}</span>
           </div>
+          {(s.title || s.form || Math.abs(s.streak) >= 3) && <div className="flex flex-wrap items-center gap-1 my-0.5"><TitleBadge id={s.title} /><FormBadge s={s} /></div>}
           <div className="text-xs text-sky-200">
-            {STATUS_NAMES[s.status]}{s.team ? ` · ${ORIG_TEAMS[s.team.team].name} ${s.team.squad}군` : s.status === "semipro" && s.semiproUntil !== undefined ? ` (~${dateText(s.semiproUntil)})` : ""}
+            {s.fa ? `FA (${dateText(s.fa.until).slice(5)}까지 구단 찾기)` : STATUS_NAMES[s.status]}{s.team ? ` · ${ORIG_TEAMS[s.team.team].name} ${s.team.squad}군` : s.status === "semipro" && s.semiproUntil !== undefined ? ` (~${dateText(s.semiproUntil)})` : ""}
           </div>
           <div className="text-[11px] text-neutral-300">{dateText(s.day)} ({DOW[x.dow]}) · 오늘 행동 <b className={left ? "text-emerald-300" : "text-rose-300"}>{left}</b>/{DAY_SLOTS}</div>
         </div>
@@ -115,6 +117,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
   if (today.proleague) banners.push(<Banner key="p" icon="🏟️" title="프로리그 엔트리에 들었습니다!" desc="오늘 경기 (행동 2) · 하지 않으면 다음 날로 넘길 때 자동으로 치릅니다" action="출전" disabled={busy || left < 2} onClick={() => proleague.mutate()} />);
   if (today.promo && s.team) banners.push(<Banner key="pr" icon={s.team.squad === 2 ? "⬆️" : "🛡️"} title="오늘은 팀 내 승강전 날" desc={s.team.squad === 2 ? `2군 1위면 1군 꼴찌와 3판 2선승 (이번 달 내부 연습 ${s.team.monthW}승 ${s.team.monthL}패 · 3승 이상 필요)` : "1군 자리를 지키는 경기 (3판 2선승)"} action="승강전" disabled={busy || left < 3} onClick={() => promo.mutate()} />);
   if (!s.team) for (const t of s.tryouts) banners.push(<Banner key={`t${t.team}`} icon="📝" title={`${ORIG_TEAMS[t.team].name} 입단 테스트 제의`} desc={`${t.from} · ${dateText(t.until)}까지 · 2군 선수와 3판 2선승 (행동 3)`} action="테스트 보기" disabled={busy || left < 3} onClick={() => tryout.mutate({ team: t.team })} />);
+  if (s.nego) banners.push(<Banner key="n" icon="💼" title="연봉 협상 중" desc={`구단 제시 월급 ${s.nego.offer}만원 · ${dateText(s.nego.until).slice(5)}까지`} action="협상" onClick={() => setView("team")} />);
   if (s.offers.length) banners.push(<Banner key="o" icon="📨" title={`이적 제안 ${s.offers.length}건`} desc="구단 화면에서 확인하세요" action="보기" onClick={() => setView("team")} />);
 
   const ACTIONS_GRID: Array<{ icon: string; label: string; desc: string; onClick: () => void; disabled?: boolean; hide?: boolean }> = [
@@ -126,7 +129,11 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
     { icon: "💵", label: "용돈 받기", desc: s.allowanceDay !== undefined && s.day - s.allowanceDay < 7 ? `${7 - (s.day - s.allowanceDay)}일 뒤 가능` : "일주일에 한 번 · 행동 1", onClick: () => allowance.mutate(), disabled: busy || left < 1 || (s.allowanceDay !== undefined && s.day - s.allowanceDay < 7), hide: s.status === "pro" },
     { icon: "🏆", label: "대회", desc: `예정 ${s.events.filter(e => e.day >= s.day && !e.result).length}개 · 참가 신청`, onClick: () => setView("events") },
     { icon: "🛒", label: "상점·가방", desc: "비타비타·장비·포션", onClick: () => setView("shop") },
-    { icon: "🏢", label: "구단", desc: s.team ? `${ORIG_TEAMS[s.team.team].short} ${s.team.squad}군 · 이적` : "프로가 되면 열림", onClick: () => setView("team") },
+    { icon: "📚", label: "멘토 과외", desc: s.mentorDay === s.day ? "오늘은 받았음" : "프로에게 배우기 · 행동 3", onClick: () => setView("mentor") },
+    { icon: "🏢", label: "구단", desc: s.team ? `${ORIG_TEAMS[s.team.team].short} ${s.team.squad}군 · 이적` : s.fa ? "FA · 구단 찾기" : "프로가 되면 열림", onClick: () => setView("team") },
+    { icon: "💌", label: "팬카페", desc: `회원 ${s.fanCafe.members.toLocaleString()}명 · 반응`, onClick: () => setView("fans") },
+    { icon: "🏅", label: "업적·칭호", desc: `${Object.keys(s.achievements).length}개 달성`, onClick: () => setView("ach") },
+    { icon: "📊", label: "랭킹", desc: "다른 유저 선수들", onClick: () => setView("rank") },
     { icon: "📅", label: "달력", desc: "한 일 · 일정", onClick: () => setView("calendar") },
     { icon: "📜", label: "기록", desc: `${s.record.w}승 ${s.record.l}패 · 소식`, onClick: () => setView("log") },
   ];
@@ -148,6 +155,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
               </button>
             ))}
           </div>
+          <RivalCard s={s} />
           <StatsCard s={s} />
           <div className="rounded-xl bg-card border border-border p-2.5 space-y-0.5">
             <div className="text-xs font-bold text-foreground mb-1">📰 최근 소식</div>
@@ -166,6 +174,10 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
       {view === "team" && <><div className="flex">{back}</div><TeamView s={s} /></>}
       {view === "calendar" && <><div className="flex">{back}</div><RookieCalendar s={s} /></>}
       {view === "log" && <><div className="flex">{back}</div><LogView s={s} /></>}
+      {view === "mentor" && <><div className="flex">{back}</div><MentorView s={s} /></>}
+      {view === "fans" && <><div className="flex">{back}</div><FanView s={s} /></>}
+      {view === "ach" && <><div className="flex">{back}</div><AchView s={s} /></>}
+      {view === "rank" && <><div className="flex">{back}</div><RankView /></>}
     </div>
   );
 }
@@ -375,6 +387,29 @@ function TeamView({ s }: { s: RookieState }) {
   const sync = useRookieSync();
   const req = trpc.rookie.requestTransfer.useMutation(sync);
   const accept = trpc.rookie.acceptOffer.useMutation(sync);
+  if (s.fa) {
+    return (
+      <div className="space-y-3">
+        <div className="rounded-2xl bg-card border border-rose-400/50 p-3.5 text-sm space-y-1">
+          <div className="text-base font-black text-foreground">💔 FA (자유계약)</div>
+          <div className="text-muted-foreground">{dateText(s.fa.until)}까지 새 구단을 찾아야 합니다. 못 찾으면 준프로로 돌아갑니다. 구단에 직접 연락해도 들킬 걱정은 없어요.</div>
+        </div>
+        <OfferList s={s} accept={team => accept.mutate({ team })} />
+        <div className="rounded-2xl bg-card border border-border p-3 space-y-1.5">
+          <div className="text-sm font-bold text-foreground">📞 구단에 연락하기 <span className="text-[10.5px] text-muted-foreground">(행동 1)</span></div>
+          <div className="grid grid-cols-3 gap-1.5">
+            {PRO_TEAMS.map(x => (
+              <button key={x.id} onClick={() => req.mutate({ team: x.id })} disabled={req.isPending || s.used >= DAY_SLOTS || s.offers.some(o => o.team === x.id)}
+                className="rounded-xl bg-muted/40 border border-border p-1.5 flex flex-col items-center disabled:opacity-40">
+                <TeamLogo team={x} className="w-[46px] h-[27px]" />
+                <span className="text-[10px] text-foreground truncate w-full text-center">{x.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (!s.team) {
     return (
       <div className="rounded-2xl bg-card border border-border p-4 text-sm text-muted-foreground space-y-1.5">
@@ -394,24 +429,15 @@ function TeamView({ s }: { s: RookieState }) {
           <div className="font-black text-foreground">{ORIG_TEAMS[t.team].name} <span className="text-primary">{t.squad}군</span></div>
           <div className="text-xs text-muted-foreground">입단 {dateText(t.joined)} · 월급 {t.salary}만원 · 이번 달 내부 연습 {t.monthW}승 {t.monthL}패</div>
           <div className="text-xs text-muted-foreground">프로리그 {t.proW ?? 0}승 {t.proL ?? 0}패{t.caught ? ` · ⚠️ 이적 시도 적발 ${t.caught}회` : ""}</div>
+          {t.contractUntil !== undefined && <div className="text-xs text-muted-foreground">계약 {dateText(t.contractUntil)}까지 (끝나면 연봉 협상)</div>}
         </div>
       </div>
       <div className="rounded-xl bg-muted/40 border border-border p-2.5 text-[11.5px] text-muted-foreground space-y-0.5">
         <div>· 매달 마지막 날 팀 내 승강전: 2군에서 내부 연습 성적이 좋으면(3승 이상) 1군 꼴찌와 3판 2선승</div>
         <div>· 1군은 프로리그 기간(3~6월, 9~12월) 주말에 엔트리에 들면 출전 · 승리 수당 30만원</div>
       </div>
-      {s.offers.length > 0 && (
-        <div className="rounded-2xl bg-card border border-amber-400/50 p-3 space-y-1.5">
-          <div className="text-sm font-bold text-foreground">📨 받은 이적 제안</div>
-          {s.offers.map(o => (
-            <div key={o.team} className="flex items-center gap-2">
-              <TeamLogo team={ORIG_TEAMS[o.team]} className="w-[46px] h-[27px]" />
-              <span className="flex-1 text-sm text-foreground">{ORIG_TEAMS[o.team].name} · 월급 {o.salary}만 · {dateText(o.until).slice(5)}까지</span>
-              <button onClick={() => confirm(`${ORIG_TEAMS[o.team].name}(으)로 이적할까요? (2군부터 시작)`) && accept.mutate({ team: o.team })} className="rounded-lg bg-emerald-600 text-white text-xs font-bold px-2.5 py-1">이적</button>
-            </div>
-          ))}
-        </div>
-      )}
+      {s.nego && <NegoBox s={s} />}
+      <OfferList s={s} accept={team => accept.mutate({ team })} />
       <div className="rounded-2xl bg-card border border-border p-3 space-y-1.5">
         <div className="text-sm font-bold text-foreground">✈️ 다른 구단에 이적 요청 <span className="text-[10.5px] text-rose-300">구단에 들키면 벌금·사기 하락, 두 번 들키면 방출!</span></div>
         <div className="grid grid-cols-3 gap-1.5">
@@ -424,6 +450,22 @@ function TeamView({ s }: { s: RookieState }) {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function OfferList({ s, accept }: { s: RookieState; accept: (team: number) => void }) {
+  if (!s.offers.length) return null;
+  return (
+    <div className="rounded-2xl bg-card border border-amber-400/50 p-3 space-y-1.5">
+      <div className="text-sm font-bold text-foreground">📨 받은 {s.fa ? "영입" : "이적"} 제안</div>
+      {s.offers.map(o => (
+        <div key={o.team} className="flex items-center gap-2">
+          <TeamLogo team={ORIG_TEAMS[o.team]} className="w-[46px] h-[27px]" />
+          <span className="flex-1 text-sm text-foreground">{ORIG_TEAMS[o.team].name} · 월급 {o.salary}만 · {dateText(o.until).slice(5)}까지</span>
+          <button onClick={() => confirm(`${ORIG_TEAMS[o.team].name}(으)로 ${s.fa ? "입단" : "이적"}할까요? (2군부터 시작)`) && accept(o.team)} className="rounded-lg bg-emerald-600 text-white text-xs font-bold px-2.5 py-1">{s.fa ? "입단" : "이적"}</button>
+        </div>
+      ))}
     </div>
   );
 }
