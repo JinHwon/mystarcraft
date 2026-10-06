@@ -139,5 +139,7 @@ export const rookieRouter = router({
   clanTest: p.input(z.object({ id: z.string().max(30) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.clanTest(s, input.id))),
   clanPractice: p.mutation(({ ctx }) => mutate(ctx.user.id, s => ({ games: [L.clanPractice(s)] }))),
   leaveClan: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.leaveClan(s))),
+  batch: p.input(z.object({ kind: z.enum(["lobby", "ladder", "clan", "internal"]), tier: z.enum(tierKeys).optional(), mapId: z.number().int().min(0).optional() }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.batch(s, input.kind, { tier: input.tier, mapId: input.mapId }))),
   nextDay: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.nextDay(s))),
 });

@@ -36,7 +36,7 @@ function reqs(s: RookieState, c: ClanDef) {
   return out;
 }
 
-export function ClanView({ s, onPlayed }: { s: RookieState; onPlayed: (games: PlayedGame[], title: string) => void }) {
+export function ClanView({ s, onPlayed, onBatch }: { s: RookieState; onPlayed: (games: PlayedGame[], title: string) => void; onBatch: () => void }) {
   const sync = useRookieSync();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<string | null>(null);
@@ -52,7 +52,9 @@ export function ClanView({ s, onPlayed }: { s: RookieState; onPlayed: (games: Pl
   return (
     <div className="space-y-3">
       {s.clan && mine && (() => {
-        const me: ClanMember & { me?: boolean } = { name: s.name, race: s.race, stats: s.stats, points: s.clan.points, me: true };
+        const me: ClanMember & { me?: boolean } = { name: s.name, race: s.race, stats: s.stats, points: s.clan.points, w: s.clan.w, l: s.clan.l, me: true };
+        const vs = s.clan.vs ?? {};
+        const vsAll = Object.values(vs).reduce((a, [w, l]) => [a[0] + w, a[1] + l], [0, 0]);
         const ranking = [...s.clan.members, me].sort((a, b) => b.points - a.points);
         const rank = ranking.findIndex(m => (m as { me?: boolean }).me) + 1;
         return (
@@ -69,21 +71,28 @@ export function ClanView({ s, onPlayed }: { s: RookieState; onPlayed: (games: Pl
                   <div className="font-black text-lg text-foreground">{rank}<span className="text-xs text-muted-foreground">/{ranking.length}</span></div>
                 </div>
               </div>
-              <div className="text-[11.5px] text-muted-foreground mt-1">내 점수 {s.clan.points} · 클랜 연습 {s.clan.w}승 {s.clan.l}패 · 프로 {s.clan.members.filter(m => m.pro).length}명</div>
+              <div className="grid grid-cols-3 gap-1.5 mt-2 text-center">
+                <div className="rounded-lg bg-black/20 py-1"><div className="text-[10px] text-muted-foreground">내 점수</div><div className="font-black text-foreground">{s.clan.points}</div></div>
+                <div className="rounded-lg bg-black/20 py-1"><div className="text-[10px] text-muted-foreground">클랜 연습 전적</div><div className="font-black"><span className="text-emerald-300">{s.clan.w}승</span> <span className="text-rose-300">{s.clan.l}패</span></div></div>
+                <div className="rounded-lg bg-black/20 py-1"><div className="text-[10px] text-muted-foreground">승률</div><div className="font-black text-foreground">{s.clan.w + s.clan.l ? Math.round((s.clan.w / (s.clan.w + s.clan.l)) * 100) : 0}%</div></div>
+              </div>
+              <div className="text-[10.5px] text-muted-foreground mt-1">이기면 +10점, 지면 -6점 (상대 클랜원은 반대로) · 래더 승 +5 / 패 -3 · 프로 {s.clan.members.filter(m => m.pro).length}명{vsAll[0] + vsAll[1] ? ` · 클랜원 상대 ${vsAll[0]}승 ${vsAll[1]}패` : ""}</div>
               <div className="text-[10.5px] text-muted-foreground">클랜 연습은 조언을 들어 1.3배(프로 상대 1.5배)로 배웁니다. {mine.pros.length > 0 ? "클랜 순위 3위 안이면 프로 선배가 구단에 추천해 주기도 해요." : ""}</div>
               <div className="grid grid-cols-2 gap-2 mt-2">
-                <button onClick={() => practice.mutate()} disabled={practice.isPending || left < 1} className="rounded-xl bg-emerald-600 text-white py-2 text-sm font-black disabled:opacity-40">⚔️ 클랜 연습 (행동 1)</button>
-                <button onClick={() => confirm(`${mine.name}에서 탈퇴할까요? (점수가 사라집니다)`) && leave.mutate()} className="rounded-xl border border-rose-400/50 text-rose-300 py-2 text-sm font-bold">🚪 탈퇴</button>
+                <button onClick={() => practice.mutate()} disabled={practice.isPending || left < 1} className="rounded-xl border border-emerald-500 text-emerald-300 py-2 text-sm font-black disabled:opacity-40">⚔️ 1판</button>
+                <button onClick={onBatch} disabled={left < 1} className="rounded-xl bg-emerald-600 text-white py-2 text-sm font-black disabled:opacity-40">⏩ {left}판 연속</button>
               </div>
             </div>
             <div className="rounded-2xl bg-card border border-border">
-              <div className="px-3 pt-2.5 pb-1 text-sm font-bold text-foreground">🏅 클랜 랭킹</div>
+              <div className="px-3 pt-2.5 pb-1 flex items-center text-sm font-bold text-foreground"><span className="flex-1">🏅 클랜 랭킹</span><span className="w-[64px] text-center text-[10px] text-muted-foreground font-normal">전체 전적</span><span className="w-[52px] text-center text-[10px] text-muted-foreground font-normal">나와</span><span className="w-[44px] text-right text-[10px] text-muted-foreground font-normal">점수</span></div>
               <div className="divide-y divide-border max-h-[340px] overflow-y-auto">
                 {ranking.map((m, i) => (
                   <div key={i} className={cn("flex items-center gap-2 px-3 py-1.5 text-sm", (m as { me?: boolean }).me && "bg-primary/15")}>
                     <span className={cn("w-6 text-center font-black", i < 3 ? "text-amber-300" : "text-muted-foreground")}>{i + 1}</span>
                     <span className="flex-1 truncate text-foreground">{m.pro ? <span className="text-sky-300 text-[10px] mr-1">PRO {ORIG_TEAMS[m.pro.team]?.short}</span> : null}{m.name}{(m as { me?: boolean }).me ? " (나)" : ""} <span className="text-[10px] text-muted-foreground">{RACE_NAMES[m.race].slice(0, 1)}</span></span>
-                    <span className="font-bold text-foreground">{m.points.toLocaleString()}</span>
+                    <span className="w-[64px] text-center text-[11px]"><span className="text-emerald-300">{m.w ?? 0}</span>-<span className="text-rose-300">{m.l ?? 0}</span></span>
+                    <span className="w-[52px] text-center text-[11px] text-muted-foreground">{(m as { me?: boolean }).me ? "" : vs[m.name] ? `${vs[m.name][0]}-${vs[m.name][1]}` : "-"}</span>
+                    <span className="w-[44px] text-right font-bold text-foreground">{m.points.toLocaleString()}</span>
                   </div>
                 ))}
               </div>
@@ -92,6 +101,7 @@ export function ClanView({ s, onPlayed }: { s: RookieState; onPlayed: (games: Pl
         );
       })()}
 
+      {s.clan && mine && <button onClick={() => confirm(`${mine.name}에서 탈퇴할까요? (점수가 사라집니다)`) && leave.mutate()} className="w-full text-[11px] text-rose-300/80 py-0.5">🚪 클랜 탈퇴</button>}
       {s.clan && !browse && <button onClick={() => setBrowse(true)} className="w-full rounded-xl border border-border bg-card py-2 text-sm text-muted-foreground">🔍 다른 클랜 찾아보기 ▼</button>}
       {browse && <div className="rounded-2xl bg-card border border-border p-3 space-y-2">
         <div className="text-sm font-bold text-foreground">🔍 클랜 찾기 {s.clan ? <span className="text-[10.5px] text-muted-foreground font-normal">(다른 클랜에 붙으면 지금 클랜은 탈퇴)</span> : null}</div>

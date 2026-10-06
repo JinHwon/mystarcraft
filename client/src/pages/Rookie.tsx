@@ -23,6 +23,7 @@ import { RookieCalendar } from "@/components/rookie/Calendar";
 import { AchView, FanView, FormBadge, MentorView, NegoBox, RankView, RivalCard, TitleBadge } from "@/components/rookie/Extras";
 import { ClanView } from "@/components/rookie/Clan";
 import { GrowthChart, LevelBar, WeekStrip } from "@/components/rookie/Growth";
+import { BATCH_NAMES, BatchRunning, BatchSummary, type BatchResult } from "@/components/rookie/Batch";
 
 type View = "home" | "lobby" | "events" | "shop" | "team" | "calendar" | "log" | "mentor" | "fans" | "ach" | "rank";
 const PRO_TEAMS = ORIG_TEAMS.filter(t => t.id < 12);
@@ -56,8 +57,8 @@ function Shell({ children, onHome, sub, onBack }: { children: ReactNode; onHome?
   );
 }
 
-type Tab = "home" | "play" | "grow" | "clan" | "more";
-const TABS: Array<[Tab, string, string]> = [["home", "🏠", "홈"], ["play", "⚔️", "경기"], ["grow", "📈", "성장"], ["clan", "🛡️", "클랜"], ["more", "☰", "더보기"]];
+type Tab = "home" | "play" | "grow" | "shop" | "clan" | "more";
+const TABS: Array<[Tab, string, string]> = [["home", "🏠", "홈"], ["play", "⚔️", "경기"], ["grow", "📈", "성장"], ["shop", "🛒", "상점"], ["clan", "🛡️", "클랜"], ["more", "☰", "더보기"]];
 const SUB_TITLES: Record<View, string> = { home: "", lobby: "공방 (연습 경기)", events: "대회", shop: "상점·가방", team: "구단", calendar: "달력", log: "기록", mentor: "멘토 과외", fans: "팬카페", ach: "업적·칭호", rank: "랭킹" };
 
 function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRestart: () => void }) {
@@ -87,7 +88,10 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
   const promo = m.promo.useMutation(done("팀 내 승강전"));
   const tryout = m.tryout.useMutation(done("입단 테스트", r => <div className="text-center text-[13px] text-[#ffe45c]">{(r as { won: boolean }).won ? "합격! 프로게이머가 되었습니다 🎉" : "불합격"}</div>));
   const playEvent = m.playEvent.useMutation(done("대회 결과", r => <PlaceLine place={(r as { place: number }).place} prize={(r as { prize: number }).prize} />));
-  const busy = [ladder, rest, stream, allowance, next, courage, draft, internal, clanPractice, proleague, promo, tryout, playEvent].some(x => x.isPending);
+  const [batchKind, setBatchKind] = useState<BatchResult["kind"] | null>(null);
+  const [batchRes, setBatchRes] = useState<BatchResult | null>(null);
+  const batchM = m.batch.useMutation({ onSuccess: r => { sync.onSuccess(r); setBatchRes(r.result as BatchResult); }, onError: sync.onError });
+  const busy = [ladder, rest, stream, allowance, next, courage, draft, internal, clanPractice, proleague, promo, tryout, playEvent, batchM].some(x => x.isPending);
 
   if (watch) return <MatchViewer s={s} games={watch.games} title={watch.title} extra={watch.extra} onClose={() => setWatch(null)} />;
   const left = DAY_SLOTS - s.used;
@@ -139,35 +143,88 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
   if (s.offers.length) banners.push(<Banner key="o" icon="📨" title={`${s.fa ? "영입" : "이적"} 제안 ${s.offers.length}건`} desc="구단 화면에서 확인하세요" action="보기" onClick={() => go("more", "team")} />);
 
   type Act = { icon: string; label: string; desc: string; onClick: () => void; disabled?: boolean; hide?: boolean };
-  const quick: Act[] = [
-    { icon: "🎮", label: "공방", desc: "행동 1", onClick: () => go("play", "lobby"), disabled: left < 1 },
-    { icon: "⚔️", label: "래더", desc: today.ladderLock ? "🔒 조건" : `${s.ladder.score}`, onClick: () => ladder.mutate(), disabled: busy || left < 1 || !!today.ladderLock },
-    { icon: "🛡️", label: "클랜 연습", desc: "행동 1 · 1.3배", onClick: () => clanPractice.mutate(), disabled: busy || left < 1, hide: !s.clan },
-    { icon: "🏢", label: "팀 연습", desc: s.team ? `${s.team.monthW}승${s.team.monthL}패` : "", onClick: () => internal.mutate(), disabled: busy || left < 1, hide: !s.team },
-    { icon: "💤", label: "휴식", desc: s.cond >= 100 ? "가득 참" : "컨디션 +12", onClick: () => rest.mutate(), disabled: busy || left < 1 || s.cond >= 100 },
-    { icon: "📺", label: "방송", desc: "행동 2", onClick: () => stream.mutate(), disabled: busy || left < 2 },
-    { icon: "💵", label: "용돈", desc: s.allowanceDay !== undefined && s.day - s.allowanceDay < 7 ? `${7 - (s.day - s.allowanceDay)}일 뒤` : "주 1회", onClick: () => allowance.mutate(), disabled: busy || left < 1 || (s.allowanceDay !== undefined && s.day - s.allowanceDay < 7), hide: s.status === "pro" },
-  ];
   const actGrid = (acts: Act[], cols = 3) => (
-    <div className={cn("grid gap-1.5", cols === 3 ? "grid-cols-3" : "grid-cols-2")}>
+    <div className={cn("grid gap-1.5", cols === 4 ? "grid-cols-4" : cols === 3 ? "grid-cols-3" : "grid-cols-2")}>
       {acts.filter(a => !a.hide).map(a => (
-        <button key={a.label} onClick={a.onClick} disabled={a.disabled} className="rounded-xl bg-card border border-border px-2 py-2 text-left disabled:opacity-40 active:scale-[0.98]">
-          <div className="flex items-center gap-1.5"><span className="text-lg leading-none">{a.icon}</span><span className="text-[13px] font-black text-foreground truncate">{a.label}</span></div>
-          <div className="text-[10px] text-muted-foreground truncate mt-0.5">{a.desc}</div>
+        <button key={a.label} onClick={a.onClick} disabled={a.disabled} className={cn("rounded-xl bg-card border border-border text-left disabled:opacity-40 active:scale-[0.98]", cols === 4 ? "px-1 py-2 text-center" : "px-2 py-2")}>
+          {cols === 4 ? (
+            <><div className="text-xl leading-none">{a.icon}</div><div className="text-[12px] font-black text-foreground truncate mt-1">{a.label}</div><div className="text-[9.5px] text-muted-foreground truncate">{a.desc}</div></>
+          ) : (
+            <><div className="flex items-center gap-1.5"><span className="text-lg leading-none">{a.icon}</span><span className="text-[13px] font-black text-foreground truncate">{a.label}</span></div>
+              <div className="text-[10px] text-muted-foreground truncate mt-0.5">{a.desc}</div></>
+          )}
         </button>
       ))}
     </div>
   );
-  const nextBtn = (
-    <button onClick={() => next.mutate()} disabled={busy} className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black disabled:opacity-50">
-      ▶ 다음 날로 ({ymd(s.day + 1).m}/{ymd(s.day + 1).d} {DOW[ymd(s.day + 1).dow]}) {left ? `· 남은 행동 ${left}` : ""}
-    </button>
+  const pref = s.lobbyPref;
+  /** 경기 한 줄: 한 판(중계) · 남은 행동만큼 연속 */
+  const plays: Array<{ key: BatchResult["kind"]; icon: string; label: string; desc: string; one: () => void; lock?: string; hide?: boolean }> = [
+    { key: "lobby", icon: "🎮", label: "공방 연습", desc: pref ? `${TIERS[pref.tier].name}방 · ${ORIG_MAPS[pref.mapId]?.[0]}` : "방·맵을 먼저 고르세요", one: () => go("play", "lobby") },
+    { key: "ladder", icon: "⚔️", label: "래더", desc: today.ladderLock ?? `${ladderGrade(s.ladder.score)} · ${s.ladder.score}점 · ${s.ladder.w}승 ${s.ladder.l}패`, one: () => ladder.mutate(), lock: today.ladderLock ?? undefined },
+    { key: "clan", icon: "🛡️", label: "클랜 연습", desc: s.clan ? `[${CLAN_BY_ID[s.clan.id]?.tag}] ${s.clan.w}승 ${s.clan.l}패 · ${today.clanRank}위` : "", one: () => clanPractice.mutate(), hide: !s.clan },
+    { key: "internal", icon: "🏢", label: "팀 내부 연습", desc: s.team ? `이번 달 ${s.team.monthW}승 ${s.team.monthL}패` : "", one: () => internal.mutate(), hide: !s.team },
+  ];
+  const playRows = (
+    <div className="rounded-2xl bg-card border border-border divide-y divide-border">
+      {plays.filter(p => !p.hide).map(p => (
+        <div key={p.key} className="flex items-center gap-2 px-2.5 py-2">
+          <span className="text-xl">{p.icon}</span>
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-black text-foreground">{p.label}</div>
+            <div className={cn("text-[10.5px] truncate", p.lock ? "text-rose-300" : "text-muted-foreground")}>{p.lock ? `🔒 ${p.lock}` : p.desc}</div>
+          </div>
+          <button onClick={p.one} disabled={busy || left < 1 || !!p.lock} className="shrink-0 rounded-lg border border-primary/50 text-primary text-[12px] font-bold px-2.5 py-1.5 disabled:opacity-40">{p.key === "lobby" ? "고르기" : "1판"}</button>
+          <button onClick={() => runBatch(p.key)} disabled={busy || left < 1 || !!p.lock || (p.key === "lobby" && !pref)} className="shrink-0 rounded-lg bg-primary text-primary-foreground text-[12px] font-black px-2.5 py-1.5 disabled:opacity-40">⏩ {left}판</button>
+        </div>
+      ))}
+    </div>
+  );
+  const life: Act[] = [
+    { icon: "💤", label: "휴식", desc: s.cond >= 100 ? "가득 참" : "컨디션 +12", onClick: () => rest.mutate(), disabled: busy || left < 1 || s.cond >= 100 },
+    { icon: "📺", label: "방송", desc: "별풍선 · 행동 2", onClick: () => stream.mutate(), disabled: busy || left < 2 },
+    { icon: "💵", label: "용돈", desc: s.allowanceDay !== undefined && s.day - s.allowanceDay < 7 ? `${7 - (s.day - s.allowanceDay)}일 뒤` : "주 1회", onClick: () => allowance.mutate(), disabled: busy || left < 1 || (s.allowanceDay !== undefined && s.day - s.allowanceDay < 7), hide: s.status === "pro" },
+  ];
+  const shortcuts: Act[] = [
+    { icon: "🛒", label: "상점", desc: "비타·장비", onClick: () => go("shop") },
+    { icon: "📚", label: "멘토", desc: s.mentorDay === s.day ? "오늘 받음" : "프로 과외", onClick: () => go("grow", "mentor") },
+    { icon: "🏆", label: "대회", desc: `${s.events.filter(e => e.day >= s.day && !e.result).length}개 예정`, onClick: () => go("play", "events") },
+    { icon: "🛡️", label: "클랜", desc: s.clan ? `${today.clanRank}위` : "가입하기", onClick: () => go("clan") },
+  ];
+  const section = (title: string, extra?: ReactNode) => <div className="flex items-center justify-between px-0.5 pt-1"><span className="text-[12px] font-black text-foreground">{title}</span>{extra}</div>;
+  // 하루 마치기: 남은 행동이 있으면 한 번 더 물어봄
+  const endDay = () => { if (left > 0 && !confirm(`오늘 행동이 ${left}번 남았습니다. 그래도 다음 날로 넘어갈까요?`)) return; next.mutate(); };
+  const dayBar = (
+    <div className="fixed inset-x-0 bottom-[54px] z-30 pb-[env(safe-area-inset-bottom)] pointer-events-none">
+      <div className="max-w-lg mx-auto px-3 pb-1.5 pointer-events-auto">
+        <div className="rounded-2xl border border-border bg-background/95 backdrop-blur shadow-lg flex items-center gap-2 pl-3 pr-1.5 py-1.5">
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] text-muted-foreground">{dateText(s.day).slice(5)} ({DOW[x.dow]}) · 남은 행동</div>
+            <div className="flex gap-[3px] mt-0.5">{Array.from({ length: DAY_SLOTS }, (_, i) => <span key={i} className={cn("h-1.5 flex-1 rounded-full", i < left ? "bg-emerald-400" : "bg-muted")} />)}</div>
+          </div>
+          <button onClick={endDay} disabled={busy} className={cn("shrink-0 rounded-xl px-3 py-2 text-[12.5px] font-black disabled:opacity-50", left ? "border border-border text-muted-foreground" : "bg-gradient-to-r from-amber-500 to-orange-600 text-white")}>
+            🌙 하루 마치기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+  const runBatch = (kind: BatchResult["kind"]) => {
+    if (kind === "lobby" && !pref) { go("play", "lobby"); return; }
+    setBatchKind(kind);
+    batchM.mutate({ kind });
+  };
+  const overlays = (
+    <>
+      {batchM.isPending && batchKind && <BatchRunning label={BATCH_NAMES[batchKind]} n={left} />}
+      {batchRes && <BatchSummary r={batchRes} onClose={() => setBatchRes(null)} />}
+    </>
   );
 
   // 하위 화면 (뒤로 가기 막대)
   if (view !== "home") {
     const sub: Record<string, ReactNode> = {
-      lobby: <LobbyView s={s} onPlayed={g => setWatch({ games: g, title: "공방 결과" })} />,
+      lobby: <LobbyView s={s} onPlayed={g => setWatch({ games: g, title: "공방 결과" })} onBatch={(tier, mapId) => { setBatchKind("lobby"); batchM.mutate({ kind: "lobby", tier, mapId }); }} />,
       events: <EventsView s={s} />,
       shop: <ShopView s={s} />,
       team: <TeamView s={s} />,
@@ -181,6 +238,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
     return (
       <Shell onHome={() => go("home")} sub={SUB_TITLES[view]} onBack={() => open("home")}>
         <div className="p-3 space-y-3 max-w-lg mx-auto">{sub[view]}</div>
+        {overlays}
         <TabBar tab={tab} go={go} />
       </Shell>
     );
@@ -188,15 +246,18 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
 
   return (
     <Shell onHome={() => go("home")}>
-      <div className="p-3 space-y-2.5 max-w-lg mx-auto">
+      <div className={cn("p-3 space-y-2.5 max-w-lg mx-auto", tab === "home" || tab === "play" || tab === "clan" ? "pb-24" : "pb-4")}>
         {header}
         {tab === "home" && (
           <>
             <WeekStrip s={s} onOpenCalendar={() => open("calendar")} />
             {banners}
-            <div className="flex items-center justify-between px-0.5"><span className="text-xs font-bold text-foreground">오늘 할 일</span><span className="text-[11px] text-muted-foreground">{dateText(s.day)} ({DOW[x.dow]}) · 행동 <b className={left ? "text-emerald-300" : "text-rose-300"}>{left}</b>/{DAY_SLOTS}</span></div>
-            {actGrid(quick)}
-            {nextBtn}
+            {section("⚔️ 경기", <span className="text-[10.5px] text-muted-foreground">⏩ = 남은 행동만큼 한 번에</span>)}
+            {playRows}
+            {section("🏠 생활")}
+            {actGrid(life)}
+            {section("✨ 바로가기")}
+            {actGrid(shortcuts, 4)}
             <RivalCard s={s} />
             <div className="rounded-xl bg-card border border-border p-2.5 space-y-0.5">
               <button onClick={() => open("log")} className="w-full flex justify-between text-xs font-bold text-foreground mb-0.5"><span>📰 최근 소식</span><span className="text-muted-foreground font-normal">전체 ›</span></button>
@@ -207,32 +268,29 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
         {tab === "play" && (
           <>
             {banners}
-            {actGrid([
-              { icon: "🎮", label: "공방", desc: "맵·방 골라 연습", onClick: () => open("lobby"), disabled: left < 1 },
-              { icon: "⚔️", label: "래더", desc: today.ladderLock ?? `점수 ${s.ladder.score} · 행동 1`, onClick: () => ladder.mutate(), disabled: busy || left < 1 || !!today.ladderLock },
-              { icon: "🏆", label: "대회", desc: `예정 ${s.events.filter(e => e.day >= s.day && !e.result).length}개 · 신청`, onClick: () => open("events") },
-              { icon: "🛡️", label: "클랜 연습", desc: s.clan ? "1.3배 성장 · 행동 1" : "클랜 가입 필요", onClick: () => (s.clan ? clanPractice.mutate() : go("clan")), disabled: busy || (!!s.clan && left < 1) },
-              { icon: "🏢", label: "팀 내부 연습", desc: s.team ? `이번 달 ${s.team.monthW}승 ${s.team.monthL}패` : "", onClick: () => internal.mutate(), disabled: busy || left < 1, hide: !s.team },
-            ], 2)}
+            {section("⚔️ 경기", <span className="text-[10.5px] text-muted-foreground">⏩ = 남은 행동만큼 한 번에</span>)}
+            {playRows}
             {today.ladderLock && <div className="text-[11px] text-muted-foreground px-1">🔒 래더 조건: 경기 {LADDER_REQ.games}판 이상 · 능력치 합 {LADDER_REQ.total.toLocaleString()} 이상</div>}
-            {nextBtn}
+            {section("🏆 대회")}
+            {actGrid([{ icon: "🏆", label: "대회 일정·신청", desc: `예정 ${s.events.filter(e => e.day >= s.day && !e.result).length}개 · 3위까지 상금`, onClick: () => open("events") }], 2)}
           </>
         )}
         {tab === "grow" && (
           <>
+            {actGrid([
+              { icon: "📚", label: "멘토 과외", desc: s.mentorDay === s.day ? "오늘은 받았음" : "프로에게 배우기 · 행동 3", onClick: () => open("mentor") },
+              { icon: "🛒", label: "상점·가방", desc: "비타·장비·포션", onClick: () => go("shop") },
+            ], 2)}
             <div className="rounded-2xl bg-card border border-border p-3 space-y-2">
               <LevelBar s={s} />
               <div className="text-[10.5px] text-muted-foreground">레벨이 오를 때마다 능력치가 조금 오르고 성장 한계가 +20 늘어납니다. 공방은 조금, 래더·대회·클랜 가입·입단·우승은 경험치를 많이 줍니다.</div>
               <GrowthChart s={s} cap={today.cap} />
             </div>
             <StatsCard s={s} />
-            {actGrid([
-              { icon: "📚", label: "멘토 과외", desc: s.mentorDay === s.day ? "오늘은 받았음" : "프로에게 배우기 · 행동 3", onClick: () => open("mentor") },
-              { icon: "🛒", label: "상점·가방", desc: "비타·장비·포션", onClick: () => open("shop") },
-            ], 2)}
           </>
         )}
-        {tab === "clan" && <ClanView s={s} onPlayed={(g, title) => setWatch({ games: g, title })} />}
+        {tab === "shop" && <ShopView s={s} />}
+        {tab === "clan" && <ClanView s={s} onPlayed={(g, title) => setWatch({ games: g, title })} onBatch={() => runBatch("clan")} />}
         {tab === "more" && (
           <>
             {actGrid([
@@ -248,6 +306,8 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
           </>
         )}
       </div>
+      {(tab === "home" || tab === "play" || tab === "clan") && dayBar}
+      {overlays}
       <TabBar tab={tab} go={go} />
     </Shell>
   );
@@ -257,7 +317,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
 function TabBar({ tab, go }: { tab: Tab; go: (t: Tab) => void }) {
   return (
     <nav className="fixed bottom-0 inset-x-0 z-30 bg-background/95 backdrop-blur border-t border-border pb-[env(safe-area-inset-bottom)]">
-      <div className="max-w-lg mx-auto grid grid-cols-5">
+      <div className="max-w-lg mx-auto grid grid-cols-6">
         {TABS.map(([k, icon, label]) => (
           <button key={k} onClick={() => go(k)} className={cn("py-2 flex flex-col items-center gap-0.5", tab === k ? "text-primary" : "text-muted-foreground")}>
             <span className="text-lg leading-none">{icon}</span>
@@ -342,10 +402,11 @@ function weakest(mapId: number, me: Race): { vs: Race; pct: number } {
   const others = (["terran", "zerg", "protoss"] as Race[]).filter(r => r !== me);
   return others.map(vs => ({ vs, pct: matchupValue(mapId, me, vs) })).sort((a, b) => a.pct - b.pct)[0];
 }
-function LobbyView({ s, onPlayed }: { s: RookieState; onPlayed: (g: PlayedGame[]) => void }) {
+function LobbyView({ s, onPlayed, onBatch }: { s: RookieState; onPlayed: (g: PlayedGame[]) => void; onBatch: (tier: Tier, mapId: number) => void }) {
   const sync = useRookieSync();
-  const [tier, setTier] = useState<Tier>(s.lobby?.tier ?? "low");
-  const [mapId, setMapId] = useState(s.lobby?.mapId ?? 0);
+  // 지난번에 고른 방·맵 그대로
+  const [tier, setTier] = useState<Tier>(s.lobby?.tier ?? s.lobbyPref?.tier ?? "low");
+  const [mapId, setMapId] = useState(s.lobby?.mapId ?? s.lobbyPref?.mapId ?? 0);
   const [q, setQ] = useState("");
   const [weakOnly, setWeakOnly] = useState(false);
   const find = trpc.rookie.findLobby.useMutation(sync);
@@ -383,7 +444,11 @@ function LobbyView({ s, onPlayed }: { s: RookieState; onPlayed: (g: PlayedGame[]
         <div className="rounded-xl bg-black p-2 flex justify-center"><MapInfo mapId={mapId} size={56} /></div>
         <div className="text-[10.5px] text-muted-foreground">내 종족이 불리한 종족전으로 연습하면 능력치가 더 잘 오릅니다 (최대 1.6배).</div>
       </div>
-      <button onClick={() => find.mutate({ tier, mapId })} disabled={find.isPending} className="w-full py-2.5 rounded-2xl bg-primary text-primary-foreground font-black">🔍 매칭 ({TIERS[tier].name}방 · {ORIG_MAPS[mapId][0]})</button>
+      <div className="grid grid-cols-2 gap-2">
+        <button onClick={() => find.mutate({ tier, mapId })} disabled={find.isPending || s.used >= DAY_SLOTS} className="py-2.5 rounded-2xl border border-primary text-primary font-black disabled:opacity-40">🔍 한 판 매칭</button>
+        <button onClick={() => onBatch(tier, mapId)} disabled={s.used >= DAY_SLOTS} className="py-2.5 rounded-2xl bg-primary text-primary-foreground font-black disabled:opacity-40">⏩ {DAY_SLOTS - s.used}판 연속</button>
+      </div>
+      <div className="text-[10.5px] text-muted-foreground text-center -mt-1">{TIERS[tier].name}방 · {ORIG_MAPS[mapId][0]} · 연속은 중계 없이 결과만 보여줍니다</div>
       {opp && (() => {
         const bonus = bonusFor(s.lobby!.mapId, opp.race);
         return (
