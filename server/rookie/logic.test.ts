@@ -63,7 +63,7 @@ describe("선수 키우기", () => {
 
   it("커리지 매치 날에 참가 · 우승하면 준프로 → 드래프트 날 참가 가능", () => {
     const s = mk();
-    s.day = courageDays(2010)[1];
+    s.day = courageDays(2026)[1];
     // 강하게 만들어 우승 보장에 가깝게
     for (const k of Object.keys(s.stats) as Array<keyof typeof s.stats>) s.stats[k] = 560;
     let won = false;
@@ -76,7 +76,7 @@ describe("선수 키우기", () => {
     }
     expect(won).toBe(true);
     expect(s.status).toBe("semipro");
-    s.day = draftDay(2010); s.used = 0; s.cond = 100;
+    s.day = draftDay(2026); s.used = 0; s.cond = 100;
     const d = L.playDraft(s);
     expect(d.rank).toBeGreaterThanOrEqual(1);
     expect(d.games).toHaveLength(4);
