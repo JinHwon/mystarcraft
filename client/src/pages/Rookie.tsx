@@ -1,7 +1,7 @@
 /**
  * 선수 키우기 모드 메인: 오늘 할 일 · 공방 · 래더 · 대회 · 상점 · 구단 · 달력 · 기록
  */
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
@@ -92,6 +92,12 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
   const [batchRes, setBatchRes] = useState<BatchResult | null>(null);
   const batchM = m.batch.useMutation({ onSuccess: r => { sync.onSuccess(r); setBatchRes(r.result as BatchResult); }, onError: sync.onError });
   const busy = [ladder, rest, stream, allowance, next, courage, draft, internal, clanPractice, proleague, promo, tryout, playEvent, batchM].some(x => x.isPending);
+  // 오늘 행동을 다 쓰면 경기 화면(공방·경기·클랜 탭)에서 홈으로
+  const noneLeft = s.used >= DAY_SLOTS;
+  useEffect(() => {
+    if (!noneLeft) return;
+    if (view === "lobby" || (view === "home" && (tab === "play" || tab === "clan"))) { setTab("home"); setView("home"); window.scrollTo(0, 0); }
+  }, [noneLeft]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (watch) return <MatchViewer s={s} games={watch.games} title={watch.title} extra={watch.extra} onClose={() => setWatch(null)} />;
   const left = DAY_SLOTS - s.used;
