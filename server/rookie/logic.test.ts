@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rollStats, sumStats, courageDays, draftDay, DAY_SLOTS, STAT_CAP, ladderGrade, capOf } from "@shared/rookie/model";
+import { rollStats, sumStats, courageDays, draftDay, DAY_SLOTS, STAT_CAP, ladderGrade, capOf, mapUnd } from "@shared/rookie/model";
 import * as L from "./logic";
 
 const mk = () => L.newRookie({ name: "테스트", race: "zerg", concept: "control", stats: rollStats("control") });
@@ -278,5 +278,25 @@ describe("선수 키우기", () => {
     const vs = Object.values(s.clan.vs ?? {});
     expect(vs.reduce((a, [w, l]) => a + w + l, 0)).toBe(10);
     if (s.clan.l > 0) expect(s.clan.points).toBeLessThan(50 + s.clan.w * 10);
+  });
+
+  it("래더 맵: 한 달마다 5개 · 고른 맵에서만 나오고, 맵 이해도가 쌓임 (최대 55)", () => {
+    const s = veteran(mk());
+    s.stats = { ...s.stats }; for (const k of Object.keys(s.stats)) s.stats[k as keyof typeof s.stats] = 600;
+    const pool = L.ladderPool(s);
+    expect(pool.maps).toHaveLength(5);
+    expect(new Set(pool.maps).size).toBe(5);
+    expect(L.ladderPool(s).maps).toEqual(pool.maps);
+    const keep = pool.maps[2];
+    L.setLadderMaps(s, [keep]);
+    expect(() => L.setLadderMaps(s, [9999])).toThrow(/하나 이상/);
+    const g = L.playLadder(s);
+    expect(g.mapId).toBe(keep);
+    expect(s.mapGames?.[keep]).toBe(1);
+    s.mapGames![keep] = 500;
+    expect(mapUnd(s, keep)).toBe(55);
+    const m0 = pool.month;
+    s.day += 40;
+    expect(L.ladderPool(s).month).toBeGreaterThan(m0);
   });
 });

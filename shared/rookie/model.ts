@@ -344,6 +344,10 @@ export interface RookieState {
   clan?: { id: string; joined: number; points: number; w: number; l: number; members: ClanMember[]; /** 클랜원별 상대 전적 [내 승, 내 패] */ vs?: Record<string, [number, number]> };
   /** 공방에서 마지막으로 고른 방·맵 */
   lobbyPref?: { tier: Tier; mapId: number };
+  /** 이번 달 래더 맵 5개 (month = 연*12+월) 와 그중 내가 고른 맵 */
+  ladderMaps?: { month: number; maps: number[]; sel: number[] };
+  /** 맵별 출전 횟수 (맵 이해도) */
+  mapGames?: Record<number, number>;
   /** 클랜 입단 시험 본 날 (재시험 대기) */
   clanTried: Record<string, number>;
 }
@@ -391,3 +395,7 @@ export function capOf(s: Pick<RookieState, "status" | "team"> & { level?: number
   if (s.status === "pro") return (s.team?.squad === 1 ? STAT_CAP.pro1 : STAT_CAP.pro2) + lv;
   return (s.status === "semipro" ? STAT_CAP.semipro : STAT_CAP.amateur) + lv;
 }
+
+/** 맵 이해도 (0~55): 출전 횟수가 쌓일수록 올라 불리한 종족전 맵의 불리함을 줄여 줌 */
+export const MAP_UND_MAX = 55;
+export const mapUnd = (s: Pick<RookieState, "mapGames">, mapId: number) => Math.min(MAP_UND_MAX, Math.floor((s.mapGames?.[mapId] ?? 0) * 1.5));

@@ -12,7 +12,7 @@ import {
   CONCEPTS, DAY_SLOTS, EVENT_NAMES, LADDER_START, RACES, ROOKIE_BONUS, ROOKIE_PRICE, ROOKIE_USES, SEMIPRO_DAYS, STATUS_NAMES,
   STAT_MAX_ONE, STAT_MIN_ONE, TIERS, TIER_ORDER, TRYOUT_MIN, VITA_PER_DAY, capOf, courageDays, dateText, draftDay, isMonthEnd,
   ladderGrade, nickname, statsAround, sumStats, ymd, ACHIEVEMENTS, MENTOR_PRICE, STAT_CAP, emptyCounts, dayOf, rollStats,
-  CLANS, CLAN_BY_ID, CLAN_RETRY_DAYS, CLAN_STRENGTH, LADDER_REQ, MAX_LEVEL, clanRoster, eventReq, levelNeed, type ClanMember,
+  CLANS, CLAN_BY_ID, mapUnd, CLAN_RETRY_DAYS, CLAN_STRENGTH, LADDER_REQ, MAX_LEVEL, clanRoster, eventReq, levelNeed, type ClanMember,
   type Concept, type Opp, type RookieEvent, type RookieState, type Stats, type Tier, type Rival, type FanPost,
 } from "@shared/rookie/model";
 import { simulateSet } from "../gameSimulation";
@@ -169,6 +169,15 @@ export interface PlayedGame {
   label: string;
 }
 
+/** 맵 이해도만큼 내 종족이 불리한 맵의 불리함을 덜어 줌 (이해도 55 → 불리함 55% 감소) */
+function understood(s: RookieState, mapId: number, opp: Race) {
+  const adv = mapAdvantage(mapId, s.race, opp);
+  const mine = adv[s.race];
+  if (mine === undefined || mine >= 1) return adv;
+  const fixed = mine + (1 - mine) * (mapUnd(s, mapId) / 100);
+  return { [s.race]: fixed, [opp]: 2 - fixed };
+}
+
 /** 한 판 (a = 나). broadcast: 중계 문장까지 */
 /** 연속 진행 중 (중계 문장 없이 빠르게) */
 let QUIET = false;
@@ -178,13 +187,14 @@ function playOne(s: RookieState, opp: Opp, mapId: number, label: string, broadca
   const r = simulateSet(
     { id: 1, name: s.name, race: s.race, stats: effective(s), fatigue: 100 },
     { id: 2, name: opp.name, race: opp.race, stats: oppForm(opp), fatigue: 100 },
-    mapAdvantage(mapId, s.race, opp.race),
+    understood(s, mapId, opp.race),
     { rushDistance: m.rush / 2, resources: m.res / 2, complexity: m.complexity / 2 },
     false, broadcast,
     // 공방·래더·클랜·팀 연습은 온라인 게임 (치어풀·세리머니 없음)
     /^(공방|래더|팀 내부 연습)|클랜/.test(label),
   );
   const won = r.winnerId === 1;
+  (s.mapGames ??= {})[mapId] = (s.mapGames[mapId] ?? 0) + 1;
   const before = { stats: { ...s.stats }, cond: s.cond };
   grow(s, opp, won, growMul);
   s.cond = clampCond(s.cond - (won ? randInt(1, 3) : randInt(2, 5)));
@@ -356,6 +366,27 @@ function ladderOpp(score: number): Opp {
   return { name: nickname(), race: pick(RACES), stats: statsAround(semipro ? Math.max(4000, total) : total), semipro, ladder: Math.round(score + randInt(-120, 120)) };
 }
 
+/** 래더 맵: 한 달마다 새로 5개 (같은 달에는 늘 같은 맵) */
+export function ladderPool(s: RookieState) {
+  const x = ymd(s.day), month = x.y * 12 + x.m;
+  if (s.ladderMaps?.month !== month) {
+    let seed = (month * 2654435761 + [...s.name].reduce((a, c) => a + c.charCodeAt(0), 0) * 40503) >>> 0;
+    const next = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
+    const all = ORIG_MAPS.map((_, i) => i);
+    for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(next() * (i + 1)); [all[i], all[j]] = [all[j], all[i]]; }
+    const maps = all.slice(0, 5);
+    s.ladderMaps = { month, maps, sel: [...maps] };
+  }
+  return s.ladderMaps;
+}
+export function setLadderMaps(s: RookieState, sel: number[]) {
+  const pool = ladderPool(s);
+  const ok = pool.maps.filter(m => sel.includes(m));
+  if (!ok.length) throw new RookieError("래더 맵을 하나 이상 고르세요");
+  pool.sel = ok;
+  return { sel: ok };
+}
+
 export function ladderLocked(s: RookieState): string | null {
   const games = s.record.w + s.record.l;
   if (games < LADDER_REQ.games) return `래더는 경기 ${LADDER_REQ.games}판 이상 해본 선수만 (지금 ${games}판)`;
@@ -372,7 +403,9 @@ export function playLadder(s: RookieState) {
   // 라이벌과 점수가 비슷하면 가끔 만남
   const rv = rivalOpp(s);
   if (Math.abs((rv.ladder ?? 0) - s.ladder.score) < 350 && rand() < 0.12) opp = rv;
-  const g = playOne(s, opp, randomMap(), "래더");
+  const pool = ladderPool(s);
+  const mapId = pick(pool.sel.length ? pool.sel : pool.maps);
+  const g = playOne(s, opp, mapId, "래더");
   const won = g.winner === "a";
   const exp = 1 / (1 + Math.pow(10, ((opp.ladder ?? s.ladder.score) - s.ladder.score) / 400));
   const before = s.ladder.score;
@@ -1271,6 +1304,7 @@ export function todayInfo(s: RookieState) {
     grade: ladderGrade(s.ladder.score),
     cap: capOf(s),
     ladderLock: ladderLocked(s),
+    ladderMaps: ladderPool(s),
     clanRank: clanRank(s),
   };
 }
