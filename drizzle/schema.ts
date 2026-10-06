@@ -299,3 +299,15 @@ export const careers = mysqlTable("careers", {
 (table) => [
 	uniqueIndex("careers_userId_unique").on(table.userId),
 ]);
+
+/** 선수 키우기 모드 세이브 (감독 모드 careers 와 별개, 사용자당 하나) */
+export const rookieCareers = mysqlTable("rookie_careers", {
+	id: int().autoincrement().notNull().primaryKey(),
+	userId: int().notNull(),
+	state: longtext().notNull(),
+	createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	uniqueIndex("rookie_careers_userId_unique").on(table.userId),
+]);

@@ -1,5 +1,6 @@
 import { router } from "../_core/trpc";
 import { careerRouter } from "../career/router";
+import { rookieRouter } from "../rookie/router";
 import { adminRouter } from "./admin";
 import { authRouter } from "./auth";
 import { eventRouter } from "./event";
@@ -10,6 +11,7 @@ export const appRouter = router({
   admin: adminRouter,
   event: eventRouter,
   career: careerRouter,
+  rookie: rookieRouter,
 });
 
 export type AppRouter = typeof appRouter;
