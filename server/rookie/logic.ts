@@ -12,14 +12,17 @@ import {
   CONCEPTS, DAY_SLOTS, EVENT_NAMES, LADDER_START, RACES, ROOKIE_BONUS, ROOKIE_PRICE, ROOKIE_USES, SEMIPRO_DAYS, STATUS_NAMES,
   STAT_MAX_ONE, STAT_MIN_ONE, TIERS, TIER_ORDER, TRYOUT_MIN, VITA_PER_DAY, capOf, courageDays, dateText, draftDay, isMonthEnd,
   ladderGrade, nickname, statsAround, sumStats, ymd, ACHIEVEMENTS, MENTOR_PRICE, STAT_CAP, emptyCounts, dayOf, rollStats,
-  CLANS, CLAN_BY_ID, mapUnd, CLAN_RETRY_DAYS, CLAN_STRENGTH, LADDER_REQ, MAX_LEVEL, clanRoster, eventReq, levelNeed, type ClanMember,
+  CLANS, CLAN_BY_ID, mapUnd, CLAN_RETRY_DAYS, CLAN_STRENGTH, LADDER_REQ, MAX_LEVEL, eventReq, levelNeed, withTag, LEVEL_CAP_BONUS, type ClanMember,
   type Concept, type Opp, type RookieEvent, type RookieState, type Stats, type Tier, type Rival, type FanPost,
 } from "@shared/rookie/model";
 import { simulateSet } from "../gameSimulation";
 import { mapAdvantage } from "../career/core";
 import type { SetTimeline } from "../gameSimulation";
 import { fanPosts, type FanKind } from "./fans";
+import { clanMembers, clanTagOfPro, proGamerId } from "@shared/rookie/pros";
 
+/** 클랜 명단 버전 (바뀌면 불러올 때 새 명단으로 교체) */
+const ROSTER_VER = 2;
 export class RookieError extends Error {}
 const rand = () => Math.random();
 const randInt = (a: number, b: number) => a + Math.floor(rand() * (b - a + 1));
@@ -30,7 +33,15 @@ const clampCond = (v: number) => Math.max(COND_MIN, Math.min(COND_MAX, Math.roun
 // 프로 선수 (원작 데이터, 능력치 고정)
 const PROS = initialPlayers();
 const prosOf = (team: number) => PROS.filter(p => p.team === team);
-const proOpp = (id: number): Opp => { const p = PROS[id]; return { name: p.name, race: p.race, stats: { ...p.stats }, pro: { id, team: p.team } }; };
+/** 프로: 게임 아이디(소속 클랜 태그) + 본명 */
+const proOpp = (id: number): Opp => {
+  const p = PROS[id], gid = proGamerId(id);
+  return { name: withTag(gid, clanTagOfPro(id)), ...(gid !== p.name ? { real: p.name } : {}), race: p.race, stats: { ...p.stats }, pro: { id, team: p.team }, cond: randInt(70, 100) };
+};
+/** 상대 컨디션을 정해 둠 (화면에 보이는 값과 경기에 쓰는 값이 같게) */
+const withCond = (o: Opp): Opp => { o.cond ??= randInt(55, 100); return o; };
+/** 내 게임 아이디: 클랜에 들어가 있으면 아이디[태그] */
+const myId = (s: RookieState) => withTag(s.name, s.clan ? CLAN_BY_ID[s.clan.id]?.tag : undefined);
 const PRO_TEAMS = ORIG_TEAMS.filter(t => t.id < 12);
 
 // ── 새로 만들기 ─────────────────────────────────────────────────
@@ -57,10 +68,9 @@ export function newRookie(input: { name: string; race: Race; concept: Concept; s
   return s;
 }
 
-const RIVAL_NAMES = ["김택용", "이영호", "송병구", "이제동", "정명훈", "도재욱", "진영화", "김정우", "허영무", "어윤수", "구성훈", "신동원", "김민철", "정윤종", "이신형", "백동준"];
 function newRival(myRace: Race, total: number): Rival {
   // 원작 선수와 겹치지 않게 '아마추어 시절 아이디'처럼
-  const name = `${pick(RIVAL_NAMES).slice(0, 1)}${nickname().replace(/\d+$/, "")}`;
+  const name = nickname();
   const concept = pick(Object.keys(CONCEPTS) as Concept[]);
   const st = rollStats(concept);
   // 나와 비슷한 수준으로
@@ -83,6 +93,14 @@ export function upgrade(s: RookieState) {
   s.clanTried ??= {};
   // 없어진 클랜 (클랜 목록이 바뀐 경우)
   if (s.clan && !CLAN_BY_ID[s.clan.id]) delete s.clan;
+  // 클랜 명단이 새로 짜인 경우 (영어 아이디·강해진 클랜원): 내 점수는 유지하고 명단만 새로
+  if (s.clan && (s.clan as { rv?: number }).rv !== ROSTER_VER) {
+    s.clan.members = rosterOf(s.clan.id);
+    s.clan.vs = {};
+    (s.clan as { rv?: number }).rv = ROSTER_VER;
+  }
+  // 한글이던 라이벌 이름도 영어 아이디로
+  if (/[가-힣]/.test(s.rival.name)) s.rival.name = nickname();
   // 예전 클랜원에 전적이 없으면 점수에 맞춰 채움
   for (const m of s.clan?.members ?? []) { m.w ??= Math.round(m.points / 10); m.l ??= Math.round(m.points / 25); }
   return s;
@@ -126,7 +144,7 @@ export function gainExp(s: RookieState, n: number) {
       budget -= v;
       gains.push(`${STAT_LABELS[k]} +${v}`);
     }
-    log(s, "⭐", `레벨 업! Lv.${s.level}${gains.length ? ` · ${gains.join(", ")}` : ""} · 성장 한계 +20`);
+    log(s, "⭐", `레벨 업! Lv.${s.level}${gains.length ? ` · ${gains.join(", ")}` : ""} · 성장 한계 +${LEVEL_CAP_BONUS}`);
     mark(s, "⭐");
   }
 }
@@ -156,7 +174,10 @@ export function effective(s: RookieState): Stats {
   return Object.fromEntries(STAT_KEYS.map(x => [x, Math.round((s.stats[x] + g[x]) * k)])) as Stats;
 }
 /** 상대도 컨디션이 들쭉날쭉 */
-const oppForm = (o: Opp) => Object.fromEntries(STAT_KEYS.map(k => [k, Math.round(o.stats[k] * (0.85 + rand() * 0.2))])) as Stats;
+const oppForm = (o: Opp) => {
+  const k = o.cond !== undefined ? 0.6 + 0.4 * (o.cond / 100) : 0.85 + rand() * 0.2;
+  return Object.fromEntries(STAT_KEYS.map(x => [x, Math.round(o.stats[x] * k)])) as Stats;
+};
 
 export interface PlayedGame {
   mapId: number;
@@ -185,7 +206,7 @@ function playOne(s: RookieState, opp: Opp, mapId: number, label: string, broadca
   const broadcast = broadcastIn && !QUIET;
   const m = mapView(mapId);
   const r = simulateSet(
-    { id: 1, name: s.name, race: s.race, stats: effective(s), fatigue: 100 },
+    { id: 1, name: myId(s), race: s.race, stats: effective(s), fatigue: 100 },
     { id: 2, name: opp.name, race: opp.race, stats: oppForm(opp), fatigue: 100 },
     understood(s, mapId, opp.race),
     { rushDistance: m.rush / 2, resources: m.res / 2, complexity: m.complexity / 2 },
@@ -218,7 +239,7 @@ function grow(s: RookieState, opp: Opp, won: boolean, mul = 1) {
   const keys = [...STAT_KEYS].sort(() => rand() - 0.5);
   if (won) {
     const n = randInt(2, 3);
-    for (const k of keys.slice(0, n)) s.stats[k] = clampStat(s.stats[k] + Math.max(0, Math.round(randInt(3, 7) * ratio * room)));
+    for (const k of keys.slice(0, n)) s.stats[k] = clampStat(s.stats[k] + Math.max(0, Math.round(randInt(3, 7) * ratio * room * 0.85)));
   } else if (ratio > 1.15 && rand() < 0.35) {
     // 훨씬 강한 상대에게 지면 가끔은 배움
     s.stats[keys[0]] = clampStat(s.stats[keys[0]] + Math.max(1, Math.round(randInt(1, 3) * room)));
@@ -312,7 +333,7 @@ function lobbyOpp(tier: Tier): Opp {
   const r = rand();
   if (r < 0.06) i += 2; else if (r < 0.2) i += 1; else if (r > 0.9) i -= 1;
   const t = TIERS[TIER_ORDER[Math.max(0, Math.min(TIER_ORDER.length - 1, i))]];
-  return { name: nickname(), race: pick(RACES), stats: statsAround(randInt(t.range[0], t.range[1])) };
+  return withCond({ name: nickname(), race: pick(RACES), stats: statsAround(randInt(t.range[0], t.range[1])) });
 }
 
 export function findLobby(s: RookieState, tier: Tier, mapId: number) {
@@ -361,9 +382,9 @@ function ladderOpp(score: number): Opp {
     o.ladder = Math.round(1100 + (sumStats(o.stats) - 3000) * 0.38 + randInt(-80, 80));
     return o;
   }
-  const total = Math.max(3300, Math.min(5200, Math.round(3000 + (score - 1100) / 0.38 + randInt(-300, 300))));
+  const total = Math.max(3400, Math.min(6000, Math.round(3100 + (score - 1100) / 0.36 + randInt(-300, 300))));
   const semipro = r < 0.55;
-  return { name: nickname(), race: pick(RACES), stats: statsAround(semipro ? Math.max(4000, total) : total), semipro, ladder: Math.round(score + randInt(-120, 120)) };
+  return withCond({ name: nickname(), race: pick(RACES), stats: statsAround(semipro ? Math.max(4000, total) : total), semipro, ladder: Math.round(score + randInt(-120, 120)) });
 }
 
 /** 래더 맵: 한 달마다 새로 5개 (같은 달에는 늘 같은 맵) */
@@ -416,6 +437,12 @@ export function playLadder(s: RookieState) {
   mark(s, "⚔️", won);
   log(s, won ? "⚔️" : "💧", `래더 vs ${opp.pro ? `${PRO_TEAMS[opp.pro.team]?.short} ` : opp.semipro ? "준프로 " : ""}${opp.name} ${won ? "승리" : "패배"} (${before}→${s.ladder.score} · ${ladderGrade(s.ladder.score)})`);
   gainExp(s, won ? (opp.pro ? 25 : 15) : 5);
+  // 래더 승리 수당: 점수가 높을수록 많이 (프로를 이기면 두 배)
+  if (won) {
+    const prize = (1 + Math.round(Math.max(0, s.ladder.score - 1300) / 250)) * (opp.pro ? 2 : 1);
+    s.money += prize;
+    g.fx.money = (g.fx.money ?? 0) + prize;
+  }
   if (s.clan) s.clan.points = Math.max(0, s.clan.points + (won ? 5 : -3));
   if (won) {
     s.fame += opp.pro ? 8 : 2;
@@ -448,7 +475,7 @@ export function stream(s: RookieState) {
   const base = Math.max(0, (total - 2500) / 9 + s.fame * 0.5 + s.fanCafe.members / 10 + Math.max(0, s.ladder.score - 1500) / 4 + (s.status === "pro" ? 150 : s.status === "semipro" ? 40 : 0));
   const viewers = Math.max(0, Math.round(base * (0.55 + rand() * 0.9) + randInt(0, 6)));
   const balloons = viewers < 15 ? randInt(0, 3) : Math.round(viewers * (0.4 + rand() * 1.6));
-  const money = Math.round(balloons / 100);
+  const money = Math.round(balloons / 40);
   s.money += money;
   s.stream.count++;
   s.stream.best = Math.max(s.stream.best, viewers);
@@ -464,6 +491,19 @@ export function stream(s: RookieState) {
   return { viewers, balloons, money };
 }
 
+/** 아르바이트: 컨디션을 쓰는 대신 돈을 번다 (행동 3) */
+export function partTime(s: RookieState) {
+  if (s.status === "pro") throw new RookieError("프로게이머는 월급과 수당이 있습니다");
+  useSlots(s, 3);
+  const money = randInt(14, 26) + Math.round(s.level / 4);
+  s.money += money;
+  s.cond = clampCond(s.cond - 8);
+  s.morale = Math.max(0, s.morale - 1);
+  mark(s, "💼");
+  log(s, "💼", `PC방 아르바이트로 ${money}만원을 벌었습니다`);
+  return { money };
+}
+
 /** 부모님 용돈: 일주일에 한 번 (프로가 되면 없음) */
 export function allowance(s: RookieState) {
   if (s.status === "pro") throw new RookieError("프로게이머는 월급을 받습니다");
@@ -471,7 +511,7 @@ export function allowance(s: RookieState) {
   useSlots(s, 1);
   s.allowanceDay = s.day;
   const lecture = s.record.l > s.record.w * 2 && rand() < 0.4;
-  const money = lecture ? randInt(2, 5) : randInt(5, 15);
+  const money = lecture ? randInt(4, 8) : randInt(10, 25);
   s.money += money;
   if (lecture) s.morale = Math.max(0, s.morale - 3);
   mark(s, "💵");
@@ -600,7 +640,8 @@ export function playEvent(s: RookieState, id: number) {
   if (e.result) throw new RookieError("이미 참가한 대회입니다");
   if (s.used > 0) throw new RookieError("대회는 하루 종일 걸립니다 — 다른 일을 하지 않은 날에만 참가할 수 있습니다");
   const r = TIERS[e.level].range;
-  const field = Array.from({ length: e.size - 1 }, () => ({ name: nickname(), race: pick(RACES), stats: statsAround(randInt(r[0], r[1] + 300)) } as Opp));
+  const used = new Set<string>();
+  const field = Array.from({ length: e.size - 1 }, () => withCond({ name: nickname(Math.random, used), race: pick(RACES), stats: statsAround(randInt(r[0], r[1] + 300)) } as Opp));
   if (s.rival.status !== "pro" && rand() < 0.5) field[0] = rivalOpp(s);
   const { games, place } = tournament(s, e.size, field, e.name);
   s.used = DAY_SLOTS;
@@ -627,7 +668,8 @@ export function playCourage(s: RookieState) {
   if (s.doneDays.includes(s.day)) throw new RookieError("이미 참가했습니다");
   if (s.used > 0) throw new RookieError("커리지 매치는 하루 종일 걸립니다 — 다른 일을 하지 않은 날에만 참가할 수 있습니다");
   s.doneDays.push(s.day);
-  const field = Array.from({ length: 31 }, () => ({ name: nickname(), race: pick(RACES), stats: statsAround(randInt(3200, 4300)) } as Opp));
+  const used = new Set<string>();
+  const field = Array.from({ length: 31 }, () => withCond({ name: nickname(Math.random, used), race: pick(RACES), stats: statsAround(randInt(3400, 4600)) } as Opp));
   if (s.rival.status !== "pro") field[0] = rivalOpp(s);
   const { games, place } = tournament(s, 32, field, "커리지 매치");
   s.used = DAY_SLOTS;
@@ -658,7 +700,8 @@ export function playDraft(s: RookieState) {
   if (s.doneDays.includes(s.day)) throw new RookieError("이미 참가했습니다");
   if (s.used > 0) throw new RookieError("드래프트는 하루 종일 걸립니다 — 다른 일을 하지 않은 날에만 참가할 수 있습니다");
   s.doneDays.push(s.day);
-  const field = Array.from({ length: 15 }, () => ({ name: nickname(), race: pick(RACES), stats: statsAround(randInt(3900, 4800)), semipro: true } as Opp));
+  const used = new Set<string>();
+  const field = Array.from({ length: 15 }, () => withCond({ name: nickname(Math.random, used), race: pick(RACES), stats: statsAround(randInt(4100, 5100)), semipro: true } as Opp));
   const score = new Map<Opp | "me", number>([["me", 0], ...field.map(o => [o, 0] as [Opp, number])]);
   const games: PlayedGame[] = [];
   for (let r = 0; r < 4; r++) {
@@ -702,7 +745,7 @@ export function playTryout(s: RookieState, team: number) {
   if (!t) throw new RookieError("받은 입단 테스트가 아닙니다");
   if (s.status === "pro") throw new RookieError("이미 프로게이머입니다");
   useSlots(s, 3);
-  const opp: Opp = { name: `${ORIG_TEAMS[team].short} 2군 ${nickname()}`, race: pick(RACES), stats: statsAround(randInt(4300, 4900)) };
+  const opp: Opp = withCond({ name: withTag(nickname(), ORIG_TEAMS[team].short), real: "2군 선수", race: pick(RACES), stats: statsAround(randInt(4500, 5200)) });
   const res = series(s, opp, 2, `${ORIG_TEAMS[team].name} 입단 테스트`);
   s.tryouts = s.tryouts.filter(x => x !== t);
   for (const g of res.games) mark(s, "📝", g.winner === "a");
@@ -734,7 +777,7 @@ function teammate(s: RookieState): Opp {
   const t = s.team!;
   if (s.rival.team === t.team && rand() < 0.15) return rivalOpp(s);
   if (rand() < 0.6) return proOpp(pick(prosOf(t.team)).id);
-  return { name: `${ORIG_TEAMS[t.team].short} 연습생 ${nickname()}`, race: pick(RACES), stats: statsAround(randInt(4200, 5100)) };
+  return withCond({ name: withTag(nickname(), ORIG_TEAMS[t.team].short), real: "연습생", race: pick(RACES), stats: statsAround(randInt(4400, 5400)) });
 }
 /** 팀 내부 연습 경기 (월말 승강전 순위에 들어감) */
 export function playInternal(s: RookieState) {
@@ -760,7 +803,7 @@ export function playPromo(s: RookieState) {
   if (t.squad === 2 && !(t.monthW >= 3 && t.monthW > t.monthL)) throw new RookieError("이번 달 내부 연습에서 2군 1위를 해야 승강전에 나갈 수 있습니다 (3승 이상, 승이 패보다 많게)");
   useSlots(s, 3);
   s.doneDays.push(s.day);
-  const opp = t.squad === 2 ? proOpp(weakestFirst(t.team).id) : { name: `2군 1위 ${nickname()}`, race: pick(RACES), stats: statsAround(randInt(4600, 5300)) } as Opp;
+  const opp = t.squad === 2 ? proOpp(weakestFirst(t.team).id) : withCond({ name: withTag(nickname(), ORIG_TEAMS[t.team].short), real: "2군 1위", race: pick(RACES), stats: statsAround(randInt(4800, 5600)) } as Opp);
   const res = series(s, opp, 2, `${ORIG_TEAMS[t.team].short} 승강전`);
   for (const g of res.games) mark(s, "⬆️", g.winner === "a");
   if (t.squad === 2 && res.won) { gainExp(s, 250); t.squad = 1; t.salary = Math.max(t.salary, 120); s.fame += 30; log(s, "⬆️", `승강전 승리! 1군으로 올라갔습니다 (월급 ${t.salary}만원)`); fan(s, "promoUp", ORIG_TEAMS[t.team].short); }
@@ -985,7 +1028,7 @@ function rivalCap(r: Rival) {
 export function rivalLadder(r: Rival) { return Math.max(1200, Math.round(1100 + (sumStats(r.stats) - 3000) * 0.38)); }
 function rivalOpp(s: RookieState): Opp {
   const r = s.rival;
-  return { name: r.name, race: r.race, stats: { ...r.stats }, semipro: r.status === "semipro", rival: true, ladder: rivalLadder(r) };
+  return withCond({ name: r.name, race: r.race, stats: { ...r.stats }, semipro: r.status === "semipro", rival: true, ladder: rivalLadder(r) });
 }
 /** 라이벌의 하루: 꾸준히 성장, 커리지 매치·드래프트·승강전도 스스로 */
 function rivalDay(s: RookieState, prevDay: number) {
@@ -1022,15 +1065,9 @@ function rivalDay(s: RookieState, prevDay: number) {
 }
 
 // ── 클랜 ─────────────────────────────────────────────────────
-const proIdByName = (name: string) => PROS.find(p => p.name === name)?.id;
 /** 클랜원 명단 (프로는 원작 선수 정보로 채움) */
 export function rosterOf(id: string): ClanMember[] {
-  const c = CLAN_BY_ID[id];
-  return clanRoster(c, proIdByName).map(m => {
-    if (!m.pro) return m;
-    const p = PROS[m.pro.id];
-    return { ...m, name: p.name, race: p.race, stats: { ...p.stats }, pro: { id: p.id, team: p.team } };
-  });
+  return clanMembers(id);
 }
 /** 입단 조건을 못 채웠으면 그 이유 */
 export function clanLocked(s: RookieState, id: string): string | null {
@@ -1054,14 +1091,14 @@ export function clanTest(s: RookieState, id: string) {
   useSlots(s, 3);
   s.clanTried[id] = s.day;
   const roster = rosterOf(id).filter(m => !m.pro).sort((a, b) => sumStats(a.stats) - sumStats(b.stats));
-  // 시험관은 중간 실력의 클랜원
-  const ex = roster[Math.floor(roster.length * (0.35 + rand() * 0.3))];
-  const opp: Opp = { name: `[${c.tag}] ${ex.name}`, race: ex.race, stats: { ...ex.stats } };
+  // 시험관은 클랜원 중 아래쪽~중간 실력
+  const ex = roster[Math.floor(roster.length * (0.05 + rand() * 0.3))];
+  const opp: Opp = withCond({ name: withTag(ex.name, c.tag), race: ex.race, stats: { ...ex.stats } });
   const res = series(s, opp, 2, `${c.name} 입단 시험`);
   for (const g of res.games) mark(s, "🛡️", g.winner === "a");
   if (res.won) {
     const from = s.clan ? CLAN_BY_ID[s.clan.id]?.name : undefined;
-    s.clan = { id, joined: s.day, points: 0, w: 0, l: 0, members: rosterOf(id) };
+    s.clan = { id, joined: s.day, points: 0, w: 0, l: 0, members: rosterOf(id), ...({ rv: ROSTER_VER } as object) };
     s.fame += c.tier * 6;
     s.titles.unshift(`${dateText(s.day)} 클랜 ${c.name}[${c.tag}] 가입`);
     log(s, "🛡️", `${c.name} 입단 시험 통과! 클랜 [${c.tag}]에 들어갔습니다${from ? ` (${from} 탈퇴)` : ""}`);
@@ -1075,15 +1112,24 @@ export function leaveClan(s: RookieState) {
   delete s.clan;
   return { ok: true };
 }
+/** 클랜 연습 상대: 클랜 안에서 나와 비슷하거나 더 강한 쪽을 자주 만남 (높은 단계 클랜일수록 강한 상대) */
+function clanOpponent(s: RookieState): ClanMember {
+  const c = CLAN_BY_ID[s.clan!.id];
+  const all = s.clan!.members;
+  const pros = all.filter(m => m.pro);
+  if (pros.length && rand() < (c.tier >= 4 ? 0.3 : 0.2)) return pick(pros);
+  const ams = all.filter(m => !m.pro).sort((a, b) => sumStats(b.stats) - sumStats(a.stats));
+  // 상위 절반에서 60%, 나머지는 아무나
+  const pool = rand() < 0.6 ? ams.slice(0, Math.max(3, Math.ceil(ams.length / 2))) : ams;
+  return pick(pool);
+}
 /** 클랜 연습: 클랜원(가끔 프로)과 한 판, 조언을 들어 1.3배로 배움 */
-export function clanPractice(s: RookieState) {
+export function clanPractice(s: RookieState, target?: string) {
   if (!s.clan) throw new RookieError("클랜에 들어가야 합니다");
   useSlots(s, 1);
   const c = CLAN_BY_ID[s.clan.id];
-  const pros = s.clan.members.filter(m => m.pro);
-  const pool = pros.length && rand() < 0.2 ? pros : s.clan.members.filter(m => !m.pro);
-  const m = pick(pool);
-  const opp: Opp = m.pro ? proOpp(m.pro.id) : { name: `[${c.tag}] ${m.name}`, race: m.race, stats: { ...m.stats } };
+  const m = (target && s.clan.members.find(x => x.name === target)) || clanOpponent(s);
+  const opp: Opp = m.pro ? proOpp(m.pro.id) : withCond({ name: withTag(m.name, c.tag), race: m.race, stats: { ...m.stats } });
   const mapId = randomMap();
   const g = playOne(s, opp, mapId, `${c.name} 클랜 연습`, true, (m.pro ? 1.5 : 1.3) * raceGrowth(mapId, s.race, opp.race));
   const won = g.winner === "a";
@@ -1094,10 +1140,45 @@ export function clanPractice(s: RookieState) {
   m[won ? "l" : "w"] = (m[won ? "l" : "w"] ?? 0) + 1;
   const vs = ((s.clan.vs ??= {})[m.name] ??= [0, 0]);
   vs[won ? 0 : 1]++;
+  addFriend(s, m.name, 3);
+  // 진 경기에서 떨어진 능력치는 피드백으로 일부 되돌릴 수 있음
+  if (!won) {
+    const fb = (s.clan.fb ??= { lost: {}, from: m.name });
+    fb.from = m.name;
+    for (const [k, v] of Object.entries(g.fx.stats)) if ((v ?? 0) < 0) fb.lost[k as StatKey] = (fb.lost[k as StatKey] ?? 0) + -(v as number);
+  }
   gainExp(s, won ? 10 : 4);
   mark(s, "🛡️", won);
   log(s, won ? "🛡️" : "💧", `클랜 연습 vs ${m.pro ? `프로 ${opp.name}` : opp.name} ${won ? "승리" : "패배"}`);
   return g;
+}
+/** 클랜원과의 친분도 (연습·경기를 같이 할수록 올라감) */
+function addFriend(s: RookieState, name: string, n: number) {
+  if (!s.clan) return;
+  const fr = (s.clan.fr ??= {});
+  fr[name] = Math.min(100, (fr[name] ?? 0) + n);
+}
+/** 피드백 받기: 클랜원에게 진 경기에서 떨어진 능력치 일부를 되찾는 대신 컨디션이 줄어듦 */
+export function clanFeedback(s: RookieState) {
+  const fb = s.clan?.fb;
+  if (!s.clan || !fb || !Object.keys(fb.lost).length) throw new RookieError("피드백 받을 패배 경기가 없습니다");
+  if (s.cond < 20) throw new RookieError("컨디션이 너무 낮아 피드백을 받을 수 없습니다");
+  const cap = capOf(s);
+  const back: Partial<Stats> = {};
+  const before = s.cond;
+  for (const [k, lost] of Object.entries(fb.lost) as Array<[StatKey, number]>) {
+    const room = Math.max(0, cap - sumStats(s.stats));
+    const v = Math.min(room, Math.max(1, Math.round(lost * (0.5 + rand() * 0.3))));
+    if (v <= 0) continue;
+    s.stats[k] = clampStat(s.stats[k] + v);
+    back[k] = v;
+  }
+  s.cond = clampCond(s.cond - 10);
+  addFriend(s, fb.from, 2);
+  delete s.clan.fb;
+  log(s, "🗣️", `${fb.from}에게 피드백을 받았습니다 (${Object.entries(back).map(([k, v]) => `${STAT_LABELS[k as StatKey]} +${v}`).join(", ") || "회복할 능력치 없음"} · 컨디션 -10)`);
+  mark(s, "🗣️");
+  return { back, cond: [before, s.cond] as [number, number] };
 }
 export type BatchKind = "lobby" | "ladder" | "clan" | "internal";
 /**
@@ -1246,6 +1327,12 @@ export function nextDay(s: RookieState) {
   s.fanCafe.members = Math.max(0, s.fanCafe.members + Math.round((target - s.fanCafe.members) * 0.03));
   if (s.fanCafe.members >= 300 && rand() < 0.3) s.fame = Math.min(1000, s.fame + 1);
   const x = ymd(s.day);
+  // 인지도가 쌓이면 후원 (매달 1일)
+  if (ymd(s.day).d === 1 && s.fame >= 50 && s.status !== "pro") {
+    const sponsor = Math.round(s.fame / 8);
+    s.money += sponsor;
+    log(s, "🤝", `인지도 ${s.fame}: 후원금 ${sponsor}만원이 들어왔습니다`);
+  }
   // 월급 (매달 1일)
   if (s.team && x.d === 1) { s.money += s.team.salary; s.team.monthW = 0; s.team.monthL = 0; log(s, "💰", `월급 ${s.team.salary}만원 (${ORIG_TEAMS[s.team.team].name})`); }
   // 계약 만료 → 연봉 협상 (기한 안에 답이 없으면 구단 제시액으로)

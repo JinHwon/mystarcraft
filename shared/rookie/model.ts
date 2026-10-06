@@ -24,10 +24,10 @@ export const STATUS_NAMES: Record<Status, string> = { amateur: "아마추어", s
 
 /**
  * 능력치 성장 한계 (능력치 합). 아마추어·준프로는 고만고만하게, 프로가 되면 프로 수준까지
- * (참고: 프로 1군 선수 합 4,500~6,500)
+ * (참고: 프로 1군 선수 합 4,500~7,000)
  */
-export const STAT_CAP: Record<"amateur" | "semipro" | "pro2" | "pro1", number> = { amateur: 4300, semipro: 4800, pro2: 5800, pro1: 7000 };
-export const STAT_MAX_ONE = 950;
+export const STAT_CAP: Record<"amateur" | "semipro" | "pro2" | "pro1", number> = { amateur: 4800, semipro: 5300, pro2: 6300, pro1: 7600 };
+export const STAT_MAX_ONE = 1000;
 export const STAT_MIN_ONE = 100;
 
 export const sumStats = (st: Stats) => STAT_KEYS.reduce((a, k) => a + st[k], 0);
@@ -85,19 +85,23 @@ export const GRADE_COLOR: Record<string, string> = { S: "#ff6bd5", A: "#ffe45c",
 // ── 공방 (연습 게임) ─────────────────────────────────────────────
 export type Tier = "newbie" | "low" | "mid" | "high" | "elite" | "pro";
 export const TIERS: Record<Tier, { name: string; range: [number, number] }> = {
-  newbie: { name: "초보", range: [1900, 2500] },
-  low: { name: "하수", range: [2400, 2900] },
-  mid: { name: "중수", range: [2800, 3400] },
-  high: { name: "고수", range: [3300, 3900] },
-  elite: { name: "초고수", range: [3800, 4400] },
-  pro: { name: "프로급", range: [4300, 5200] },
+  newbie: { name: "초보", range: [1900, 2600] },
+  low: { name: "하수", range: [2500, 3100] },
+  mid: { name: "중수", range: [3000, 3700] },
+  high: { name: "고수", range: [3600, 4300] },
+  elite: { name: "초고수", range: [4200, 5000] },
+  pro: { name: "프로급", range: [4800, 5900] },
 };
 export const TIER_ORDER: Tier[] = ["newbie", "low", "mid", "high", "elite", "pro"];
 
 // ── 사람 (상대) ─────────────────────────────────────────────────
 export interface Opp {
-  /** 상대 이름 (아이디) */
+  /** 상대 게임 아이디 (소속 클랜이 있으면 아이디[태그]) */
   name: string;
+  /** 프로게이머 본명 · 연습생 소속 등 아이디 옆에 같이 보여줄 설명 */
+  real?: string;
+  /** 컨디션 (%, 능력치에 반영) */
+  cond?: number;
   race: Race;
   stats: Stats;
   /** 프로게이머면 원작 선수 번호 (사진) · 소속 팀 */
@@ -110,12 +114,27 @@ export interface Opp {
   rival?: boolean;
 }
 
-const NICK_A = ["불꽃", "질럿", "저글링", "마린", "드랍", "캐리어", "벌처", "뮤탈", "하이템플러", "탱크", "럴커", "스카웃", "레이스", "울트라", "다크", "옵저버", "커세어", "디파일러", "아비터", "고스트"];
-const NICK_B = ["킹", "장인", "마스터", "러버", "신", "중독", "소년", "전사", "왕자", "대장", "요정", "괴물", "천재", "덕후", "명가", "의신", "형", "짱", "님", "킬러"];
-/** 아마추어 아이디 */
-export function nickname(rnd: () => number = Math.random) {
-  const a = NICK_A[Math.floor(rnd() * NICK_A.length)], b = NICK_B[Math.floor(rnd() * NICK_B.length)];
-  return rnd() < 0.35 ? `${a}${b}${Math.floor(rnd() * 99) + 1}` : `${a}${b}`;
+const NICK_A = ["Dark", "Ice", "Fire", "Storm", "Shadow", "Iron", "Blue", "Red", "Sky", "Moon", "Star", "Wild", "Cool", "Rush", "Nova", "Neo", "Mad", "Lazy", "Silent", "Rapid", "Gold", "Silver", "Crazy", "Happy", "Angry", "Sweet", "Lucky", "Super", "Mega", "Tiny", "Big", "Old", "Young", "Black", "White", "Green", "Night", "Sun", "Wind", "Thunder"];
+const NICK_B = ["Boy", "King", "Lord", "Man", "Master", "Kid", "Rider", "Hunter", "Killer", "Slayer", "Wolf", "Fox", "Bear", "Tiger", "Dragon", "Phoenix", "Eagle", "Hawk", "Shark", "Blade", "Knight", "Ghost", "Zero", "One", "Joker", "Star", "Light", "Wing", "Fang", "Rush", "Zealot", "Muta", "Hydra", "Lurker", "Marine", "Tank", "Probe", "Drone", "Reaver", "Carrier"];
+const NICK_C = ["sc", "pro", "gosu", "noob", "fan", "love", "zerg", "terran", "toss", "bw"];
+const leet = (s: string) => s.replace(/o/g, "0").replace(/i/g, "1").replace(/e/g, "3");
+/** 아마추어 아이디: 스타크래프트처럼 영어 (Dark_Wolf, IceKing77, xHydrax ...) */
+export function nickname(rnd: () => number = Math.random, used?: Set<string>) {
+  const pickOf = (arr: string[]) => arr[Math.floor(rnd() * arr.length)];
+  for (let tries = 0; ; tries++) {
+    const a = pickOf(NICK_A), b = pickOf(NICK_B), r = rnd();
+    let n: string;
+    if (r < 0.28) n = `${a}${b}`;
+    else if (r < 0.46) n = `${a}_${b}`;
+    else if (r < 0.64) n = `${a}${b}${Math.floor(rnd() * 99) + 1}`;
+    else if (r < 0.74) n = `x${b}x`;
+    else if (r < 0.82) n = `${pickOf(NICK_C)}_${b.toLowerCase()}${Math.floor(rnd() * 9) + 1}`;
+    else if (r < 0.9) n = leet(`${a}${b}`);
+    else if (r < 0.95) n = `${a.toLowerCase()}${b.toLowerCase()}`;
+    else n = `${b}${Math.floor(rnd() * 900) + 100}`;
+    // 같은 곳(클랜·대회 등)에서 아이디가 겹치지 않게
+    if (!used || !used.has(n) || tries > 40) { used?.add(n); return n; }
+  }
 }
 
 /** 능력치 합이 total 근처인 무작위 선수 */
@@ -126,6 +145,8 @@ export function statsAround(total: number, rnd: () => number = Math.random): Sta
 }
 
 export const RACES: Race[] = ["terran", "zerg", "protoss"];
+/** 화면 표기: 아이디(본명) */
+export const oppLabel = (o: Pick<Opp, "name" | "real">) => (o.real ? `${o.name}(${o.real})` : o.name);
 
 // ── 이벤트 경기 (하루 대회) ──────────────────────────────────────
 export const EVENT_NAMES = [
@@ -150,7 +171,7 @@ export const LADDER_REQ = { games: 10, total: 2700 };
 export const levelNeed = (lv: number) => 100 + (lv - 1) * 60;
 export const MAX_LEVEL = 60;
 /** 레벨이 오를 때마다 성장 한계도 조금씩 */
-export const LEVEL_CAP_BONUS = 20;
+export const LEVEL_CAP_BONUS = 40;
 
 // ── 클랜 ───────────────────────────────────────────────────────
 export interface ClanDef {
@@ -164,48 +185,87 @@ export interface ClanDef {
   real?: boolean;
 }
 /**
- * 클랜: 실제 스타1 배틀넷(웨스트·아시아) 클랜과 그 클랜 출신 프로게이머.
- * 맨 위 두 클랜(동네PC방연합·새싹스타)만 처음 시작하는 선수를 위해 게임에서 만든 클랜
+ * 클랜: 실제 스타1 배틀넷(웨스트·아시아) 클랜과 그 클랜 출신 프로게이머, 그리고 게임에서 만든 클랜.
+ * 클랜에 소속된 프로는 shared/rookie/pros.ts 의 clanProIds 가 정한다 (여기 pros 는 먼저 넣을 선수)
  */
+const mk = (id: string, name: string, tag: string, tier: ClanDef["tier"], desc: string, req: [number, number, number, number], size: number, pros: string[] = [], real = false): ClanDef =>
+  ({ id, name, tag, tier, desc, req: { games: req[0], ladderGames: req[1], ladder: req[2], total: req[3] }, size, pros, ...(real ? { real: true } : {}) });
 export const CLANS: ClanDef[] = [
-  { id: "pcbang", name: "동네PC방연합", tag: "PCB", tier: 1, desc: "누구나 환영! 동네 형들이 모인 친목 클랜", req: { games: 0, ladderGames: 0, ladder: 0, total: 0 }, size: 14, pros: [] },
-  { id: "newbie", name: "새싹스타", tag: "SPR", tier: 1, desc: "초보끼리 같이 성장해요", req: { games: 5, ladderGames: 0, ladder: 0, total: 2200 }, size: 12, pros: [] },
-  { id: "gm", name: "gm 길드", tag: "gm", tier: 2, real: true, desc: "웨스트 서버의 오래된 길드 · 꾸준히 연습하는 중수들", req: { games: 30, ladderGames: 5, ladder: 0, total: 2700 }, size: 18, pros: [] },
-  { id: "yg", name: "yG 길드", tag: "yG", tier: 2, real: true, desc: "국내 대표 명문 길드 중 하나 · 클랜전이 활발", req: { games: 40, ladderGames: 10, ladder: 1450, total: 2900 }, size: 20, pros: [] },
-  { id: "legend", name: "레전드", tag: "LGD", tier: 3, real: true, desc: "이름처럼 전통 있는 명문 클랜", req: { games: 60, ladderGames: 15, ladder: 1550, total: 3200 }, size: 20, pros: [] },
-  { id: "miracle", name: "Miracle", tag: "Mc", tier: 3, real: true, desc: "2005년 창단 · 훗날 s2Mc의 뿌리가 된 클랜", req: { games: 70, ladderGames: 20, ladder: 1600, total: 3300 }, size: 18, pros: [] },
-  { id: "kal", name: "KaL", tag: "KaL", tier: 3, real: true, desc: "Siz 클랜이 갈라질 때 생긴 클랜 (Siz·KaL·By)", req: { games: 80, ladderGames: 25, ladder: 1650, total: 3400 }, size: 18, pros: [] },
-  { id: "siz", name: "Siz", tag: "Siz", tier: 3, real: true, desc: "Siz)FlaSh·Siz)FanTaSy가 쓰던 바로 그 클랜 · By의 뿌리", req: { games: 90, ladderGames: 30, ladder: 1700, total: 3500 }, size: 20, pros: [] },
-  { id: "sg", name: "S.G", tag: "S.G", tier: 4, real: true, desc: "2000년 전부터 이어진 가장 전통 있는 클랜 · 각종 대회 우승 단골", req: { games: 120, ladderGames: 40, ladder: 1800, total: 3700 }, size: 24, pros: ["박지호"] },
-  { id: "fou", name: "fOu", tag: "fOu", tier: 4, real: true, desc: "for Our utopia · 김정우·구성훈·조병세·이철민을 배출한 네임드 클랜", req: { games: 140, ladderGames: 50, ladder: 1850, total: 3800 }, size: 22, pros: ["조병세", "구성훈"] },
-  { id: "nsp", name: "NsP", tag: "NsP", tier: 4, real: true, desc: "대회 우승을 휩쓴 A급 클랜", req: { games: 160, ladderGames: 60, ladder: 1900, total: 3900 }, size: 22, pros: ["김대엽", "김성대", "신노열", "박대호"] },
-  { id: "moo", name: "Moo", tag: "Moo", tier: 4, real: true, desc: "아프리카TV 클랜리그 강호 · 이제동이 저그 라인을 지킨 클랜", req: { games: 160, ladderGames: 60, ladder: 1900, total: 3900 }, size: 20, pros: ["이제동"] },
-  { id: "white", name: "WHITE", tag: "WHITE", tier: 5, real: true, desc: "1998년 MiN 서버에서 시작한 명문 · 도재욱·김윤중 등 인기 전프로", req: { games: 220, ladderGames: 80, ladder: 2000, total: 4100 }, size: 24, pros: ["도재욱", "김윤중", "방태수"] },
-  { id: "shield", name: "Shield", tag: "Shield", tier: 5, real: true, desc: "Bisu[Shield]·Sea[Shield] · 김택용·염보성·김정우 '쉴드 삼대장'", req: { games: 250, ladderGames: 90, ladder: 2050, total: 4200 }, size: 24, pros: ["김택용", "염보성", "김정우"] },
-  { id: "by", name: "By", tag: "By", tier: 5, real: true, desc: "이영호·정명훈을 배출한 웨스트 최강 클랜 · 프로게이머만 20명 넘게", req: { games: 300, ladderGames: 100, ladder: 2150, total: 4300 }, size: 28, pros: ["이영호", "정명훈", "장윤철", "조일장", "박수범", "진영화", "황병영", "전태양", "김구현"] },
+  // 1단계: 처음 시작하는 선수를 위해 게임에서 만든 클랜
+  mk("pcbang", "동네PC방연합", "PCB", 1, "누구나 환영! 동네 형들이 모인 친목 클랜", [0, 0, 0, 0], 14),
+  mk("newbie", "새싹스타", "SPR", 1, "초보끼리 같이 성장해요", [5, 0, 0, 2200], 12),
+  mk("night", "야간작업반", "NGT", 1, "밤새 연습하는 올빼미들", [10, 0, 0, 2400], 14),
+  mk("campus", "캠퍼스스타", "CMP", 1, "대학 동아리에서 시작한 친목 클랜", [15, 0, 0, 2500], 16),
+  // 2단계
+  mk("gm", "gm 길드", "gm", 2, "웨스트 서버의 오래된 길드 · 꾸준히 연습하는 중수들", [30, 5, 0, 2900], 18, [], true),
+  mk("yg", "yG 길드", "yG", 2, "국내 대표 명문 길드 중 하나 · 클랜전이 활발", [40, 10, 1450, 3100], 20, [], true),
+  mk("nexus", "Nexus", "NXS", 2, "프로토스 유저가 많은 신생 클랜", [35, 8, 1400, 3000], 18),
+  mk("gateway", "Gateway", "GTW", 2, "게이트웨이 앞에서 모이던 동네 고수들", [45, 10, 1450, 3200], 18),
+  mk("swarm", "Swarm", "SWM", 2, "저그 유저들이 모인 물량 클랜", [40, 8, 1450, 3300], 18),
+  mk("bunker", "Bunker", "BKR", 2, "수비가 단단한 테란 클랜", [50, 12, 1500, 3300], 20),
+  // 3단계
+  mk("legend", "레전드", "LGD", 3, "이름처럼 전통 있는 명문 클랜", [60, 15, 1550, 3700], 20, [], true),
+  mk("miracle", "Miracle", "Mc", 3, "2005년 창단 · 훗날 s2Mc의 뿌리가 된 클랜", [70, 20, 1600, 3800], 18, [], true),
+  mk("kal", "KaL", "KaL", 3, "Siz 클랜이 갈라질 때 생긴 클랜 (Siz·KaL·By)", [80, 25, 1650, 3900], 18, [], true),
+  mk("siz", "Siz", "Siz", 3, "Siz)FlaSh·Siz)FanTaSy가 쓰던 바로 그 클랜 · By의 뿌리", [90, 30, 1700, 4000], 20, [], true),
+  mk("phoenix", "Phoenix", "PHX", 3, "불사조처럼 지고도 다시 일어나는 클랜", [70, 20, 1600, 3800], 18),
+  mk("reaver", "Reaver", "RVR", 3, "리버 드랍이 특기인 견제 클랜", [80, 25, 1650, 4000], 18),
+  mk("valkyrie", "Valkyrie", "VLK", 3, "공중전을 즐기는 클랜", [85, 25, 1650, 4100], 20),
+  mk("ironwall", "철벽", "IRN", 3, "뚫리지 않는 수비로 유명한 클랜", [90, 30, 1700, 4100], 20),
+  // 4단계
+  mk("sg", "S.G", "S.G", 4, "2000년 전부터 이어진 가장 전통 있는 클랜 · 각종 대회 우승 단골", [120, 40, 1800, 4400], 24, ["박지호"], true),
+  mk("fou", "fOu", "fOu", 4, "for Our utopia · 김정우·구성훈·조병세·이철민을 배출한 네임드 클랜", [140, 50, 1850, 4500], 22, ["조병세", "구성훈"], true),
+  mk("nsp", "NsP", "NsP", 4, "대회 우승을 휩쓴 A급 클랜", [160, 60, 1900, 4600], 22, ["김대엽", "김성대", "신노열", "박대호"], true),
+  mk("moo", "Moo", "Moo", 4, "아프리카TV 클랜리그 강호 · 이제동이 저그 라인을 지킨 클랜", [160, 60, 1900, 4600], 20, ["이제동"], true),
+  mk("overlord", "Overlord", "OVL", 4, "하늘을 지배한다는 프라이드의 클랜", [150, 50, 1850, 4500], 22),
+  mk("carrier", "Carrier", "CRR", 4, "후반 운영으로 이기는 클랜", [170, 60, 1900, 4700], 22),
+  mk("dropship", "Dropship", "DRP", 4, "다양한 견제와 기습의 클랜", [170, 65, 1950, 4800], 22),
+  // 5단계: 최상위 (프로게이머가 가장 많이 소속)
+  mk("white", "WHITE", "WHITE", 5, "1998년 MiN 서버에서 시작한 명문 · 도재욱·김윤중 등 인기 전프로", [220, 80, 2000, 5000], 24, ["도재욱", "김윤중", "방태수"], true),
+  mk("shield", "Shield", "Shield", 5, "Bisu[Shield]·Sea[Shield] · 김택용·염보성·김정우 '쉴드 삼대장'", [250, 90, 2050, 5100], 24, ["김택용", "염보성", "김정우"], true),
+  mk("by", "By", "By", 5, "이영호·정명훈을 배출한 웨스트 최강 클랜 · 프로게이머만 20명 넘게", [300, 100, 2150, 5200], 28, ["이영호", "정명훈", "장윤철", "조일장", "박수범", "진영화", "황병영", "전태양", "김구현"], true),
+  mk("zenith", "Zenith", "ZNT", 5, "정점을 노리는 신흥 강호", [260, 90, 2050, 5200], 24),
+  mk("titan", "Titan", "TTN", 5, "프로게이머 지망생들의 최종 목적지", [280, 95, 2100, 5300], 26),
 ];
 export const CLAN_BY_ID = Object.fromEntries(CLANS.map(c => [c.id, c])) as Record<string, ClanDef>;
 /** 클랜원 수준 (능력치 합 범위) */
-export const CLAN_STRENGTH: Record<ClanDef["tier"], [number, number]> = { 1: [2000, 3000], 2: [2700, 3600], 3: [3300, 4200], 4: [3900, 4700], 5: [4300, 5200] };
-export interface ClanMember { name: string; race: Race; stats: Stats; points: number; pro?: { id: number; team: number }; w?: number; l?: number }
+export const CLAN_STRENGTH: Record<ClanDef["tier"], [number, number]> = { 1: [2000, 3200], 2: [3000, 4100], 3: [3800, 4900], 4: [4600, 5600], 5: [5400, 6500] };
+export interface ClanMember {
+  /** 게임 아이디 (프로는 게임 아이디, 모르면 본명) */
+  name: string;
+  /** 프로의 본명 (아이디와 다를 때) */
+  real?: string;
+  race: Race; stats: Stats; points: number; pro?: { id: number; team: number }; w?: number; l?: number;
+  /** 직책: 길드장 · 부길드장 (없으면 일반) */
+  role?: "master" | "sub";
+}
+/** 친분도 단계 */
+export const FRIEND_LEVELS: Array<[number, string, string]> = [[0, "처음 보는 사이", "🙂"], [10, "아는 사이", "😀"], [30, "친한 사이", "😄"], [60, "절친", "🤝"], [90, "의형제", "💞"]];
+export const friendLevel = (n: number) => [...FRIEND_LEVELS].reverse().find(l => n >= l[0])!;
 /** 클랜 재시험 대기 (일) */
 export const CLAN_RETRY_DAYS = 7;
 
-/** 클랜원 명단 (클랜마다 늘 같은 명단). proId: 이름 → 원작 선수 번호 */
-export function clanRoster(c: ClanDef, proId: (name: string) => number | undefined): ClanMember[] {
+/** 클랜 아이디 표기: 아이디[태그] */
+export const withTag = (name: string, tag?: string) => (tag ? `${name}[${tag}]` : name);
+
+/**
+ * 클랜원 명단 (클랜마다 늘 같은 명단, 아이디는 클랜 안에서 겹치지 않음)
+ * proIds: 이 클랜에 소속된 프로 (원작 선수 번호) — 능력치·본명은 부르는 쪽에서 채움
+ */
+export function clanRoster(c: ClanDef, proIds: number[]): ClanMember[] {
   let seed = [...c.id].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
   const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
   const [lo, hi] = CLAN_STRENGTH[c.tier];
-  const pros = c.pros.map(n => [n, proId(n)] as const).filter(([, id]) => id !== undefined) as Array<readonly [string, number]>;
+  const used = new Set<string>();
   const out: ClanMember[] = [];
-  for (let i = 0; i < c.size - pros.length; i++) {
+  for (let i = 0; i < c.size - proIds.length; i++) {
     const total = Math.round(lo + rnd() * (hi - lo));
     const points = Math.round(rnd() * 300 * c.tier);
-    out.push({ name: nickname(rnd), race: RACES[Math.floor(rnd() * 3)], stats: statsAround(total, rnd), points, w: Math.round(points / 10 + rnd() * 10), l: Math.round(rnd() * 12 + points / 25) });
+    out.push({ name: nickname(rnd, used), race: RACES[Math.floor(rnd() * 3)], stats: statsAround(total, rnd), points, w: Math.round(points / 10 + rnd() * 10), l: Math.round(rnd() * 12 + points / 25) });
   }
-  for (const [name, id] of pros) {
+  for (const id of proIds) {
     const points = Math.round(400 * c.tier + rnd() * 400);
-    out.push({ name, race: "terran", stats: {} as Stats, points, pro: { id, team: -1 }, w: Math.round(points / 9), l: Math.round(points / 40) });
+    out.push({ name: `pro${id}`, race: "terran", stats: {} as Stats, points, pro: { id, team: -1 }, w: Math.round(points / 9), l: Math.round(points / 40) });
   }
   return out;
 }
@@ -341,7 +401,15 @@ export interface RookieState {
   exp: number;
   /** 날짜별 능력치 합 (그래프) */
   history: Array<[number, number]>;
-  clan?: { id: string; joined: number; points: number; w: number; l: number; members: ClanMember[]; /** 클랜원별 상대 전적 [내 승, 내 패] */ vs?: Record<string, [number, number]> };
+  clan?: {
+    id: string; joined: number; points: number; w: number; l: number; members: ClanMember[];
+    /** 클랜원별 상대 전적 [내 승, 내 패] */
+    vs?: Record<string, [number, number]>;
+    /** 클랜원별 친분도 0~100 */
+    fr?: Record<string, number>;
+    /** 클랜원에게 진 경기에서 떨어진 능력치 (피드백으로 일부 되찾음) */
+    fb?: { lost: Partial<Stats>; from: string };
+  };
   /** 공방에서 마지막으로 고른 방·맵 */
   lobbyPref?: { tier: Tier; mapId: number };
   /** 이번 달 래더 맵 5개 (month = 연*12+월) 와 그중 내가 고른 맵 */

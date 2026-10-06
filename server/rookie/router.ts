@@ -105,6 +105,7 @@ export const rookieRouter = router({
   ladderMaps: p.input(z.object({ sel: z.array(z.number().int()).min(1).max(5) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.setLadderMaps(s, input.sel))),
   rest: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.rest(s))),
   stream: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.stream(s))),
+  partTime: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.partTime(s))),
   allowance: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.allowance(s))),
   buy: p.input(z.object({ key: z.string(), qty: z.number().int().min(1).max(99) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.buy(s, input.key, input.qty))),
   use: p.input(z.object({ key: z.string() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.useItem(s, input.key))),
@@ -138,7 +139,8 @@ export const rookieRouter = router({
     return { rows: rows.map(strip), me: mine[0] ? strip(mine[0]) : null, myRank };
   }),
   clanTest: p.input(z.object({ id: z.string().max(30) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.clanTest(s, input.id))),
-  clanPractice: p.mutation(({ ctx }) => mutate(ctx.user.id, s => ({ games: [L.clanPractice(s)] }))),
+  clanPractice: p.input(z.object({ target: z.string().max(40).optional() }).optional()).mutation(({ ctx, input }) => mutate(ctx.user.id, s => ({ games: [L.clanPractice(s, input?.target)] }))),
+  clanFeedback: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.clanFeedback(s))),
   leaveClan: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.leaveClan(s))),
   batch: p.input(z.object({ kind: z.enum(["lobby", "ladder", "clan", "internal"]), tier: z.enum(tierKeys).optional(), mapId: z.number().int().min(0).optional() }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.batch(s, input.kind, { tier: input.tier, mapId: input.mapId }))),

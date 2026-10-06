@@ -7,7 +7,7 @@ import { STAT_LABELS, type StatKey } from "@shared/gameConstants";
 import { ORIG_TEAMS } from "@shared/career/originalData";
 import type { CareerState, CPlayer } from "@shared/career/rules";
 import { mapView } from "@shared/career/view";
-import { sumStats, ymd, type Opp, type RookieState } from "@shared/rookie/model";
+import { CLAN_BY_ID, oppLabel, sumStats, withTag, ymd, type Opp, type RookieState } from "@shared/rookie/model";
 import type { PlayedGame } from "../../../../server/rookie/logic";
 import { Broadcast } from "@/components/legacy/match/broadcast";
 import { useSpeed } from "@/components/legacy/match/common";
@@ -26,7 +26,7 @@ export function MatchViewer({ s, games, title, extra, onClose }: { s: RookieStat
   const [i, setI] = useState(0);
   const [speed, setSpeed] = useSpeed();
   const fake = { season: ymd(s.day).y - 2025, week: 1, myTeam: -1, teams: [], players: [], matches: [] } as unknown as CareerState;
-  const me = asPlayer({ name: s.name, race: s.race, stats: s.stats }, ME_ID, { photoUrl: s.photo, photoOf: -1 });
+  const me = asPlayer({ name: withTag(s.name, s.clan ? CLAN_BY_ID[s.clan.id]?.tag : undefined), race: s.race, stats: s.stats }, ME_ID, { photoUrl: s.photo, photoOf: -1 });
   if (i < games.length) {
     const g = games[i];
     const opp = oppPlayer(g.opp, i);
@@ -56,7 +56,7 @@ export function MatchViewer({ s, games, title, extra, onClose }: { s: RookieStat
           {games.map((g, k) => (
             <div key={k} className="px-2 py-1 text-[12px] flex items-center gap-1.5">
               <span className={cn("w-6 font-black", g.winner === "a" ? "text-[#bff5c6]" : "text-[#ffb8c8]")}>{g.winner === "a" ? "승" : "패"}</span>
-              <span className="flex-1 min-w-0 truncate">{g.label} · vs {g.opp.pro ? `${ORIG_TEAMS[g.opp.pro.team].short} ` : g.opp.semipro ? "준프로 " : ""}{g.opp.name} <span className="text-neutral-500">({mapView(g.mapId).name} · 능력치 약 {Math.round(sumStats(g.opp.stats) / 100) * 100})</span></span>
+              <span className="flex-1 min-w-0 truncate">{g.label} · vs {g.opp.pro ? `${ORIG_TEAMS[g.opp.pro.team].short} ` : g.opp.semipro ? "준프로 " : ""}{oppLabel(g.opp)} <span className="text-neutral-500">({mapView(g.mapId).name} · 능력치 약 {Math.round(sumStats(g.opp.stats) / 100) * 100})</span></span>
               {g.fx.ladder && <span className="text-[10.5px] text-neutral-300">{g.fx.ladder[0]}→{g.fx.ladder[1]}</span>}
             </div>
           ))}

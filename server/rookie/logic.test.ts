@@ -299,4 +299,59 @@ describe("선수 키우기", () => {
     s.day += 40;
     expect(L.ladderPool(s).month).toBeGreaterThan(m0);
   });
+
+  it("아이디는 영어이고 클랜 안에서 겹치지 않으며, 프로는 아이디와 본명이 같이 나온다", async () => {
+    const { CLANS, clanRoster } = await import("@shared/rookie/model");
+    const { clanMembers, clanProIds, proLabel, clanOfPro } = await import("@shared/rookie/pros");
+    const hangul = /[가-힣]/;
+    for (let i = 0; i < 50; i++) { const s = mk(); L.findLobby(s, "low", 0); expect(hangul.test(s.lobby!.opp.name)).toBe(false); }
+    for (const c of CLANS) {
+      const ms = clanMembers(c.id);
+      expect(ms.length).toBe(c.size);
+      const names = ms.map(m => m.name);
+      expect(new Set(names).size).toBe(names.length);
+      for (const m of ms.filter(x => !x.pro)) expect(hangul.test(m.name)).toBe(false);
+    }
+    // 한 프로는 한 클랜에만
+    const all = CLANS.flatMap(c => clanProIds(c.id));
+    expect(new Set(all).size).toBe(all.length);
+    expect(CLANS.length).toBeGreaterThanOrEqual(25);
+    expect(clanProIds("by").length).toBeGreaterThan(clanProIds("gm").length);
+    const flash = clanMembers("by").find(m => m.real === "이영호");
+    expect(flash?.name).toBe("Flash");
+    expect(proLabel(flash!.pro!.id)).toBe("Flash(이영호)");
+    expect(clanOfPro(flash!.pro!.id)).toBe("by");
+    // 높은 단계 클랜일수록 클랜원이 강하다
+    const avg = (id: string) => { const a = clanMembers(id).filter(m => !m.pro); return a.reduce((x, m) => x + sumStats(m.stats), 0) / a.length; };
+    expect(avg("by")).toBeGreaterThan(avg("legend"));
+    expect(avg("legend")).toBeGreaterThan(avg("gm"));
+    expect(clanRoster(CLANS[0], []).length).toBe(CLANS[0].size);
+  });
+
+  it("클랜에서 지면 피드백으로 떨어진 능력치 일부를 되찾고, 연습할수록 친분도가 오른다", () => {
+    const s = veteran(mk());
+    s.clan = { id: "pcbang", joined: 0, points: 50, w: 0, l: 0, members: L.rosterOf("pcbang") };
+    s.cond = 100;
+    s.clan.members.forEach(m => { m.stats = Object.fromEntries(Object.keys(m.stats).map(k => [k, 900])) as typeof m.stats; });
+    const target = s.clan.members.find(m => !m.pro)!;
+    let lost = false;
+    for (let i = 0; i < 6 && !lost; i++) { s.used = 0; L.clanPractice(s, target.name); lost = (s.clan!.fb && Object.keys(s.clan!.fb.lost).length > 0) as boolean; }
+    expect(lost).toBe(true);
+    expect(s.clan.fr?.[target.name]).toBeGreaterThan(0);
+    const before = { ...s.stats }, cond = s.cond;
+    const r = L.clanFeedback(s);
+    expect(Object.keys(r.back).length).toBeGreaterThan(0);
+    expect(s.cond).toBe(cond - 10);
+    expect(Object.entries(r.back).every(([k, v]) => s.stats[k as keyof typeof s.stats] >= before[k as keyof typeof before] + (v as number) - 0)).toBe(true);
+    expect(s.clan.fb).toBeUndefined();
+    expect(() => L.clanFeedback(s)).toThrow(/피드백/);
+  });
+
+  it("아르바이트로 돈을 벌 수 있다", () => {
+    const s = mk();
+    const m = s.money;
+    L.partTime(s);
+    expect(s.money).toBeGreaterThan(m + 10);
+    expect(s.used).toBe(3);
+  });
 });
