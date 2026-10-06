@@ -15,9 +15,9 @@ import { useRookieSync, type RookieToday } from "@/lib/rookie";
 import { PlayerPhoto } from "@/components/legacy/Legacy";
 
 const PROS = initialPlayers();
-const PRO_IDS = PROS.filter(p => p.team < 12).map(p => p.id);
+const proIdByName = (name: string) => PROS.find(p => p.name === name)?.id;
 function roster(c: ClanDef): ClanMember[] {
-  return clanRoster(c, PRO_IDS).map(m => {
+  return clanRoster(c, proIdByName).map(m => {
     if (!m.pro) return m;
     const p = PROS[m.pro.id];
     return { ...m, name: p.name, race: p.race, stats: { ...p.stats }, pro: { id: p.id, team: p.team } };
@@ -70,7 +70,7 @@ export function ClanView({ s, onPlayed }: { s: RookieState; onPlayed: (games: Pl
                 </div>
               </div>
               <div className="text-[11.5px] text-muted-foreground mt-1">내 점수 {s.clan.points} · 클랜 연습 {s.clan.w}승 {s.clan.l}패 · 프로 {s.clan.members.filter(m => m.pro).length}명</div>
-              <div className="text-[10.5px] text-muted-foreground">클랜 연습은 조언을 들어 1.3배(프로 상대 1.5배)로 배웁니다. {mine.pros > 0 ? "클랜 순위 3위 안이면 프로 선배가 구단에 추천해 주기도 해요." : ""}</div>
+              <div className="text-[10.5px] text-muted-foreground">클랜 연습은 조언을 들어 1.3배(프로 상대 1.5배)로 배웁니다. {mine.pros.length > 0 ? "클랜 순위 3위 안이면 프로 선배가 구단에 추천해 주기도 해요." : ""}</div>
               <div className="grid grid-cols-2 gap-2 mt-2">
                 <button onClick={() => practice.mutate()} disabled={practice.isPending || left < 1} className="rounded-xl bg-emerald-600 text-white py-2 text-sm font-black disabled:opacity-40">⚔️ 클랜 연습 (행동 1)</button>
                 <button onClick={() => confirm(`${mine.name}에서 탈퇴할까요? (점수가 사라집니다)`) && leave.mutate()} className="rounded-xl border border-rose-400/50 text-rose-300 py-2 text-sm font-bold">🚪 탈퇴</button>
@@ -109,9 +109,10 @@ export function ClanView({ s, onPlayed }: { s: RookieState; onPlayed: (games: Pl
                   <div className="flex items-center gap-1.5">
                     <span className="font-black text-foreground">{c.name}</span><span className="text-[10.5px] text-muted-foreground">[{c.tag}]</span>
                     <span className="text-[10.5px] text-amber-300">{stars(c.tier)}</span>
-                    <span className="ml-auto text-[10.5px] text-muted-foreground">{c.size}명{c.pros ? ` · 프로 ${c.pros}` : ""} {open === c.id ? "▲" : "▼"}</span>
+                    <span className="ml-auto text-[10.5px] text-muted-foreground">{c.size}명{c.pros.length ? ` · 프로 ${c.pros.length}` : ""} {open === c.id ? "▲" : "▼"}</span>
                   </div>
                   <div className="text-[11px] text-muted-foreground">{c.desc} · 실력 {CLAN_STRENGTH[c.tier][0].toLocaleString()}~{CLAN_STRENGTH[c.tier][1].toLocaleString()}</div>
+                  {c.pros.length > 0 && <div className="text-[11px] text-sky-300 truncate">출신 프로: {c.pros.join(" · ")}</div>}
                 </button>
                 {rs.length > 0 && <div className="flex flex-wrap gap-1 mt-1">{rs.map(r => <span key={r.label} className={cn("text-[10px] rounded-full px-1.5 py-0.5 border", r.ok ? "border-emerald-400/50 text-emerald-300" : "border-rose-400/50 text-rose-300")}>{r.ok ? "✓" : "✗"} {r.label}</span>)}</div>}
                 {open === c.id && (

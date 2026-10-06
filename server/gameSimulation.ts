@@ -95,7 +95,9 @@ export function simulateSet(
   mapRaceAdvantage: Record<string, number>,
   mapTraits: MapTraits,
   withHighlights = true,
-  withTimeline = false
+  withTimeline = false,
+  /** 연습·래더처럼 무대가 아닌 경기 (중계 말투만 바뀜) */
+  casual = false
 ): SetResult {
   const gs = initializeGameState(
     p1.id, p1.name, p1.race, p2.id, p2.name, p2.race,
@@ -106,7 +108,7 @@ export function simulateSet(
   const highlights: string[] = [];
   // 중계 화면용: 원작 해설 문장으로 중계 (엔진 이벤트 → 원작 문장)
   const timeline: SetTimeline | undefined = withTimeline ? { lines: [], frames: [{ t: 0, army: [0, 0], res: [0, 0] }] } : undefined;
-  const caster = withTimeline ? new LegacyCaster({ side: 1, name: p1.name, race: p1.race }, { side: 2, name: p2.name, race: p2.race }) : undefined;
+  const caster = withTimeline ? new LegacyCaster({ side: 1, name: p1.name, race: p1.race }, { side: 2, name: p2.name, race: p2.race }, casual) : undefined;
   // 경기 내용 집계를 위해 엔진 이벤트는 항상 받음
   gs.feed = [];
   const content: [SetContent, SetContent] = [emptyContent(), emptyContent()];

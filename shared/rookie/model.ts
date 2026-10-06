@@ -158,22 +158,31 @@ export interface ClanDef {
   /** 입단 조건: 전체 경기 수 · 래더 경기 수 · 래더 점수 · 능력치 합 */
   req: { games: number; ladderGames: number; ladder: number; total: number };
   size: number;
-  /** 소속 프로게이머 수 */
-  pros: number;
+  /** 소속(출신) 프로게이머 이름 (원작 선수 데이터에서 찾음) */
+  pros: string[];
+  /** 실제로 있던 클랜인지 (아니면 게임용으로 만든 클랜) */
+  real?: boolean;
 }
+/**
+ * 클랜: 실제 스타1 배틀넷(웨스트·아시아) 클랜과 그 클랜 출신 프로게이머.
+ * 맨 위 두 클랜(동네PC방연합·새싹스타)만 처음 시작하는 선수를 위해 게임에서 만든 클랜
+ */
 export const CLANS: ClanDef[] = [
-  { id: "pcbang", name: "동네PC방연합", tag: "PCB", tier: 1, desc: "누구나 환영! 동네 형들이 모인 친목 클랜", req: { games: 0, ladderGames: 0, ladder: 0, total: 0 }, size: 14, pros: 0 },
-  { id: "newbie", name: "새싹스타", tag: "SPR", tier: 1, desc: "초보끼리 같이 성장해요", req: { games: 5, ladderGames: 0, ladder: 0, total: 2200 }, size: 12, pros: 0 },
-  { id: "eunha", name: "은하수", tag: "MW", tier: 2, desc: "꾸준히 연습하는 중수 클랜", req: { games: 30, ladderGames: 5, ladder: 0, total: 2700 }, size: 18, pros: 0 },
-  { id: "redfire", name: "레드불꽃", tag: "RF", tier: 2, desc: "공격적인 플레이를 사랑하는 사람들", req: { games: 40, ladderGames: 10, ladder: 1450, total: 2900 }, size: 16, pros: 0 },
-  { id: "hydra", name: "Hydra", tag: "HYD", tier: 2, desc: "저그 유저가 많은 클랜 · 매일 밤 클랜전", req: { games: 50, ladderGames: 10, ladder: 1500, total: 3000 }, size: 20, pros: 0 },
-  { id: "cheongryong", name: "청룡", tag: "CR", tier: 3, desc: "대회 입상자가 여럿인 실력파", req: { games: 80, ladderGames: 20, ladder: 1600, total: 3300 }, size: 22, pros: 1 },
-  { id: "nova", name: "Nova", tag: "NV", tier: 3, desc: "전략 연구 클랜 · 빌드 공유가 활발", req: { games: 100, ladderGames: 25, ladder: 1650, total: 3400 }, size: 20, pros: 1 },
-  { id: "warcry", name: "WarCry", tag: "WC", tier: 3, desc: "래더 상위권이 모인 클랜", req: { games: 100, ladderGames: 40, ladder: 1750, total: 3500 }, size: 18, pros: 1 },
-  { id: "asura", name: "아수라", tag: "ASR", tier: 4, desc: "준프로가 많은 강호 클랜 · 프로 연습 상대", req: { games: 150, ladderGames: 50, ladder: 1850, total: 3800 }, size: 24, pros: 2 },
-  { id: "supernova", name: "초신성", tag: "SN", tier: 4, desc: "커리지 매치 우승자 배출 명문", req: { games: 180, ladderGames: 60, ladder: 1900, total: 3900 }, size: 22, pros: 3 },
-  { id: "elysium", name: "엘리시움", tag: "ELY", tier: 5, desc: "프로게이머가 직접 운영하는 최강 클랜", req: { games: 250, ladderGames: 80, ladder: 2050, total: 4100 }, size: 26, pros: 4 },
-  { id: "blackhole", name: "블랙홀", tag: "BH", tier: 5, desc: "들어가기 가장 어렵다는 전설의 클랜", req: { games: 300, ladderGames: 100, ladder: 2150, total: 4200 }, size: 20, pros: 5 },
+  { id: "pcbang", name: "동네PC방연합", tag: "PCB", tier: 1, desc: "누구나 환영! 동네 형들이 모인 친목 클랜", req: { games: 0, ladderGames: 0, ladder: 0, total: 0 }, size: 14, pros: [] },
+  { id: "newbie", name: "새싹스타", tag: "SPR", tier: 1, desc: "초보끼리 같이 성장해요", req: { games: 5, ladderGames: 0, ladder: 0, total: 2200 }, size: 12, pros: [] },
+  { id: "gm", name: "gm 길드", tag: "gm", tier: 2, real: true, desc: "웨스트 서버의 오래된 길드 · 꾸준히 연습하는 중수들", req: { games: 30, ladderGames: 5, ladder: 0, total: 2700 }, size: 18, pros: [] },
+  { id: "yg", name: "yG 길드", tag: "yG", tier: 2, real: true, desc: "국내 대표 명문 길드 중 하나 · 클랜전이 활발", req: { games: 40, ladderGames: 10, ladder: 1450, total: 2900 }, size: 20, pros: [] },
+  { id: "legend", name: "레전드", tag: "LGD", tier: 3, real: true, desc: "이름처럼 전통 있는 명문 클랜", req: { games: 60, ladderGames: 15, ladder: 1550, total: 3200 }, size: 20, pros: [] },
+  { id: "miracle", name: "Miracle", tag: "Mc", tier: 3, real: true, desc: "2005년 창단 · 훗날 s2Mc의 뿌리가 된 클랜", req: { games: 70, ladderGames: 20, ladder: 1600, total: 3300 }, size: 18, pros: [] },
+  { id: "kal", name: "KaL", tag: "KaL", tier: 3, real: true, desc: "Siz 클랜이 갈라질 때 생긴 클랜 (Siz·KaL·By)", req: { games: 80, ladderGames: 25, ladder: 1650, total: 3400 }, size: 18, pros: [] },
+  { id: "siz", name: "Siz", tag: "Siz", tier: 3, real: true, desc: "Siz)FlaSh·Siz)FanTaSy가 쓰던 바로 그 클랜 · By의 뿌리", req: { games: 90, ladderGames: 30, ladder: 1700, total: 3500 }, size: 20, pros: [] },
+  { id: "sg", name: "S.G", tag: "S.G", tier: 4, real: true, desc: "2000년 전부터 이어진 가장 전통 있는 클랜 · 각종 대회 우승 단골", req: { games: 120, ladderGames: 40, ladder: 1800, total: 3700 }, size: 24, pros: ["박지호"] },
+  { id: "fou", name: "fOu", tag: "fOu", tier: 4, real: true, desc: "for Our utopia · 김정우·구성훈·조병세·이철민을 배출한 네임드 클랜", req: { games: 140, ladderGames: 50, ladder: 1850, total: 3800 }, size: 22, pros: ["조병세", "구성훈"] },
+  { id: "nsp", name: "NsP", tag: "NsP", tier: 4, real: true, desc: "대회 우승을 휩쓴 A급 클랜", req: { games: 160, ladderGames: 60, ladder: 1900, total: 3900 }, size: 22, pros: ["김대엽", "김성대", "신노열", "박대호"] },
+  { id: "moo", name: "Moo", tag: "Moo", tier: 4, real: true, desc: "아프리카TV 클랜리그 강호 · 이제동이 저그 라인을 지킨 클랜", req: { games: 160, ladderGames: 60, ladder: 1900, total: 3900 }, size: 20, pros: ["이제동"] },
+  { id: "white", name: "WHITE", tag: "WHITE", tier: 5, real: true, desc: "1998년 MiN 서버에서 시작한 명문 · 도재욱·김윤중 등 인기 전프로", req: { games: 220, ladderGames: 80, ladder: 2000, total: 4100 }, size: 24, pros: ["도재욱", "김윤중", "방태수"] },
+  { id: "shield", name: "Shield", tag: "Shield", tier: 5, real: true, desc: "Bisu[Shield]·Sea[Shield] · 김택용·염보성·김정우 '쉴드 삼대장'", req: { games: 250, ladderGames: 90, ladder: 2050, total: 4200 }, size: 24, pros: ["김택용", "염보성", "김정우"] },
+  { id: "by", name: "By", tag: "By", tier: 5, real: true, desc: "이영호·정명훈을 배출한 웨스트 최강 클랜 · 프로게이머만 20명 넘게", req: { games: 300, ladderGames: 100, ladder: 2150, total: 4300 }, size: 28, pros: ["이영호", "정명훈", "장윤철", "조일장", "박수범", "진영화", "황병영", "전태양", "김구현"] },
 ];
 export const CLAN_BY_ID = Object.fromEntries(CLANS.map(c => [c.id, c])) as Record<string, ClanDef>;
 /** 클랜원 수준 (능력치 합 범위) */
@@ -182,20 +191,18 @@ export interface ClanMember { name: string; race: Race; stats: Stats; points: nu
 /** 클랜 재시험 대기 (일) */
 export const CLAN_RETRY_DAYS = 7;
 
-/** 클랜원 명단 (클랜마다 늘 같은 명단, 프로는 원작 선수) */
-export function clanRoster(c: ClanDef, proIds: number[]): ClanMember[] {
+/** 클랜원 명단 (클랜마다 늘 같은 명단). proId: 이름 → 원작 선수 번호 */
+export function clanRoster(c: ClanDef, proId: (name: string) => number | undefined): ClanMember[] {
   let seed = [...c.id].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
   const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
   const [lo, hi] = CLAN_STRENGTH[c.tier];
+  const pros = c.pros.map(n => [n, proId(n)] as const).filter(([, id]) => id !== undefined) as Array<readonly [string, number]>;
   const out: ClanMember[] = [];
-  for (let i = 0; i < c.size - c.pros; i++) {
+  for (let i = 0; i < c.size - pros.length; i++) {
     const total = Math.round(lo + rnd() * (hi - lo));
     out.push({ name: nickname(rnd), race: RACES[Math.floor(rnd() * 3)], stats: statsAround(total, rnd), points: Math.round(rnd() * 300 * c.tier) });
   }
-  for (let i = 0; i < c.pros && proIds.length; i++) {
-    const id = proIds[Math.floor(rnd() * proIds.length)];
-    out.push({ name: "", race: "terran", stats: {} as Stats, points: Math.round(400 * c.tier + rnd() * 400), pro: { id, team: -1 } });
-  }
+  for (const [name, id] of pros) out.push({ name, race: "terran", stats: {} as Stats, points: Math.round(400 * c.tier + rnd() * 400), pro: { id, team: -1 } });
   return out;
 }
 

@@ -81,6 +81,8 @@ export function upgrade(s: RookieState) {
   s.exp ??= 0;
   s.history ??= [[s.day, sumStats(s.stats)]];
   s.clanTried ??= {};
+  // 없어진 클랜 (클랜 목록이 바뀐 경우)
+  if (s.clan && !CLAN_BY_ID[s.clan.id]) delete s.clan;
   return s;
 }
 
@@ -174,6 +176,8 @@ function playOne(s: RookieState, opp: Opp, mapId: number, label: string, broadca
     mapAdvantage(mapId, s.race, opp.race),
     { rushDistance: m.rush / 2, resources: m.res / 2, complexity: m.complexity / 2 },
     false, broadcast,
+    // 공방·래더·클랜·팀 연습은 온라인 게임 (치어풀·세리머니 없음)
+    /^(공방|래더|팀 내부 연습)|클랜/.test(label),
   );
   const won = r.winnerId === 1;
   const before = { stats: { ...s.stats }, cond: s.cond };
@@ -903,7 +907,7 @@ export function mentorsFor(s: RookieState, stat: StatKey) {
   return [...pool].sort((a, b) => b.stats[stat] - a.stats[stat]).slice(0, 3).map(p => ({ id: p.id, name: p.name, team: p.team, value: p.stats[stat] }));
 }
 /** 같은 팀 선배 · 명문 클랜(프로 소속) 이면 싸게 */
-export function mentorPrice(s: RookieState) { return s.team || (s.clan && (CLAN_BY_ID[s.clan.id]?.pros ?? 0) > 0) ? MENTOR_PRICE.teammate : MENTOR_PRICE.outside; }
+export function mentorPrice(s: RookieState) { return s.team || (s.clan && (CLAN_BY_ID[s.clan.id]?.pros.length ?? 0) > 0) ? MENTOR_PRICE.teammate : MENTOR_PRICE.outside; }
 /** 프로에게 과외: 고른 능력치를 집중적으로 (하루 한 번 · 행동 3) */
 export function mentor(s: RookieState, stat: StatKey, proId: number) {
   if (!STAT_KEYS.includes(stat)) throw new RookieError("배울 능력치를 고르세요");
@@ -979,11 +983,11 @@ function rivalDay(s: RookieState, prevDay: number) {
 }
 
 // ── 클랜 ─────────────────────────────────────────────────────
-const PRO_IDS = PROS.filter(p => p.team < 12).map(p => p.id);
+const proIdByName = (name: string) => PROS.find(p => p.name === name)?.id;
 /** 클랜원 명단 (프로는 원작 선수 정보로 채움) */
 export function rosterOf(id: string): ClanMember[] {
   const c = CLAN_BY_ID[id];
-  return clanRoster(c, PRO_IDS).map(m => {
+  return clanRoster(c, proIdByName).map(m => {
     if (!m.pro) return m;
     const p = PROS[m.pro.id];
     return { ...m, name: p.name, race: p.race, stats: { ...p.stats }, pro: { id: p.id, team: p.team } };
