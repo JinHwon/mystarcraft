@@ -1244,6 +1244,18 @@ describe("결장 감각 저하·팬미팅 능력치", () => {
     expect(totalOf(q.stats)).toBe(qb);
   });
 
+  it("위너스리그 시즌에는 결장해도 실전 감각이 떨어지지 않는다", async () => {
+    const { benchDecay } = await import("./logic");
+    const s = newCareer(0);
+    s.season = 3;
+    const p = rosterOf(s, 1)[0];
+    p.benchWeeks = 4; p.lastProWeek = undefined;
+    const before = totalOf(p.stats);
+    benchDecay(s);
+    expect(totalOf(p.stats)).toBe(before);
+    expect(p.benchWeeks).toBe(0);
+  });
+
   it("팬미팅(이벤트)을 하면 능력치가 조금 떨어진다", async () => {
     const { runMyActions } = await import("./logic");
     const s = newCareer(0);

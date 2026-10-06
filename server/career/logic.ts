@@ -49,6 +49,7 @@ import {
   regularWeeksOf,
   weekMoney,
   type TransferTiming,
+  isWinnersSeason,
 } from "@shared/career/rules";
 import {
   type SetMods,
@@ -539,6 +540,11 @@ export { BENCH_DECAY_WEEKS };
  * 2주 이상 연속이면 매주 능력치 3개가 2~5씩 줄어듦 (오래 쉴수록 조금 더, 훈련으로 오르는 것보다 큼). 무소속은 제외
  */
 export function benchDecay(s: CareerState) {
+  // 위너스리그 시즌은 이긴 선수가 계속 나오는 방식이라 결장해도 실전 감각이 떨어지지 않음
+  if (isWinnersSeason(s.season)) {
+    for (const p of activePlayers(s)) if (p.benchWeeks) p.benchWeeks = 0;
+    return;
+  }
   const wk = `${s.season}-${s.week}`;
   // NO MATCH 주(그 팀 경기가 없는 주)는 결장으로 치지 않음
   const played = new Set(s.matches.filter(m => m.week === s.week && m.stage === "regular").flatMap(m => [m.a, m.b]));

@@ -2,7 +2,7 @@
  * 감독에게 알릴 일 (영입 제안·감독 제의·자금 위기·이적 희망 등) — 상단 알림과 감독실이 함께 씀
  * key 는 내용이 바뀌면 달라져서 새 알림으로 잡힌다 (제안이 새로 오면 다시 알림)
  */
-import { BENCH_DECAY_WEEKS, difficultyOf, type CareerState } from "@shared/career/rules";
+import { BENCH_DECAY_WEEKS, difficultyOf, isWinnersSeason, type CareerState } from "@shared/career/rules";
 import { activeSponsors, maxSponsors } from "@shared/career/sponsor";
 import { rosterOf } from "@shared/career/view";
 
@@ -42,7 +42,7 @@ export function careerAlerts(s: CareerState): CareerAlert[] {
     out.push({ key: `job-${s.season}-${o.team}`, icon: "🤵", text: `${s.teams[o.team]?.name}에서 감독 제의 (계약금 ${o.fee.toLocaleString()}만원)`, to: "/club?tab=manager", urgent: true });
   }
   // 프로리그 결장: 1주째면 경고, 2주 이상이면 실전 감각 저하 중 (능력치 하락)
-  if (s.phase === "regular") {
+  if (s.phase === "regular" && !isWinnersSeason(s.season)) {
     const roster = rosterOf(s, s.myTeam);
     const decaying = roster.filter(p => (p.benchWeeks ?? 0) >= BENCH_DECAY_WEEKS);
     const warn = roster.filter(p => (p.benchWeeks ?? 0) === BENCH_DECAY_WEEKS - 1);

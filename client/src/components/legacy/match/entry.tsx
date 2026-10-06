@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
-import { BENCH_DECAY_WEEKS, adaptWeeksLeft, burstLabel, burstOf, slumpOn, matchFormatName, matchSets, totalOf, type CareerState, type CMatch, type CPlayer } from "@shared/career/rules";
+import { BENCH_DECAY_WEEKS, adaptWeeksLeft, isWinnersSeason, burstLabel, burstOf, slumpOn, matchFormatName, matchSets, totalOf, type CareerState, type CMatch, type CPlayer } from "@shared/career/rules";
 import { STAGE_NAMES, mapView, proRosterOf, rosterOf } from "@shared/career/view";
 import { ITEM_BY_KEY, gearCond, itemImg, matchCond } from "@shared/career/items";
 import { GrayBox, LEGACY_FONT, LegacyFrame, LegacyImg, MapInfo, MslBadges, TeamLogo } from "../Legacy";
@@ -230,7 +230,8 @@ export function EntryScreen({ s, match, front, setFront, items, setItems, onSubm
             <div className="text-center italic font-black text-[10.5px] tracking-wider leading-none py-0.5" style={{ textShadow: "0 0 4px #3aa0ff, 0 0 8px #3aa0ff" }}>MY TEAM</div>
             <RosterList dense s={s} players={mine} onPick={assign} selected={viewMine} marks={marks} blocked={blocked} />
             {blocked.size > 0 && <div className="text-[10px] text-neutral-500 leading-tight">🧳 회색 = 이적 적응기간 (프로리그 출전 불가, 개인리그는 가능)</div>}
-            {mine.some(p => (p.benchWeeks ?? 0) >= BENCH_DECAY_WEEKS - 1) && <div className="text-[10px] text-neutral-500 leading-tight">📉 결장으로 실전 감각 저하 중 · ⏳ 이번 주도 못 나가면 저하</div>}
+            {isWinnersSeason(s.season) && <div className="text-[10px] text-neutral-500 leading-tight">🏆 위너스리그 시즌: 프로리그에 못 나가도 실전 감각이 떨어지지 않습니다</div>}
+            {!isWinnersSeason(s.season) && mine.some(p => (p.benchWeeks ?? 0) >= BENCH_DECAY_WEEKS - 1) && <div className="text-[10px] text-neutral-500 leading-tight">📉 결장으로 실전 감각 저하 중 · ⏳ 이번 주도 못 나가면 저하</div>}
           </div>
 
           <div className="space-y-1">
