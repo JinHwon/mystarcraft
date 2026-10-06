@@ -136,7 +136,68 @@ export const EVENT_NAMES = [
   "서울시장배 e스포츠 대회", "울산 공업도시 스타 리그", "전주 비빔 스타 챔피언십", "MBC게임 아마추어 열전",
 ];
 /** 상금 (만원) 1·2·3위 */
-export interface RookieEvent { id: number; name: string; day: number; size: 8 | 16; prize: [number, number, number]; level: Tier; registered?: boolean; result?: string }
+export interface RookieEvent { id: number; name: string; day: number; size: 8 | 16; prize: [number, number, number]; level: Tier; registered?: boolean; result?: string; fee?: number }
+/** 대회 참가 조건: 능력치 합 · (큰 대회는) 래더 점수 */
+export function eventReq(e: Pick<RookieEvent, "level">): { total: number; ladder?: number } {
+  const total = { newbie: 0, low: 2300, mid: 2700, high: 3100, elite: 3500, pro: 3900 }[e.level];
+  return e.level === "elite" || e.level === "pro" ? { total, ladder: 1650 } : { total };
+}
+/** 래더 참가 조건: 공방 경기 수 · 능력치 합 */
+export const LADDER_REQ = { games: 10, total: 2700 };
+
+// ── 레벨 ───────────────────────────────────────────────────────
+/** 다음 레벨까지 필요한 경험치 */
+export const levelNeed = (lv: number) => 100 + (lv - 1) * 60;
+export const MAX_LEVEL = 60;
+/** 레벨이 오를 때마다 성장 한계도 조금씩 */
+export const LEVEL_CAP_BONUS = 20;
+
+// ── 클랜 ───────────────────────────────────────────────────────
+export interface ClanDef {
+  id: string; name: string; tag: string; tier: 1 | 2 | 3 | 4 | 5; desc: string;
+  /** 입단 조건: 전체 경기 수 · 래더 경기 수 · 래더 점수 · 능력치 합 */
+  req: { games: number; ladderGames: number; ladder: number; total: number };
+  size: number;
+  /** 소속 프로게이머 수 */
+  pros: number;
+}
+export const CLANS: ClanDef[] = [
+  { id: "pcbang", name: "동네PC방연합", tag: "PCB", tier: 1, desc: "누구나 환영! 동네 형들이 모인 친목 클랜", req: { games: 0, ladderGames: 0, ladder: 0, total: 0 }, size: 14, pros: 0 },
+  { id: "newbie", name: "새싹스타", tag: "SPR", tier: 1, desc: "초보끼리 같이 성장해요", req: { games: 5, ladderGames: 0, ladder: 0, total: 2200 }, size: 12, pros: 0 },
+  { id: "eunha", name: "은하수", tag: "MW", tier: 2, desc: "꾸준히 연습하는 중수 클랜", req: { games: 30, ladderGames: 5, ladder: 0, total: 2700 }, size: 18, pros: 0 },
+  { id: "redfire", name: "레드불꽃", tag: "RF", tier: 2, desc: "공격적인 플레이를 사랑하는 사람들", req: { games: 40, ladderGames: 10, ladder: 1450, total: 2900 }, size: 16, pros: 0 },
+  { id: "hydra", name: "Hydra", tag: "HYD", tier: 2, desc: "저그 유저가 많은 클랜 · 매일 밤 클랜전", req: { games: 50, ladderGames: 10, ladder: 1500, total: 3000 }, size: 20, pros: 0 },
+  { id: "cheongryong", name: "청룡", tag: "CR", tier: 3, desc: "대회 입상자가 여럿인 실력파", req: { games: 80, ladderGames: 20, ladder: 1600, total: 3300 }, size: 22, pros: 1 },
+  { id: "nova", name: "Nova", tag: "NV", tier: 3, desc: "전략 연구 클랜 · 빌드 공유가 활발", req: { games: 100, ladderGames: 25, ladder: 1650, total: 3400 }, size: 20, pros: 1 },
+  { id: "warcry", name: "WarCry", tag: "WC", tier: 3, desc: "래더 상위권이 모인 클랜", req: { games: 100, ladderGames: 40, ladder: 1750, total: 3500 }, size: 18, pros: 1 },
+  { id: "asura", name: "아수라", tag: "ASR", tier: 4, desc: "준프로가 많은 강호 클랜 · 프로 연습 상대", req: { games: 150, ladderGames: 50, ladder: 1850, total: 3800 }, size: 24, pros: 2 },
+  { id: "supernova", name: "초신성", tag: "SN", tier: 4, desc: "커리지 매치 우승자 배출 명문", req: { games: 180, ladderGames: 60, ladder: 1900, total: 3900 }, size: 22, pros: 3 },
+  { id: "elysium", name: "엘리시움", tag: "ELY", tier: 5, desc: "프로게이머가 직접 운영하는 최강 클랜", req: { games: 250, ladderGames: 80, ladder: 2050, total: 4100 }, size: 26, pros: 4 },
+  { id: "blackhole", name: "블랙홀", tag: "BH", tier: 5, desc: "들어가기 가장 어렵다는 전설의 클랜", req: { games: 300, ladderGames: 100, ladder: 2150, total: 4200 }, size: 20, pros: 5 },
+];
+export const CLAN_BY_ID = Object.fromEntries(CLANS.map(c => [c.id, c])) as Record<string, ClanDef>;
+/** 클랜원 수준 (능력치 합 범위) */
+export const CLAN_STRENGTH: Record<ClanDef["tier"], [number, number]> = { 1: [2000, 3000], 2: [2700, 3600], 3: [3300, 4200], 4: [3900, 4700], 5: [4300, 5200] };
+export interface ClanMember { name: string; race: Race; stats: Stats; points: number; pro?: { id: number; team: number } }
+/** 클랜 재시험 대기 (일) */
+export const CLAN_RETRY_DAYS = 7;
+
+/** 클랜원 명단 (클랜마다 늘 같은 명단, 프로는 원작 선수) */
+export function clanRoster(c: ClanDef, proIds: number[]): ClanMember[] {
+  let seed = [...c.id].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  const [lo, hi] = CLAN_STRENGTH[c.tier];
+  const out: ClanMember[] = [];
+  for (let i = 0; i < c.size - c.pros; i++) {
+    const total = Math.round(lo + rnd() * (hi - lo));
+    out.push({ name: nickname(rnd), race: RACES[Math.floor(rnd() * 3)], stats: statsAround(total, rnd), points: Math.round(rnd() * 300 * c.tier) });
+  }
+  for (let i = 0; i < c.pros && proIds.length; i++) {
+    const id = proIds[Math.floor(rnd() * proIds.length)];
+    out.push({ name: "", race: "terran", stats: {} as Stats, points: Math.round(400 * c.tier + rnd() * 400), pro: { id, team: -1 } });
+  }
+  return out;
+}
 
 // ── 아이템 (감독 모드 아이템을 아마추어 값으로) ───────────────────
 /** 선수 키우기 상점 가격 배율 · 장비 사용 횟수 배율 · 장비 효과 배율 */
@@ -166,6 +227,9 @@ export interface RookieTeam {
   /** 프로리그 출전 · 전적 */
   proW?: number;
   proL?: number;
+  /** 이번 시즌 프로리그 전적 (시즌 우승 확률) */
+  seasonW?: number;
+  seasonL?: number;
   /** 계약 끝나는 날 (그 다음 날 연봉 협상) */
   contractUntil?: number;
 }
@@ -262,6 +326,13 @@ export interface RookieState {
   nego?: Nego;
   /** 자유계약 (FA): 이 날까지 구단을 못 찾으면 준프로로 */
   fa?: { until: number };
+  level: number;
+  exp: number;
+  /** 날짜별 능력치 합 (그래프) */
+  history: Array<[number, number]>;
+  clan?: { id: string; joined: number; points: number; w: number; l: number; members: ClanMember[] };
+  /** 클랜 입단 시험 본 날 (재시험 대기) */
+  clanTried: Record<string, number>;
 }
 
 // ── 업적 · 칭호 ─────────────────────────────────────────────────
@@ -287,6 +358,10 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: "raise", icon: "💼", name: "연봉 인상", desc: "연봉 협상에서 월급 올리기", title: "협상의 달인", check: s => s.counts.raises >= 1 },
   { id: "rich", icon: "💰", name: "부자 게이머", desc: "돈 1000만원 모으기", title: "재벌 게이머", check: s => s.money >= 1000 },
   { id: "stat_5000", icon: "💪", name: "괴물 신인", desc: "능력치 합 5000", title: "괴물 신인", check: s => sumStats(s.stats) >= 5000 },
+  { id: "clan", icon: "🛡️", name: "클랜 가입", desc: "클랜 입단 시험 통과", title: "클랜원", check: s => !!s.clan },
+  { id: "clan_top", icon: "🏰", name: "명문 클랜", desc: "4단계 이상 클랜 가입", title: "명문 클랜원", check: s => !!s.clan && (CLAN_BY_ID[s.clan.id]?.tier ?? 0) >= 4 },
+  { id: "level_20", icon: "⭐", name: "레벨 20", desc: "선수 레벨 20 달성", title: "베테랑", check: s => s.level >= 20 },
+  { id: "pl_champ", icon: "🏆", name: "프로리그 우승", desc: "소속팀 프로리그 시즌 우승", title: "우승 멤버", check: s => s.titles.some(t => t.includes("프로리그") && t.includes("우승")) },
 ];
 export const ACH_BY_ID = Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, a])) as Record<string, Achievement>;
 
@@ -298,7 +373,8 @@ export const RANK_SORTS = { ladder: "래더", total: "능력치", fame: "인지�
 export type RankSort = keyof typeof RANK_SORTS;
 
 /** 지금 성장 한계 */
-export function capOf(s: Pick<RookieState, "status" | "team">): number {
-  if (s.status === "pro") return s.team?.squad === 1 ? STAT_CAP.pro1 : STAT_CAP.pro2;
-  return s.status === "semipro" ? STAT_CAP.semipro : STAT_CAP.amateur;
+export function capOf(s: Pick<RookieState, "status" | "team"> & { level?: number }): number {
+  const lv = ((s.level ?? 1) - 1) * LEVEL_CAP_BONUS;
+  if (s.status === "pro") return (s.team?.squad === 1 ? STAT_CAP.pro1 : STAT_CAP.pro2) + lv;
+  return (s.status === "semipro" ? STAT_CAP.semipro : STAT_CAP.amateur) + lv;
 }

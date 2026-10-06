@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { rollStats, sumStats, courageDays, draftDay, DAY_SLOTS, STAT_CAP, ladderGrade } from "@shared/rookie/model";
+import { rollStats, sumStats, courageDays, draftDay, DAY_SLOTS, STAT_CAP, ladderGrade, capOf } from "@shared/rookie/model";
 import * as L from "./logic";
 
 const mk = () => L.newRookie({ name: "테스트", race: "zerg", concept: "control", stats: rollStats("control") });
+/** 래더 조건 채우기 */
+const veteran = <T extends { record: { w: number; l: number }; stats: Record<string, number> }>(s: T) => { s.record.w = Math.max(s.record.w, 10); for (const k of Object.keys(s.stats)) s.stats[k] = Math.max(s.stats[k], 400); return s; };
 
 describe("선수 키우기", () => {
   it("만들기: 능력치 합 2,000~3,200 · 컨셉 반영 · 잘못된 능력치 거절", () => {
@@ -25,6 +27,7 @@ describe("선수 키우기", () => {
     void first;
     const g = L.playLobby(s);
     expect(g.timeline?.lines.length).toBeGreaterThan(3);
+    veteran(s);
     for (let i = 1; i < DAY_SLOTS; i++) L.rest(s);
     expect(() => L.playLadder(s)).toThrow(/하루/);
     const cond = s.cond;
@@ -34,7 +37,7 @@ describe("선수 키우기", () => {
   });
 
   it("래더: 1500에서 시작해 승패로 오르내림, 등급", () => {
-    const s = mk();
+    const s = veteran(mk());
     L.playLadder(s);
     expect(s.ladder.score).not.toBe(1500);
     expect(ladderGrade(1500)).toBe("D");
@@ -52,8 +55,9 @@ describe("선수 키우기", () => {
       L.nextDay(s);
     }
     const total = sumStats(s.stats);
-    console.log("6개월 뒤", sumStats(s.startStats), "→", total, s.record);
-    expect(total).toBeLessThanOrEqual(STAT_CAP.amateur);
+    console.log("6개월 뒤", sumStats(s.startStats), "→", total, s.record, "Lv", s.level);
+    expect(total).toBeLessThanOrEqual(capOf(s));
+    expect(capOf(s)).toBeLessThan(STAT_CAP.amateur + 1000);
     expect(total).toBeGreaterThan(sumStats(s.startStats));
   }, 60_000);
 
@@ -81,9 +85,10 @@ describe("선수 키우기", () => {
   it("이벤트 대회: 신청한 날 하루를 다 쓰고, 3위 안이면 상금", () => {
     const s = mk();
     const e = s.events[0];
+    for (const k of Object.keys(s.stats) as Array<keyof typeof s.stats>) s.stats[k] = 600;
+    s.ladder.best = 2000; s.money = 1000;
     L.registerEvent(s, e.id);
     s.day = e.day;
-    for (const k of Object.keys(s.stats) as Array<keyof typeof s.stats>) s.stats[k] = 600;
     const money = s.money;
     const r = L.playEvent(s, e.id);
     expect(s.used).toBe(DAY_SLOTS);
@@ -131,6 +136,7 @@ describe("선수 키우기", () => {
     for (let d = 0; d < 120; d++) L.nextDay(s);
     expect(sumStats(s.rival.stats)).toBeGreaterThan(start + 300);
     let met = 0;
+    veteran(s);
     for (let i = 0; i < 200 && met === 0; i++) {
       if (s.used >= DAY_SLOTS) L.nextDay(s);
       s.cond = 100;
@@ -207,5 +213,49 @@ describe("선수 키우기", () => {
     L.setTitle(s, "rich");
     expect(s.title).toBe("rich");
     expect(() => L.setTitle(s, "ladder_s")).toThrow(L.RookieError);
+  });
+
+  it("레벨: 경험치가 쌓이면 레벨업하고 성장 한계가 오름", () => {
+    const s = mk();
+    const cap = capOf(s);
+    L.gainExp(s, 1000);
+    expect(s.level).toBeGreaterThan(3);
+    expect(capOf(s)).toBeGreaterThan(cap);
+  });
+
+  it("대회 조건·참가비: 능력치가 모자라면 신청 불가, 참가비는 신청할 때 내고 취소하면 돌려받음", () => {
+    const s = mk();
+    const e = { ...s.events[0], id: 999, level: "elite" as const, fee: 20, registered: false };
+    s.events.push(e);
+    expect(() => L.registerEvent(s, 999)).toThrow(/능력치/);
+    for (const k of Object.keys(s.stats) as Array<keyof typeof s.stats>) s.stats[k] = 600;
+    s.ladder.best = 1700; s.money = 50;
+    L.registerEvent(s, 999);
+    expect(s.money).toBe(30);
+    L.registerEvent(s, 999);
+    expect(s.money).toBe(50);
+  });
+
+  it("클랜: 조건이 모자라면 시험 불가 · 통과하면 가입 · 클랜 연습 · 순위", () => {
+    const s = mk();
+    expect(L.clanLocked(s, "blackhole")).toMatch(/경기/);
+    expect(L.clanLocked(s, "pcbang")).toBeNull();
+    for (const k of Object.keys(s.stats) as Array<keyof typeof s.stats>) s.stats[k] = 700;
+    let ok = false;
+    for (let i = 0; i < 10 && !ok; i++) { s.used = 0; s.cond = 100; s.clanTried = {}; ok = L.clanTest(s, "pcbang").won; }
+    expect(ok).toBe(true);
+    expect(s.clan?.members.length).toBeGreaterThan(5);
+    s.used = 0;
+    L.clanPractice(s);
+    expect(s.clan!.w + s.clan!.l).toBe(1);
+    expect(L.clanRank(s)).toBeGreaterThan(0);
+    // 프로가 있는 클랜 명단에는 원작 선수
+    expect(L.rosterOf("blackhole").filter(m => m.pro).length).toBeGreaterThan(0);
+  });
+
+  it("불리한 맵에서 연습하면 더 많이 배움", () => {
+    let found = 0;
+    for (let m = 0; m < 30; m++) if (L.raceGrowth(m, "zerg", "terran") > 1 || L.raceGrowth(m, "terran", "zerg") > 1) found++;
+    expect(found).toBeGreaterThan(0);
   });
 });

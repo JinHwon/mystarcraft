@@ -136,5 +136,8 @@ export const rookieRouter = router({
     const strip = ({ userId, ...r }: (typeof rows)[number]) => ({ ...r, me: userId === ctx.user.id });
     return { rows: rows.map(strip), me: mine[0] ? strip(mine[0]) : null, myRank };
   }),
+  clanTest: p.input(z.object({ id: z.string().max(30) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.clanTest(s, input.id))),
+  clanPractice: p.mutation(({ ctx }) => mutate(ctx.user.id, s => ({ games: [L.clanPractice(s)] }))),
+  leaveClan: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.leaveClan(s))),
   nextDay: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.nextDay(s))),
 });
