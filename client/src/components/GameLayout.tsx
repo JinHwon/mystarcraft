@@ -45,6 +45,7 @@ const NAV: NavItem[] = [
   { path: "/transfer", label: "이적시장", icon: Handshake },
   { path: "/records", label: "기록", icon: ScrollText },
   { path: "/ranking", label: "감독 랭킹", icon: Medal },
+  { path: "/rookie", label: "🎮 선수 키우기 모드", icon: Zap },
 ];
 const ADMIN_NAV: NavItem[] = [
   { path: "/admin", label: "관리자 패널", icon: Settings },

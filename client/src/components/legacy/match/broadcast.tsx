@@ -105,7 +105,7 @@ export function Broadcast({ s, stageName, lp, rp, mapId, set, leftIsA, score, le
         <div className="flex-1 min-h-0 grid grid-cols-[78px_1fr_78px] gap-2 mt-2">
           <div className="flex flex-col items-center justify-between">
             <div className="flex flex-col items-center">
-              <PlayerPhoto id={lp.photoOf ?? lp.id} name={lp.name} titles={lp.titles} size={56} />
+              <PlayerPhoto id={lp.photoOf ?? lp.id} name={lp.name} titles={lp.titles} size={56} src={lp.photoUrl} />
               <span className="text-[11px] mt-0.5 text-center">{nameRace(lp)}</span>
               <SetPower s={s} p={lp} set={set} side={leftIsA ? "a" : "b"} />
               {done && leftWon && <Winner />}
@@ -121,7 +121,7 @@ export function Broadcast({ s, stageName, lp, rp, mapId, set, leftIsA, score, le
           </div>
           <div className="flex flex-col items-center justify-between">
             <div className="flex flex-col items-center">
-              <PlayerPhoto id={rp.photoOf ?? rp.id} name={rp.name} titles={rp.titles} size={56} />
+              <PlayerPhoto id={rp.photoOf ?? rp.id} name={rp.name} titles={rp.titles} size={56} src={rp.photoUrl} />
               <span className="text-[11px] mt-0.5 text-center">{nameRace(rp)}</span>
               <SetPower s={s} p={rp} set={set} side={leftIsA ? "b" : "a"} />
               {done && !leftWon && <Winner />}

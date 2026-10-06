@@ -226,6 +226,8 @@ export interface CPlayer {
   reserve?: boolean;
   /** 신인으로 등장한 시즌 */
   rookie?: number;
+  /** 사진 (선수 키우기 모드에서 올린 이미지) */
+  photoUrl?: string;
 }
 
 /** 후원: 자금 또는 소모품 한 종류 1~5개 (매주 확률로 도착, 받기를 눌러야 들어옴) */
