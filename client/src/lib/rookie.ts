@@ -10,6 +10,12 @@ export function useRookie() {
   return { state: (q.data?.state ?? null) as RookieState | null, today: (q.data?.today ?? null) as RookieToday | null, loading: q.isLoading };
 }
 
+/** 선수 키우기를 쓸 수 있는지 (공개 전에는 관리자만) */
+export function useRookieAccess() {
+  const q = trpc.rookie.access.useQuery(undefined, { staleTime: 60_000, refetchOnWindowFocus: false, retry: false });
+  return { allowed: !!q.data?.allowed, open: !!q.data?.open, loading: q.isLoading };
+}
+
 /** 변경 결과(새 상태)를 캐시에 바로 반영 */
 export function useRookieSync() {
   const utils = trpc.useUtils();

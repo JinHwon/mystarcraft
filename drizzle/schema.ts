@@ -322,3 +322,10 @@ export const rookieCareers = mysqlTable("rookie_careers", {
 	uniqueIndex("rookie_careers_userId_unique").on(table.userId),
 	index("rookie_careers_ladder_idx").on(table.ladder),
 ]);
+
+/** 운영 설정 (키-값). 예: rookie_open = "1" 이면 선수 키우기 모드를 모든 사용자에게 공개 */
+export const appSettings = mysqlTable("app_settings", {
+	key: varchar({ length: 64 }).notNull().primaryKey(),
+	value: text().notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});

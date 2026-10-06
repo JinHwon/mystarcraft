@@ -1,3 +1,4 @@
+import { useRookieAccess } from "@/lib/rookie";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -96,6 +97,12 @@ function RookiePage() {
   const { isAuthenticated, loading } = useAuth();
   if (loading) return <PageLoading />;
   if (!isAuthenticated) return <Redirect to="/login" />;
+  return <RookieGate />;
+}
+function RookieGate() {
+  const access = useRookieAccess();
+  if (access.loading) return <PageLoading />;
+  if (!access.allowed) return <div className="p-6 text-center text-muted-foreground space-y-3"><div className="text-3xl">🎮</div><div>선수 키우기 모드는 아직 준비 중입니다</div><a href="/lobby" className="text-primary font-bold">← 돌아가기</a></div>;
   return <Suspense fallback={<PageLoading />}><Rookie /></Suspense>;
 }
 

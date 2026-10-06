@@ -5,6 +5,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { desc, eq, sql } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
+import { rookieOpen } from "../settings";
 import { getDb } from "../db";
 import { rookieCareers } from "../../drizzle/schema";
 import { STAT_KEYS, type StatKey } from "@shared/gameConstants";
@@ -69,9 +70,18 @@ function mutate<T>(userId: number, fn: (s: RookieState) => T) {
 const statsSchema = z.object(Object.fromEntries(STAT_KEYS.map(k => [k, z.number().int()])) as Record<(typeof STAT_KEYS)[number], z.ZodNumber>);
 const conceptKeys = Object.keys(CONCEPTS) as [Concept, ...Concept[]];
 const tierKeys = Object.keys(TIERS) as [Tier, ...Tier[]];
-const p = protectedProcedure;
+/** 공개 전에는 관리자만 (관리자 패널에서 공개/비공개) */
+const p = protectedProcedure.use(async ({ ctx, next }) => {
+  if (ctx.user.role !== "admin" && !(await rookieOpen())) throw new TRPCError({ code: "FORBIDDEN", message: "선수 키우기 모드는 아직 준비 중입니다" });
+  return next();
+});
 
 export const rookieRouter = router({
+  /** 화면에 메뉴를 보여줄지 (누구나 물어볼 수 있음) */
+  access: protectedProcedure.query(async ({ ctx }) => {
+    const open = await rookieOpen();
+    return { open, allowed: open || ctx.user.role === "admin" };
+  }),
   get: p.query(async ({ ctx }) => { const state = await load(ctx.user.id); return { state, today: state ? L.todayInfo(state) : null }; }),
   create: p.input(z.object({
     name: z.string().max(20), race: z.enum(["terran", "zerg", "protoss"]), concept: z.enum(conceptKeys), stats: statsSchema, photo: z.string().max(70_000).optional(),
