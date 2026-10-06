@@ -113,8 +113,50 @@ export function newCareer(myTeam: number, difficulty: Difficulty = "normal"): Ca
   s.msl = createMsl(s);
   if (s.msl.v2) s.msl2 = createMsl(s, secondLeagueOf(s.season)); else delete s.msl2;
   rollWeekBursts(s);
+  recordMarket(s, s.season * 100);
   news(s, `${s.teams[myTeam].name} 감독으로 부임했습니다. ${s.season}시즌 ${leagueName(myDiv(s))}가 곧 개막합니다!`);
   return s;
+}
+
+/** 선수 시세 기록은 최근 이만큼의 주만 남김 */
+const MKT_KEEP = 40;
+/** 모든 선수의 현재 시세·능력치 합을 기록 (key = 시즌*100+주, 주 0 = 시즌 시작) */
+export function recordMarket(s: CareerState, key: number) {
+  const m = (s.mkt ??= { keys: [], p: {} });
+  if (m.keys[m.keys.length - 1] === key) return;
+  const idx = m.keys.length;
+  m.keys.push(key);
+  for (const p of activePlayers(s)) {
+    let r = m.p[p.id];
+    // 중간에 빠졌다 돌아온 선수는 새로 시작
+    if (!r || r.f + r.v.length !== idx) r = m.p[p.id] = { f: idx, v: [], t: [] };
+    r.v.push(Math.round(askingPrice(p, s.season) / 10));
+    r.t.push(totalOf(p.stats));
+  }
+  const cut = m.keys.length - MKT_KEEP;
+  if (cut > 0) {
+    m.keys.splice(0, cut);
+    for (const [id, r] of Object.entries(m.p)) {
+      if (r.f >= cut) r.f -= cut;
+      else { r.v.splice(0, cut - r.f); r.t.splice(0, cut - r.f); r.f = 0; }
+      if (!r.v.length) delete m.p[Number(id)];
+    }
+  }
+}
+
+/** 한 선수의 주별 시세·능력치 (key 와 함께) */
+export function marketSeries(s: CareerState, pid: number) {
+  const m = s.mkt, r = m?.p[pid];
+  if (!m || !r) return [] as Array<{ key: number; price: number; total: number }>;
+  return r.v.map((v, i) => ({ key: m.keys[r.f + i], price: v * 10, total: r.t[i] }));
+}
+/** 모든 선수의 지난 기록 대비 시세 변화 (마지막 두 기록 비교, 없으면 0) */
+export function marketDeltas(s: CareerState) {
+  const out: Record<number, number> = {};
+  const m = s.mkt;
+  if (!m) return out;
+  for (const [id, r] of Object.entries(m.p)) if (r.v.length >= 2) out[Number(id)] = (r.v[r.v.length - 1] - r.v[r.v.length - 2]) * 10;
+  return out;
 }
 
 /** 예전 세이브 보정 */
@@ -124,6 +166,7 @@ export function migrateCareer(s: CareerState) {
   ensureClub(s);
   ensurePotential(s);
   ensureHeadToHead(s);
+  if (!s.mkt) recordMarket(s, s.season * 100 + Math.max(0, s.week - 1));
   rollWeekBursts(s);
   // 개인리그 준우승 기록 (예전 세이브는 시즌 기록에만 있음)
   for (const h of s.history) {
@@ -614,6 +657,7 @@ function finishWeek(s: CareerState): WeekResult {
   // 우리 선수 행동력: 매주 20 (최대 40까지 모임)
   for (const p of rosterOf(s, s.myTeam)) { p.ap = playerAp(p) + WEEKLY_AP; delete p.vitaUsed; }
   pruneHighlights(s);
+  recordMarket(s, s.season * 100 + s.week);
   s.week++;
   rollWeekBursts(s);
   s.ap = WEEKLY_AP;
@@ -934,6 +978,7 @@ export function startNextSeason(s: CareerState, opts: { releaseExpiring?: boolea
   s.msl = createMsl(s);
   if (s.msl.v2) s.msl2 = createMsl(s, secondLeagueOf(s.season)); else delete s.msl2;
   rollWeekBursts(s);
+  recordMarket(s, s.season * 100);
   news(s, `${s.season}시즌 ${leagueName(myDiv(s))} 개막!`);
 }
 

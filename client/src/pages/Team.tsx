@@ -13,11 +13,12 @@ import { popularity, potentialStars } from "@shared/career/contract";
 import { BONUS_NAMES, type BonusKey } from "@shared/career/rules";
 import { useCareer, useCareerUpdater } from "@/lib/career";
 import { CondBadge, RaceBadge, RACE_NAME, StatBars, TeamBadge } from "@/components/career/Bits";
+import { MarketChart } from "@/components/career/MarketChart";
 import { StatRadarChart } from "@/components/StatRadarChart";
 
 type Sort = "total" | "cond" | "level" | "age";
 
-export function PlayerSheet({ s, player, onClose, actions }: { s: CareerState; player: CPlayer | null; onClose: () => void; actions?: React.ReactNode }) {
+export function PlayerSheet({ s, player, onClose, actions, market }: { s: CareerState; player: CPlayer | null; onClose: () => void; actions?: React.ReactNode; /** 시세 그래프를 처음부터 펼침 */ market?: boolean }) {
   return (
     <Sheet open={!!player} onOpenChange={o => !o && onClose()}>
       {/* 원작 화면(LegacyFrame, z-60) 위에서도 보이게 */}
@@ -51,6 +52,7 @@ export function PlayerSheet({ s, player, onClose, actions }: { s: CareerState; p
             {player.titles && player.titles.length > 0 && (
               <TitleChips titles={player.titles} />
             )}
+            <MarketBox s={s} player={player} open={market} />
             {player.team === s.myTeam && <H2HBox s={s} player={player} />}
             <div className="rounded-xl bg-muted/50 p-2.5 text-xs space-y-0.5">
               <div>📄 계약: <b>{player.contract ? `남은 ${player.contract.years}시즌 · 연봉 ${player.contract.salary.toLocaleString()}만원` : "없음 (무소속)"}</b></div>
@@ -83,6 +85,20 @@ export function PlayerSheet({ s, player, onClose, actions }: { s: CareerState; p
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** 주별 시세·능력치 그래프 (펼치면 서버에서 기록을 받아 옴) */
+function MarketBox({ s, player, open: initOpen }: { s: CareerState; player: CPlayer; open?: boolean }) {
+  const [open, setOpen] = useState(!!initOpen);
+  return (
+    <div className="rounded-xl bg-muted/50 p-2.5 text-xs">
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between font-bold">
+        <span>💰 시세·능력치 추이 <span className="text-muted-foreground font-normal">(주별)</span></span>
+        <span className="text-muted-foreground font-normal">{open ? "접기 ▲" : "펼치기 ▼"}</span>
+      </button>
+      {open && <div className="mt-1.5"><MarketChart s={s} player={player} /></div>}
+    </div>
   );
 }
 

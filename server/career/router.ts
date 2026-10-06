@@ -34,6 +34,8 @@ import {
   requestBid,
   requestScout,
   cancelRequest,
+  marketSeries,
+  marketDeltas,
   releasePlayer,
   rosterOf,
   setAction,
@@ -149,6 +151,13 @@ async function refreshEvents() {
 export function resetEventsCache() { eventsAt = 0; }
 
 /** 세이브를 불러와 수정하고 저장. 바뀐 부분(diff)만 돌려준다. 게임 규칙 오류는 사용자에게 보여줄 메시지로 변환 */
+/** 시세 기록(mkt)은 화면에 안 보냄 (선수를 눌렀을 때만 따로 받음) */
+function withoutMarket<T extends CareerState | null>(s: T): T {
+  if (!s || !s.mkt) return s;
+  const { mkt: _mkt, ...rest } = s;
+  return rest as T;
+}
+
 function mutate<T>(userId: number, fn: (s: CareerState) => T) {
   return withLock(userId, async () => {
     await refreshEvents();
@@ -397,7 +406,21 @@ export const careerRouter = router({
   rev: protectedProcedure.query(({ ctx }) => ({ rev: outsideRev.get(ctx.user.id) ?? 0 })),
 
   get: protectedProcedure.query(async ({ ctx }) => {
-    return { state: await load(ctx.user.id) };
+    return { state: withoutMarket(await load(ctx.user.id)) };
+  }),
+
+  /** 선수 한 명의 주별 시세·능력치 기록 (선수를 눌렀을 때) */
+  marketSeries: protectedProcedure
+    .input(z.object({ playerId: z.number().int(), /** 주가 바뀌면 다시 받으려고 화면이 붙이는 값 */ at: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      const s = await load(ctx.user.id);
+      return { series: s ? marketSeries(s, input.playerId) : [] };
+    }),
+
+  /** 모든 선수의 지난주 대비 시세 변화 */
+  marketDeltas: protectedProcedure.input(z.object({ at: z.number().optional() })).query(async ({ ctx }) => {
+    const s = await load(ctx.user.id);
+    return { deltas: s ? marketDeltas(s) : {} };
   }),
 
   newGame: protectedProcedure
@@ -406,7 +429,7 @@ export const careerRouter = router({
       try {
         const state = newCareer(input.teamId, input.difficulty ?? "normal");
         save(ctx.user.id, state);
-        return { state };
+        return { state: withoutMarket(state) };
       } catch (e) {
         if (e instanceof CareerError) throw new TRPCError({ code: "BAD_REQUEST", message: e.message });
         throw e;
