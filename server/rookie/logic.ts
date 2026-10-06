@@ -83,6 +83,8 @@ export function upgrade(s: RookieState) {
   s.clanTried ??= {};
   // 없어진 클랜 (클랜 목록이 바뀐 경우)
   if (s.clan && !CLAN_BY_ID[s.clan.id]) delete s.clan;
+  // 예전 클랜원에 전적이 없으면 점수에 맞춰 채움
+  for (const m of s.clan?.members ?? []) { m.w ??= Math.round(m.points / 10); m.l ??= Math.round(m.points / 25); }
   return s;
 }
 
@@ -168,7 +170,10 @@ export interface PlayedGame {
 }
 
 /** 한 판 (a = 나). broadcast: 중계 문장까지 */
-function playOne(s: RookieState, opp: Opp, mapId: number, label: string, broadcast = true, growMul = 1): PlayedGame {
+/** 연속 진행 중 (중계 문장 없이 빠르게) */
+let QUIET = false;
+function playOne(s: RookieState, opp: Opp, mapId: number, label: string, broadcastIn = true, growMul = 1): PlayedGame {
+  const broadcast = broadcastIn && !QUIET;
   const m = mapView(mapId);
   const r = simulateSet(
     { id: 1, name: s.name, race: s.race, stats: effective(s), fatigue: 100 },
@@ -203,13 +208,13 @@ function grow(s: RookieState, opp: Opp, won: boolean, mul = 1) {
   const keys = [...STAT_KEYS].sort(() => rand() - 0.5);
   if (won) {
     const n = randInt(2, 3);
-    for (const k of keys.slice(0, n)) s.stats[k] = clampStat(s.stats[k] + Math.max(0, Math.round(randInt(2, 6) * ratio * room)));
-  } else if (ratio > 1.05 && rand() < 0.6) {
-    // 강한 상대에게 지면서도 배움
-    s.stats[keys[0]] = clampStat(s.stats[keys[0]] + Math.max(1, Math.round(randInt(1, 4) * room)));
+    for (const k of keys.slice(0, n)) s.stats[k] = clampStat(s.stats[k] + Math.max(0, Math.round(randInt(3, 7) * ratio * room)));
+  } else if (ratio > 1.15 && rand() < 0.35) {
+    // 훨씬 강한 상대에게 지면 가끔은 배움
+    s.stats[keys[0]] = clampStat(s.stats[keys[0]] + Math.max(1, Math.round(randInt(1, 3) * room)));
   } else {
-    // 약한 상대에게 지면 더 많이 떨어짐
-    s.stats[keys[0]] = clampStat(s.stats[keys[0]] - Math.max(1, Math.round(randInt(1, 3) / ratio)));
+    // 지면 능력치 2개가 떨어짐 (약한 상대에게 지면 더 많이)
+    for (const k of keys.slice(0, 2)) s.stats[k] = clampStat(s.stats[k] - Math.max(1, Math.round(randInt(1, 4) / Math.sqrt(ratio))));
   }
   // 한계를 넘으면 가장 높은 능력치부터 조금씩 깎음
   let over = sumStats(s.stats) - capOf(s);
@@ -305,6 +310,7 @@ export function findLobby(s: RookieState, tier: Tier, mapId: number) {
   if (!(mapId >= 0 && mapId < ORIG_MAPS.length)) throw new RookieError("맵을 고르세요");
   if (s.used >= DAY_SLOTS) throw new RookieError("오늘은 더 할 수 없습니다. 다음 날로 넘어가세요");
   s.lobby = { tier, mapId, opp: lobbyOpp(tier) };
+  s.lobbyPref = { tier, mapId };
   return { opp: s.lobby.opp };
 }
 /** 상대가 마음에 안 들면 강퇴 (하루 10번) */
@@ -377,7 +383,7 @@ export function playLadder(s: RookieState) {
   mark(s, "⚔️", won);
   log(s, won ? "⚔️" : "💧", `래더 vs ${opp.pro ? `${PRO_TEAMS[opp.pro.team]?.short} ` : opp.semipro ? "준프로 " : ""}${opp.name} ${won ? "승리" : "패배"} (${before}→${s.ladder.score} · ${ladderGrade(s.ladder.score)})`);
   gainExp(s, won ? (opp.pro ? 25 : 15) : 5);
-  if (s.clan) s.clan.points += won ? 5 : 1;
+  if (s.clan) s.clan.points = Math.max(0, s.clan.points + (won ? 5 : -3));
   if (won) {
     s.fame += opp.pro ? 8 : 2;
     s.counts.ladderW++;
@@ -1049,17 +1055,79 @@ export function clanPractice(s: RookieState) {
   const g = playOne(s, opp, mapId, `${c.name} 클랜 연습`, true, (m.pro ? 1.5 : 1.3) * raceGrowth(mapId, s.race, opp.race));
   const won = g.winner === "a";
   s.clan[won ? "w" : "l"]++;
-  s.clan.points += won ? 10 : 2;
+  // 이기면 점수를 가져오고 지면 잃음 (상대 클랜원도 반대로)
+  s.clan.points = Math.max(0, s.clan.points + (won ? 10 : -6));
+  m.points = Math.max(0, m.points + (won ? -6 : 10));
+  m[won ? "l" : "w"] = (m[won ? "l" : "w"] ?? 0) + 1;
+  const vs = ((s.clan.vs ??= {})[m.name] ??= [0, 0]);
+  vs[won ? 0 : 1]++;
   gainExp(s, won ? 10 : 4);
   mark(s, "🛡️", won);
   log(s, won ? "🛡️" : "💧", `클랜 연습 vs ${m.pro ? `프로 ${opp.name}` : opp.name} ${won ? "승리" : "패배"}`);
   return g;
 }
+export type BatchKind = "lobby" | "ladder" | "clan" | "internal";
+/**
+ * 남은 행동만큼 한 번에 (중계 없이). 하다가 조건이 안 되면 거기서 멈춤
+ * 결과: 몇 판 · 승패 · 능력치 변화 · 컨디션 · 래더/클랜 점수 · 레벨
+ */
+export function batch(s: RookieState, kind: BatchKind, opts: { tier?: Tier; mapId?: number; max?: number } = {}) {
+  if (s.retired) throw new RookieError(s.retired);
+  const left = DAY_SLOTS - s.used;
+  if (left < 1) throw new RookieError("오늘은 더 할 수 없습니다. 다음 날로 넘어가세요");
+  const n = Math.max(1, Math.min(left, opts.max ?? left));
+  const before = { stats: { ...s.stats }, cond: s.cond, ladder: s.ladder.score, clan: s.clan?.points, level: s.level, exp: s.exp, rank: clanRank(s) };
+  const tier = opts.tier ?? s.lobbyPref?.tier ?? "low";
+  const mapId = opts.mapId ?? s.lobbyPref?.mapId ?? 0;
+  if (kind === "lobby") { if (!TIERS[tier]) throw new RookieError("방을 고르세요"); s.lobbyPref = { tier, mapId }; }
+  const results: Array<{ won: boolean; opp: string; map: string }> = [];
+  let stop: string | undefined;
+  QUIET = true;
+  try {
+    for (let i = 0; i < n; i++) {
+      try {
+        let g: PlayedGame;
+        if (kind === "lobby") { s.lobby = { tier, mapId, opp: lobbyOpp(tier) }; g = playLobby(s); }
+        else if (kind === "ladder") g = playLadder(s);
+        else if (kind === "clan") g = clanPractice(s);
+        else g = playInternal(s);
+        results.push({ won: g.winner === "a", opp: g.opp.name, map: mapView(g.mapId).name });
+      } catch (e) {
+        if (e instanceof RookieError) { stop = e.message; break; }
+        throw e;
+      }
+    }
+  } finally { QUIET = false; }
+  if (!results.length) throw new RookieError(stop ?? "진행할 수 없습니다");
+  const stats: Partial<Stats> = {};
+  for (const k of STAT_KEYS) if (s.stats[k] !== before.stats[k]) stats[k] = s.stats[k] - before.stats[k];
+  const w = results.filter(r => r.won).length;
+  return {
+    kind, count: results.length, w, l: results.length - w, results, stats,
+    cond: [before.cond, s.cond] as [number, number],
+    ladder: kind === "ladder" ? [before.ladder, s.ladder.score] as [number, number] : undefined,
+    clan: s.clan && before.clan !== undefined ? { points: [before.clan, s.clan.points] as [number, number], rank: [before.rank, clanRank(s)] as [number, number] } : undefined,
+    level: [before.level, s.level] as [number, number],
+    stop,
+  };
+}
+
 /** 클랜 하루: 다른 클랜원도 점수를 쌓고, 프로 클랜원이 상위권 아마추어를 구단에 추천하기도 */
 function clanDay(s: RookieState, prevDay: number) {
   if (!s.clan) return;
   const c = CLAN_BY_ID[s.clan.id];
-  for (const m of s.clan.members) m.points += randInt(0, 3 + c.tier * 2);
+  // 다른 클랜원끼리도 하루 몇 판씩: 이기면 +10, 지면 -6
+  const ms = s.clan.members;
+  for (let i = 0; i < Math.ceil(ms.length * 0.6); i++) {
+    const a = pick(ms), b = pick(ms);
+    if (a === b) continue;
+    const sa = a.pro ? PROS[a.pro.id].stats : a.stats, sb = b.pro ? PROS[b.pro.id].stats : b.stats;
+    const aw = aiWins({ name: a.name, race: a.race, stats: sa }, { name: b.name, race: b.race, stats: sb });
+    const [w, l] = aw ? [a, b] : [b, a];
+    w.points += 10; w.w = (w.w ?? 0) + 1;
+    l.points = Math.max(0, l.points - 6); l.l = (l.l ?? 0) + 1;
+  }
+  void c;
   if (isMonthEnd(prevDay) && s.status !== "pro" && !s.team) {
     const rank = clanRank(s);
     const pros = s.clan.members.filter(m => m.pro);

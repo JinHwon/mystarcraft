@@ -258,4 +258,25 @@ describe("선수 키우기", () => {
     for (let m = 0; m < 30; m++) if (L.raceGrowth(m, "zerg", "terran") > 1 || L.raceGrowth(m, "terran", "zerg") > 1) found++;
     expect(found).toBeGreaterThan(0);
   });
+
+  it("연속 진행: 남은 행동만큼 한 번에, 승패·능력치·컨디션 요약 · 고른 맵 기억", () => {
+    const s = mk();
+    s.used = 3;
+    const r = L.batch(s, "lobby", { tier: "low", mapId: 5 });
+    expect(r.count).toBe(DAY_SLOTS - 3);
+    expect(r.w + r.l).toBe(r.count);
+    expect(s.used).toBe(DAY_SLOTS);
+    expect(s.lobbyPref).toEqual({ tier: "low", mapId: 5 });
+    expect(r.cond[1]).toBeLessThanOrEqual(r.cond[0]);
+    expect(() => L.batch(s, "lobby")).toThrow(/오늘은/);
+  });
+
+  it("클랜 연습: 지면 점수가 줄고, 클랜원별 상대 전적이 쌓임", () => {
+    const s = mk();
+    s.clan = { id: "pcbang", joined: 0, points: 50, w: 0, l: 0, members: L.rosterOf("pcbang") };
+    for (let i = 0; i < 10; i++) { s.cond = 100; L.clanPractice(s); }
+    const vs = Object.values(s.clan.vs ?? {});
+    expect(vs.reduce((a, [w, l]) => a + w + l, 0)).toBe(10);
+    if (s.clan.l > 0) expect(s.clan.points).toBeLessThan(50 + s.clan.w * 10);
+  });
 });

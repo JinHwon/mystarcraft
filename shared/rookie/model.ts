@@ -187,7 +187,7 @@ export const CLANS: ClanDef[] = [
 export const CLAN_BY_ID = Object.fromEntries(CLANS.map(c => [c.id, c])) as Record<string, ClanDef>;
 /** 클랜원 수준 (능력치 합 범위) */
 export const CLAN_STRENGTH: Record<ClanDef["tier"], [number, number]> = { 1: [2000, 3000], 2: [2700, 3600], 3: [3300, 4200], 4: [3900, 4700], 5: [4300, 5200] };
-export interface ClanMember { name: string; race: Race; stats: Stats; points: number; pro?: { id: number; team: number } }
+export interface ClanMember { name: string; race: Race; stats: Stats; points: number; pro?: { id: number; team: number }; w?: number; l?: number }
 /** 클랜 재시험 대기 (일) */
 export const CLAN_RETRY_DAYS = 7;
 
@@ -200,9 +200,13 @@ export function clanRoster(c: ClanDef, proId: (name: string) => number | undefin
   const out: ClanMember[] = [];
   for (let i = 0; i < c.size - pros.length; i++) {
     const total = Math.round(lo + rnd() * (hi - lo));
-    out.push({ name: nickname(rnd), race: RACES[Math.floor(rnd() * 3)], stats: statsAround(total, rnd), points: Math.round(rnd() * 300 * c.tier) });
+    const points = Math.round(rnd() * 300 * c.tier);
+    out.push({ name: nickname(rnd), race: RACES[Math.floor(rnd() * 3)], stats: statsAround(total, rnd), points, w: Math.round(points / 10 + rnd() * 10), l: Math.round(rnd() * 12 + points / 25) });
   }
-  for (const [name, id] of pros) out.push({ name, race: "terran", stats: {} as Stats, points: Math.round(400 * c.tier + rnd() * 400), pro: { id, team: -1 } });
+  for (const [name, id] of pros) {
+    const points = Math.round(400 * c.tier + rnd() * 400);
+    out.push({ name, race: "terran", stats: {} as Stats, points, pro: { id, team: -1 }, w: Math.round(points / 9), l: Math.round(points / 40) });
+  }
   return out;
 }
 
@@ -337,7 +341,9 @@ export interface RookieState {
   exp: number;
   /** 날짜별 능력치 합 (그래프) */
   history: Array<[number, number]>;
-  clan?: { id: string; joined: number; points: number; w: number; l: number; members: ClanMember[] };
+  clan?: { id: string; joined: number; points: number; w: number; l: number; members: ClanMember[]; /** 클랜원별 상대 전적 [내 승, 내 패] */ vs?: Record<string, [number, number]> };
+  /** 공방에서 마지막으로 고른 방·맵 */
+  lobbyPref?: { tier: Tier; mapId: number };
   /** 클랜 입단 시험 본 날 (재시험 대기) */
   clanTried: Record<string, number>;
 }
