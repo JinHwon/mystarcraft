@@ -238,7 +238,7 @@ describe("선수 키우기", () => {
 
   it("클랜: 조건이 모자라면 시험 불가 · 통과하면 가입 · 클랜 연습 · 순위", () => {
     const s = mk();
-    expect(L.clanLocked(s, "blackhole")).toMatch(/경기/);
+    expect(L.clanLocked(s, "by")).toMatch(/경기/);
     expect(L.clanLocked(s, "pcbang")).toBeNull();
     for (const k of Object.keys(s.stats) as Array<keyof typeof s.stats>) s.stats[k] = 700;
     let ok = false;
@@ -250,7 +250,7 @@ describe("선수 키우기", () => {
     expect(s.clan!.w + s.clan!.l).toBe(1);
     expect(L.clanRank(s)).toBeGreaterThan(0);
     // 프로가 있는 클랜 명단에는 원작 선수
-    expect(L.rosterOf("blackhole").filter(m => m.pro).length).toBeGreaterThan(0);
+    expect(L.rosterOf("by").filter(m => m.pro).length).toBeGreaterThan(0);
   });
 
   it("불리한 맵에서 연습하면 더 많이 배움", () => {

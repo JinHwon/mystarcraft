@@ -225,6 +225,24 @@ function openingLine(a: { race: Race; plan: string; style: string }, b: { race: 
 }
 
 // ── 해설자 ────────────────────────────────────────────────────
+/** 온라인 연습·래더용 말 (무대 경기의 치어풀·세리머니 대신) */
+const CASUAL_OPEN = [
+  "관전자들이 하나둘 들어오네요.",
+  "채팅창에 \"gl hf\" 인사가 오갑니다.",
+  "핑이 좀 튀는 것 같은데요, 괜찮을까요.",
+  "방장이 맵을 바꾸지 않고 바로 시작합니다.",
+];
+const CASUAL_WIN = [
+  " 선수, 리플레이를 저장하고 다음 상대를 찾습니다.",
+  " 선수, 채팅창에 \"gg\"를 남깁니다.",
+  " 선수, 승리 기록이 하나 더 쌓였습니다.",
+];
+const CASUAL_LOSE = [
+  " 선수, \"gg\"를 치고 방을 나갑니다.",
+  " 선수, 바로 \"한 판 더?\"를 외치네요.",
+  " 선수, 리플레이를 다시 돌려보겠다고 합니다.",
+];
+
 export class LegacyCaster {
   private out: CastLine[] = [];
   private used = new Set<number>();
@@ -234,7 +252,8 @@ export class LegacyCaster {
   private units: Record<Side, Record<string, number>> = { 1: {}, 2: {} };
   private lastRaid: Partial<Record<Side, number>> = {};
 
-  constructor(private p1: CastPlayer, private p2: CastPlayer) {}
+  /** casual: 배틀넷 연습·래더처럼 무대가 아닌 경기 (치어풀·관중·세리머니 대신 온라인 게임다운 말) */
+  constructor(private p1: CastPlayer, private p2: CastPlayer, private casual = false) {}
 
   private P(side: Side) { return side === 1 ? this.p1 : this.p2; }
   private O(side: Side) { return side === 1 ? this.p2 : this.p1; }
@@ -304,7 +323,8 @@ export class LegacyCaster {
         const a = this.plans[1], b = this.plans[2];
         if (a && b) {
           this.say(t, null, openingLine(a, b));
-          if (rand() < 0.35) this.say(t, pick([this.p1, this.p2]), find("cheer", "치어풀"));
+          if (this.casual) { if (rand() < 0.3) this.say(t, null, pick(CASUAL_OPEN)); }
+          else if (rand() < 0.35) this.say(t, pick([this.p1, this.p2]), find("cheer", "치어풀"));
         }
         return;
       }
@@ -417,7 +437,8 @@ export class LegacyCaster {
         const group = t < 420 ? end[1] : t < 720 ? end[2] : t < 1200 ? end[3] : end[4];
         this.say(t, winner, group ? pick(group) : undefined);
         this.say(t, null, end[5]?.[0] ?? "경기가 종료되었습니다.");
-        this.say(t, winner, pick(flat("ceremony")));
+        if (this.casual) { if (rand() < 0.5) this.say(t, winner, pick(CASUAL_WIN)); else this.say(t, loser, pick(CASUAL_LOSE)); }
+        else this.say(t, winner, pick(flat("ceremony")));
         return;
       }
     }
