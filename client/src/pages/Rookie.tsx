@@ -26,6 +26,7 @@ import { BatchRunning } from "@/components/rookie/Batch";
 import { ReportView, type ActResult } from "@/components/rookie/Report";
 import { TodayPanel } from "@/components/rookie/Today";
 import { BracketPanel } from "@/components/rookie/Bracket";
+import { ClanWarPanel } from "@/components/rookie/ClanWar";
 import type { Activity } from "../../../server/rookie/logic";
 
 type View = "home" | "shop" | "team" | "calendar" | "log" | "mentor" | "fans" | "ach" | "rank";
@@ -99,7 +100,20 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
     },
     onError: sync.onError,
   });
-  const busy = act.isPending || bracketPlay.isPending;
+  /** 클랜전: 엔트리 제출 · 다음 세트 */
+  const warEntry = m.warEntry.useMutation({ onSuccess: r => { sync.onSuccess(r); window.scrollTo(0, 0); }, onError: sync.onError });
+  const warPlay = m.warPlay.useMutation({
+    onSuccess: (r, vars) => {
+      sync.onSuccess(r);
+      const res = r.result as { games: PlayedGame[]; war: NonNullable<RookieState["war"]>; finished?: ActResult & { win: boolean; score: [number, number]; oppClan: string; played: boolean; myWon: boolean } };
+      if (res.finished) setReport({ ...res.finished, war: res.war, games: undefined });
+      if (!vars.quick && res.games.length) setWatch({ games: res.games, title: "클랜전" });
+      else if (res.games.length === 0 && !vars.quick) toast.info("관전할 경기가 없습니다");
+      window.scrollTo(0, 0);
+    },
+    onError: sync.onError,
+  });
+  const busy = act.isPending || bracketPlay.isPending || warEntry.isPending || warPlay.isPending;
   const doAct = (a: Activity, title = "") => { setActTitle(title); act.mutate(a as never); };
 
   if (watch) return <MatchViewer s={s} games={watch.games} title={watch.title} onClose={() => setWatch(null)} />;
@@ -142,6 +156,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
   // 알림 띠
   const banners: ReactNode[] = [];
   if (s.bracket) banners.push(<Banner key="br" icon={s.bracket.kind === "courage" ? "🎓" : "🏆"} title={`${s.bracket.title} 진행 중`} desc={`${roundName(s.bracket.size, s.bracket.round)} · 내 경기를 한 판씩 치르세요`} action="이어서" onClick={() => go("home")} />);
+  if (s.war) banners.push(<Banner key="wr" icon="⚔️" title="클랜전 진행 중" desc={s.war.phase === "entry" ? "길드장이 엔트리를 짜야 합니다" : `${s.war.score[0]} : ${s.war.score[1]} · 다음 세트를 진행하세요`} action="이어서" onClick={() => go("home")} />);
   if (today.openEvents > 0) banners.push(<Banner key="oe" icon="🎪" title={`신청할 수 있는 대회가 ${today.openEvents}개 있어요!`} desc="신청해 두면 그날 직접 참가합니다 (놓치면 불참)" action="대회 보기" onClick={() => go("events")} />);
   if (s.nego) banners.push(<Banner key="n" icon="💼" title="연봉 협상 중" desc={`구단 제시 월급 ${s.nego.offer}만원 · ${dateText(s.nego.until).slice(5)}까지`} action="협상" onClick={() => go("more", "team")} />);
   if (s.offers.length) banners.push(<Banner key="o" icon="📨" title={`${s.fa ? "영입" : "이적"} 제안 ${s.offers.length}건`} desc="구단 화면에서 확인하세요" action="보기" onClick={() => go("more", "team")} />);
@@ -203,8 +218,8 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
         {tab === "home" && (
           <>
             <WeekStrip s={s} picks={today.weekPicks} onOpenCalendar={() => open("calendar")} />
-            {banners.filter(b => (b as { key?: string }).key !== "br")}
-            {s.bracket ? <BracketPanel s={s} b={s.bracket} busy={busy} onPlay={quick => bracketPlay.mutate({ quick })} /> : <TodayPanel s={s} today={today} busy={busy} onAct={a => doAct(a, ACT_NAMES[a.kind])} onLadderMaps={sel => ladderMaps.mutate({ sel })} onOpen={v => (v === "mentor" ? open("mentor") : go("events"))} />}
+            {banners.filter(b => !["br", "wr"].includes((b as { key?: string }).key ?? ""))}
+            {s.war ? <ClanWarPanel s={s} war={s.war} busy={busy} onEntry={names => warEntry.mutate({ names })} onPlay={quick => warPlay.mutate({ quick })} /> : s.bracket ? <BracketPanel s={s} b={s.bracket} busy={busy} onPlay={quick => bracketPlay.mutate({ quick })} /> : <TodayPanel s={s} today={today} busy={busy} onAct={a => doAct(a, ACT_NAMES[a.kind])} onLadderMaps={sel => ladderMaps.mutate({ sel })} onOpen={v => (v === "mentor" ? open("mentor") : go("events"))} />}
             {section("✨ 바로가기")}
             {actGrid(shortcuts, 4)}
             <RivalCard s={s} />
@@ -216,7 +231,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
         )}
         {tab === "events" && (
           <>
-            {banners.filter(b => !["oe", "br"].includes((b as { key?: string }).key ?? ""))}
+            {banners.filter(b => !["oe", "br", "wr"].includes((b as { key?: string }).key ?? ""))}
             <EventsView s={s} />
           </>
         )}
@@ -235,7 +250,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
           </>
         )}
         {tab === "shop" && <ShopView s={s} />}
-        {tab === "clan" && <ClanView s={s} busy={busy} onAct={(a, title) => doAct(a, title)} />}
+        {tab === "clan" && <ClanView s={s} today={today} busy={busy} onAct={(a, title) => doAct(a, title)} />}
         {tab === "more" && (
           <>
             {actGrid([
@@ -258,7 +273,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
 }
 const ACT_NAMES: Record<Activity["kind"], string> = {
   lobby: "공방 연습", ladder: "래더", clan: "클랜 연습", internal: "팀 내부 연습", stream: "방송", rest: "휴식", work: "아르바이트",
-  mentor: "멘토 과외", clanTest: "클랜 입단 시험", tryout: "입단 테스트", event: "대회", courage: "커리지 매치", draft: "드래프트", promo: "승강전",
+  mentor: "멘토 과외", clanTest: "클랜 입단 시험", tryout: "입단 테스트", event: "대회", courage: "커리지 매치", draft: "드래프트", promo: "승강전", friendly: "친선경기", war: "클랜전",
 };
 
 /** 아래 탭 */

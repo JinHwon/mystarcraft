@@ -30,14 +30,15 @@ export function MatchViewer({ s, games, title, extra, onClose }: { s: RookieStat
   if (i < games.length) {
     const g = games[i];
     const opp = oppPlayer(g.opp, i);
+    const lp = g.left ? oppPlayer(g.left, i + 50) : me;
     const key = seriesKey(g.label);
     const prev = games.slice(0, i).filter(x => seriesKey(x.label) === key);
     const score: [number, number] = [prev.filter(x => x.winner === "a").length, prev.filter(x => x.winner === "b").length];
     const myTeam = s.team ? <TeamLogo team={ORIG_TEAMS[s.team.team]} className="w-[64px] h-[38px]" /> : <div className="w-[64px] h-[38px] flex items-center justify-center text-[10px] text-[#8fd0ff] border border-neutral-700">{s.name}</div>;
     return (
-      <Broadcast key={i} s={fake} stageName={g.label} lp={me} rp={opp} mapId={g.mapId}
-        set={{ mapId: g.mapId, a: ME_ID, b: opp.id, winner: g.winner, duration: g.duration, timeline: g.timeline }}
-        leftIsA score={score} leftLogo={myTeam} rightLogo={logoOf(g.opp)} speed={speed} setSpeed={setSpeed}
+      <Broadcast key={i} s={fake} stageName={g.label} lp={lp} rp={opp} mapId={g.mapId}
+        set={{ mapId: g.mapId, a: lp.id, b: opp.id, winner: g.winner, duration: g.duration, timeline: g.timeline }}
+        leftIsA score={score} leftLogo={g.left ? logoOf(g.left) : myTeam} rightLogo={logoOf(g.opp)} speed={speed} setSpeed={setSpeed}
         onDone={() => setI(i + 1)} onClose={() => setI(games.length)} />
     );
   }

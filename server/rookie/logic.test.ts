@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rollStats, sumStats, isMonthEnd, courageDays, draftDay, DAY_SLOTS, STAT_CAP, ladderGrade, capOf, mapUnd } from "@shared/rookie/model";
+import { ymd, rollStats, sumStats, isMonthEnd, courageDays, draftDay, DAY_SLOTS, STAT_CAP, ladderGrade, capOf, mapUnd } from "@shared/rookie/model";
 import * as L from "./logic";
 
 const mk = () => L.newRookie({ name: "테스트", race: "zerg", concept: "control", stats: rollStats("control") });
@@ -449,5 +449,93 @@ describe("선수 키우기", () => {
     // 프로는 못 나감
     const t = mk(); t.day = days[0]; t.status = "pro";
     expect(() => L.startCourage(t)).toThrow(/프로/);
+  });
+
+  it("클랜전: 일정이 2주마다 나오고, 길드장이 아니면 엔트리가 정해져 있고, 세트를 한 판씩 진행해 3선승으로 끝난다", async () => {
+    const { clanRelations } = await import("@shared/rookie/model");
+    const s = veteran(mk());
+    s.clan = { id: "pcbang", joined: 0, points: 50, w: 0, l: 0, members: L.rosterOf("pcbang") };
+    const sch = L.warSchedule(s, 4);
+    expect(sch.length).toBe(4);
+    expect(sch.every(w => ymd(w.day).dow === 0)).toBe(true);
+    expect(sch[1].day - sch[0].day).toBeGreaterThanOrEqual(14);
+    expect(sch.every(w => w.opp !== "pcbang")).toBe(true);
+    expect(new Set(L.warSchedule(s, 8).map(w => w.opp)).size).toBeGreaterThan(2);
+    const rel = clanRelations("pcbang");
+    expect(rel.rival).not.toBe("pcbang");
+    expect(rel.friend).not.toBe("pcbang");
+    // 클랜전 날까지 진행
+    let guard = 0;
+    while (s.day < sch[0].day && guard++ < 60) L.act(s, { kind: "rest" });
+    expect(s.day).toBe(sch[0].day);
+    expect(L.eventStop(s, s.day)).toBe("war");
+    L.startWar(s);
+    const war = s.war!;
+    expect(war.phase).toBe("fight");
+    expect(war.my.length).toBe(5);
+    expect(war.opp.length).toBe(5);
+    expect(() => L.act(s, { kind: "rest" })).toThrow(/클랜전/);
+    const day = s.day;
+    let finished: unknown;
+    let sets = 0;
+    while (s.war) {
+      const x = L.warPlay(s, true);
+      sets++;
+      finished = x.finished ?? finished;
+    }
+    expect(sets).toBeGreaterThanOrEqual(3);
+    expect(sets).toBeLessThanOrEqual(5);
+    expect(finished).toBeDefined();
+    expect(s.clan.wars![0].day).toBe(day);
+    expect(s.clan.wars![0].my + s.clan.wars![0].their).toBe(sets);
+    const rec = s.clan.vsClan![sch[0].opp];
+    expect(rec[0] + rec[1]).toBe(1);
+    expect(s.day).toBeGreaterThan(day);
+    // 다음 일정은 앞으로
+    expect(L.warSchedule(s, 1)[0].day).toBeGreaterThan(day);
+  });
+
+  it("클랜전: 길드장은 엔트리를 직접 짜고, 불참하면 내 세트는 기권패 · 직책 승진과 길드장 세습", () => {
+    const s = veteran(mk());
+    s.clan = { id: "pcbang", joined: 0, points: 400, w: 0, l: 0, members: L.rosterOf("pcbang"), role: "master" };
+    const day0 = L.warSchedule(s, 1)[0].day;
+    let guard = 0;
+    while (s.day < day0 && guard++ < 60) L.act(s, { kind: "rest" });
+    L.startWar(s);
+    expect(s.war!.phase).toBe("entry");
+    expect(() => L.warEntry(s, ["없는사람", "a", "b", "c", "d"])).toThrow();
+    const names = L.warEntrySuggest(s);
+    expect(names.length).toBe(5);
+    L.warEntry(s, names);
+    expect(s.war!.phase).toBe("fight");
+    expect(s.war!.my.map(m => m.name).sort()).toEqual([...names].sort());
+    while (s.war) L.warPlay(s, true);
+    // 길드장이 탈퇴하면 부길드장이 길드장이 됨
+    const sub = s.clan!.members.find(m => m.role === "sub")!;
+    const r = L.leaveClan(s);
+    expect(r.successor).toBeDefined();
+    expect(s.clan).toBeUndefined();
+    void sub;
+    // 불참: 엔트리에 들 만큼 강하면 기권패 처리
+    const t = veteran(mk());
+    for (const k of Object.keys(t.stats)) t.stats[k as keyof typeof t.stats] = 900;
+    t.clan = { id: "pcbang", joined: 0, points: 100, w: 0, l: 0, members: L.rosterOf("pcbang") };
+    const d1 = L.warSchedule(t, 1)[0].day;
+    guard = 0;
+    while (t.day < d1 && guard++ < 60) L.act(t, { kind: "rest" });
+    L.act(t, { kind: "rest" });
+    expect(t.clan.wars![0].played).toBe(true);
+    expect(t.clan.warWon ?? 0).toBe(0);
+    expect(t.log.some(l => l.text.includes("기권패"))).toBe(true);
+    expect(t.war).toBeUndefined();
+  });
+
+  it("친선경기: 친한 클랜과 연습하고 전적이 쌓인다", () => {
+    const s = veteran(mk());
+    s.clan = { id: "pcbang", joined: 0, points: 50, w: 0, l: 0, members: L.rosterOf("pcbang") };
+    const r = L.act(s, { kind: "friendly" }) as { batch: { count: number } };
+    expect(r.batch.count).toBe(8);
+    // 이어서 자동으로 지나간 날에도 친선경기를 할 수 있어서 8판 이상
+    expect(s.clan.friendly![0] + s.clan.friendly![1]).toBeGreaterThanOrEqual(8);
   });
 });

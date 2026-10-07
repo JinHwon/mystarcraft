@@ -8,7 +8,7 @@ import { DOW, dateText, ymd } from "@shared/rookie/model";
 import type { DayReport, PlayedGame } from "../../../../server/rookie/logic";
 import { BatchBody, type BatchResult } from "./Batch";
 import { BracketTree } from "./Bracket";
-import type { Bracket } from "@shared/rookie/model";
+import { CLAN_BY_ID, type Bracket, type ClanWar } from "@shared/rookie/model";
 
 /** 활동 하나를 마친 결과 (서버 act 의 반환) */
 export interface ActResult {
@@ -26,6 +26,8 @@ export interface ActResult {
   rank?: number; team?: number; squad?: number;
   /** 대회·커리지 매치 대진표 (시작할 때, 끝났을 때) */
   bracket?: Bracket;
+  /** 클랜전 결과 */
+  war?: ClanWar; win?: boolean; score?: [number, number]; oppClan?: string; played?: boolean; myWon?: boolean;
 }
 
 const dayText = (d: number) => `${dateText(d).slice(5)} (${DOW[ymd(d).dow]})`;
@@ -62,6 +64,7 @@ function Primary({ res }: { res: ActResult }) {
   if (res.work) return line(<><div className="text-2xl">💼</div><div>아르바이트로 <b className="text-emerald-300">+{res.work.money}만원</b></div></>);
   if (res.mentor) return line(<><div className="text-2xl">📚</div><div>{res.mentor.mentor} 선수에게 과외 (-{res.mentor.price}만원)</div><div className="text-emerald-300">{Object.entries(res.mentor.delta).filter(([, v]) => v).map(([k, v]) => `${STAT_LABELS[k as StatKey]} ${v! > 0 ? "+" : ""}${v}`).join(" · ")}</div></>);
   if (res.place !== undefined) return line(<><div className="text-2xl">{res.place === 1 ? "🏆" : res.place === 2 ? "🥈" : res.place === 3 ? "🥉" : "🎮"}</div><div className="font-black text-[16px] text-amber-300">{res.place === 1 ? "우승!" : res.place === 2 ? "준우승" : res.place === 3 ? "3위" : `${res.place}강 탈락`}</div>{res.prize ? <div className="text-emerald-300">상금 {res.prize}만원</div> : null}</>);
+  if (res.score && res.oppClan) return line(<><div className="text-2xl">{res.win ? "🏆" : "💧"}</div><div className="font-black text-[16px] text-amber-300">클랜전 {res.score[0]} : {res.score[1]} {res.win ? "승리!" : "패배"}</div><div className="text-[12px] text-muted-foreground">vs [{CLAN_BY_ID[res.oppClan]?.tag}] {CLAN_BY_ID[res.oppClan]?.name}{res.played ? ` · 내 세트 ${res.myWon ? "승" : "패"}` : " · 관전"}</div></>);
   if (res.rank !== undefined) return line(<><div className="text-2xl">📋</div><div>드래프트 {res.rank}위{res.team !== undefined ? " · 구단에 지명되었습니다 🎉" : ""}</div></>);
   if (res.squad !== undefined) return line(<><div className="text-2xl">{res.won ? "⬆️" : "🛡️"}</div><div>승강전 {res.won ? "승리" : "패배"} · 지금 {res.squad}군</div></>);
   if (res.won !== undefined) return line(<><div className="text-2xl">{res.won ? "🎉" : "💧"}</div><div className="font-black">{res.won ? "합격!" : "불합격"}</div></>);

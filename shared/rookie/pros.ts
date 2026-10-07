@@ -70,10 +70,15 @@ export type { Race };
 /** 클랜 명단: 프로는 원작 선수 능력치와 게임 아이디·본명으로 채움 */
 export function clanMembers(clanId: string): ClanMember[] {
   const c = CLAN_BY_ID[clanId];
-  return clanRoster(c, clanProIds(clanId)).map(m => {
+  const list = clanRoster(c, clanProIds(clanId)).map(m => {
     if (!m.pro) return m;
     const p = PROS[m.pro.id];
     const id = proGamerId(p.id);
     return { ...m, name: id, ...(id !== p.name ? { real: p.name } : {}), race: p.race, stats: { ...p.stats }, pro: { id: p.id, team: p.team } };
   });
+  // 직책: 아마추어 중 점수가 가장 높은 사람이 길드장, 다음 두 명이 부길드장
+  const ams = list.filter(m => !m.pro).sort((a, b) => b.points - a.points);
+  if (ams[0]) ams[0].role = "master";
+  for (const m of ams.slice(1, 3)) m.role = "sub";
+  return list;
 }

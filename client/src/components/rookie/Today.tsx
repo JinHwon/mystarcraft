@@ -7,7 +7,7 @@ import { ORIG_MAPS, ORIG_TEAMS } from "@shared/career/originalData";
 import { matchupValue } from "@shared/career/view";
 import type { Race } from "@shared/career/rules";
 import {
-  AUTO_GAMES, CLAN_BY_ID, DAY_GAMES, DOW, LADDER_REQ, MAP_UND_MAX, RACE_NAMES, TIERS, TIER_ORDER, WEEK_PICKS, dateText, ladderGrade, mapUnd, sumStats, ymd,
+  AUTO_GAMES, CLAN_BY_ID, clanRelations, DAY_GAMES, DOW, LADDER_REQ, MAP_UND_MAX, RACE_NAMES, TIERS, TIER_ORDER, WEEK_PICKS, dateText, ladderGrade, mapUnd, sumStats, ymd,
   type RookieState, type Tier,
 } from "@shared/rookie/model";
 import type { Activity } from "../../../../server/rookie/logic";
@@ -142,6 +142,7 @@ export function TodayPanel({ s, today, busy, onAct, onLadderMaps, onOpen }: {
     { key: "ladder", icon: "⚔️", label: "래더", desc: today.ladderLock ?? `${ladderGrade(s.ladder.score)} · ${s.ladder.score}점 · 이번 달 맵 보기`, lock: today.ladderLock ?? undefined, onClick: () => setSheet("ladder") },
     { key: "clan", icon: "🛡️", label: "클랜 연습", desc: s.clan ? `[${CLAN_BY_ID[s.clan.id]?.tag}] ${today.clanRank}위 · ${DAY_GAMES}판` : "", hide: !s.clan, onClick: () => onAct({ kind: "clan" }) },
     { key: "internal", icon: "🏢", label: "팀 내부 연습", desc: s.team ? `이번 달 ${s.team.monthW}승 ${s.team.monthL}패 · ${DAY_GAMES}판` : "", hide: !s.team, onClick: () => onAct({ kind: "internal" }) },
+    { key: "friendly", icon: "🤝", label: "친선경기", desc: s.clan ? `친한 클랜 [${CLAN_BY_ID[clanRelations(s.clan.id).friend]?.tag}] · ${DAY_GAMES}판` : "", hide: !s.clan, onClick: () => onAct({ kind: "friendly" }) },
     { key: "stream", icon: "📺", label: "방송", desc: "별풍선 · 인지도", onClick: () => onAct({ kind: "stream" }) },
     { key: "rest", icon: "💤", label: "휴식", desc: s.cond >= 100 ? "컨디션 가득 참" : "컨디션 크게 회복", onClick: () => onAct({ kind: "rest" }) },
     { key: "work", icon: "💼", label: "아르바이트", desc: "컨디션을 쓰고 돈 벌기", hide: pro, onClick: () => onAct({ kind: "work" }) },
@@ -164,6 +165,7 @@ export function TodayPanel({ s, today, busy, onAct, onLadderMaps, onOpen }: {
         </div>
       </div>
       {today.todayEvent === "courage" && s.status !== "pro" && <EventCard icon="🎓" title="오늘은 커리지 매치!" desc="32강 토너먼트 · 대진표를 보고 한 판씩 · 우승하면 준프로" disabled={busy} onClick={() => onAct({ kind: "courage" })} />}
+      {today.todayEvent === "war" && s.clan && today.clanWar?.schedule[0] && <EventCard icon="⚔️" title={`오늘은 클랜전! vs [${CLAN_BY_ID[today.clanWar.schedule[0].opp]?.tag}] ${CLAN_BY_ID[today.clanWar.schedule[0].opp]?.name}`} desc={`${s.clan.role === "master" ? "길드장이 직접 엔트리를 짭니다" : "엔트리에 들면 한 세트를 직접 뛰고, 아니면 관전합니다"} · 5세트 3선승${today.clanWar.schedule[0].opp === today.clanWar.rival ? " · 🔥 라이벌 클랜" : ""}`} disabled={busy} onClick={() => onAct({ kind: "war" })} />}
       {today.todayEvent === "draft" && <EventCard icon="📋" title="오늘은 드래프트!" desc="준프로 16명 4라운드 · 상위 8명은 구단이 지명할 수도" disabled={busy} onClick={() => onAct({ kind: "draft" })} />}
       {today.todayEvent === "promo" && s.team && <EventCard icon={s.team.squad === 2 ? "⬆️" : "🛡️"} title="팀 내 승강전 날" desc={s.team.squad === 2 ? `2군 1위면 1군 꼴찌와 3판 2선승 (이번 달 ${s.team.monthW}승 ${s.team.monthL}패)` : "1군 자리를 지키는 경기 (3판 2선승)"} disabled={busy} onClick={() => onAct({ kind: "promo" })} />}
       {todayEvents.map(e => <EventCard key={e.id} icon="🏆" title={`오늘은 ${e.name}!`} desc={`${e.size}강 · 대진표를 보고 한 판씩 · 우승 ${e.prize[0]}만원`} disabled={busy} onClick={() => onAct({ kind: "event", id: e.id })} />)}

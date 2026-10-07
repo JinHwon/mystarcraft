@@ -83,6 +83,8 @@ const activitySchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("ladder"), watch: watchN }),
   z.object({ kind: z.literal("clan"), target: z.string().max(40).optional(), watch: watchN }),
   z.object({ kind: z.literal("internal"), watch: watchN }),
+  z.object({ kind: z.literal("friendly"), watch: watchN }),
+  z.object({ kind: z.literal("war") }),
   z.object({ kind: z.literal("stream") }), z.object({ kind: z.literal("rest") }), z.object({ kind: z.literal("work") }),
   z.object({ kind: z.literal("mentor"), stat: z.enum(STAT_KEYS as unknown as [StatKey, ...StatKey[]]), pro: z.number().int() }),
   z.object({ kind: z.literal("clanTest"), id: z.string().max(30) }),
@@ -157,10 +159,13 @@ export const rookieRouter = router({
   clanPractice: p.input(z.object({ target: z.string().max(40).optional() }).optional()).mutation(({ ctx, input }) => mutate(ctx.user.id, s => ({ games: [L.clanPractice(s, input?.target)] }))),
   clanFeedback: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.clanFeedback(s))),
   leaveClan: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.leaveClan(s))),
-  batch: p.input(z.object({ kind: z.enum(["lobby", "ladder", "clan", "internal"]), tier: z.enum(tierKeys).optional(), mapId: z.number().int().min(0).optional() }))
+  batch: p.input(z.object({ kind: z.enum(["lobby", "ladder", "clan", "internal", "friendly"]), tier: z.enum(tierKeys).optional(), mapId: z.number().int().min(0).optional() }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.batch(s, input.kind, { tier: input.tier, mapId: input.mapId }))),
   act: p.input(activitySchema).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.act(s, input as L.Activity))),
   /** 진행 중인 대회: 내 다음 경기 하나 (quick = 중계 없이 결과만) */
   bracketPlay: p.input(z.object({ quick: z.boolean().optional() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.bracketPlay(s, input.quick))),
+  /** 클랜전: 길드장이 엔트리 제출 · 다음 세트 진행 */
+  warEntry: p.input(z.object({ names: z.array(z.string().max(40)).length(5) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => { L.warEntry(s, input.names); return { war: s.war }; })),
+  warPlay: p.input(z.object({ quick: z.boolean().optional() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.warPlay(s, input.quick))),
   nextDay: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.nextDay(s))),
 });
