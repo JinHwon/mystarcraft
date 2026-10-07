@@ -72,7 +72,7 @@ export function LevelBar({ s, compact }: { s: RookieState; compact?: boolean }) 
 }
 
 /** 오늘부터 일주일: 날마다 무슨 일정이 있는지 (달력처럼 하루씩 진행) */
-export function WeekStrip({ s, onOpenCalendar }: { s: RookieState; onOpenCalendar: () => void }) {
+export function WeekStrip({ s, picks, onOpenCalendar }: { s: RookieState; /** 이번 주에 직접 고르는 날 */ picks: number[]; onOpenCalendar: () => void }) {
   // 실제 달력처럼 이번 주 일요일 ~ 토요일, 오늘이 선택된 상태
   const sunday = s.day - ymd(s.day).dow;
   const days = Array.from({ length: 7 }, (_, i) => sunday + i);
@@ -94,7 +94,7 @@ export function WeekStrip({ s, onOpenCalendar }: { s: RookieState; onOpenCalenda
     <button onClick={onOpenCalendar} className="w-full rounded-2xl bg-card border border-border p-2 text-left">
       <div className="flex items-center justify-between px-0.5 mb-1">
         <span className="text-[12px] font-black text-foreground">📅 {x0.y}년 {x0.m}월</span>
-        <span className="text-[10.5px] text-muted-foreground">달력 보기 ›</span>
+        <span className="text-[10.5px] text-muted-foreground"><span className="text-amber-300">⭐ = 직접 고르는 날</span> · 달력 ›</span>
       </div>
       <div className="grid grid-cols-7 gap-1">
         {days.map(d => {
@@ -106,7 +106,7 @@ export function WeekStrip({ s, onOpenCalendar }: { s: RookieState; onOpenCalenda
             <div key={d} className={cn("rounded-xl border py-1 flex flex-col items-center min-h-[56px]", today ? "border-primary bg-primary/20 ring-1 ring-primary" : past ? "border-border/60 bg-muted/20 opacity-70" : "border-border bg-background/40", d < 0 && "opacity-25")}>
               <span className={cn("text-[9.5px]", x.dow === 0 ? "text-rose-300" : x.dow === 6 ? "text-sky-300" : "text-muted-foreground")}>{DOW[x.dow]}</span>
               <span className={cn("text-[13px] font-black leading-tight", today ? "text-primary" : "text-foreground")}>{x.d}</span>
-              <span className="text-[11px] leading-none mt-0.5">{ic.slice(0, 2).join("")}</span>
+              <span className="text-[11px] leading-none mt-0.5">{picks.includes(d) ? "⭐" : ""}{ic.slice(0, picks.includes(d) ? 1 : 2).join("")}</span>
               {sum && (sum.w || sum.l) ? <span className="text-[9px] mt-auto"><span className="text-emerald-300">{sum.w}</span>-<span className="text-rose-300">{sum.l}</span></span> : today ? <span className="text-[8.5px] text-primary mt-auto">오늘</span> : null}
             </div>
           );

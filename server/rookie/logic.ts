@@ -9,7 +9,7 @@ import { ITEM_BY_KEY, slotOf } from "@shared/career/items";
 import { initialPlayers } from "@shared/career/init";
 import { mapView } from "@shared/career/view";
 import {
-  CONCEPTS, DAY_SLOTS, EVENT_NAMES, LADDER_START, RACES, ROOKIE_BONUS, ROOKIE_PRICE, ROOKIE_USES, SEMIPRO_DAYS, STATUS_NAMES,
+  CONCEPTS, DAY_SLOTS, DAY_GAMES, AUTO_GAMES, WEEK_PICKS, weekStartOf, EVENT_NAMES, LADDER_START, RACES, ROOKIE_BONUS, ROOKIE_PRICE, ROOKIE_USES, SEMIPRO_DAYS, STATUS_NAMES,
   STAT_MAX_ONE, STAT_MIN_ONE, TIERS, TIER_ORDER, TRYOUT_MIN, VITA_PER_DAY, capOf, courageDays, dateText, draftDay, isMonthEnd,
   ladderGrade, nickname, statsAround, sumStats, ymd, ACHIEVEMENTS, MENTOR_PRICE, STAT_CAP, emptyCounts, dayOf, rollStats,
   CLANS, CLAN_BY_ID, mapUnd, CLAN_RETRY_DAYS, CLAN_STRENGTH, LADDER_REQ, MAX_LEVEL, eventReq, levelNeed, withTag, LEVEL_CAP_BONUS, type ClanMember,
@@ -19,7 +19,7 @@ import { simulateSet } from "../gameSimulation";
 import { mapAdvantage } from "../career/core";
 import type { SetTimeline } from "../gameSimulation";
 import { fanPosts, type FanKind } from "./fans";
-import { clanMembers, clanTagOfPro, proGamerId } from "@shared/rookie/pros";
+import { clanMembers, clanProIds, clanTagOfPro, proGamerId } from "@shared/rookie/pros";
 
 /** 클랜 명단 버전 (바뀌면 불러올 때 새 명단으로 교체) */
 const ROSTER_VER = 2;
@@ -239,7 +239,7 @@ function grow(s: RookieState, opp: Opp, won: boolean, mul = 1) {
   const keys = [...STAT_KEYS].sort(() => rand() - 0.5);
   if (won) {
     const n = randInt(2, 3);
-    for (const k of keys.slice(0, n)) s.stats[k] = clampStat(s.stats[k] + Math.max(0, Math.round(randInt(3, 7) * ratio * room * 0.85)));
+    for (const k of keys.slice(0, n)) s.stats[k] = clampStat(s.stats[k] + Math.max(0, Math.round(randInt(3, 7) * ratio * room * 0.32)));
   } else if (ratio > 1.15 && rand() < 0.35) {
     // 훨씬 강한 상대에게 지면 가끔은 배움
     s.stats[keys[0]] = clampStat(s.stats[keys[0]] + Math.max(1, Math.round(randInt(1, 3) * room)));
@@ -382,7 +382,7 @@ function ladderOpp(score: number): Opp {
     o.ladder = Math.round(1100 + (sumStats(o.stats) - 3000) * 0.38 + randInt(-80, 80));
     return o;
   }
-  const total = Math.max(3400, Math.min(6000, Math.round(3100 + (score - 1100) / 0.36 + randInt(-300, 300))));
+  const total = Math.max(3400, Math.min(7500, Math.round(3100 + (score - 1100) / 0.4 + randInt(-300, 300))));
   const semipro = r < 0.55;
   return withCond({ name: nickname(), race: pick(RACES), stats: statsAround(semipro ? Math.max(4000, total) : total), semipro, ladder: Math.round(score + randInt(-120, 120)) });
 }
@@ -450,7 +450,8 @@ export function playLadder(s: RookieState) {
     if (opp.pro) { s.counts.proBeaten++; fan(s, "proBeat", opp.name); }
   }
   // 프로를 이기면 그 팀에서 입단 테스트 제의 (아직 프로가 아니면)
-  if (won && opp.pro && s.status !== "pro" && rand() < 0.35 && !s.tryouts.some(t => t.team === opp.pro!.team)) {
+  // (무소속 프로를 이겼을 때는 입단 제의 없음)
+  if (won && opp.pro && opp.pro.team < 12 && s.status !== "pro" && rand() < 0.35 && !s.tryouts.some(t => t.team === opp.pro!.team)) {
     s.tryouts.push({ team: opp.pro.team, until: s.day + 14, from: `래더에서 ${opp.name} 선수를 꺾음` });
     log(s, "📩", `${PRO_TEAMS[opp.pro.team].name}에서 입단 테스트를 제의했습니다! (${opp.name} 선수를 래더에서 이김 · 2주 안에)`);
     mark(s, "📩");
@@ -989,7 +990,7 @@ export function mentorsFor(s: RookieState, stat: StatKey) {
   return [...pool].sort((a, b) => b.stats[stat] - a.stats[stat]).slice(0, 3).map(p => ({ id: p.id, name: p.name, team: p.team, value: p.stats[stat] }));
 }
 /** 같은 팀 선배 · 명문 클랜(프로 소속) 이면 싸게 */
-export function mentorPrice(s: RookieState) { return s.team || (s.clan && (CLAN_BY_ID[s.clan.id]?.pros.length ?? 0) > 0) ? MENTOR_PRICE.teammate : MENTOR_PRICE.outside; }
+export function mentorPrice(s: RookieState) { return s.team || (s.clan && clanProIds(s.clan.id).length > 0) ? MENTOR_PRICE.teammate : MENTOR_PRICE.outside; }
 /** 프로에게 과외: 고른 능력치를 집중적으로 (하루 한 번 · 행동 3) */
 export function mentor(s: RookieState, stat: StatKey, proId: number) {
   if (!STAT_KEYS.includes(stat)) throw new RookieError("배울 능력치를 고르세요");
@@ -1185,7 +1186,7 @@ export type BatchKind = "lobby" | "ladder" | "clan" | "internal";
  * 남은 행동만큼 한 번에 (중계 없이). 하다가 조건이 안 되면 거기서 멈춤
  * 결과: 몇 판 · 승패 · 능력치 변화 · 컨디션 · 래더/클랜 점수 · 레벨
  */
-export function batch(s: RookieState, kind: BatchKind, opts: { tier?: Tier; mapId?: number; max?: number } = {}) {
+export function batch(s: RookieState, kind: BatchKind, opts: { tier?: Tier; mapId?: number; max?: number; /** 처음 몇 판은 중계로 볼 수 있게 (최대 3) */ watch?: number } = {}) {
   if (s.retired) throw new RookieError(s.retired);
   const left = DAY_SLOTS - s.used;
   if (left < 1) throw new RookieError("오늘은 더 할 수 없습니다. 다음 날로 넘어가세요");
@@ -1195,17 +1196,20 @@ export function batch(s: RookieState, kind: BatchKind, opts: { tier?: Tier; mapI
   const mapId = opts.mapId ?? s.lobbyPref?.mapId ?? 0;
   if (kind === "lobby") { if (!TIERS[tier]) throw new RookieError("방을 고르세요"); s.lobbyPref = { tier, mapId }; }
   const results: Array<{ won: boolean; opp: string; map: string }> = [];
+  const watched: PlayedGame[] = [];
+  const watchN = Math.max(0, Math.min(3, opts.watch ?? 0));
   let stop: string | undefined;
-  QUIET = true;
   try {
     for (let i = 0; i < n; i++) {
+      QUIET = i >= watchN;
       try {
         let g: PlayedGame;
         if (kind === "lobby") { s.lobby = { tier, mapId, opp: lobbyOpp(tier) }; g = playLobby(s); }
         else if (kind === "ladder") g = playLadder(s);
         else if (kind === "clan") g = clanPractice(s);
         else g = playInternal(s);
-        results.push({ won: g.winner === "a", opp: g.opp.name, map: mapView(g.mapId).name });
+        if (i < watchN) watched.push(g);
+        results.push({ won: g.winner === "a", opp: g.opp.real ? `${g.opp.name}(${g.opp.real})` : g.opp.name, map: mapView(g.mapId).name });
       } catch (e) {
         if (e instanceof RookieError) { stop = e.message; break; }
         throw e;
@@ -1223,6 +1227,7 @@ export function batch(s: RookieState, kind: BatchKind, opts: { tier?: Tier; mapI
     clan: s.clan && before.clan !== undefined ? { points: [before.clan, s.clan.points] as [number, number], rank: [before.rank, clanRank(s)] as [number, number] } : undefined,
     level: [before.level, s.level] as [number, number],
     stop,
+    games: watched.length ? watched : undefined,
   };
 }
 
@@ -1379,6 +1384,180 @@ export function nextDay(s: RookieState) {
   return { day: s.day };
 }
 
+// ── 일정: 직접 고르는 날(선택일) · 자동 진행 ─────────────────────
+/**
+ * 하루는 활동 하나로 끝난다. 일주일(일~토)에 직접 고르는 날은 2번 (대회·커리지 매치 같은 이벤트도 여기 포함),
+ * 나머지 날은 휴식과 연습을 알아서 하며 지나간다.
+ */
+export type StopKind = "event" | "free";
+/** 직접 나가야 하는 이벤트가 있는 날인지 (대회·커리지 매치·드래프트·팀 내 승강전) */
+export function eventStop(s: RookieState, day: number): "event" | "courage" | "draft" | "promo" | null {
+  if (s.events.some(e => e.day === day && e.registered && !e.result)) return "event";
+  const y = ymd(day).y;
+  if (s.status !== "pro" && courageDays(y).includes(day) && !s.doneDays.includes(day)) return "courage";
+  if (s.status === "semipro" && draftDay(y) === day && !s.doneDays.includes(day)) return "draft";
+  if (s.team && isMonthEnd(day) && !s.doneDays.includes(day) && (s.team.squad === 1 || (s.team.monthW >= 3 && s.team.monthW > s.team.monthL))) return "promo";
+  return null;
+}
+/** 이벤트가 없는 주에 직접 고르게 되는 요일 (수·토 먼저). 맨 처음 주는 월·목 */
+const FREE_PREF = [3, 6, 1, 5, 2, 4, 0];
+const FIRST_WEEK_PREF = [1, 4, 2, 5, 3, 6];
+/** 그 주(일~토)에서 직접 고르는 날들 */
+export function weekStops(s: RookieState, day: number): Array<{ day: number; kind: StopKind }> {
+  const ws = weekStartOf(day);
+  const days = Array.from({ length: 7 }, (_, i) => ws + i).filter(d => d >= 0);
+  const ev = days.filter(d => eventStop(s, d));
+  const out: Array<{ day: number; kind: StopKind }> = ev.map(d => ({ day: d, kind: "event" as const }));
+  const pref = ws < 0 ? FIRST_WEEK_PREF : FREE_PREF;
+  for (const dow of pref) {
+    if (out.length >= WEEK_PICKS) break;
+    const d = days.find(x => ymd(x).dow === dow);
+    if (d !== undefined && !ev.includes(d)) out.push({ day: d, kind: "free" });
+  }
+  return out.sort((a, b) => a.day - b.day);
+}
+export const stopKind = (s: RookieState, day: number): StopKind | null => weekStops(s, day).find(x => x.day === day)?.kind ?? null;
+/** 앞으로 직접 고르는 날들 (오늘부터 n일) */
+export function upcomingStops(s: RookieState, n = 21) {
+  const out: Array<{ day: number; kind: StopKind }> = [];
+  for (let d = s.day; d < s.day + n; d += 1) {
+    const k = stopKind(s, d);
+    if (k) out.push({ day: d, kind: k });
+  }
+  return out;
+}
+
+/** 하루 리포트 (직접 한 날 · 자동으로 지나간 날) */
+export interface DayReport {
+  day: number;
+  mode: "chosen" | "auto" | "event";
+  title: string;
+  w: number; l: number;
+  stats: Partial<Stats>;
+  cond: [number, number];
+  money: number;
+  notes: string[];
+}
+const snapOf = (s: RookieState) => ({ stats: { ...s.stats }, cond: s.cond, money: s.money, w: s.record.w, l: s.record.l, top: s.log[0] });
+function reportOf(s: RookieState, b: ReturnType<typeof snapOf>, day: number, mode: DayReport["mode"], title: string): DayReport {
+  const stats: Partial<Stats> = {};
+  for (const k of STAT_KEYS) if (s.stats[k] !== b.stats[k]) stats[k] = s.stats[k] - b.stats[k];
+  const notes: string[] = [];
+  for (const e of s.log) { if (e === b.top) break; notes.push(`${e.icon} ${e.text}`); }
+  return { day, mode, title, w: s.record.w - b.w, l: s.record.l - b.l, stats, cond: [b.cond, s.cond], money: s.money - b.money, notes: notes.reverse().slice(0, 8) };
+}
+
+/** 하루 쉬기: 컨디션을 크게 회복 */
+export function restDay(s: RookieState, amount = 35) {
+  if (s.retired) throw new RookieError(s.retired);
+  const before = s.cond;
+  s.cond = clampCond(s.cond + amount);
+  s.morale = Math.min(100, s.morale + 3);
+  mark(s, "💤");
+  log(s, "💤", `푹 쉬었습니다 (컨디션 ${before}% → ${s.cond}%)`);
+  return { cond: [before, s.cond] as [number, number] };
+}
+/** 자동으로 연습할 방 (직접 고른 방이 없으면 내 실력에 맞는 방) */
+function autoTier(s: RookieState): Tier {
+  const total = sumStats(s.stats);
+  return [...TIER_ORDER].reverse().find(t => TIERS[t].range[0] <= total * 1.02) ?? "newbie";
+}
+/** 직접 고르지 않는 날: 지쳤으면 쉬고, 아니면 연습 (공방·래더·클랜·팀 연습 중) */
+function autoDay(s: RookieState): string {
+  s.used = 0;
+  if (s.status !== "pro" && (s.allowanceDay === undefined || s.day - s.allowanceDay >= 7)) { try { allowance(s); } catch { /* 무시 */ } s.used = 0; }
+  if (s.cond < 45) { restDay(s, 30); return "💤 휴식"; }
+  const kinds: Array<[BatchKind, number]> = [["lobby", 5]];
+  if (!ladderLocked(s)) kinds.push(["ladder", 3]);
+  if (s.clan) kinds.push(["clan", 2]);
+  if (s.team) kinds.push(["internal", 3]);
+  const total = kinds.reduce((a, [, w]) => a + w, 0);
+  let r = rand() * total, kind: BatchKind = "lobby";
+  for (const [k, w] of kinds) { if ((r -= w) < 0) { kind = k; break; } }
+  const pref = s.lobbyPref;
+  try {
+    batch(s, kind, { max: AUTO_GAMES, tier: pref?.tier ?? autoTier(s), mapId: pref?.mapId ?? randomMap() });
+  } finally {
+    // 자동 연습이 내가 고른 방·맵을 덮어쓰지 않게
+    if (pref) s.lobbyPref = pref; else delete s.lobbyPref;
+    s.used = 0;
+  }
+  return `${{ lobby: "🎮 공방 연습", ladder: "⚔️ 래더", clan: "🛡️ 클랜 연습", internal: "🏢 팀 내부 연습" }[kind]} ${AUTO_GAMES}판`;
+}
+
+export type Activity =
+  | { kind: "lobby"; tier?: Tier; mapId?: number; watch?: number }
+  | { kind: "ladder"; watch?: number }
+  | { kind: "clan"; target?: string; watch?: number }
+  | { kind: "internal"; watch?: number }
+  | { kind: "stream" } | { kind: "rest" } | { kind: "work" }
+  | { kind: "mentor"; stat: StatKey; pro: number }
+  | { kind: "clanTest"; id: string }
+  | { kind: "tryout"; team: number }
+  | { kind: "event"; id: number } | { kind: "courage" } | { kind: "draft" } | { kind: "promo" };
+const ACT_TITLE: Record<Activity["kind"], string> = {
+  lobby: "🎮 공방 연습", ladder: "⚔️ 래더", clan: "🛡️ 클랜 연습", internal: "🏢 팀 내부 연습", stream: "📺 방송", rest: "💤 휴식", work: "💼 아르바이트",
+  mentor: "📚 멘토 과외", clanTest: "📝 클랜 입단 시험", tryout: "📝 입단 테스트", event: "🏆 대회", courage: "🎓 커리지 매치", draft: "📋 드래프트", promo: "⬆️ 팀 내 승강전",
+};
+
+/**
+ * 오늘 할 일 하나를 고르면 오늘이 끝나고, 다음 선택일까지 자동으로 지나간다
+ * 결과: 고른 활동의 결과 + 날마다 리포트
+ */
+export function act(s: RookieState, a: Activity) {
+  if (s.retired) throw new RookieError(s.retired);
+  const day = s.day;
+  const b = snapOf(s);
+  s.used = 0;
+  let res: Record<string, unknown> = {};
+  switch (a.kind) {
+    case "lobby": case "ladder": case "clan": case "internal": {
+      if (a.kind === "clan" && a.target) {
+        // 특정 클랜원과 연습: 처음 판은 그 사람, 나머지는 평소처럼
+        const first = clanPractice(s, a.target);
+        const rest = batch(s, "clan", { max: DAY_GAMES - 1 });
+        res = { batch: mergeFirst(first, rest), games: a.watch ? [first] : undefined };
+        break;
+      }
+      const r = batch(s, a.kind, { max: DAY_GAMES, tier: a.kind === "lobby" ? a.tier : undefined, mapId: a.kind === "lobby" ? a.mapId : undefined, watch: a.watch });
+      res = { batch: r, games: r.games };
+      break;
+    }
+    case "stream": res = { stream: stream(s) }; break;
+    case "rest": res = { rest: restDay(s) }; break;
+    case "work": res = { work: partTime(s) }; break;
+    case "mentor": res = { mentor: mentor(s, a.stat, a.pro) }; break;
+    case "clanTest": { const r = clanTest(s, a.id); res = { games: r.games, won: r.won }; break; }
+    case "tryout": { const r = playTryout(s, a.team); res = { games: r.games, won: r.won }; break; }
+    case "event": res = playEvent(s, a.id) as unknown as Record<string, unknown>; break;
+    case "courage": res = playCourage(s) as unknown as Record<string, unknown>; break;
+    case "draft": res = playDraft(s) as unknown as Record<string, unknown>; break;
+    case "promo": res = playPromo(s) as unknown as Record<string, unknown>; break;
+  }
+  s.used = 0;
+  // 오늘 열리는 대회에 신청해 놓고 다른 걸 골랐으면 불참 처리
+  if (a.kind !== "event") for (const e of s.events.filter(x => x.day === day && x.registered && !x.result)) { e.result = "불참"; log(s, "🚫", `${e.name}에 나가지 않았습니다 (불참)`); }
+  nextDay(s);
+  const reports: DayReport[] = [reportOf(s, b, day, ["event", "courage", "draft", "promo"].includes(a.kind) ? "event" : "chosen", ACT_TITLE[a.kind])];
+  // 다음 선택일까지 자동으로
+  for (let guard = 0; guard < 15 && !stopKind(s, s.day); guard++) {
+    const d = s.day, nb = snapOf(s);
+    const title = autoDay(s);
+    nextDay(s);
+    reports.push(reportOf(s, nb, d, "auto", title));
+  }
+  return { activity: a.kind, title: ACT_TITLE[a.kind], ...res, reports };
+}
+/** 특정 클랜원과 먼저 한 판 + 이어서 연속 → 하나의 결과로 */
+function mergeFirst(first: PlayedGame, r: ReturnType<typeof batch> | null) {
+  const won = first.winner === "a";
+  const one = { won, opp: first.opp.real ? `${first.opp.name}(${first.opp.real})` : first.opp.name, map: mapView(first.mapId).name };
+  if (!r) return { kind: "clan" as const, count: 1, w: won ? 1 : 0, l: won ? 0 : 1, results: [one], stats: first.fx.stats, cond: first.fx.cond, level: [0, 0] as [number, number] };
+  const stats: Partial<Stats> = { ...r.stats };
+  for (const [k, v] of Object.entries(first.fx.stats)) stats[k as StatKey] = (stats[k as StatKey] ?? 0) + (v ?? 0);
+  return { ...r, count: r.count + 1, w: r.w + (won ? 1 : 0), l: r.l + (won ? 0 : 1), results: [one, ...r.results], stats, cond: [first.fx.cond[0], r.cond[1]] as [number, number] };
+}
+
 /** 화면용 요약 */
 export function todayInfo(s: RookieState) {
   return {
@@ -1393,5 +1572,24 @@ export function todayInfo(s: RookieState) {
     ladderLock: ladderLocked(s),
     ladderMaps: ladderPool(s),
     clanRank: clanRank(s),
+    ...scheduleInfo(s),
+  };
+}
+/** 일정 화면용: 직접 고르는 날 · 신청할 수 있는 대회 */
+function scheduleInfo(s: RookieState) {
+  const stops = upcomingStops(s, 21);
+  const ws = weekStartOf(s.day);
+  const thisWeek = weekStops(s, s.day);
+  const open = s.events.filter(e => e.day >= s.day && e.day <= s.day + 21 && !e.result && !e.registered && !eventLocked(s, e) && (!e.fee || s.money >= e.fee)).length;
+  return {
+    stops,
+    /** 오늘이 직접 고르는 날인지 (아니면 자동으로 지나가는 날 — 보통은 오늘이 항상 선택일) */
+    stopToday: stopKind(s, s.day),
+    /** 이번 주에 직접 고르는 날 (오늘 포함, 이미 지난 날 포함) */
+    weekPicks: thisWeek.map(x => x.day),
+    weekStart: ws,
+    /** 지금 신청할 수 있는 대회 수 */
+    openEvents: open,
+    todayEvent: eventStop(s, s.day),
   };
 }

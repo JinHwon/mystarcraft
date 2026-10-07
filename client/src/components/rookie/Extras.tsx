@@ -57,10 +57,8 @@ export function RivalCard({ s }: { s: RookieState }) {
 }
 
 // ── 멘토 과외 ─────────────────────────────────────────────────
-export function MentorView({ s }: { s: RookieState }) {
-  const sync = useRookieSync();
+export function MentorView({ s, busy, onAct }: { s: RookieState; busy: boolean; onAct: (a: { kind: "mentor"; stat: StatKey; pro: number }) => void }) {
   const [stat, setStat] = useState<StatKey>(STAT_KEYS[0]);
-  const go = trpc.rookie.mentor.useMutation(sync);
   const pool = s.team ? PROS.filter(p => p.team === s.team!.team) : PROS.filter(p => p.team < 12);
   const mentors = [...pool].sort((a, b) => b.stats[stat] - a.stats[stat]).slice(0, 3);
   const price = s.team ? MENTOR_PRICE.teammate : MENTOR_PRICE.outside;
@@ -68,7 +66,7 @@ export function MentorView({ s }: { s: RookieState }) {
   return (
     <div className="space-y-3">
       <div className="text-sm text-muted-foreground">
-        프로 선수에게 하루 한 번 과외를 받아 원하는 능력치를 집중적으로 올립니다 (행동 3 · {price}만원{s.team ? " · 같은 팀 선배라 싸게" : ""}).
+        프로 선수에게 과외를 받아 원하는 능력치를 집중적으로 올립니다 (오늘 하루 · {price}만원{s.team ? " · 같은 팀 선배라 싸게" : ""}).
         성장 한계 근처에서도 조금은 오르고, 그만큼 가장 높은 다른 능력치가 깎여 균형이 바뀝니다.
       </div>
       <div className="grid grid-cols-4 gap-1.5">
@@ -86,7 +84,7 @@ export function MentorView({ s }: { s: RookieState }) {
               <div className="font-black text-foreground">{p.name} <span className="text-[11px] text-muted-foreground font-normal">{ORIG_TEAMS[p.team].short} · {RACE_NAMES[p.race]}</span></div>
               <div className="text-[11.5px] text-muted-foreground">{STAT_LABELS[stat]} <b className="text-amber-300">{p.stats[stat]}</b> (나 {s.stats[stat]})</div>
             </div>
-            <button onClick={() => go.mutate({ stat, pro: p.id })} disabled={go.isPending || doneToday || s.money < price || DAY_SLOTS - s.used < 3}
+            <button onClick={() => onAct({ kind: "mentor", stat, pro: p.id })} disabled={busy || doneToday || s.money < price}
               className="shrink-0 rounded-xl bg-emerald-600 text-white text-xs font-black px-3 py-2 disabled:opacity-40">📚 과외</button>
           </div>
         ))}

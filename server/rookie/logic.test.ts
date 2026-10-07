@@ -354,4 +354,50 @@ describe("선수 키우기", () => {
     expect(s.money).toBeGreaterThan(m + 10);
     expect(s.used).toBe(3);
   });
+
+  it("하루는 활동 하나: 고르면 오늘이 끝나고 다음 선택일까지 자동으로 지나간다 (일주일에 직접 고르는 날 2번)", () => {
+    const s = mk();
+    expect(L.stopKind(s, s.day)).toBe("free");
+    // 일(~토) 한 주에 직접 고르는 날이 2번 (이벤트 포함)
+    for (let d = 0; d < 120; d++) expect(L.weekStops(s, d).length).toBeLessThanOrEqual(2 + 0);
+    const startDay = s.day;
+    const r = L.act(s, { kind: "lobby", tier: "newbie", mapId: 1 });
+    expect(r.activity).toBe("lobby");
+    expect(r.reports[0].mode).toBe("chosen");
+    expect(r.reports[0].w + r.reports[0].l).toBeGreaterThan(0);
+    expect(s.day).toBeGreaterThan(startDay);
+    expect(L.stopKind(s, s.day)).not.toBeNull();
+    // 중간에 지나간 날은 자동 진행 리포트
+    expect(r.reports.length).toBe(s.day - startDay);
+    for (const a of r.reports.slice(1)) expect(a.mode).toBe("auto");
+    expect(s.used).toBe(0);
+  });
+
+  it("대회에 신청해 두면 그날이 선택일이 되고, 다른 활동을 고르면 불참 처리", () => {
+    const s = mk();
+    L.act(s, { kind: "rest" });
+    const e = s.events.find(x => x.day > s.day)!;
+    e.registered = true; e.level = "newbie";
+    // 대회 날까지 진행
+    let guard = 0;
+    while (s.day < e.day && guard++ < 40) { expect(L.stopKind(s, s.day)).not.toBeNull(); L.act(s, { kind: "rest" }); }
+    if (s.day === e.day) {
+      expect(L.eventStop(s, s.day)).toBe("event");
+      L.act(s, { kind: "rest" });
+      expect(e.result).toBe("불참");
+    }
+  });
+
+  it("자동으로 지나가는 날은 지치면 쉬고, 아니면 연습한다", () => {
+    const s = mk();
+    s.cond = 100;
+    const r = L.act(s, { kind: "stream" });
+    expect(r.reports[0].title).toContain("방송");
+    // 컨디션이 낮으면 어떤 날이든 자동으로 쉰다 (리포트에 휴식이 나옴)
+    const t = mk();
+    t.cond = 40;
+    t.used = 0;
+    const r2 = L.act(t, { kind: "work" });
+    expect(r2.reports.some(x => x.mode === "auto")).toBe(true);
+  });
 });

@@ -76,6 +76,21 @@ const p = protectedProcedure.use(async ({ ctx, next }) => {
   return next();
 });
 
+const watchN = z.number().int().min(0).max(3).optional();
+/** 오늘 하루 동안 할 활동 하나 (고르면 오늘이 끝나고 다음 선택일까지 자동으로 지나감) */
+const activitySchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("lobby"), tier: z.enum(tierKeys).optional(), mapId: z.number().int().min(0).optional(), watch: watchN }),
+  z.object({ kind: z.literal("ladder"), watch: watchN }),
+  z.object({ kind: z.literal("clan"), target: z.string().max(40).optional(), watch: watchN }),
+  z.object({ kind: z.literal("internal"), watch: watchN }),
+  z.object({ kind: z.literal("stream") }), z.object({ kind: z.literal("rest") }), z.object({ kind: z.literal("work") }),
+  z.object({ kind: z.literal("mentor"), stat: z.enum(STAT_KEYS as unknown as [StatKey, ...StatKey[]]), pro: z.number().int() }),
+  z.object({ kind: z.literal("clanTest"), id: z.string().max(30) }),
+  z.object({ kind: z.literal("tryout"), team: z.number().int() }),
+  z.object({ kind: z.literal("event"), id: z.number().int() }),
+  z.object({ kind: z.literal("courage") }), z.object({ kind: z.literal("draft") }), z.object({ kind: z.literal("promo") }),
+]);
+
 export const rookieRouter = router({
   /** 화면에 메뉴를 보여줄지 (누구나 물어볼 수 있음) */
   access: protectedProcedure.query(async ({ ctx }) => {
@@ -144,5 +159,6 @@ export const rookieRouter = router({
   leaveClan: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.leaveClan(s))),
   batch: p.input(z.object({ kind: z.enum(["lobby", "ladder", "clan", "internal"]), tier: z.enum(tierKeys).optional(), mapId: z.number().int().min(0).optional() }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.batch(s, input.kind, { tier: input.tier, mapId: input.mapId }))),
+  act: p.input(activitySchema).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.act(s, input as L.Activity))),
   nextDay: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.nextDay(s))),
 });
