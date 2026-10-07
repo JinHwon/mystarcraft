@@ -7,6 +7,8 @@ import { STAT_LABELS, type StatKey } from "@shared/gameConstants";
 import { DOW, dateText, ymd } from "@shared/rookie/model";
 import type { DayReport, PlayedGame } from "../../../../server/rookie/logic";
 import { BatchBody, type BatchResult } from "./Batch";
+import { BracketTree } from "./Bracket";
+import type { Bracket } from "@shared/rookie/model";
 
 /** 활동 하나를 마친 결과 (서버 act 의 반환) */
 export interface ActResult {
@@ -22,6 +24,8 @@ export interface ActResult {
   won?: boolean;
   place?: number; prize?: number; name?: string;
   rank?: number; team?: number; squad?: number;
+  /** 대회·커리지 매치 대진표 (시작할 때, 끝났을 때) */
+  bracket?: Bracket;
 }
 
 const dayText = (d: number) => `${dateText(d).slice(5)} (${DOW[ymd(d).dow]})`;
@@ -75,6 +79,7 @@ export function ReportView({ res, nextStop, onClose }: { res: ActResult; nextSto
           <div className="text-lg font-black text-foreground">{res.title}</div>
         </div>
         <Primary res={res} />
+        {res.bracket && res.place !== undefined && <details className="rounded-xl border border-border bg-muted/20 px-2.5 py-1.5"><summary className="text-[12px] font-black text-foreground cursor-pointer">📋 최종 대진표 보기</summary><div className="mt-1.5"><BracketTree b={res.bracket} openRound={res.bracket.rounds.length - 1} /></div></details>}
         {first && first.notes.length > 0 && (
           <div className="rounded-xl bg-muted/30 border border-border p-2 space-y-0.5">
             {first.notes.map((n, i) => <div key={i} className="text-[11.5px] text-foreground/85">{n}</div>)}

@@ -163,10 +163,10 @@ export function TodayPanel({ s, today, busy, onAct, onLadderMaps, onOpen }: {
           <span className="rounded-full border border-border px-2 py-0.5 text-muted-foreground">자동 진행 날은 {AUTO_GAMES}판씩</span>
         </div>
       </div>
-      {today.todayEvent === "courage" && s.status !== "pro" && <EventCard icon="🎓" title="오늘은 커리지 매치!" desc="32명 토너먼트 · 우승하면 준프로 자격" disabled={busy} onClick={() => onAct({ kind: "courage" })} />}
+      {today.todayEvent === "courage" && s.status !== "pro" && <EventCard icon="🎓" title="오늘은 커리지 매치!" desc="32강 토너먼트 · 대진표를 보고 한 판씩 · 우승하면 준프로" disabled={busy} onClick={() => onAct({ kind: "courage" })} />}
       {today.todayEvent === "draft" && <EventCard icon="📋" title="오늘은 드래프트!" desc="준프로 16명 4라운드 · 상위 8명은 구단이 지명할 수도" disabled={busy} onClick={() => onAct({ kind: "draft" })} />}
       {today.todayEvent === "promo" && s.team && <EventCard icon={s.team.squad === 2 ? "⬆️" : "🛡️"} title="팀 내 승강전 날" desc={s.team.squad === 2 ? `2군 1위면 1군 꼴찌와 3판 2선승 (이번 달 ${s.team.monthW}승 ${s.team.monthL}패)` : "1군 자리를 지키는 경기 (3판 2선승)"} disabled={busy} onClick={() => onAct({ kind: "promo" })} />}
-      {todayEvents.map(e => <EventCard key={e.id} icon="🏆" title={`오늘은 ${e.name}!`} desc={`${e.size}강 · 우승 ${e.prize[0]}만원`} disabled={busy} onClick={() => onAct({ kind: "event", id: e.id })} />)}
+      {todayEvents.map(e => <EventCard key={e.id} icon="🏆" title={`오늘은 ${e.name}!`} desc={`${e.size}강 · 대진표를 보고 한 판씩 · 우승 ${e.prize[0]}만원`} disabled={busy} onClick={() => onAct({ kind: "event", id: e.id })} />)}
       {!s.team && s.tryouts.map(t => <EventCard key={t.team} icon="📝" title={`${ORIG_TEAMS[t.team].name} 입단 테스트`} desc={`${t.from} · ${dateText(t.until).slice(5)}까지 · 3판 2선승`} action="테스트" disabled={busy} onClick={() => onAct({ kind: "tryout", team: t.team })} />)}
       {(todayEvents.length > 0 || today.todayEvent) && <div className="text-[10.5px] text-rose-300 px-1">⚠️ 다른 활동을 고르면 오늘 이벤트는 불참 처리됩니다</div>}
       <div className="grid grid-cols-2 gap-1.5">

@@ -3,6 +3,7 @@
  */
 import { useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { STAT_KEYS, STAT_LABELS } from "@shared/gameConstants";
@@ -10,7 +11,7 @@ import { ORIG_TEAMS } from "@shared/career/originalData";
 import { ITEMS, ITEM_BY_KEY, itemImg, slotOf, SLOT_NAMES } from "@shared/career/items";
 import {
   CONCEPTS, DOW, GRADE_COLOR, RACE_NAMES, ROOKIE_PRICE, STATUS_NAMES, TIERS, VITA_PER_DAY, CLAN_BY_ID, DAY_SLOTS, eventReq,
-  courageDays, dateText, draftDay, ladderGrade, sumStats, ymd, type RookieState, oppLabel, withTag,
+  courageDays, dateText, draftDay, ladderGrade, sumStats, ymd, type RookieState, oppLabel, withTag, roundName,
 } from "@shared/rookie/model";
 import type { PlayedGame } from "../../../server/rookie/logic";
 import { useRookie, useRookieSync, type RookieToday } from "@/lib/rookie";
@@ -24,6 +25,7 @@ import { GrowthChart, LevelBar, WeekStrip } from "@/components/rookie/Growth";
 import { BatchRunning } from "@/components/rookie/Batch";
 import { ReportView, type ActResult } from "@/components/rookie/Report";
 import { TodayPanel } from "@/components/rookie/Today";
+import { BracketPanel } from "@/components/rookie/Bracket";
 import type { Activity } from "../../../server/rookie/logic";
 
 type View = "home" | "shop" | "team" | "calendar" | "log" | "mentor" | "fans" | "ach" | "rank";
@@ -75,13 +77,29 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
     onSuccess: r => {
       sync.onSuccess(r);
       const res = r.result as ActResult;
-      setReport(res);
+      // 대회를 시작하면 대진표 화면으로 (결과 창은 대회가 끝난 뒤)
+      if (res.reports.length) setReport(res);
       if (res.games?.length) setWatch({ games: res.games, title: res.title });
       window.scrollTo(0, 0);
     },
     onError: sync.onError,
   });
-  const busy = act.isPending;
+  /** 대회 중 내 경기 하나 */
+  const bracketPlay = m.bracketPlay.useMutation({
+    onSuccess: (r, vars) => {
+      sync.onSuccess(r);
+      const res = r.result as { games: PlayedGame[]; bracket: NonNullable<RookieState["bracket"]>; finished?: ActResult };
+      if (res.finished) setReport({ ...res.finished, bracket: res.bracket, games: undefined });
+      if (!vars.quick && res.games.length) setWatch({ games: res.games, title: res.bracket.title });
+      else {
+        const won = res.games[res.games.length - 1]?.winner === "a";
+        toast[won ? "success" : "error"](won ? "승리! 다음 라운드로" : "패배… 탈락했습니다");
+      }
+      window.scrollTo(0, 0);
+    },
+    onError: sync.onError,
+  });
+  const busy = act.isPending || bracketPlay.isPending;
   const doAct = (a: Activity, title = "") => { setActTitle(title); act.mutate(a as never); };
 
   if (watch) return <MatchViewer s={s} games={watch.games} title={watch.title} onClose={() => setWatch(null)} />;
@@ -123,6 +141,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
 
   // 알림 띠
   const banners: ReactNode[] = [];
+  if (s.bracket) banners.push(<Banner key="br" icon={s.bracket.kind === "courage" ? "🎓" : "🏆"} title={`${s.bracket.title} 진행 중`} desc={`${roundName(s.bracket.size, s.bracket.round)} · 내 경기를 한 판씩 치르세요`} action="이어서" onClick={() => go("home")} />);
   if (today.openEvents > 0) banners.push(<Banner key="oe" icon="🎪" title={`신청할 수 있는 대회가 ${today.openEvents}개 있어요!`} desc="신청해 두면 그날 직접 참가합니다 (놓치면 불참)" action="대회 보기" onClick={() => go("events")} />);
   if (s.nego) banners.push(<Banner key="n" icon="💼" title="연봉 협상 중" desc={`구단 제시 월급 ${s.nego.offer}만원 · ${dateText(s.nego.until).slice(5)}까지`} action="협상" onClick={() => go("more", "team")} />);
   if (s.offers.length) banners.push(<Banner key="o" icon="📨" title={`${s.fa ? "영입" : "이적"} 제안 ${s.offers.length}건`} desc="구단 화면에서 확인하세요" action="보기" onClick={() => go("more", "team")} />);
@@ -184,8 +203,8 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
         {tab === "home" && (
           <>
             <WeekStrip s={s} picks={today.weekPicks} onOpenCalendar={() => open("calendar")} />
-            {banners}
-            <TodayPanel s={s} today={today} busy={busy} onAct={a => doAct(a, ACT_NAMES[a.kind])} onLadderMaps={sel => ladderMaps.mutate({ sel })} onOpen={v => (v === "mentor" ? open("mentor") : go("events"))} />
+            {banners.filter(b => (b as { key?: string }).key !== "br")}
+            {s.bracket ? <BracketPanel s={s} b={s.bracket} busy={busy} onPlay={quick => bracketPlay.mutate({ quick })} /> : <TodayPanel s={s} today={today} busy={busy} onAct={a => doAct(a, ACT_NAMES[a.kind])} onLadderMaps={sel => ladderMaps.mutate({ sel })} onOpen={v => (v === "mentor" ? open("mentor") : go("events"))} />}
             {section("✨ 바로가기")}
             {actGrid(shortcuts, 4)}
             <RivalCard s={s} />
@@ -197,7 +216,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
         )}
         {tab === "events" && (
           <>
-            {banners.filter(b => (b as { key?: string }).key !== "oe")}
+            {banners.filter(b => !["oe", "br"].includes((b as { key?: string }).key ?? ""))}
             <EventsView s={s} />
           </>
         )}
@@ -287,7 +306,8 @@ function UpcomingLine({ s }: { s: RookieState }) {
   const y = ymd(s.day).y;
   const list: Array<[number, string]> = [];
   if (!s.team) {
-    for (const d of [...courageDays(y), ...courageDays(y + 1)]) if (d >= s.day) list.push([d, "🎓 커리지 매치"]);
+    const nextCourage = [...courageDays(y), ...courageDays(y + 1)].find(d => d >= s.day);
+    if (nextCourage !== undefined) list.push([nextCourage, "🎓 커리지 매치 (매달 마지막 날)"]);
     const dd = [draftDay(y), draftDay(y + 1)].find(d => d >= s.day);
     if (dd !== undefined) list.push([dd, "📋 드래프트"]);
   }
@@ -450,7 +470,7 @@ function TeamView({ s }: { s: RookieState }) {
     return (
       <div className="rounded-2xl bg-card border border-border p-4 text-sm text-muted-foreground space-y-1.5">
         <div className="text-base font-black text-foreground">🏢 아직 프로가 아닙니다</div>
-        <div>· 6월·12월 커리지 매치에서 우승하면 준프로 (능력치가 정말 높으면 구단이 입단 경기를 제의)</div>
+        <div>· 매달 마지막 날 열리는 커리지 매치(32강 토너먼트)에서 우승하면 준프로 (능력치가 정말 높으면 구단이 입단 경기를 제의)</div>
         <div>· 준프로는 2년 동안 12월 드래프트에 나갈 수 있고, 상위 8명은 구단이 지명할 수도 있습니다</div>
         <div>· 래더에서 프로게이머를 이기면 그 팀에서 입단 테스트를 제의하기도 합니다</div>
       </div>

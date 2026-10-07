@@ -1,6 +1,6 @@
 /**
  * 선수 키우기 모드 규칙 (서버)
- * 하루 10번(연습·래더·휴식·방송·용돈) + 이벤트 대회(하루) + 커리지 매치(6·12월) + 드래프트(12월) + 프로 구단 생활
+ * 하루는 활동 하나(연습·래더·휴식·방송 등) + 이벤트 대회 + 커리지 매치(매달 말) + 드래프트(12월) + 프로 구단 생활
  */
 import { STAT_KEYS, STAT_LABELS, type StatKey } from "@shared/gameConstants";
 import { ORIG_MAPS, ORIG_TEAMS } from "@shared/career/originalData";
@@ -9,6 +9,7 @@ import { ITEM_BY_KEY, slotOf } from "@shared/career/items";
 import { initialPlayers } from "@shared/career/init";
 import { mapView } from "@shared/career/view";
 import {
+  roundName, type Bracket, type BracketMatch,
   CONCEPTS, DAY_SLOTS, DAY_GAMES, AUTO_GAMES, WEEK_PICKS, weekStartOf, EVENT_NAMES, LADDER_START, RACES, ROOKIE_BONUS, ROOKIE_PRICE, ROOKIE_USES, SEMIPRO_DAYS, STATUS_NAMES,
   STAT_MAX_ONE, STAT_MIN_ONE, TIERS, TIER_ORDER, TRYOUT_MIN, VITA_PER_DAY, capOf, courageDays, dateText, draftDay, isMonthEnd,
   ladderGrade, nickname, statsAround, sumStats, ymd, ACHIEVEMENTS, MENTOR_PRICE, STAT_CAP, emptyCounts, dayOf, rollStats,
@@ -62,7 +63,7 @@ export function newRookie(input: { name: string; race: Race; concept: Concept; s
     rival: newRival(input.race, sumStats(input.stats)), streak: 0, fanCafe: { members: 0, posts: [] }, achievements: {}, counts: emptyCounts(),
     level: 1, exp: 0, history: [[0, total]], clanTried: {},
   };
-  log(s, "🎮", `${name} (${input.race === "terran" ? "테란" : input.race === "zerg" ? "저그" : "프로토스"} · ${CONCEPTS[input.concept].name}) 게이머의 꿈을 시작했습니다! 6월·12월 커리지 매치에서 우승하면 준프로가 됩니다`);
+  log(s, "🎮", `${name} (${input.race === "terran" ? "테란" : input.race === "zerg" ? "저그" : "프로토스"} · ${CONCEPTS[input.concept].name}) 게이머의 꿈을 시작했습니다! 매달 마지막 날 열리는 커리지 매치에서 우승하면 준프로가 됩니다`);
   log(s, "⚡", `같은 PC방에서 연습하는 ${s.rival.name}(${raceShort(s.rival.race)} · ${CONCEPTS[s.rival.concept].name})이(가) 라이벌을 선언했습니다! 래더·대회에서 자주 만나게 됩니다`);
   ensureEvents(s);
   return s;
@@ -319,7 +320,8 @@ const randomMap = () => randInt(0, ORIG_MAPS.length - 1);
 
 /** 대회에서 나 말고 다른 선수끼리 (능력치로 빠른 판정) */
 function aiWins(a: Opp, b: Opp, need = 1) {
-  const pa = sumStats(a.stats), pb = sumStats(b.stats);
+  const eff = (o: Opp) => sumStats(o.stats) * (o.cond !== undefined ? 0.6 + 0.4 * (o.cond / 100) : 1);
+  const pa = eff(a), pb = eff(b);
   const p = 1 / (1 + Math.pow(10, (pb - pa) / 900));
   let w = 0, l = 0;
   while (w < need && l < need) { if (rand() < p) w++; else l++; }
@@ -646,6 +648,12 @@ export function playEvent(s: RookieState, id: number) {
   if (s.rival.status !== "pro" && rand() < 0.5) field[0] = rivalOpp(s);
   const { games, place } = tournament(s, e.size, field, e.name);
   s.used = DAY_SLOTS;
+  const prize = rewardEvent(s, e, place);
+  for (const g of games) mark(s, "🏆", g.winner === "a");
+  return { games, place, prize, name: e.name };
+}
+/** 대회 결과 처리: 상금·인지도·경험치·소식 (상금을 돌려줌) */
+function rewardEvent(s: RookieState, e: RookieEvent, place: number) {
   e.result = place <= 3 ? `${place}위` : `${place}강`;
   const prize = place <= 3 ? e.prize[place - 1] : 0;
   s.money += prize;
@@ -654,9 +662,8 @@ export function playEvent(s: RookieState, id: number) {
   gainExp(s, place === 1 ? 150 : place === 2 ? 90 : place === 3 ? 60 : 20);
   if (s.clan) s.clan.points += place === 1 ? 30 : place <= 3 ? 15 : 3;
   fan(s, place === 1 ? "eventWin" : place <= 3 ? "eventPodium" : "eventOut", e.name);
-  for (const g of games) mark(s, "🏆", g.winner === "a");
   log(s, "🏆", `${e.name}: ${e.result}${prize ? ` · 상금 ${prize}만원` : ""}`);
-  return { games, place, prize, name: e.name };
+  return prize;
 }
 
 // ── 커리지 매치 · 드래프트 · 입단 테스트 ────────────────────────
@@ -664,7 +671,7 @@ export function courageToday(s: RookieState) { return courageDays(ymd(s.day).y).
 export function draftToday(s: RookieState) { return draftDay(ymd(s.day).y) === s.day; }
 
 export function playCourage(s: RookieState) {
-  if (!courageToday(s)) throw new RookieError("오늘은 커리지 매치가 없습니다 (6/20 · 12/20)");
+  if (!courageToday(s)) throw new RookieError("오늘은 커리지 매치가 없습니다 (매달 마지막 날)");
   if (s.status === "pro") throw new RookieError("프로게이머는 커리지 매치에 나갈 수 없습니다");
   if (s.doneDays.includes(s.day)) throw new RookieError("이미 참가했습니다");
   if (s.used > 0) throw new RookieError("커리지 매치는 하루 종일 걸립니다 — 다른 일을 하지 않은 날에만 참가할 수 있습니다");
@@ -675,6 +682,11 @@ export function playCourage(s: RookieState) {
   const { games, place } = tournament(s, 32, field, "커리지 매치");
   s.used = DAY_SLOTS;
   for (const g of games) mark(s, "🎓", g.winner === "a");
+  rewardCourage(s, place);
+  return { games, place };
+}
+/** 커리지 매치 결과 처리: 우승하면 준프로 */
+function rewardCourage(s: RookieState, place: number) {
   let note = "";
   if (place === 1) {
     s.status = "semipro";
@@ -691,7 +703,6 @@ export function playCourage(s: RookieState) {
   log(s, "🎓", `커리지 매치 ${place === 1 ? "우승" : place <= 3 ? `${place}위` : `${place}강`}${note}`);
   fan(s, place === 1 ? "courageWin" : "courageLose");
   gainExp(s, place === 1 ? 300 : 40);
-  return { games, place };
 }
 
 /** 드래프트: 준프로 16명 스위스 4라운드 → 상위 8명을 구단이 지명할 수도 */
@@ -1046,7 +1057,7 @@ function rivalDay(s: RookieState, prevDay: number) {
   if (r.status !== "pro" && courageDays(y).includes(prevDay)) {
     // 내가 우승했으면 라이벌은 우승 못 함
     const meWon = s.titles.some(t => t.startsWith(dateText(prevDay)) && t.includes("커리지 매치 우승"));
-    if (!meWon && rand() < Math.max(0.03, Math.min(0.4, (sumStats(r.stats) - 3700) / 1500))) {
+    if (!meWon && rand() < Math.max(0.01, Math.min(0.12, (sumStats(r.stats) - 3700) / 6000))) {
       r.status = "semipro";
       r.semiproUntil = prevDay + SEMIPRO_DAYS;
       log(s, "⚡", `라이벌 ${r.name}이(가) 커리지 매치에서 우승해 준프로가 되었습니다!`);
@@ -1438,12 +1449,14 @@ export interface DayReport {
   money: number;
   notes: string[];
 }
-const snapOf = (s: RookieState) => ({ stats: { ...s.stats }, cond: s.cond, money: s.money, w: s.record.w, l: s.record.l, top: s.log[0] });
-function reportOf(s: RookieState, b: ReturnType<typeof snapOf>, day: number, mode: DayReport["mode"], title: string): DayReport {
+type Snap = { stats: Stats; cond: number; money: number; w: number; l: number; top?: RookieState["log"][number] };
+const snapOf = (s: RookieState): Snap => ({ stats: { ...s.stats }, cond: s.cond, money: s.money, w: s.record.w, l: s.record.l, top: s.log[0] });
+function reportOf(s: RookieState, b: Snap, day: number, mode: DayReport["mode"], title: string): DayReport {
   const stats: Partial<Stats> = {};
   for (const k of STAT_KEYS) if (s.stats[k] !== b.stats[k]) stats[k] = s.stats[k] - b.stats[k];
   const notes: string[] = [];
-  for (const e of s.log) { if (e === b.top) break; notes.push(`${e.icon} ${e.text}`); }
+  // 여러 번에 나눠 한 날(대회)은 그날 쓴 소식을 모두
+  for (const e of s.log) { if (b.top ? e === b.top : e.day < day) break; notes.push(`${e.icon} ${e.text}`); }
   return { day, mode, title, w: s.record.w - b.w, l: s.record.l - b.l, stats, cond: [b.cond, s.cond], money: s.money - b.money, notes: notes.reverse().slice(0, 8) };
 }
 
@@ -1506,10 +1519,16 @@ const ACT_TITLE: Record<Activity["kind"], string> = {
  */
 export function act(s: RookieState, a: Activity) {
   if (s.retired) throw new RookieError(s.retired);
+  if (s.bracket) throw new RookieError("진행 중인 대회가 있습니다. 먼저 끝까지 치르세요");
   const day = s.day;
   const b = snapOf(s);
   s.used = 0;
   let res: Record<string, unknown> = {};
+  // 대회·커리지 매치: 대진표를 짜고 시작 (하루는 대회를 마친 뒤에 끝남)
+  if (a.kind === "event" || a.kind === "courage") {
+    if (a.kind === "event") startEvent(s, a.id); else startCourage(s);
+    return { activity: a.kind, title: ACT_TITLE[a.kind], bracket: s.bracket, reports: [] as DayReport[] };
+  }
   switch (a.kind) {
     case "lobby": case "ladder": case "clan": case "internal": {
       if (a.kind === "clan" && a.target) {
@@ -1529,24 +1548,136 @@ export function act(s: RookieState, a: Activity) {
     case "mentor": res = { mentor: mentor(s, a.stat, a.pro) }; break;
     case "clanTest": { const r = clanTest(s, a.id); res = { games: r.games, won: r.won }; break; }
     case "tryout": { const r = playTryout(s, a.team); res = { games: r.games, won: r.won }; break; }
-    case "event": res = playEvent(s, a.id) as unknown as Record<string, unknown>; break;
-    case "courage": res = playCourage(s) as unknown as Record<string, unknown>; break;
     case "draft": res = playDraft(s) as unknown as Record<string, unknown>; break;
     case "promo": res = playPromo(s) as unknown as Record<string, unknown>; break;
   }
   s.used = 0;
   // 오늘 열리는 대회에 신청해 놓고 다른 걸 골랐으면 불참 처리
-  if (a.kind !== "event") for (const e of s.events.filter(x => x.day === day && x.registered && !x.result)) { e.result = "불참"; log(s, "🚫", `${e.name}에 나가지 않았습니다 (불참)`); }
+  for (const e of s.events.filter(x => x.day === day && x.registered && !x.result)) { e.result = "불참"; log(s, "🚫", `${e.name}에 나가지 않았습니다 (불참)`); }
+  const reports = endDay(s, b, day, ["draft", "promo"].includes(a.kind) ? "event" : "chosen", ACT_TITLE[a.kind]);
+  return { activity: a.kind, title: ACT_TITLE[a.kind], ...res, reports };
+}
+/** 오늘을 마치고 다음 선택일까지 자동으로 지나감 (날마다 리포트) */
+function endDay(s: RookieState, b: Snap, day: number, mode: DayReport["mode"], title: string): DayReport[] {
   nextDay(s);
-  const reports: DayReport[] = [reportOf(s, b, day, ["event", "courage", "draft", "promo"].includes(a.kind) ? "event" : "chosen", ACT_TITLE[a.kind])];
-  // 다음 선택일까지 자동으로
+  const reports: DayReport[] = [reportOf(s, b, day, mode, title)];
   for (let guard = 0; guard < 15 && !stopKind(s, s.day); guard++) {
     const d = s.day, nb = snapOf(s);
-    const title = autoDay(s);
+    const t = autoDay(s);
     nextDay(s);
-    reports.push(reportOf(s, nb, d, "auto", title));
+    reports.push(reportOf(s, nb, d, "auto", t));
   }
-  return { activity: a.kind, title: ACT_TITLE[a.kind], ...res, reports };
+  return reports;
+}
+
+// ── 토너먼트 (대진표를 보고 내 경기를 한 판씩) ───────────────────
+function newBracket(s: RookieState, kind: Bracket["kind"], title: string, size: number, field: Opp[], eventId?: number): Bracket {
+  const me: Opp = { name: myId(s), race: s.race, stats: { ...s.stats }, cond: s.cond };
+  const players = [me, ...field.slice(0, size - 1)].sort(() => rand() - 0.5);
+  const first = Array.from({ length: size / 2 }, (_, i) => ({ a: 2 * i, b: 2 * i + 1 }));
+  return {
+    kind, title, eventId, day: s.day, size, players, me: players.indexOf(me), rounds: [first], round: 0, games: 0,
+    before: { stats: { ...s.stats }, cond: s.cond, money: s.money, w: s.record.w, l: s.record.l },
+  };
+}
+/** 신청해 둔 대회를 시작: 대진표를 짬 */
+export function startEvent(s: RookieState, id: number) {
+  const e = s.events.find(x => x.id === id);
+  if (!e || e.day !== s.day) throw new RookieError("오늘 열리는 대회가 아닙니다");
+  if (!e.registered) throw new RookieError("참가 신청을 하지 않은 대회입니다");
+  if (e.result) throw new RookieError("이미 참가한 대회입니다");
+  const r = TIERS[e.level].range;
+  const used = new Set<string>();
+  const field = Array.from({ length: e.size - 1 }, () => withCond({ name: nickname(Math.random, used), race: pick(RACES), stats: statsAround(randInt(r[0], r[1] + 300)) } as Opp));
+  if (s.rival.status !== "pro" && rand() < 0.5) field[0] = rivalOpp(s);
+  e.result = "진행 중";
+  s.bracket = newBracket(s, "event", e.name, e.size, field, e.id);
+  log(s, "🏆", `${e.name} 대진표가 나왔습니다 (${e.size}강)`);
+  return s.bracket;
+}
+/** 월말 커리지 매치를 시작 (32명) */
+export function startCourage(s: RookieState) {
+  if (!courageToday(s)) throw new RookieError("오늘은 커리지 매치가 없습니다 (매달 마지막 날)");
+  if (s.status === "pro") throw new RookieError("프로게이머는 커리지 매치에 나갈 수 없습니다");
+  if (s.doneDays.includes(s.day)) throw new RookieError("이미 참가했습니다");
+  s.doneDays.push(s.day);
+  const used = new Set<string>();
+  const field = Array.from({ length: 31 }, () => withCond({ name: nickname(Math.random, used), race: pick(RACES), stats: statsAround(randInt(3400, 4600)) } as Opp));
+  if (s.rival.status !== "pro") field[0] = rivalOpp(s);
+  s.bracket = newBracket(s, "courage", "커리지 매치", 32, field);
+  log(s, "🎓", "커리지 매치 대진표가 나왔습니다 (32강)");
+  return s.bracket;
+}
+/** 내 다음 상대 (대진표에서) */
+export function bracketNext(b: Bracket) {
+  const round = b.rounds[b.round];
+  const m = round?.find(x => x.a === b.me || x.b === b.me);
+  if (!m || b.done) return null;
+  const oppI = m.a === b.me ? m.b : m.a;
+  return { match: m, opp: b.players[oppI], oppIndex: oppI, name: roundName(b.size, b.round), final: round.length === 1 };
+}
+/**
+ * 내 경기 하나를 치르고(결승은 3판 2선승) 같은 라운드의 다른 경기도 진행.
+ * 지거나 우승하면 대회가 끝나 하루를 마침
+ */
+export function bracketPlay(s: RookieState, quick = false) {
+  const b = s.bracket;
+  if (!b || b.done) throw new RookieError("진행 중인 대회가 없습니다");
+  if (s.retired) throw new RookieError(s.retired);
+  const nx = bracketNext(b)!;
+  const round = b.rounds[b.round];
+  const prevQuiet = QUIET;
+  if (quick) QUIET = true;
+  let res: ReturnType<typeof series>;
+  try { res = series(s, nx.opp, nx.final ? 2 : 1, `${b.title} ${nx.name}`); } finally { QUIET = prevQuiet; }
+  b.games += res.games.length;
+  const mine = res.games.filter(g => g.winner === "a").length;
+  nx.match.w = res.won ? b.me : nx.oppIndex;
+  nx.match.sets = nx.match.a === b.me ? [mine, res.games.length - mine] : [res.games.length - mine, mine];
+  for (const m of round) if (m !== nx.match) m.w = aiWins(b.players[m.a], b.players[m.b], nx.final ? 2 : 1) ? m.a : m.b;
+  // 다음 라운드
+  const nextRound = (r: BracketMatch[]): BracketMatch[] | null => {
+    const ws = r.map(m => m.w!);
+    if (ws.length <= 1) return null;
+    return Array.from({ length: ws.length / 2 }, (_, i) => ({ a: ws[2 * i], b: ws[2 * i + 1] }));
+  };
+  const left = b.size / 2 ** b.round;
+  if (!res.won) {
+    b.place = nx.final ? 2 : left === 4 ? 3 : left;
+    // 남은 라운드는 다른 선수끼리 끝까지
+    let cur = round;
+    for (let nr = nextRound(cur); nr; nr = nextRound(cur)) {
+      for (const m of nr) m.w = aiWins(b.players[m.a], b.players[m.b], nr.length === 1 ? 2 : 1) ? m.a : m.b;
+      b.rounds.push(nr);
+      cur = nr;
+    }
+    b.champion = cur[cur.length - 1].w;
+    b.done = true;
+  } else if (nx.final) {
+    b.place = 1; b.champion = b.me; b.done = true;
+  } else {
+    b.rounds.push(nextRound(round)!);
+    b.round++;
+  }
+  for (const g of res.games) mark(s, b.kind === "courage" ? "🎓" : "🏆", g.winner === "a");
+  if (!b.done) return { games: res.games, bracket: b, finished: undefined };
+  // 대회 끝: 보상 · 하루 마무리
+  const before = b.before as Snap;
+  const day = b.day;
+  let prize = 0;
+  if (b.kind === "event") {
+    const e = s.events.find(x => x.id === b.eventId)!;
+    prize = rewardEvent(s, e, b.place!);
+  } else rewardCourage(s, b.place!);
+  b.prize = prize;
+  const bracket = b;
+  delete s.bracket;
+  s.used = 0;
+  const reports = endDay(s, before, day, "event", b.kind === "courage" ? "🎓 커리지 매치" : `🏆 ${b.title}`);
+  return {
+    games: res.games, bracket,
+    finished: { activity: b.kind, title: b.kind === "courage" ? "🎓 커리지 매치" : `🏆 ${b.title}`, place: b.place!, prize, name: b.title, reports },
+  };
 }
 /** 특정 클랜원과 먼저 한 판 + 이어서 연속 → 하나의 결과로 */
 function mergeFirst(first: PlayedGame, r: ReturnType<typeof batch> | null) {
