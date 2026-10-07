@@ -160,5 +160,7 @@ export const rookieRouter = router({
   batch: p.input(z.object({ kind: z.enum(["lobby", "ladder", "clan", "internal"]), tier: z.enum(tierKeys).optional(), mapId: z.number().int().min(0).optional() }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.batch(s, input.kind, { tier: input.tier, mapId: input.mapId }))),
   act: p.input(activitySchema).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.act(s, input as L.Activity))),
+  /** 진행 중인 대회: 내 다음 경기 하나 (quick = 중계 없이 결과만) */
+  bracketPlay: p.input(z.object({ quick: z.boolean().optional() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.bracketPlay(s, input.quick))),
   nextDay: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.nextDay(s))),
 });

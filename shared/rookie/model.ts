@@ -66,8 +66,8 @@ export const WEEK_PICKS = 2;
 export const weekStartOf = (day: number) => day - ymd(day).dow;
 
 // ── 커리지 매치 · 드래프트 ───────────────────────────────────────
-/** 커리지 매치: 6월·12월 셋째 토요일 근처 (매년 6/20, 12/20 로 고정) */
-export const courageDays = (y: number) => [dayOf(y, 6, 20), dayOf(y, 12, 20)];
+/** 커리지 매치: 매달 마지막 날 (우승하면 준프로) */
+export const courageDays = (y: number) => Array.from({ length: 12 }, (_, i) => dayOf(y, i + 2, 1) - 1);
 /** 드래프트: 12월 커리지 매치 뒤 12/27 */
 export const draftDay = (y: number) => dayOf(y, 12, 27);
 /** 준프로 자격 기간 (드래프트 참가 가능) */
@@ -289,6 +289,35 @@ export const VITA_PER_DAY = 10;
 export interface DayLog { day: number; icon: string; text: string }
 export interface DaySummary { w: number; l: number; icons: string[] }
 
+/** 토너먼트 대진표 (대회·커리지 매치): 내 경기를 한 판씩 진행 */
+export interface BracketMatch { a: number; b: number; /** 이긴 쪽 (players 번호) */ w?: number; /** 세트 스코어 [a, b] */ sets?: [number, number] }
+export interface Bracket {
+  kind: "event" | "courage";
+  title: string;
+  eventId?: number;
+  day: number;
+  size: number;
+  /** 참가자 (내 번호는 me) */
+  players: Opp[];
+  me: number;
+  /** 라운드별 대진 (내가 올라가는 만큼 늘어남) */
+  rounds: BracketMatch[][];
+  /** 내가 치를 라운드 */
+  round: number;
+  done?: boolean;
+  /** 내 최종 순위 (1 = 우승) */
+  place?: number;
+  /** 우승한 참가자 (끝난 뒤) */
+  champion?: number;
+  prize?: number;
+  /** 지금까지 내가 치른 판 수 */
+  games: number;
+  /** 시작할 때의 내 상태 (하루 리포트용) */
+  before: { stats: Stats; cond: number; money: number; w: number; l: number };
+}
+/** 라운드 이름 (그 라운드 시작 때 남은 인원 기준) */
+export const roundName = (size: number, r: number) => { const left = size / 2 ** r; return left === 2 ? "결승" : left === 4 ? "4강" : `${left}강`; };
+
 export interface RookieTeam {
   /** 구단 (원작 팀 번호) */
   team: number;
@@ -419,6 +448,8 @@ export interface RookieState {
   };
   /** 공방에서 마지막으로 고른 방·맵 */
   lobbyPref?: { tier: Tier; mapId: number };
+  /** 진행 중인 토너먼트 (대회·커리지 매치) */
+  bracket?: Bracket;
   /** 이번 달 래더 맵 5개 (month = 연*12+월) 와 그중 내가 고른 맵 */
   ladderMaps?: { month: number; maps: number[]; sel: number[] };
   /** 맵별 출전 횟수 (맵 이해도) */

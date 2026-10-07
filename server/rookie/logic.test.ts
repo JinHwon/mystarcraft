@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rollStats, sumStats, courageDays, draftDay, DAY_SLOTS, STAT_CAP, ladderGrade, capOf, mapUnd } from "@shared/rookie/model";
+import { rollStats, sumStats, isMonthEnd, courageDays, draftDay, DAY_SLOTS, STAT_CAP, ladderGrade, capOf, mapUnd } from "@shared/rookie/model";
 import * as L from "./logic";
 
 const mk = () => L.newRookie({ name: "테스트", race: "zerg", concept: "control", stats: rollStats("control") });
@@ -399,5 +399,55 @@ describe("선수 키우기", () => {
     t.used = 0;
     const r2 = L.act(t, { kind: "work" });
     expect(r2.reports.some(x => x.mode === "auto")).toBe(true);
+  });
+
+  it("대회: 대진표를 짜고 내 경기를 한 판씩 치르며, 끝나면 하루가 마무리된다", () => {
+    const s = mk();
+    L.act(s, { kind: "rest" });
+    const e = s.events.find(x => x.day > s.day)!;
+    e.registered = true; e.level = "newbie"; e.size = 8;
+    let guard = 0;
+    while (s.day < e.day && guard++ < 40) L.act(s, { kind: "rest" });
+    expect(s.day).toBe(e.day);
+    const r = L.act(s, { kind: "event", id: e.id }) as { bracket: NonNullable<typeof s.bracket>; reports: unknown[] };
+    expect(r.reports).toEqual([]);
+    expect(s.bracket?.players.length).toBe(8);
+    expect(s.bracket!.rounds[0].length).toBe(4);
+    expect(new Set(s.bracket!.players.map(p => p.name)).size).toBe(8);
+    expect(() => L.act(s, { kind: "rest" })).toThrow(/대회/);
+    const dayBefore = s.day;
+    let finished: ReturnType<typeof L.bracketPlay>["finished"];
+    let plays = 0;
+    while (s.bracket) {
+      const nx = L.bracketNext(s.bracket)!;
+      expect(nx.opp.cond).toBeGreaterThan(0);
+      const x = L.bracketPlay(s, true);
+      plays++;
+      if (!x.finished) expect(s.day).toBe(dayBefore);
+      finished = x.finished ?? finished;
+      if (x.finished) { expect(x.bracket.rounds.length).toBe(3); expect(x.bracket.champion).toBeDefined(); }
+    }
+    expect(plays).toBeLessThanOrEqual(3);
+    expect(finished!.place).toBeGreaterThanOrEqual(1);
+    expect(e.result).not.toBe("진행 중");
+    expect(s.day).toBeGreaterThan(dayBefore);
+    expect(L.stopKind(s, s.day)).not.toBeNull();
+  });
+
+  it("커리지 매치는 매달 마지막 날 열리는 32강 토너먼트", () => {
+    const days = courageDays(2026);
+    expect(days.length).toBe(12);
+    expect(days.every(d => isMonthEnd(d))).toBe(true);
+    const s = mk();
+    s.day = days[0];
+    s.used = 0;
+    expect(L.eventStop(s, s.day)).toBe("courage");
+    L.startCourage(s);
+    expect(s.bracket!.size).toBe(32);
+    expect(s.bracket!.rounds[0].length).toBe(16);
+    expect(L.bracketNext(s.bracket!)!.name).toBe("32강");
+    // 프로는 못 나감
+    const t = mk(); t.day = days[0]; t.status = "pro";
+    expect(() => L.startCourage(t)).toThrow(/프로/);
   });
 });
