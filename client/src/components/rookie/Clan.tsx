@@ -8,12 +8,12 @@ import { trpc } from "@/lib/trpc";
 import { ORIG_TEAMS } from "@shared/career/originalData";
 import { STAT_KEYS, STAT_LABELS } from "@shared/gameConstants";
 import {
-  CLANS, CLAN_BY_ID, CLAN_RETRY_DAYS, CLAN_STRENGTH, DAY_SLOTS, FRIEND_LEVELS, RACE_NAMES, friendLevel, sumStats, withTag,
+  CLANS, CLAN_BY_ID, CLAN_RETRY_DAYS, CLAN_STRENGTH, DAY_GAMES, FRIEND_LEVELS, RACE_NAMES, friendLevel, sumStats, withTag,
   type ClanDef, type ClanMember, type RookieState,
 } from "@shared/rookie/model";
 import { clanMembers, clanProIds, proLabel } from "@shared/rookie/pros";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import type { PlayedGame } from "../../../../server/rookie/logic";
+import type { Activity } from "../../../../server/rookie/logic";
 import { useRookieSync, type RookieToday } from "@/lib/rookie";
 import { LegacyRadar, PlayerPhoto } from "@/components/legacy/Legacy";
 
@@ -31,19 +31,15 @@ function reqs(s: RookieState, c: ClanDef) {
   return out;
 }
 
-export function ClanView({ s, onPlayed, onBatch }: { s: RookieState; onPlayed: (games: PlayedGame[], title: string) => void; onBatch: () => void }) {
+export function ClanView({ s, busy, onAct }: { s: RookieState; busy: boolean; onAct: (a: Activity, title: string) => void }) {
   const sync = useRookieSync();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [browse, setBrowse] = useState(!s.clan);
-  const done = (title: string) => ({ onSuccess: (r: { state: RookieState; today: RookieToday; result: unknown; gained?: string[] }) => { sync.onSuccess(r); const g = (r.result as { games?: PlayedGame[] }).games; if (g?.length) onPlayed(g, title); }, onError: sync.onError });
-  const test = trpc.rookie.clanTest.useMutation(done("클랜 입단 시험"));
-  const practice = trpc.rookie.clanPractice.useMutation(done("클랜 연습"));
   const leave = trpc.rookie.leaveClan.useMutation(sync);
   const feedback = trpc.rookie.clanFeedback.useMutation({ ...sync, onSuccess: (r: { state: RookieState; today: RookieToday; result: unknown; gained?: string[] }) => { sync.onSuccess(r); const b = (r.result as { back: Record<string, number> }).back; toast.success(`피드백 효과! ${Object.entries(b).map(([k, v]) => `${STAT_LABELS[k as keyof typeof STAT_LABELS]} +${v}`).join(", ") || "되찾을 능력치가 없었습니다"} (컨디션 -10)`); } });
   const [view, setView] = useState<string | null>(null);
   const [tier, setTier] = useState<number>(0);
-  const left = DAY_SLOTS - s.used;
   const mine = s.clan ? CLAN_BY_ID[s.clan.id] : undefined;
   const list = CLANS.filter(c => (!tier || c.tier === tier) && (!q || c.name.toLowerCase().includes(q.toLowerCase()) || c.tag.toLowerCase().includes(q.toLowerCase()) || c.desc.includes(q)));
 
@@ -76,15 +72,15 @@ export function ClanView({ s, onPlayed, onBatch }: { s: RookieState; onPlayed: (
                 <div className="rounded-lg bg-black/20 py-1"><div className="text-[10px] text-muted-foreground">승률</div><div className="font-black text-foreground">{s.clan.w + s.clan.l ? Math.round((s.clan.w / (s.clan.w + s.clan.l)) * 100) : 0}%</div></div>
               </div>
               <div className="text-[10.5px] text-muted-foreground mt-1">이기면 +10점, 지면 -6점 (상대 클랜원은 반대로) · 래더 승 +5 / 패 -3 · 프로 {s.clan.members.filter(m => m.pro).length}명{vsAll[0] + vsAll[1] ? ` · 클랜원 상대 ${vsAll[0]}승 ${vsAll[1]}패` : ""}</div>
-              <div className="text-[10.5px] text-muted-foreground">클랜 연습은 조언을 들어 1.3배(프로 상대 1.5배)로 배웁니다. {mine.pros.length > 0 ? "클랜 순위 3위 안이면 프로 선배가 구단에 추천해 주기도 해요." : ""}</div>
+              <div className="text-[10.5px] text-muted-foreground">클랜 연습은 조언을 들어 1.3배(프로 상대 1.5배)로 배웁니다. {clanProIds(mine.id).length > 0 ? "클랜 순위 3위 안이면 프로 선배가 구단에 추천해 주기도 해요." : ""}</div>
               {fb && Object.keys(fb.lost).length > 0 && (
                 <button onClick={() => feedback.mutate()} disabled={feedback.isPending || s.cond < 20} className="mt-2 w-full rounded-xl border border-amber-400/70 bg-amber-500/10 text-amber-200 py-2 text-[12.5px] font-black disabled:opacity-40">
                   🗣️ 피드백 받기 ({Object.entries(fb.lost).map(([k, v]) => `${STAT_LABELS[k as keyof typeof STAT_LABELS]} -${v}`).join(" ")} 일부 회복 · 컨디션 -10)
                 </button>
               )}
               <div className="grid grid-cols-2 gap-2 mt-2">
-                <button onClick={() => practice.mutate()} disabled={practice.isPending || left < 1} className="rounded-xl border border-emerald-500 text-emerald-300 py-2 text-sm font-black disabled:opacity-40">⚔️ 1판</button>
-                <button onClick={onBatch} disabled={left < 1} className="rounded-xl bg-emerald-600 text-white py-2 text-sm font-black disabled:opacity-40">⏩ {left}판 연속</button>
+                <button onClick={() => onAct({ kind: "clan", watch: 2 }, "클랜 연습")} disabled={busy} className="rounded-xl border border-emerald-500 text-emerald-300 py-2 text-sm font-black disabled:opacity-40">👀 중계 보며 {DAY_GAMES}판</button>
+                <button onClick={() => onAct({ kind: "clan" }, "클랜 연습")} disabled={busy} className="rounded-xl bg-emerald-600 text-white py-2 text-sm font-black disabled:opacity-40">⚔️ 클랜 연습 {DAY_GAMES}판</button>
               </div>
             </div>
             <div className="rounded-2xl bg-card border border-border">
@@ -105,7 +101,7 @@ export function ClanView({ s, onPlayed, onBatch }: { s: RookieState; onPlayed: (
         );
       })()}
 
-      {s.clan && mine && <MemberSheet s={s} name={view} onClose={() => setView(null)} onPractice={n => { setView(null); practice.mutate({ target: n }); }} busy={practice.isPending || left < 1} />}
+      {s.clan && mine && <MemberSheet s={s} name={view} onClose={() => setView(null)} onPractice={n => { setView(null); onAct({ kind: "clan", target: n }, "클랜 연습"); }} busy={busy} />}
       {s.clan && mine && <button onClick={() => confirm(`${mine.name}에서 탈퇴할까요? (점수가 사라집니다)`) && leave.mutate()} className="w-full text-[11px] text-rose-300/80 py-0.5">🚪 클랜 탈퇴</button>}
       {s.clan && !browse && <button onClick={() => setBrowse(true)} className="w-full rounded-xl border border-border bg-card py-2 text-sm text-muted-foreground">🔍 다른 클랜 찾아보기 ▼</button>}
       {browse && <div className="rounded-2xl bg-card border border-border p-3 space-y-2">
@@ -147,9 +143,9 @@ export function ClanView({ s, onPlayed, onBatch }: { s: RookieState; onPlayed: (
                   </div>
                 )}
                 {!isMine && (ok || wait > 0) && (
-                  <button onClick={() => test.mutate({ id: c.id })} disabled={!ok || wait > 0 || test.isPending || left < 3}
+                  <button onClick={() => onAct({ kind: "clanTest", id: c.id }, "클랜 입단 시험")} disabled={!ok || wait > 0 || busy}
                     className="mt-1.5 w-full rounded-lg bg-amber-500 text-black text-xs font-black py-1.5 disabled:opacity-40">
-                    {wait ? `${wait}일 뒤 재도전` : "📝 입단 시험 (클랜원과 3판 2선승 · 행동 3)"}
+                    {wait ? `${wait}일 뒤 재도전` : "📝 입단 시험 (클랜원과 3판 2선승 · 하루)"}
                   </button>
                 )}
               </div>
@@ -206,7 +202,7 @@ function MemberSheet({ s, name, onClose, onPractice, busy }: { s: RookieState; n
                 ))}
               </div>
             </div>
-            <button onClick={() => onPractice(m.name)} disabled={busy} className="w-full rounded-xl bg-emerald-600 text-white py-2.5 font-black disabled:opacity-40">⚔️ {m.name} 님과 연습 (1판)</button>
+            <button onClick={() => onPractice(m.name)} disabled={busy} className="w-full rounded-xl bg-emerald-600 text-white py-2.5 font-black disabled:opacity-40">⚔️ {m.name} 님과 연습 (오늘 하루)</button>
           </div>
         )}
       </SheetContent>

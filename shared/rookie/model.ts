@@ -55,8 +55,15 @@ export const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 /** 그 달의 마지막 날인지 */
 export const isMonthEnd = (day: number) => ymd(day + 1).m !== ymd(day).m;
 
-/** 하루에 할 수 있는 일 (연습·래더·휴식·방송 등, 이벤트 경기 제외) */
+/** 하루에 할 수 있는 일 (연습·래더·휴식·방송 등, 이벤트 경기 제외) — 이제는 선택한 활동 하나가 하루 */
 export const DAY_SLOTS = 10;
+/** 직접 고른 연습·래더·클랜 연습 하루에 치르는 판 수 / 자동으로 보내는 날의 판 수 */
+export const DAY_GAMES = 8;
+export const AUTO_GAMES = 4;
+/** 일주일(일~토)에 직접 고를 수 있는 날 수 (대회 등 이벤트도 여기 포함) */
+export const WEEK_PICKS = 2;
+/** 그 날이 속한 주의 일요일 */
+export const weekStartOf = (day: number) => day - ymd(day).dow;
 
 // ── 커리지 매치 · 드래프트 ───────────────────────────────────────
 /** 커리지 매치: 6월·12월 셋째 토요일 근처 (매년 6/20, 12/20 로 고정) */
