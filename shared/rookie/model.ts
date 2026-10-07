@@ -246,6 +246,45 @@ export interface ClanMember {
   /** 직책: 길드장 · 부길드장 (없으면 일반) */
   role?: "master" | "sub";
 }
+/** 클랜 관계: 라이벌 클랜(자주 붙는 상대) · 친한 클랜(친선경기) */
+export function clanRelations(id: string): { rival: string; friend: string } {
+  const c = CLAN_BY_ID[id];
+  const same = CLANS.filter(x => x.tier === c.tier);
+  const i = same.findIndex(x => x.id === id);
+  // 직접 정한 관계 (실제 클랜 사이)
+  const fixed: Record<string, { rival?: string; friend?: string }> = {
+    by: { rival: "shield", friend: "zenith" }, shield: { rival: "by", friend: "white" }, white: { rival: "titan", friend: "shield" },
+    siz: { rival: "kal", friend: "miracle" }, kal: { rival: "siz", friend: "legend" },
+    sg: { rival: "nsp", friend: "fou" }, nsp: { rival: "sg", friend: "moo" },
+  };
+  const rival = fixed[id]?.rival ?? same[(i + 1) % same.length].id;
+  // 친한 클랜: 한 단계 위나 아래 클랜 중 하나 (같은 단계가 아니라 서로 배우는 사이)
+  const near = CLANS.filter(x => Math.abs(x.tier - c.tier) === 1);
+  const friend = fixed[id]?.friend ?? (near.length ? near[(i * 3 + c.tier) % near.length].id : same[(i + same.length - 1) % same.length].id);
+  return { rival: rival === id ? same[(i + 1) % same.length].id : rival, friend: friend === id ? same[(i + 2) % same.length].id : friend };
+}
+
+/** 클랜전: 5세트 3선승, 길드장이 엔트리를 짜고 엔트리에 든 사람이 한 세트씩 */
+export const WAR_SETS = 5;
+export interface ClanWarSet { /** 내 클랜 쪽 · 상대 쪽 엔트리 번호는 세트 번호와 같음 */ winner?: "a" | "b"; mapId: number }
+export interface ClanWar {
+  day: number;
+  /** 몇 번째 클랜전 */
+  k: number;
+  oppClan: string;
+  /** entry: 길드장(나)이 엔트리를 짜는 중 · fight: 세트 진행 중 */
+  phase: "entry" | "fight";
+  masterIsMe: boolean;
+  /** 우리·상대 엔트리 (세트 순서대로). 나는 meIdx 번째 */
+  my: ClanMember[];
+  opp: ClanMember[];
+  meIdx: number;
+  sets: ClanWarSet[];
+  score: [number, number];
+  before: { stats: Stats; cond: number; money: number; w: number; l: number };
+}
+export interface ClanWarRecord { day: number; opp: string; my: number; their: number; played: boolean; k: number }
+
 /** 친분도 단계 */
 export const FRIEND_LEVELS: Array<[number, string, string]> = [[0, "처음 보는 사이", "🙂"], [10, "아는 사이", "😀"], [30, "친한 사이", "😄"], [60, "절친", "🤝"], [90, "의형제", "💞"]];
 export const friendLevel = (n: number) => [...FRIEND_LEVELS].reverse().find(l => n >= l[0])!;
@@ -445,11 +484,26 @@ export interface RookieState {
     fr?: Record<string, number>;
     /** 클랜원에게 진 경기에서 떨어진 능력치 (피드백으로 일부 되찾음) */
     fb?: { lost: Partial<Stats>; from: string };
+    /** 내 직책 (없으면 일반 클랜원) */
+    role?: "master" | "sub";
+    /** 클랜전 기록 (최근) */
+    wars?: ClanWarRecord[];
+    /** 클랜별 클랜전 상대 전적 [이김, 짐] */
+    vsClan?: Record<string, [number, number]>;
+    /** 친선경기 전적 (친한 클랜) [내 승, 내 패] */
+    friendly?: [number, number];
+    /** 내가 클랜전에서 뛴 횟수 / 이긴 횟수 */
+    warPlayed?: number;
+    warWon?: number;
   };
+  /** 진행 중인 클랜전 */
+  war?: ClanWar;
   /** 공방에서 마지막으로 고른 방·맵 */
   lobbyPref?: { tier: Tier; mapId: number };
   /** 진행 중인 토너먼트 (대회·커리지 매치) */
   bracket?: Bracket;
+  /** 직접 고르는 날로 이미 도착한 날 (그 주의 선택 횟수를 세는 데 씀) */
+  stopLog?: Record<number, "event" | "free">;
   /** 이번 달 래더 맵 5개 (month = 연*12+월) 와 그중 내가 고른 맵 */
   ladderMaps?: { month: number; maps: number[]; sel: number[] };
   /** 맵별 출전 횟수 (맵 이해도) */

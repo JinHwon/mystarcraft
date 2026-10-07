@@ -6,7 +6,7 @@ import { ladderGrade } from "@shared/rookie/model";
 import { cn } from "@/lib/utils";
 
 export interface BatchResult {
-  kind: "lobby" | "ladder" | "clan" | "internal";
+  kind: "lobby" | "ladder" | "clan" | "internal" | "friendly";
   count: number; w: number; l: number;
   results: Array<{ won: boolean; opp: string; map: string }>;
   stats: Partial<Record<(typeof STAT_KEYS)[number], number>>;
@@ -16,7 +16,7 @@ export interface BatchResult {
   level: [number, number];
   stop?: string;
 }
-export const BATCH_NAMES: Record<BatchResult["kind"], string> = { lobby: "공방 연습", ladder: "래더", clan: "클랜 연습", internal: "팀 내부 연습" };
+export const BATCH_NAMES: Record<BatchResult["kind"], string> = { lobby: "공방 연습", ladder: "래더", clan: "클랜 연습", internal: "팀 내부 연습", friendly: "친선경기" };
 
 /** 진행 중 (가운데 덮개) */
 export function BatchRunning({ label, n }: { label: string; n?: number }) {
