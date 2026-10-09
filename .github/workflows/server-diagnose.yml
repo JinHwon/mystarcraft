@@ -15,13 +15,13 @@ jobs:
           printf '%s\n' "$ORACLE_SSH_KEY" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | sed '/^$/d' > ~/.ssh/k
           chmod 600 ~/.ssh/k
           ssh-keyscan -T 15 -H "$ORACLE_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
-          ssh -i ~/.ssh/k -o BatchMode=yes "$ORACLE_USER@$ORACLE_HOST" 'bash -s' <<'REMOTE' 2>&1
-          df -h / | tail -1
-          sudo du -xh / --max-depth=2 2>/dev/null | sort -h | tail -14
-          sudo docker ps -a --format '{{.Names}} {{.Status}}'
-          pm2 list | head -8
-          pm2 flush; sudo journalctl --vacuum-size=50M | tail -1; sudo apt-get clean
-          sudo docker builder prune -f | tail -1; sudo docker image prune -f | tail -1
-          df -h / | tail -1
-          curl -s -m 5 localhost:3100/api/health
+          ssh -i ~/.ssh/k -o BatchMode=yes "$ORACLE_USER@$ORACLE_HOST" 'bash -s' <<'REMOTE' 2>&1 || true
+          echo "== df =="; df -h / | tail -1
+          echo "== /var/lib =="; sudo du -xh /var/lib --max-depth=2 2>/dev/null | sort -h | tail -12
+          echo "== docker volumes/containers =="; sudo du -xh /var/lib/docker --max-depth=2 2>/dev/null | sort -h | tail -10
+          echo "== docker df =="; sudo docker system df -v 2>&1 | head -30
+          echo "== mysql 컨테이너 =="; sudo docker ps -a --format '{{.Names}} {{.Status}} {{.Image}}'
+          echo "== mysql 데이터 상위 파일 =="; sudo find /var/lib/docker/volumes -type f -size +200M -printf '%s %p\n' 2>/dev/null | sort -n | tail -15
+          echo "== mysql 로그 =="; sudo docker logs --tail 25 mystarcraft-mysql 2>&1 | tail -25
+          echo "== 앱 로그 =="; tail -n 20 ~/.pm2/logs/mystarcraft-error-2.log 2>&1
           REMOTE
