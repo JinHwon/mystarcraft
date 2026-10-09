@@ -5,7 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Diagnose over SSH
+      - name: Purge binlogs over SSH
         env:
           ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
           ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
@@ -16,12 +16,11 @@ jobs:
           chmod 600 ~/.ssh/k
           ssh-keyscan -T 15 -H "$ORACLE_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
           ssh -i ~/.ssh/k -o BatchMode=yes "$ORACLE_USER@$ORACLE_HOST" 'bash -s' <<'REMOTE' 2>&1 || true
-          echo "== df =="; df -h / | tail -1
-          echo "== /var/lib =="; sudo du -xh /var/lib --max-depth=2 2>/dev/null | sort -h | tail -12
-          echo "== docker volumes/containers =="; sudo du -xh /var/lib/docker --max-depth=2 2>/dev/null | sort -h | tail -10
-          echo "== docker df =="; sudo docker system df -v 2>&1 | head -30
-          echo "== mysql 컨테이너 =="; sudo docker ps -a --format '{{.Names}} {{.Status}} {{.Image}}'
-          echo "== mysql 데이터 상위 파일 =="; sudo find /var/lib/docker/volumes -type f -size +200M -printf '%s %p\n' 2>/dev/null | sort -n | tail -15
-          echo "== mysql 로그 =="; sudo docker logs --tail 25 mystarcraft-mysql 2>&1 | tail -25
-          echo "== 앱 로그 =="; tail -n 20 ~/.pm2/logs/mystarcraft-error-2.log 2>&1
+          echo "== 전 =="; df -h / | tail -1
+          sudo docker exec mystarcraft-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SHOW BINARY LOGS" 2>/dev/null | tail -3'
+          sudo docker exec mystarcraft-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "PURGE BINARY LOGS BEFORE NOW(); SET PERSIST binlog_expire_logs_seconds=86400;" 2>&1 | grep -v Warning'
+          echo "== 후 =="; df -h / | tail -1
+          sudo find /var/lib/docker/volumes/deploy_mystarcraft-mysql-data/_data -name 'binlog.*' | wc -l
+          echo "== 앱 =="; pm2 restart mystarcraft >/dev/null 2>&1; sleep 5; curl -s -m 8 localhost:3100/api/health; echo
+          sudo docker ps -a --format '{{.Names}} {{.Status}}'
           REMOTE
