@@ -28,6 +28,19 @@ if [ "$(free -m | awk '/Swap:/{print $2}')" -lt 1024 ] && [ ! -f /swapfile ]; th
   grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
 fi
 
+# 디스크가 가득 차면 git·DB 쓰기가 모두 실패해 로그인도 안 되므로, 배포 전에 안전한 것만 정리 (DB 볼륨·소스·.env 는 건드리지 않음)
+echo "▶ 디스크: $(df -h / | awk 'NR==2{print $3" 사용 / "$2" (남음 "$4", "$5")"}')"
+pm2 flush >/dev/null 2>&1 || true
+sudo journalctl --vacuum-size=100M >/dev/null 2>&1 || true
+sudo apt-get clean >/dev/null 2>&1 || true
+sudo find /var/log -type f \( -name '*.gz' -o -name '*.[0-9]' -o -name '*.old' \) -delete 2>/dev/null || true
+sudo docker builder prune -f >/dev/null 2>&1 || true
+sudo docker image prune -f >/dev/null 2>&1 || true
+command -v pnpm >/dev/null && pnpm store prune >/dev/null 2>&1 || true
+npm cache clean --force >/dev/null 2>&1 || true
+sudo find /tmp -maxdepth 1 -type f -mtime +1 -name 'mystarcraft-*' -delete 2>/dev/null || true
+echo "▶ 정리 후 디스크: $(df -h / | awk 'NR==2{print $3" 사용 / "$2" (남음 "$4", "$5")"}')"
+
 command -v git >/dev/null || { sudo -E apt-get update -y && sudo -E apt-get install -y git; }
 command -v openssl >/dev/null || sudo -E apt-get install -y openssl
 
