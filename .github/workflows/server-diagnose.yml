@@ -1,0 +1,27 @@
+name: Server diagnose
+on: workflow_dispatch
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Diagnose over SSH
+        env:
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
+          ORACLE_USER: ${{ secrets.ORACLE_USER || 'ubuntu' }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$ORACLE_SSH_KEY" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | sed '/^$/d' > ~/.ssh/k
+          chmod 600 ~/.ssh/k
+          ssh-keyscan -T 15 -H "$ORACLE_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh -i ~/.ssh/k -o BatchMode=yes "$ORACLE_USER@$ORACLE_HOST" 'bash -s' <<'REMOTE' 2>&1
+          df -h / | tail -1
+          sudo du -xh / --max-depth=2 2>/dev/null | sort -h | tail -14
+          sudo docker ps -a --format '{{.Names}} {{.Status}}'
+          pm2 list | head -8
+          pm2 flush; sudo journalctl --vacuum-size=50M | tail -1; sudo apt-get clean
+          sudo docker builder prune -f | tail -1; sudo docker image prune -f | tail -1
+          df -h / | tail -1
+          curl -s -m 5 localhost:3100/api/health
+          REMOTE
