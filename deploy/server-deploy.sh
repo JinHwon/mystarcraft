@@ -24,6 +24,15 @@ git checkout "$BRANCH"
 git pull --ff-only origin "$BRANCH"
 echo -e "${GREEN}✓ 완료${NC}"
 
+# DB 컨테이너 설정(docker-compose.yml)이 바뀌었으면 반영 (바뀐 게 없으면 그대로 둠, 데이터 볼륨은 유지)
+sudo docker compose -f deploy/docker-compose.yml --env-file .env up -d
+for i in $(seq 1 60); do
+  [ "$(sudo docker inspect -f '{{.State.Health.Status}}' mystarcraft-mysql 2>/dev/null)" = "healthy" ] && break
+  sleep 2
+done
+# 쌓인 바이너리 로그 정리 (로그를 끈 뒤에는 이미 있던 파일이 자동으로 지워지지 않음)
+sudo docker exec mystarcraft-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "PURGE BINARY LOGS BEFORE NOW()"' >/dev/null 2>&1 || true
+
 echo -e "\n${BLUE}[2/5]${NC} 의존성 설치 중..."
 pnpm install --frozen-lockfile < /dev/null
 echo -e "${GREEN}✓ 완료${NC}"
