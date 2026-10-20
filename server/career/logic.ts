@@ -59,6 +59,7 @@ import {
 export { CareerError };
 import { initialPlayers, initialTeams } from "@shared/career/init";
 import { eventOn } from "./events";
+import { dormBonus, trainMul } from "@shared/career/facilities";
 import { aiShopping } from "./aiShop";
 import { broadcastRights, gateIncome, regularSeasonPrize, weeklyGoods } from "./income";
 import { applyPromo, ensureDivisions, fillBRosters, fmt, promoMoves, rosterLimits, scheduleDivision, schedulePromo } from "./divisions";
@@ -238,7 +239,7 @@ function actOne(s: CareerState, p: CPlayer, action: ActionKey | null | undefined
   const boost = mine && eventOn("stat_boost") ? 2 : 1;
   const tired = p.cond < 30;
   switch (action) {
-    case "train": gainStats(p, 2, 2 * boost, 6 * boost); p.cond = clampCond(p.cond - randInt(3, 5)); break;
+    case "train": gainStats(p, 2, 2 * boost, 6 * boost, mine ? trainMul(s) : 1); p.cond = clampCond(p.cond - randInt(3, 5)); break;
     case "rest": p.cond = clampCond(p.cond + 5); break;
     case "event": {
       // 인기 많은 선수일수록 팬미팅 수익이 큼 (최대 150만). 한 주에 팬미팅을 여러 번 열수록 팬이 덜 모임 (한 번에 10%씩, 최소 30%)
@@ -650,7 +651,7 @@ function finishWeek(s: CareerState): WeekResult {
   for (const p of activePlayers(s)) {
     if (p.sulkUntil && sulking(s, p)) continue;
     if (p.sulkUntil) delete p.sulkUntil;
-    p.cond = clampCond(p.cond + WEEKLY_COND_RECOVERY);
+    p.cond = clampCond(p.cond + WEEKLY_COND_RECOVERY + (p.team === s.myTeam ? dormBonus(s) : 0));
   }
   // 다른 구단은 여유 자금으로 주전 선수 아이템 구입
   if (s.phase !== "offseason") aiShopping(s);

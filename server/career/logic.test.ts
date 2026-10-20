@@ -1869,3 +1869,81 @@ describe("난이도 패치: 메인 스폰서 항목 상한·물가·성장 여�
     expect(s.inventory!.cheer).toBeLessThanOrEqual(999);
   });
 });
+
+describe("구단 시설 투자·활동 기록·세이브 분석", () => {
+  it("시설: 올리면 비용이 나가고 효과가 붙으며, 매주 유지비가 들고, 자금이 모자라거나 최고 단계면 거절", async () => {
+    const { upgradeFacility } = await import("./club");
+    const fac = await import("@shared/career/facilities");
+    const s = newCareer(0);
+    s.teams[0].money = 100_000;
+    expect(fac.upkeepWeekly(s)).toBe(0);
+    expect(fac.upgradeCost(s, "train")).toBe(800);
+    const before = s.teams[0].money;
+    upgradeFacility(s, "train");
+    expect(s.facilities?.train).toBe(1);
+    expect(s.teams[0].money).toBe(before - 800);
+    expect(s.cashbook?.at(-1)?.cat).toBe("시설 투자");
+    expect(fac.trainMul(s)).toBeCloseTo(1.05);
+    expect(fac.upkeepWeekly(s)).toBeGreaterThan(0);
+    // 시즌이 지나면 비용에 물가가 붙음
+    const later = { ...s, season: 11 } as typeof s;
+    expect(fac.upgradeCost(later, "dorm")!).toBeGreaterThan(fac.upgradeCost(s, "dorm")!);
+    // 자금 부족
+    s.teams[0].money = 10;
+    expect(() => upgradeFacility(s, "dorm")).toThrow(CareerError);
+    // 최고 단계
+    s.teams[0].money = 1_000_000;
+    for (let i = 0; i < 4; i++) upgradeFacility(s, "train");
+    expect(s.facilities?.train).toBe(5);
+    expect(() => upgradeFacility(s, "train")).toThrow(CareerError);
+  });
+
+  it("시설 효과: 숙소는 주간 컨디션 회복, 분석실은 영입비, 팬 서비스는 관중 수입, 매주 유지비는 가계부에 기록", async () => {
+    const { upgradeFacility } = await import("./club");
+    const { scoutPrice } = await import("@shared/career/contract");
+    const { gateAmount } = await import("@shared/career/income");
+    const s = newCareer(0);
+    s.teams[0].money = 1_000_000;
+    const fa = s.players.find(p => p.team === 12)!;
+    const price0 = scoutPrice(s, fa), gate0 = gateAmount(s, 0);
+    for (let i = 0; i < 3; i++) { upgradeFacility(s, "lab"); upgradeFacility(s, "fan"); upgradeFacility(s, "dorm"); }
+    expect(scoutPrice(s, fa)).toBeLessThan(price0);
+    expect(gateAmount(s, 0)).toBeGreaterThan(gate0);
+    // 숙소 3단계: 주간 컨디션 회복에 +3
+    expect((await import("@shared/career/facilities")).dormBonus(s)).toBe(3);
+    const n0 = s.cashbook!.length;
+    const m = myPendingMatch(s);
+    advanceWeek(s, m ? aiEntry(s, s.myTeam, PRO_SETS) : undefined);
+    expect(s.cashbook!.slice(n0).some(e => e.cat === "시설 유지비" && e.amount < 0)).toBe(true);
+  });
+
+  it("활동 기록: 60초에 120번을 넘기면 폭주로 한 번만 알림", async () => {
+    const { noteRequest } = await import("../audit");
+    const t0 = 1_000_000;
+    let hit = 0;
+    for (let i = 0; i < 130; i++) if (noteRequest(777, t0 + i * 100)) hit++;
+    expect(hit).toBe(1);
+    expect(noteRequest(778, t0)).toBe(false);
+  });
+
+  it("세이브 분석: 큰 수입·한도 초과 아이템·가계부 불연속을 잡고, 관리자 조정 기록은 불연속으로 보지 않음", async () => {
+    const { analyzeCareers } = await import("./analysis");
+    const mk = (fn: (s: CareerState) => void) => { const s = newCareer(0); fn(s); return s; };
+    const now = Date.now();
+    const rows = [
+      { userId: 1, role: "user", name: "정상", createdAt: now - 5 * 86400000, updatedAt: now, state: mk(() => {}) },
+      { userId: 2, role: "user", name: "큰수입", createdAt: now - 5 * 86400000, updatedAt: now, state: mk(s => { s.cashbook = [{ season: 1, week: 1, cat: "메인 스폰서 개인리그 우승 수당", amount: 90000, balance: 93000 }]; }) },
+      { userId: 3, role: "user", name: "아이템", createdAt: now - 5 * 86400000, updatedAt: now, state: mk(s => { s.inventory = { cheer: 9141 }; }) },
+      { userId: 4, role: "user", name: "불연속", createdAt: now - 5 * 86400000, updatedAt: now, state: mk(s => { s.cashbook = [{ season: 1, week: 1, cat: "연봉", amount: -100, balance: 2900 }, { season: 1, week: 2, cat: "관중 수입", amount: 50, balance: 9999 }]; }) },
+      { userId: 5, role: "user", name: "관리자조정", createdAt: now - 5 * 86400000, updatedAt: now, state: mk(s => { s.cashbook = [{ season: 1, week: 1, cat: "연봉", amount: -100, balance: 2900 }, { season: 1, week: 2, cat: "관리자 조정", amount: 7000, balance: 9900 }]; }) },
+    ];
+    const a = analyzeCareers(rows);
+    const byId = new Map(a.flags.map(f => [f.userId, f.why.join("|")]));
+    expect(byId.has(1)).toBe(false);
+    expect(byId.get(2)).toContain("한 번에 들어온 수입");
+    expect(byId.get(3)).toContain("보유 한도 초과");
+    expect(byId.get(4)).toContain("가계부 불연속");
+    expect(byId.has(5)).toBe(false);
+    expect(a.total).toBe(5);
+  });
+});

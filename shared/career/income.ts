@@ -8,6 +8,7 @@
 import { weekMoney, type CareerState, type CMatch } from "./rules";
 import { popularity } from "./contract";
 import { divOf, rosterOf } from "./view";
+import { fanMul } from "./facilities";
 
 const r10 = (v: number) => Math.round(v / 10) * 10;
 
@@ -21,13 +22,13 @@ export function fanPower(s: CareerState, team: number): number {
 export function gateAmount(s: CareerState, team: number, stage: CMatch["stage"] = "regular"): number {
   const fans = fanPower(s, team);
   const base = divOf(s, team) === 2 ? 20 + fans * 0.4 : 50 + fans * 0.8;
-  return r10(base * (stage === "final" ? 3 : stage === "regular" ? 1 : 2));
+  return r10(base * (stage === "final" ? 3 : stage === "regular" ? 1 : 2) * (team === s.myTeam ? fanMul(s) : 1));
 }
 
 /** 주간 굿즈 판매: 1부 20 + 인기 × 0.6, 2부 10 + 인기 × 0.3 */
 export function goodsAmount(s: CareerState, team: number): number {
   const fans = fanPower(s, team);
-  return r10(weekMoney(s, divOf(s, team) === 2 ? 10 + fans * 0.3 : 20 + fans * 0.6));
+  return r10(weekMoney(s, divOf(s, team) === 2 ? 10 + fans * 0.3 : 20 + fans * 0.6) * (team === s.myTeam ? fanMul(s) : 1));
 }
 
 /** 중계권 분배금 (시즌 시작) */

@@ -329,3 +329,19 @@ export const appSettings = mysqlTable("app_settings", {
 	value: text().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
+
+/** 계정별 활동 기록 (큰 수입·시즌 진행·요청 폭주·관리자 수정). 부정 이용 점검용 */
+export const auditLogs = mysqlTable("audit_logs", {
+	id: int().autoincrement().notNull().primaryKey(),
+	userId: int().notNull(),
+	/** big_money · season · burst · admin_edit */
+	kind: varchar({ length: 32 }).notNull(),
+	/** 금액(만원) 또는 시즌 번호 */
+	amount: int().default(0).notNull(),
+	detail: varchar({ length: 255 }),
+	createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+},
+(table) => [
+	index("audit_logs_user_idx").on(table.userId, table.createdAt),
+	index("audit_logs_kind_idx").on(table.kind, table.createdAt),
+]);

@@ -11,11 +11,14 @@ import { rosterOf as rosterOfView, teamPower } from "@shared/career/view";
 import { managerExpNeed } from "@shared/career/mainSponsor";
 import type { CareerEventType } from "@shared/career/events";
 import { setActiveEvents } from "./events";
+import { logAudit, noteRequest, recentAudit } from "../audit";
+import { analyzeCareers, type AnalysisRow, type CareerAnalysis } from "./analysis";
 import type { CareerState } from "@shared/career/rules";
 import { diffOf, jsonOf, snapshot, type Snapshot } from "./diff";
 import { nominate } from "./msl";
 import { ACTIONS, type ActionKey } from "@shared/career/rules";
-import { negotiateMainSponsor, pay, pruneOffers } from "./club";
+import { book, negotiateMainSponsor, pay, pruneOffers, upgradeFacility } from "./club";
+import { FACILITY_KEYS } from "@shared/career/facilities";
 import { claimGift } from "./gifts";
 import { cancelPendingJob, requestJob } from "./club";
 import { acceptJob, chooseSponsor, listPlayer, negotiateContract, respondJob, respondJoin, respondOffer, respondRaise, unlistPlayer } from "./club";
@@ -150,6 +153,8 @@ async function refreshEvents() {
 /** 관리자가 이벤트를 바꾸면 바로 반영 */
 export function resetEventsCache() { eventsAt = 0; }
 
+let analysisCache: { at: number; data: CareerAnalysis } | null = null;
+
 /** 세이브를 불러와 수정하고 저장. 바뀐 부분(diff)만 돌려준다. 게임 규칙 오류는 사용자에게 보여줄 메시지로 변환 */
 /** 시세 기록(mkt)은 화면에 안 보냄 (선수를 눌렀을 때만 따로 받음) */
 function withoutMarket<T extends CareerState | null>(s: T): T {
@@ -158,12 +163,25 @@ function withoutMarket<T extends CareerState | null>(s: T): T {
   return rest as T;
 }
 
+/** 한 요청에서 자금이 크게 바뀌었거나 시즌이 넘어갔으면 활동 기록에 남김 */
+export const BIG_MONEY = 20_000;
+function auditRequest(userId: number, s: CareerState, moneyBefore: number, seasonBefore: number) {
+  const delta = (s.teams[s.myTeam]?.money ?? 0) - moneyBefore;
+  if (Math.abs(delta) >= BIG_MONEY) {
+    const top = (s.cashbook ?? []).slice(-8).filter(e => Math.abs(e.amount) >= BIG_MONEY / 4).map(e => `${e.cat} ${e.amount.toLocaleString()}`).join(", ");
+    void logAudit(userId, "big_money", delta, `${s.season}시즌 ${s.week}주 ${top}`);
+  }
+  if (s.season !== seasonBefore) void logAudit(userId, "season", s.season, `${s.season}시즌 시작`);
+}
+
 function mutate<T>(userId: number, fn: (s: CareerState) => T) {
   return withLock(userId, async () => {
     await refreshEvents();
     const s = await load(userId);
     if (!s) throw new TRPCError({ code: "NOT_FOUND", message: "진행 중인 커리어가 없습니다. 새 게임을 시작하세요" });
     const before = cache.get(userId)?.snap ?? snapshot(s);
+    noteRequest(userId);
+    const moneyBefore = s.teams[s.myTeam]?.money ?? 0, seasonBefore = s.season;
     try {
       if (s.gameOver) throw new CareerError(`게임이 종료되었습니다: ${s.gameOver.reason}. 새 게임을 시작하세요`);
       const result = fn(s);
@@ -171,6 +189,7 @@ function mutate<T>(userId: number, fn: (s: CareerState) => T) {
       pruneOffers(s);
       const { after, ...diff } = diffOf(before, s);
       save(userId, s, jsonOf(s, after), after);
+      auditRequest(userId, s, moneyBefore, seasonBefore);
       return { result, diff };
     } catch (e) {
       // 중간에 멈춘 변경은 버리고 마지막 저장 상태로
@@ -364,6 +383,32 @@ export const careerRouter = router({
   /** 관리자: 사용자 목록 + 커리어 요약 */
   adminUsers: adminProcedure.query(async () => (await allSummaries(true)).map(r => ({ ...r, lastSignedIn: r.lastSignedIn ? String(r.lastSignedIn) : null }))),
 
+  /** 관리자: 세이브 이상 징후 점검 (전체 세이브를 읽어 분석, 무거우므로 10분 캐시) */
+  adminAnalysis: adminProcedure
+    .input(z.object({ force: z.boolean().optional() }).optional())
+    .query(async ({ input }) => {
+      if (!input?.force && analysisCache && Date.now() - analysisCache.at < 600_000) return { ...analysisCache.data, at: analysisCache.at };
+      const db = await requireDb();
+      const us = await db.select({ id: users.id, name: users.name, role: users.role, createdAt: users.createdAt }).from(users);
+      const nameOf = new Map(us.map(u => [u.id, u.name || `감독${u.id}`]));
+      const rows = await db.select({ userId: careers.userId, state: careers.state, createdAt: careers.createdAt, updatedAt: careers.updatedAt }).from(careers);
+      const parsed: AnalysisRow[] = [];
+      for (const r of rows) {
+        try {
+          const u = us.find(x => x.id === r.userId);
+          parsed.push({ userId: r.userId, role: u?.role ?? "user", name: nameOf.get(r.userId), createdAt: new Date(String(r.createdAt).replace(" ", "T") + "Z").getTime(), updatedAt: new Date(String(r.updatedAt).replace(" ", "T") + "Z").getTime(), state: cache.get(r.userId)?.state ?? (JSON.parse(r.state) as CareerState) });
+        } catch { /* 깨진 세이브는 건너뜀 */ }
+      }
+      const data = analyzeCareers(parsed);
+      analysisCache = { at: Date.now(), data };
+      return { ...data, at: analysisCache.at };
+    }),
+
+  /** 관리자: 최근 활동 기록 (큰 수입·시즌 진행·요청 폭주·관리자 수정) */
+  adminAudit: adminProcedure
+    .input(z.object({ userId: z.number().int().optional(), limit: z.number().int().min(1).max(300).default(100) }))
+    .query(async ({ input }) => (await recentAudit(input.limit, input.userId)).map(r => ({ ...r, createdAt: String(r.createdAt) }))),
+
   /** 관리자: 커리어 수정 (자금·감독 레벨·명성·아이템 지급·컨디션 회복) */
   adminEdit: adminProcedure
     .input(z.object({
@@ -376,13 +421,20 @@ export const careerRouter = router({
       clearGameOver: z.boolean().optional(),
     }))
     .mutation(({ input }) => mutateAny(input.userId, s => {
-      if (input.money !== undefined) s.teams[s.myTeam].money = input.money;
+      if (input.money !== undefined) {
+        // 가계부가 끊기지 않게 조정액을 기록으로 남김
+        const delta = input.money - s.teams[s.myTeam].money;
+        s.teams[s.myTeam].money = input.money;
+        if (delta) book(s, "관리자 조정", delta, "관리자가 자금을 수정");
+        void logAudit(input.userId, "admin_edit", delta, `자금 ${delta >= 0 ? "+" : ""}${delta.toLocaleString()}만 → ${input.money.toLocaleString()}만`);
+      }
       if (input.level !== undefined || input.reputation !== undefined) {
         s.manager = { reputation: 50, level: 1, exp: 0, ...s.manager };
         if (input.level !== undefined) { s.manager.level = input.level; s.manager.exp = 0; }
         if (input.reputation !== undefined) s.manager.reputation = input.reputation;
       }
       for (const [k, n] of Object.entries(input.items ?? {})) if (ITEM_BY_KEY[k]) s.inventory = { ...s.inventory, [k]: n };
+      if (input.level !== undefined || input.reputation !== undefined || input.items) void logAudit(input.userId, "admin_edit", 0, [input.level !== undefined ? `감독 레벨 ${input.level}` : "", input.reputation !== undefined ? `평판 ${input.reputation}` : "", input.items ? `아이템 ${Object.keys(input.items).length}종` : ""].filter(Boolean).join(", "));
       if (input.healAll) for (const p of rosterOfView(s, s.myTeam)) p.cond = 100;
       if (input.clearGameOver) { delete s.gameOver; s.debtWeeks = 0; }
       return summaryOf(s);
@@ -585,6 +637,10 @@ export const careerRouter = router({
   claimGift: protectedProcedure
     .input(z.object({ id: z.number().int() }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => claimGift(s, input.id))),
+  /** 구단 시설 한 단계 올리기 (훈련장·숙소·분석실·팬 서비스) */
+  upgradeFacility: protectedProcedure
+    .input(z.object({ key: z.enum(FACILITY_KEYS as [string, ...string[]]) }))
+    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => upgradeFacility(s, input.key as (typeof FACILITY_KEYS)[number]))),
   chooseSponsor: protectedProcedure
     .input(z.object({ name: z.string().min(1).max(40), targets: z.array(z.number().int()).max(5) }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => chooseSponsor(s, input.name, input.targets))),
