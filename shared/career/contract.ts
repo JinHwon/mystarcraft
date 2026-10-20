@@ -15,9 +15,9 @@ export function seeded(...keys: number[]): number {
 
 const round10 = (v: number) => Math.round(v / 10) * 10;
 
-/** 기본 연봉 (만원/시즌): 선수 가치의 12% (20~1,500) — 비싼 선수일수록 유지비도 큼 */
+/** 기본 연봉 (만원/시즌): 선수 가치의 15% (20~3,500) — 비싼 선수일수록 유지비도 큼 (몸값에 물가가 반영돼 시즌이 지날수록 오름) */
 export function baseSalary(p: CPlayer, season: number): number {
-  return Math.max(20, Math.min(1500, round10(askingPrice(p, season) * 0.12)));
+  return Math.max(20, Math.min(3500, round10(askingPrice(p, season) * 0.15)));
 }
 
 /** 스타 선수 기준 등급 (A- 이상) */

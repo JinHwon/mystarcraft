@@ -32,10 +32,18 @@ export function contentScores(c: SetContent, won: boolean, duration: number): Re
   };
 }
 
-/** 오를 여지: 능력치 하나가 높을수록 조금 덜 오름 (선수별 한계는 없음) */
-function room(p: CPlayer, k: StatKey) {
-  return Math.max(0.4, 1 - (p.stats[k] - 600) / 900);
+/**
+ * 오를 여지: 능력치 하나가 높을수록, 능력치 합이 높을수록 덜 오름
+ * - 한 능력치: 550 부터 줄기 시작해 800 이 넘으면 3분의 1 수준
+ * - 합계: 5800 부터 줄기 시작해 7000 쯤이면 60%, 8000 이면 거의 안 오름
+ * (선수별 성장 한계는 따로 없지만, 높이 갈수록 올리기 어려워짐)
+ */
+export function growRoom(p: CPlayer, k: StatKey) {
+  const one = Math.max(0.3, 1 - (p.stats[k] - 550) / 750);
+  const total = Math.max(0.15, Math.min(1, 1 - (totalOf(p.stats) - 5800) / 3000));
+  return one * total;
 }
+const room = growRoom;
 
 /** 재능: 크는 속도 배율 (0.9~1.3, 잠재력 값에서) — 한계가 아님 */
 export function talent(p: CPlayer) {
@@ -47,6 +55,10 @@ export function form(p: CPlayer) {
   const wr = (p.sWins + 1) / (p.sWins + p.sLosses + 2);
   return 0.7 + wr;
 }
+
+/** 이겼을 때 오르는 폭 배율 (예전 대비 85%) / 졌을 때 떨어지는 폭 배율 (예전 대비 115%) */
+export const WIN_GAIN = 0.85;
+export const LOSS_DROP = 1.15;
 
 const SS = LEGACY_GRADES.indexOf("SS");
 const S_MINUS = LEGACY_GRADES.indexOf("S-");
@@ -104,13 +116,13 @@ export function setDeltas(p: CPlayer, opp: CPlayer, won: boolean, content: SetCo
     if (won) {
       // 기본 0~4.5 + 잘한 만큼, 못했어도 이기면 거의 안 떨어짐
       d = Math.max(-1, Math.min(16, rand() * 4.5 + sc * 1.9)) * upset;
-      if (d > 0) d *= room(p, k) * grow * cu.up;
+      if (d > 0) d *= room(p, k) * grow * cu.up * WIN_GAIN;
     } else {
       // 기본 -0~5.5 + 잘한 만큼 (잘했으면 졌어도 조금 오름). 못한 내용은 -3 점까지만 (한 능력치만 크게 깎이지 않게)
       d = Math.max(-16, Math.min(5, -rand() * 5.5 + Math.max(-3, sc) * 1.4));
       // 강한 상대에게 진 건 덜, 츄잉껌이면 66% 덜 (최상위 등급 패널티는 약한 상대에게 졌을 때만)
-      if (d < 0) d *= upset * (gap > 0 ? 1 : topGradeLossMul(p, opp)) * (gum ? 0.34 : 1) * cu.down;
-      else d *= room(p, k) * grow * cu.up;
+      if (d < 0) d *= upset * (gap > 0 ? 1 : topGradeLossMul(p, opp)) * (gum ? 0.34 : 1) * cu.down * LOSS_DROP;
+      else d *= room(p, k) * grow * cu.up * WIN_GAIN;
     }
     const r = Math.round(d);
     if (r !== 0) out[k] = r;

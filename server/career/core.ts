@@ -29,7 +29,7 @@ import {
 import { mapView, matchupValue } from "@shared/career/view";
 import { ITEM_BY_KEY, gearCond, gearStats } from "@shared/career/items";
 import { simulateSet, type SetContent } from "../gameSimulation";
-import { setDeltas, talent } from "./growth";
+import { growRoom, setDeltas, talent } from "./growth";
 import { eventOn } from "./events";
 
 export const rand = () => Math.random();
@@ -58,9 +58,8 @@ export function gainStats(p: CPlayer, picks: number, min: number, max: number): 
   const weakest = [...STAT_KEYS].sort((a, b) => p.stats[a] - p.stats[b])[0];
   const keys = [weakest, ...shuffle(STAT_KEYS.filter(k => k !== weakest)).slice(0, Math.max(0, picks - 1))];
   return keys.map(k => {
-    // 능력치가 높을수록 조금 덜 오름 (선수별 성장 한계는 없음, 재능은 속도만)
-    const room = Math.max(0.4, 1 - (p.stats[k] - 600) / 900);
-    const g = Math.max(1, Math.round(randInt(min, max) * room * talent(p)));
+    // 능력치(한 개·합계)가 높을수록 덜 오름 (선수별 성장 한계는 없음, 재능은 속도만)
+    const g = Math.max(1, Math.round(randInt(min, max) * growRoom(p, k) * talent(p)));
     p.stats[k] = clampStat(p.stats[k] + g);
     return k;
   });

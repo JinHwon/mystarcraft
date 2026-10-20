@@ -63,7 +63,7 @@ import { aiShopping } from "./aiShop";
 import { broadcastRights, gateIncome, regularSeasonPrize, weeklyGoods } from "./income";
 import { applyPromo, ensureDivisions, fillBRosters, fmt, promoMoves, rosterLimits, scheduleDivision, schedulePromo } from "./divisions";
 import { createMsl, mslDueThisWeek, mslPlayersThisWeek, nominationPending, runMslWeek, type MslReport } from "./msl";
-import { ITEM_BY_KEY, isStackable, matchCond, packOf, slotOf, stackMax } from "@shared/career/items";
+import { CONSUMABLE_STACK_MAX, ITEM_BY_KEY, isStackable, matchCond, packOf, slotOf, stackMax } from "@shared/career/items";
 import { ensurePotential, retirements, rookies } from "./generation";
 import { midweekMarket } from "./club";
 import { addManagerExp, bidPlayer, mainSponsorPay, book, ensureClub, newSeasonClub, pay, seasonEndClub, weeklyClub } from "./club";
@@ -252,7 +252,7 @@ function actOne(s: CareerState, p: CPlayer, action: ActionKey | null | undefined
         pay(s, "이벤트", earn, `${p.name} 팬미팅`);
         // 팬미팅: 인기가 많을수록 치어풀을 받을 확률이 높음
         if (rand() < cheerChance(p)) {
-          s.inventory = { ...s.inventory, cheer: (s.inventory?.cheer ?? 0) + 1 };
+          s.inventory = { ...s.inventory, cheer: Math.min(CONSUMABLE_STACK_MAX, (s.inventory?.cheer ?? 0) + 1) };
           news(s, `📣 ${p.name} 선수가 팬미팅에서 치어풀을 선물 받았습니다!`);
         }
       }
@@ -942,6 +942,11 @@ export function startNextSeason(s: CareerState, opts: { releaseExpiring?: boolea
     const age = ageOf(p, s.season);
     if (age <= 21) gainStats(p, 3, 8, 25);
     else if (age <= 24) gainStats(p, 2, 3, 12);
+    else if (age >= 26) {
+      // 노화: 26세부터 시즌마다 능력치가 떨어짐 (나이가 많을수록 더 크게: 26세 0~2 → 30세 0~6 → 33세 0~9, 능력치마다)
+      const worst = 2 + (age - 26) * 1.5;
+      for (const k of STAT_KEYS) p.stats[k] = clampStat(p.stats[k] - randInt(0, Math.round(worst)));
+    }
     p.sWins = 0; p.sLosses = 0; p.sVs = undefined;
     p.potions = 0;
     // 선수 행동력은 시즌마다 새로 (쌓인 건 시즌 동안만)

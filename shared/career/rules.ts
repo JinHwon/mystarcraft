@@ -810,10 +810,18 @@ export function askingPrice(p: CPlayer, season: number): number {
   const total = totalOf(p.stats);
   const age = ageOf(p, season);
   const x = Math.max(0, total - 3800) / 1000;
-  const base = 600 * x + 60 * Math.pow(x, 3.3) + p.level * 60;
+  const base = 720 * x + 85 * Math.pow(x, 3.3) + p.level * 60;
   const ageMul = age <= 22 ? 1.2 : age >= 28 ? 0.6 : 1;
-  return Math.max(50, Math.round((base * ageMul * formMul(p)) / 10) * 10);
+  return Math.max(50, Math.round((base * ageMul * formMul(p) * priceInflation(season)) / 10) * 10);
 }
+
+/**
+ * 물가: 시즌이 지날수록 선수 몸값·연봉·구단 운영비가 올라감 (시즌마다 +6%, 최대 2.5배)
+ * — 시간이 갈수록 돈이 쌓여 쉬워지는 것을 막고, 오래 할수록 더 알뜰한 운영이 필요하게
+ */
+export const priceInflation = (season: number) => Math.min(2.5, 1 + 0.06 * Math.max(0, season - 1));
+/** 구단 운영비 물가 (시즌마다 +5%, 최대 2.2배) */
+export const costInflation = (season: number) => Math.min(2.2, 1 + 0.05 * Math.max(0, season - 1));
 
 // ── 트레이드 ────────────────────────────────────────────────────
 /** 트레이드용 선수 가치 (요구 금액 기준) */
