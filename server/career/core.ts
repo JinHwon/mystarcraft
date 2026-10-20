@@ -53,13 +53,13 @@ export function news(s: CareerState, text: string) {
   if (s.news.length > 60) s.news.length = 60;
 }
 
-export function gainStats(p: CPlayer, picks: number, min: number, max: number): string[] {
+export function gainStats(p: CPlayer, picks: number, min: number, max: number, mul = 1): string[] {
   // 하나는 가장 낮은 능력치 (패배로 떨어진 능력치를 훈련으로 되살릴 수 있게), 나머지는 무작위
   const weakest = [...STAT_KEYS].sort((a, b) => p.stats[a] - p.stats[b])[0];
   const keys = [weakest, ...shuffle(STAT_KEYS.filter(k => k !== weakest)).slice(0, Math.max(0, picks - 1))];
   return keys.map(k => {
     // 능력치(한 개·합계)가 높을수록 덜 오름 (선수별 성장 한계는 없음, 재능은 속도만)
-    const g = Math.max(1, Math.round(randInt(min, max) * growRoom(p, k) * talent(p)));
+    const g = Math.max(1, Math.round(randInt(min, max) * growRoom(p, k) * talent(p) * mul));
     p.stats[k] = clampStat(p.stats[k] + g);
     return k;
   });

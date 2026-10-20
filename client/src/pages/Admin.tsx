@@ -113,6 +113,99 @@ function RookieSwitch() {
   );
 }
 
+/** 서버 상태: 디스크·DB 백업 (디스크가 가득 차 접속이 멈춘 일이 있어서 한눈에 보이게) */
+function ServerStatus() {
+  const q = trpc.admin.serverStatus.useQuery(undefined, { refetchInterval: 60_000 });
+  if (!q.data) return null;
+  const { disk, backup } = q.data;
+  const diskLevel = disk.ok ? disk.level : "warn";
+  const bad = diskLevel !== "ok" || (backup.ok && backup.stale);
+  return (
+    <div className={cn("rounded-2xl border p-3.5 space-y-1.5", bad ? "bg-rose-500/10 border-rose-400/50" : "bg-card border-border")}>
+      <div className="font-black text-foreground">🖥️ 서버 상태</div>
+      {disk.ok ? (
+        <div className="text-xs">
+          <div className="flex items-center justify-between"><span className="text-muted-foreground">디스크</span><span className={cn("font-bold", diskLevel === "critical" ? "text-rose-300" : diskLevel === "warn" ? "text-amber-300" : "text-emerald-300")}>{Math.round(disk.ratio * 100)}% 사용 · 남은 {disk.freeGB}GB / {disk.totalGB}GB</span></div>
+          <div className="h-1.5 rounded bg-black/40 mt-1 overflow-hidden"><div className={cn("h-full", diskLevel === "critical" ? "bg-rose-400" : diskLevel === "warn" ? "bg-amber-400" : "bg-emerald-400")} style={{ width: `${Math.min(100, disk.ratio * 100)}%` }} /></div>
+          {diskLevel !== "ok" && <div className="mt-1 text-rose-200">⚠️ 디스크가 {diskLevel === "critical" ? "거의 가득 찼습니다. 지금 정리하지 않으면 접속·저장이 멈출 수 있습니다" : "80%를 넘었습니다. 오래된 로그·백업을 확인하세요"}</div>}
+        </div>
+      ) : <div className="text-xs text-amber-300">디스크 상태를 읽지 못했습니다</div>}
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">DB 백업</span>
+        {backup.ok ? (backup.count ? <span className={cn("font-bold", backup.stale ? "text-rose-300" : "text-emerald-300")}>{backup.stale ? "오래됨 · " : ""}최근 {new Date(backup.latestAt!).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} · {backup.latestMB}MB · {backup.count}개 보관</span> : <span className="text-rose-300 font-bold">백업 없음 (다음 배포 후 매일 새벽 자동 생성)</span>) : <span className="text-amber-300">{backup.error}</span>}
+      </div>
+    </div>
+  );
+}
+
+const won = (v: number) => `${Math.round(v).toLocaleString()}만`;
+
+/** 세이브 이상 징후 점검: 돈·능력치 분포, 부정 이용 의심 계정, 최근 활동 기록 */
+function AnalysisPanel({ onPick }: { onPick: (id: number) => void }) {
+  const [open, setOpen] = useState(false);
+  const q = trpc.career.adminAnalysis.useQuery(undefined, { enabled: open, staleTime: 600_000 });
+  const audit = trpc.career.adminAudit.useQuery({ limit: 40 }, { enabled: open });
+  const utils = trpc.useUtils();
+  const d = q.data;
+  const KIND: Record<string, string> = { big_money: "큰 자금 변동", season: "시즌 진행", burst: "요청 폭주", admin_edit: "관리자 수정" };
+  return (
+    <div className="rounded-2xl bg-card border border-border p-3.5 space-y-2">
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center gap-2 text-left">
+        <span className="text-2xl">🔍</span>
+        <span className="flex-1"><span className="font-black text-foreground block">이상 징후 점검</span><span className="text-xs text-muted-foreground">돈·능력치 분포와 부정 이용 의심 계정</span></span>
+        <span className="text-xs text-primary font-bold">{open ? "접기" : "열기"}</span>
+      </button>
+      {open && (q.isLoading ? <div className="text-sm text-muted-foreground">세이브를 분석하는 중... (몇 초 걸립니다)</div> : d && (
+        <div className="space-y-2.5 text-xs">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span>세이브 {d.total}개 · {new Date(d.at).toLocaleTimeString("ko-KR")} 기준</span>
+            <button onClick={() => { void utils.career.adminAnalysis.fetch({ force: true }).then(() => q.refetch()); }} className="text-primary font-bold">다시 분석</button>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5 text-center">
+            {[["자금 중앙", won(d.money.median)], ["자금 90%", won(d.money.p90)], ["자금 최대", won(d.money.max)], ["진행 시즌 중앙", `${d.seasons.median}`], ["우리 평균 능력치", `${Math.round(d.myAvg.median)}`], ["SSS 보유 유저", `${d.sssUsers}명`]].map(([k, v]) => (
+              <div key={k} className="border border-border rounded-lg py-1.5"><div className="text-[10px] text-muted-foreground">{k}</div><div className="font-bold text-foreground">{v}</div></div>
+            ))}
+          </div>
+          <div>
+            <div className="font-bold text-foreground mb-1">수입 상위 항목</div>
+            <div className="text-muted-foreground">{d.incomeTop.map(x => `${x.cat} ${won(x.amount)}`).join(" · ") || "-"}</div>
+          </div>
+          <div>
+            <div className="font-bold text-foreground mb-1">진행 시즌별 (중앙값)</div>
+            {d.bySeasons.map(b => <div key={b.label} className="flex justify-between text-muted-foreground"><span>{b.label} ({b.n}명)</span><span>자금 {won(b.money)} · 능력치 {b.avg} · SSS {b.sss}명</span></div>)}
+          </div>
+          <div>
+            <div className="font-bold text-foreground mb-1">의심 계정 {d.flags.length}건</div>
+            {d.flags.length === 0 && <div className="text-emerald-300">없음</div>}
+            <div className="space-y-1">
+              {d.flags.map(f => (
+                <button key={f.userId} onClick={() => onPick(f.userId)} className="w-full text-left rounded-lg border border-border p-2 hover:border-primary/50">
+                  <div className="font-bold text-foreground">{f.name} <span className="text-[10px] text-muted-foreground">#{f.userId} · {f.season}시즌{f.role === "admin" ? " · 관리자" : ""}</span></div>
+                  <ul className="list-disc pl-4 text-amber-200/90">{f.why.map(w => <li key={w}>{w}</li>)}</ul>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="font-bold text-foreground mb-1">최근 활동 기록</div>
+            {(audit.data ?? []).length === 0 && <div className="text-muted-foreground">아직 기록이 없습니다 (배포 이후부터 쌓입니다)</div>}
+            <div className="space-y-0.5">
+              {(audit.data ?? []).map(a => (
+                <div key={a.id} className="flex gap-1.5 text-muted-foreground">
+                  <span className="shrink-0">{new Date(a.createdAt.replace(" ", "T") + "Z").toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                  <button className="shrink-0 text-primary" onClick={() => onPick(a.userId)}>#{a.userId}</button>
+                  <span className="text-foreground shrink-0">{KIND[a.kind] ?? a.kind}</span>
+                  <span className="truncate">{a.detail}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Admin() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
@@ -138,7 +231,9 @@ export default function Admin() {
         <button onClick={() => navigate("/admin/events")} className="mt-2 w-full py-2 rounded-xl bg-primary/20 border border-primary/40 text-primary text-sm font-bold">📅 이벤트 관리</button>
       </div>
 
+      <ServerStatus />
       <RookieSwitch />
+      <AnalysisPanel onPick={setSel} />
 
       {sel !== null && <EditPanel userId={sel} onDone={() => setSel(null)} />}
 

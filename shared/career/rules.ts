@@ -697,6 +697,8 @@ export interface CareerState {
   outbox?: OutRequest[];
   /** 난이도 (없으면 중급) */
   difficulty?: Difficulty;
+  /** 구단 시설 단계 (훈련장·숙소·분석실·팬 서비스, 0~5) */
+  facilities?: Partial<Record<import("./facilities").FacilityKey, number>>;
   /** 이적료 합의된 영입 대상 (선수 → 합의 내용, 이번 주만 유효) */
   /** 선수 시세 기록 (서버에만 있고 화면에는 선수를 눌렀을 때 따로 받음) */
   mkt?: MarketHist;

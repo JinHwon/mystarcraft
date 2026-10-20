@@ -47,6 +47,7 @@ import { rollGift } from "./gifts";
 import { CareerError, addExp, clampCond, freeMoney, gainStats, markNewcomer, news, rand, randInt } from "./core";
 import { activeSponsors, maxSponsors, questLabel, questProgress, questRange, questReward, sponsorOffers } from "@shared/career/sponsor";
 import { ITEM_BY_KEY, stackMax } from "@shared/career/items";
+import { FACILITIES, FACILITY_KEYS, facilityLevel, upgradeCost, upkeepWeekly, type FacilityKey } from "@shared/career/facilities";
 import { SPONSOR_COUNTER, SPONSOR_STRETCH, TERM_NAMES, clampTerms, defaultOffer, mainSponsorName, managerExpNeed, sponsorBudget, termCaps, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
 
 const round10 = (v: number) => Math.round(v / 10) * 10;
@@ -68,7 +69,7 @@ export function book(s: CareerState, category: string, delta: number, note?: str
 }
 /** 우리 구단 돈을 움직이고 기록 */
 /** 난이도 배율을 받지 않는 돈 (선수 거래·감독 계약금·구입 등은 그대로) */
-const UNSCALED = new Set(["이적료 수입", "이적료 지출", "육성 지원금", "방출", "트레이드", "영입", "아이템", "감독명 변경", "감독 영입 계약금"]);
+const UNSCALED = new Set(["시설 투자", "시설 유지비", "관리자 조정", "이적료 수입", "이적료 지출", "육성 지원금", "방출", "트레이드", "영입", "아이템", "감독명 변경", "감독 영입 계약금"]);
 export function pay(s: CareerState, category: string, delta: number, note?: string) {
   // 난이도: 수입·연봉·운영비
   if (!UNSCALED.has(category)) {
@@ -505,6 +506,20 @@ export function addManagerExp(s: CareerState, exp: number) {
   }
 }
 
+// ── 구단 시설 ────────────────────────────────────────────────────
+export function upgradeFacility(s: CareerState, key: FacilityKey) {
+  const def = FACILITIES[key];
+  if (!def) throw new CareerError("없는 시설입니다");
+  const cost = upgradeCost(s, key);
+  if (cost === null) throw new CareerError(`${def.name}은(는) 이미 최고 단계입니다`);
+  if (s.teams[s.myTeam].money < cost) throw new CareerError(`자금이 부족합니다 (필요 ${cost.toLocaleString()}만원)`);
+  const lv = facilityLevel(s, key) + 1;
+  pay(s, "시설 투자", -cost, `${def.name} Lv.${lv}`);
+  s.facilities = { ...s.facilities, [key]: lv };
+  news(s, `🏗️ ${def.name} Lv.${lv} 완공 (${def.perLevel}씩, 유지비 포함 주 ${upkeepWeekly(s).toLocaleString()}만원)`);
+  return { key, level: lv, cost };
+}
+
 // ── 메인 스폰서 (모기업) ──────────────────────────────────────────
 export function ensureMainSponsor(s: CareerState) {
   const sp = s.mainSponsor;
@@ -606,6 +621,8 @@ export function weeklyClub(s: CareerState) {
     const wages = mine.reduce((sum, p) => sum + weeklyWage(p, s), 0);
     pay(s, "연봉", -wages, `선수 ${mine.length}명 주급`);
   }
+  const upkeep = upkeepWeekly(s);
+  if (upkeep > 0) pay(s, "시설 유지비", -upkeep, FACILITY_KEYS.filter(k => facilityLevel(s, k)).map(k => `${FACILITIES[k].name} Lv.${facilityLevel(s, k)}`).join(" · "));
   pay(s, "운영비", -Math.round(weekMoney(s, myDiv(s) === 2 ? B_OPERATING_COST : OPERATING_COST) * costInflation(s.season)), myDiv(s) === 2 ? "2부 운영비" : undefined);
   // 스폰서 후원금·퀘스트
   for (const sp of activeSponsors(s)) pay(s, "스폰서", sp.weekly, `${sp.name} 주간 후원금`);

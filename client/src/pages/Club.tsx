@@ -6,7 +6,8 @@ import { myDiv as myDivOf } from "@shared/career/view";
 import { useLocation, useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { AFTER_SEASON_FEE, B_OPERATING_COST, OPERATING_COST, regularWeeksOf, weekMoney, askingPrice, difficultyOf, totalOf, type CareerState, type Contract, type Gift, type TransferTiming } from "@shared/career/rules";
+import { FACILITIES, FACILITY_KEYS, FACILITY_MAX, FACILITY_UPKEEP, facilityLevel, upgradeCost, upkeepWeekly } from "@shared/career/facilities";
+import { AFTER_SEASON_FEE, B_OPERATING_COST, OPERATING_COST, costInflation, regularWeeksOf, weekMoney, askingPrice, difficultyOf, totalOf, type CareerState, type Contract, type Gift, type TransferTiming } from "@shared/career/rules";
 import { ITEM_BY_KEY, itemImg } from "@shared/career/items";
 import { jobThreshold, playerDemand, teamWages } from "@shared/career/contract";
 import { SPONSOR_STYLE_NAMES, activeSponsors, maxSponsors, questLabel, questProgress, questRange, questReward, sponsorOfferCount, sponsorOffers, type Sponsor, type SponsorQuest } from "@shared/career/sponsor";
@@ -59,8 +60,44 @@ function weeklyFlow(s: CareerState) {
   const sponsors = activeSponsors(s);
   const spon = sponsors.reduce((a, x) => a + x.weekly, 0);
   const wage = Math.round(wages / regularWeeksOf(s));
-  const op = weekMoney(s, myDivOf(s) === 2 ? B_OPERATING_COST : OPERATING_COST);
+  // 운영비(시즌 물가 반영) + 시설 유지비
+  const op = Math.round(weekMoney(s, myDivOf(s) === 2 ? B_OPERATING_COST : OPERATING_COST) * costInflation(s.season)) + upkeepWeekly(s);
   return { wages, sponsors, spon, wage, op, net: spon - wage - op };
+}
+
+/** 구단 시설 투자: 돈이 남을 때 쓰는 곳. 단계마다 효과는 작지만 유지비가 매주 듦 */
+function FacilityPanel({ s }: { s: CareerState }) {
+  const { reply, done, fail } = useMut();
+  const up = trpc.career.upgradeFacility.useMutation({ onSuccess: done, onError: fail });
+  const money = s.teams[s.myTeam].money;
+  return (
+    <Panel icon="🏗️" title="구단 시설" right={`유지비 주 ${upkeepWeekly(s).toLocaleString()}만`}>
+      <div className="space-y-1.5">
+        {FACILITY_KEYS.map(k => {
+          const def = FACILITIES[k], lv = facilityLevel(s, k), cost = upgradeCost(s, k);
+          return (
+            <div key={k} className="flex items-center gap-2 border border-neutral-700 bg-black/40 p-1.5">
+              <span className="text-xl">{def.emoji}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[13px] font-bold text-neutral-100">{def.name}</span>
+                  <span className="flex gap-0.5">{Array.from({ length: FACILITY_MAX }, (_, i) => <span key={i} className={cn("w-2 h-2 border", i < lv ? "bg-[#8fe07a] border-[#8fe07a]" : "border-neutral-600")} />)}</span>
+                </div>
+                <div className="text-[10.5px] text-neutral-400">{def.desc} · 단계마다 {def.perLevel}{lv ? ` (지금 Lv.${lv})` : ""}</div>
+              </div>
+              <button disabled={cost === null || up.isPending || money < (cost ?? 0)}
+                onClick={() => cost !== null && confirm(`${def.name}을(를) Lv.${lv + 1}로 올릴까요?\n비용 ${cost.toLocaleString()}만원 · 유지비 주 ${FACILITY_UPKEEP}만원 추가`) && up.mutate({ key: k })}
+                className="shrink-0 w-[74px] border border-[#ffe45c]/70 text-[#ffe45c] text-[11px] py-1 disabled:opacity-40 disabled:border-neutral-600 disabled:text-neutral-500">
+                {cost === null ? "최고 단계" : <>{cost.toLocaleString()}만<br />올리기</>}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      <div className="text-[10px] text-neutral-500 pt-1">시설 비용과 유지비는 시즌이 지날수록 물가가 반영돼 오릅니다. 유지비는 매주 자동으로 나가고, 단계를 낮출 수는 없으니 자금 여유를 보고 투자하세요</div>
+      {reply && <Reply {...reply} />}
+    </Panel>
+  );
 }
 
 function MoneyTab({ s }: { s: CareerState }) {
@@ -73,6 +110,7 @@ function MoneyTab({ s }: { s: CareerState }) {
   return (
     <div className="space-y-2">
       {(s.debtWeeks ?? 0) > 0 && <Reply text={`⚠️ 적자 ${s.debtWeeks}주째! ${difficultyOf(s).debtWeeks - (s.debtWeeks ?? 0)}주 안에 흑자로 돌리지 못하면 구단이 해체됩니다`} />}
+      <FacilityPanel s={s} />
       <Panel icon="📅" title="매주 고정 수입·지출" right="경기 수당 제외">
         <div className="grid grid-cols-3 gap-1">
           {tiles.map(([k, v, c]) => (
@@ -84,7 +122,7 @@ function MoneyTab({ s }: { s: CareerState }) {
         </div>
         <div className="flex justify-between"><span className="text-neutral-400">서브 스폰서 후원금{spon ? ` (${sponsors.map(x => x.name).join("·")})` : " (없음)"}</span><span className="text-[#bff5c6]">+{spon}</span></div>
         <div className="flex justify-between"><span className="text-neutral-400">연봉 (총 {wages.toLocaleString()}만 ÷ {regularWeeksOf(s)}주)</span><span className="text-[#ffb8c8]">-{wage}</span></div>
-        <div className="flex justify-between"><span className="text-neutral-400">구단 운영비</span><span className="text-[#ffb8c8]">-{op}</span></div>
+        <div className="flex justify-between"><span className="text-neutral-400">구단 운영비{upkeepWeekly(s) ? " · 시설 유지비" : ""}</span><span className="text-[#ffb8c8]">-{op}</span></div>
         <div className="text-[10.5px] text-neutral-500">경기 수당(주 2경기)은 메인 스폰서 계약: 승리 +{s.mainSponsor?.win ?? 0}, 패배 +{s.mainSponsor?.loss ?? 0} · 퀘스트·상금·보너스·이적료는 따로</div>
       </Panel>
       <Panel icon="📒" title={`${s.season}시즌 장부`} right={<>수입 <span className="text-[#bff5c6]">{income.toLocaleString()}</span> · 지출 <span className="text-[#ffb8c8]">{(-expense).toLocaleString()}</span></>}>

@@ -69,6 +69,15 @@ fi
 # 관리자 계정 설정이 없으면 추가 (이미 있으면 서버의 값을 그대로 둠)
 grep -q '^ADMIN_USERNAMES=' .env || echo 'ADMIN_USERNAMES=wlsgnjs1' >> .env
 
+# 매일 새벽 DB 백업 등록 (7일 보관, 이미 등록돼 있으면 한 줄만 유지). 백업이 하나도 없으면 지금 한 번 만들어 둠
+command -v crontab >/dev/null || sudo -E apt-get install -y cron
+mkdir -p "$HOME/backups"
+( crontab -l 2>/dev/null | grep -v 'deploy/backup.sh' || true; echo "17 19 * * * bash $APP_DIR/deploy/backup.sh >> $HOME/backups/backup.log 2>&1" ) | crontab -
+if ! ls "$HOME"/backups/mystarcraft-*.sql.gz >/dev/null 2>&1; then
+  echo "▶ 첫 DB 백업 (백그라운드)"
+  nohup bash deploy/backup.sh >> "$HOME/backups/backup.log" 2>&1 < /dev/null &
+fi
+
 # 오라클 Ubuntu 이미지는 iptables 로 80/443 을 막아두는 경우가 있어 허용 규칙 추가 (이미 있으면 건너뜀)
 for port in 80 443; do
   if ! sudo iptables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null; then
