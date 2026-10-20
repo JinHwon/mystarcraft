@@ -1,11 +1,15 @@
 name: Server diagnose
 on: workflow_dispatch
 jobs:
-  diagnose:
+  analyze:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - name: Purge binlogs over SSH
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Analyze careers (read-only)
         env:
           ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
           ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
@@ -15,12 +19,7 @@ jobs:
           printf '%s\n' "$ORACLE_SSH_KEY" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | sed '/^$/d' > ~/.ssh/k
           chmod 600 ~/.ssh/k
           ssh-keyscan -T 15 -H "$ORACLE_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
-          ssh -i ~/.ssh/k -o BatchMode=yes "$ORACLE_USER@$ORACLE_HOST" 'bash -s' <<'REMOTE' 2>&1 || true
-          echo "== 전 =="; df -h / | tail -1
-          sudo docker exec mystarcraft-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SHOW BINARY LOGS" 2>/dev/null | tail -3'
-          sudo docker exec mystarcraft-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "PURGE BINARY LOGS BEFORE NOW(); SET PERSIST binlog_expire_logs_seconds=86400;" 2>&1 | grep -v Warning'
-          echo "== 후 =="; df -h / | tail -1
-          sudo find /var/lib/docker/volumes/deploy_mystarcraft-mysql-data/_data -name 'binlog.*' | wc -l
-          echo "== 앱 =="; pm2 restart mystarcraft >/dev/null 2>&1; sleep 5; curl -s -m 8 localhost:3100/api/health; echo
-          sudo docker ps -a --format '{{.Names}} {{.Status}}'
-          REMOTE
+          ssh -i ~/.ssh/k -o BatchMode=yes "$ORACLE_USER@$ORACLE_HOST" \
+            "sudo docker exec mystarcraft-mysql sh -c 'mysql -uroot -p\"\$MYSQL_ROOT_PASSWORD\" --default-character-set=utf8mb4 --max-allowed-packet=512M --raw -N -B mystarcraft -e \"SELECT c.userId,u.role,c.createdAt,c.updatedAt,c.state FROM careers c JOIN users u ON u.id=c.userId\" 2>/dev/null' | gzip -c" > /tmp/careers.tsv.gz
+          ls -l /tmp/careers.tsv.gz
+          gunzip -c /tmp/careers.tsv.gz | node tools/analyze-careers.mjs
