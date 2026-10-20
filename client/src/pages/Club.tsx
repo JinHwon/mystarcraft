@@ -10,7 +10,7 @@ import { AFTER_SEASON_FEE, B_OPERATING_COST, OPERATING_COST, regularWeeksOf, wee
 import { ITEM_BY_KEY, itemImg } from "@shared/career/items";
 import { jobThreshold, playerDemand, teamWages } from "@shared/career/contract";
 import { SPONSOR_STYLE_NAMES, activeSponsors, maxSponsors, questLabel, questProgress, questRange, questReward, sponsorOfferCount, sponsorOffers, type Sponsor, type SponsorQuest } from "@shared/career/sponsor";
-import { SPONSOR_STRETCH, TERM_NAMES, levelPerks, mainSponsorName, managerExpNeed, managerLevel, sponsorBudget, sponsorFactors, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
+import { SPONSOR_STRETCH, TERM_NAMES, levelPerks, mainSponsorName, managerExpNeed, managerLevel, sponsorBudget, sponsorFactors, termCaps, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
 import { proTeams, rosterOf, teamPower } from "@shared/career/view";
 import { useCareer, useCareerPatch } from "@/lib/career";
 import { ManagerNameBox } from "@/components/ManagerName";
@@ -570,6 +570,7 @@ function MainSponsorCard({ s }: { s: CareerState }) {
   const edit = terms ?? cur;
   const budget = sponsorBudget(s);
   const limit = Math.round(budget * SPONSOR_STRETCH);
+  const caps = termCaps(s);
   const factors = sponsorFactors(s);
   const value = termsValue(edit);
   const open = canNegotiate(s);
@@ -582,8 +583,8 @@ function MainSponsorCard({ s }: { s: CareerState }) {
       </div>
       {open ? (Object.keys(TERM_NAMES) as Array<keyof MainSponsorTerms>).map(k => (
         <div key={k} className="flex items-center justify-between gap-1">
-          <span className="text-neutral-300">{TERM_NAMES[k]}</span>
-          <FeeStepper value={edit[k]} onChange={v => setTerms({ ...edit, [k]: v })} steps={k === "win" || k === "loss" ? [10, 50] : [100]} />
+          <span className="text-neutral-300">{TERM_NAMES[k]} <span className="text-[10px] text-neutral-500">(상한 {caps[k].toLocaleString()}만)</span></span>
+          <FeeStepper value={edit[k]} onChange={v => setTerms({ ...edit, [k]: Math.min(v, caps[k]) })} steps={k === "win" || k === "loss" ? [10, 50] : [100]} />
         </div>
       )) : (
         <div className="grid grid-cols-3 gap-1">

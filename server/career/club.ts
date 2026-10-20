@@ -10,6 +10,7 @@ import {
   OLD_REGULAR_WEEKS,
   regularWeeksOf,
   weekMoney,
+  costInflation,
   type TransferTiming,
   difficultyOf,
   B_MAX_ROSTER,
@@ -45,7 +46,8 @@ import { developmentBonus, myBTeam, rosterLimits } from "./divisions";
 import { rollGift } from "./gifts";
 import { CareerError, addExp, clampCond, freeMoney, gainStats, markNewcomer, news, rand, randInt } from "./core";
 import { activeSponsors, maxSponsors, questLabel, questProgress, questRange, questReward, sponsorOffers } from "@shared/career/sponsor";
-import { SPONSOR_COUNTER, SPONSOR_STRETCH, defaultOffer, mainSponsorName, managerExpNeed, sponsorBudget, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
+import { ITEM_BY_KEY, stackMax } from "@shared/career/items";
+import { SPONSOR_COUNTER, SPONSOR_STRETCH, TERM_NAMES, clampTerms, defaultOffer, mainSponsorName, managerExpNeed, sponsorBudget, termCaps, termsValue, type MainSponsorTerms } from "@shared/career/mainSponsor";
 
 const round10 = (v: number) => Math.round(v / 10) * 10;
 
@@ -92,6 +94,12 @@ export function ensureClub(s: CareerState) {
     s.jobOffers = (s.jobOffers as unknown as Array<number | JobOffer>).map(o => (typeof o === "number" ? newJobOffer(s, o) : o));
   }
   ensureMainSponsor(s);
+  if (s.inventory) {
+    for (const [key, n] of Object.entries(s.inventory)) {
+      const def = ITEM_BY_KEY[key];
+      if (def && n > stackMax(def)) s.inventory[key] = stackMax(def);
+    }
+  }
 }
 
 // ── 영입 제안 기록 ────────────────────────────────────────────────
@@ -500,7 +508,13 @@ export function addManagerExp(s: CareerState, exp: number) {
 // ── 메인 스폰서 (모기업) ──────────────────────────────────────────
 export function ensureMainSponsor(s: CareerState) {
   const sp = s.mainSponsor;
-  if (sp && sp.team === s.myTeam) return;
+  if (sp && sp.team === s.myTeam) {
+    // 한 항목에 몰아 크게 부른 예전 계약은 항목별 상한으로 낮춤
+    const caps = termCaps(s);
+    const keys = Object.keys(caps) as Array<keyof MainSponsorTerms>;
+    if (keys.some(k => (sp[k] ?? 0) > caps[k])) s.mainSponsor = { ...sp, ...clampTerms(sp, caps) };
+    return;
+  }
   s.mainSponsor = { ...defaultOffer(s), years: 1, season: s.season, team: s.myTeam };
 }
 
@@ -519,6 +533,12 @@ export function negotiateMainSponsor(s: CareerState, terms: MainSponsorTerms, ye
   useTry(s, "mainSponsor");
   const budget = sponsorBudget(s);
   const value = termsValue(terms);
+  // 한 항목에 몰아서 크게 부르는 것은 받아주지 않음 (항목별 상한)
+  const caps = termCaps(s);
+  const over = (Object.keys(caps) as Array<keyof MainSponsorTerms>).filter(k => (terms[k] ?? 0) > caps[k]);
+  if (over.length) {
+    return { result: "rejected" as const, message: `${name}: "한 항목만 그렇게 크게는 곤란합니다" (거절 · 항목별 상한: ${over.map(k => `${TERM_NAMES[k]} ${caps[k].toLocaleString()}만`).join(", ")})` };
+  }
   // 예산보다 조금(15%) 높아도 감독이 밀어붙이면 계약
   if (value <= budget * SPONSOR_STRETCH) {
     s.mainSponsor = { ...terms, years: years + (s.phase === "offseason" ? 1 : 0), season: s.season, team: s.myTeam };
@@ -586,7 +606,7 @@ export function weeklyClub(s: CareerState) {
     const wages = mine.reduce((sum, p) => sum + weeklyWage(p, s), 0);
     pay(s, "연봉", -wages, `선수 ${mine.length}명 주급`);
   }
-  pay(s, "운영비", -weekMoney(s, myDiv(s) === 2 ? B_OPERATING_COST : OPERATING_COST), myDiv(s) === 2 ? "2부 운영비" : undefined);
+  pay(s, "운영비", -Math.round(weekMoney(s, myDiv(s) === 2 ? B_OPERATING_COST : OPERATING_COST) * costInflation(s.season)), myDiv(s) === 2 ? "2부 운영비" : undefined);
   // 스폰서 후원금·퀘스트
   for (const sp of activeSponsors(s)) pay(s, "스폰서", sp.weekly, `${sp.name} 주간 후원금`);
   checkSponsor(s);

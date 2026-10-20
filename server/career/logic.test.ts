@@ -1810,3 +1810,62 @@ describe("18주 시즌 · MSL/OSL", () => {
     expect(s.msl2).toBeDefined();
   }, 120_000);
 });
+
+describe("난이도 패치: 메인 스폰서 항목 상한·물가·성장 여지·노화", () => {
+  it("메인 스폰서: 한 항목만 크게 부르면 거절, 예전에 몰아 둔 계약은 상한으로 낮춤", async () => {
+    const { negotiateMainSponsor, ensureMainSponsor } = await import("./club");
+    const { termCaps, defaultOffer, DEFAULT_TERMS } = await import("@shared/career/mainSponsor");
+    const s = newCareer(0);
+    s.phase = "offseason";
+    const caps = termCaps(s);
+    // 우승 수당만 크게 키우고 나머지는 0 (예전에는 기대치 8% 로 계산돼 통과했음)
+    const r = negotiateMainSponsor(s, { win: 0, loss: 0, proTitle: 0, proRunnerUp: 0, mslTitle: caps.mslTitle * 20, mslRunnerUp: 0 }, 1);
+    expect(r.result).toBe("rejected");
+    // 상한 안이면 기본 조건으로 계약 가능
+    expect(negotiateMainSponsor(s, defaultOffer(s), 1).result).toBe("signed");
+    // 예전 세이브: 개인리그 우승 수당이 50만 만원
+    s.mainSponsor = { ...s.mainSponsor!, mslTitle: 500_000 };
+    ensureMainSponsor(s);
+    expect(s.mainSponsor!.mslTitle).toBe(caps.mslTitle);
+    expect(caps.mslTitle).toBeLessThanOrEqual(Math.round(DEFAULT_TERMS.mslTitle * 1.6 * 1.5 / 10) * 10 + 10);
+  });
+
+  it("선수 몸값·연봉·운영비는 시즌이 지날수록 오른다", async () => {
+    const { askingPrice, priceInflation, costInflation } = await import("@shared/career/rules");
+    const { baseSalary } = await import("@shared/career/contract");
+    const p = structuredClone(rosterOf(newCareer(0), 0)[0]);
+    p.birth = 2010 + 20 - 20; // 시즌이 지나도 같은 나이대로 보이게 하려는 게 아니라 비율만 본다
+    const a = askingPrice(p, 1), b = askingPrice({ ...p, birth: p.birth + 9 }, 10); // 같은 나이로 맞춤
+    expect(b / a).toBeGreaterThan(1.4);
+    expect(priceInflation(1)).toBe(1);
+    expect(priceInflation(100)).toBe(2.5);
+    expect(costInflation(11)).toBeCloseTo(1.5);
+    expect(baseSalary(p, 1)).toBeGreaterThan(0);
+  });
+
+  it("능력치가 높을수록(한 개·합계 모두) 덜 오른다", async () => {
+    const { growRoom } = await import("./growth");
+    const low = structuredClone(rosterOf(newCareer(0), 0)[0]);
+    for (const k of Object.keys(low.stats) as (keyof typeof low.stats)[]) low.stats[k] = 650; // 5200
+    const high = structuredClone(low);
+    for (const k of Object.keys(high.stats) as (keyof typeof high.stats)[]) high.stats[k] = 880; // 7040
+    expect(growRoom(low, "attack")).toBeGreaterThan(0.7);
+    expect(growRoom(high, "attack")).toBeLessThan(0.4);
+  });
+
+  it("26세부터 시즌이 바뀔 때 능력치가 떨어지고, 응원 아이템은 보유 한도를 넘지 않는다", () => {
+    const s = newCareer(0);
+    const old = rosterOf(s, 0)[0];
+    old.birth = 2010 + 1 - 30 + 1 - 1; // 다음 시즌 30세 안팎
+    const before = totalOf(old.stats);
+    s.inventory = { ...(s.inventory ?? {}), cheer: 9141 };
+    s.phase = "offseason";
+    old.contract = { ...(old.contract ?? { salary: 100, years: 3 }), years: 3 };
+    for (const p of rosterOf(s, 0)) p.contract = { ...(p.contract ?? { salary: 100, years: 3 }), years: 3 };
+    startNextSeason(s, { releaseExpiring: false });
+    if (!old.retired) expect(totalOf(old.stats)).toBeLessThan(before);
+    // 예전 세이브를 불러올 때 한도를 넘은 아이템을 낮춤
+    migrateCareer(s);
+    expect(s.inventory!.cheer).toBeLessThanOrEqual(999);
+  });
+});

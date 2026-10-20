@@ -39,7 +39,7 @@ export function mainSponsorName(s: CareerState, team = s.myTeam): string {
 }
 
 /** 한 시즌 기대치 (지급액 계산용): 22경기 중 승·패 절반, 우승 확률 등 */
-const EXPECT: Record<keyof MainSponsorTerms, number> = { win: 11, loss: 11, proTitle: 0.1, proRunnerUp: 0.1, mslTitle: 0.08, mslRunnerUp: 0.08 };
+const EXPECT: Record<keyof MainSponsorTerms, number> = { win: 11, loss: 11, proTitle: 0.12, proRunnerUp: 0.12, mslTitle: 0.18, mslRunnerUp: 0.18 };
 
 export const DEFAULT_TERMS: MainSponsorTerms = { win: 120, loss: 30, proTitle: 800, proRunnerUp: 400, mslTitle: 500, mslRunnerUp: 250 };
 
@@ -53,15 +53,26 @@ export const managerLevel = (s: CareerState) => s.manager?.level ?? 1;
 export const managerExpNeed = (level: number) => 100 + level * 60;
 /** 레벨 혜택 배율 */
 export const levelPerks = (level: number) => ({
-  /** 메인·서브 스폰서 예산 */
-  sponsor: 1 + (level - 1) * 0.06,
-  /** 선수가 요구하는 연봉 (명장 밑에서 뛰고 싶어함) */
-  salary: Math.max(0.75, 1 - (level - 1) * 0.015),
-  /** 다른 팀이 요구하는 이적료 */
-  fee: Math.max(0.75, 1 - (level - 1) * 0.02),
-  /** 무소속 영입 금액 */
-  scout: Math.max(0.8, 1 - (level - 1) * 0.015),
+  /** 메인·서브 스폰서 예산 (최대 1.6배) */
+  sponsor: Math.min(1.6, 1 + (level - 1) * 0.04),
+  /** 선수가 요구하는 연봉 (명장 밑에서 뛰고 싶어함, 최대 15% 할인) */
+  salary: Math.max(0.85, 1 - (level - 1) * 0.01),
+  /** 다른 팀이 요구하는 이적료 (최대 15% 할인) */
+  fee: Math.max(0.85, 1 - (level - 1) * 0.015),
+  /** 무소속 영입 금액 (최대 12% 할인) */
+  scout: Math.max(0.88, 1 - (level - 1) * 0.01),
 });
+
+/** 항목별 계약 상한: 기본 조건 × 예산 배율 × 1.5 (한 항목에 몰아서 크게 부르는 것을 막음 — 우승 수당만 키우면 우승할 때마다 큰돈이 들어오던 문제) */
+export const TERM_CAP_MUL = 1.5;
+export function termCaps(s: CareerState, team = s.myTeam): MainSponsorTerms {
+  const k = sponsorBudget(s, team) / termsValue(DEFAULT_TERMS);
+  return Object.fromEntries((Object.keys(DEFAULT_TERMS) as Array<keyof MainSponsorTerms>).map(key => [key, Math.max(10, Math.round((DEFAULT_TERMS[key] * k * TERM_CAP_MUL) / 10) * 10)])) as unknown as MainSponsorTerms;
+}
+/** 상한을 넘은 항목은 상한으로 낮춤 */
+export function clampTerms(t: MainSponsorTerms, caps: MainSponsorTerms): MainSponsorTerms {
+  return Object.fromEntries((Object.keys(caps) as Array<keyof MainSponsorTerms>).map(k => [k, Math.min(t[k] ?? 0, caps[k])])) as unknown as MainSponsorTerms;
+}
 
 /** 지난 시즌 프로리그 성적에 따른 예산 증감 */
 const RESULT_BONUS: Record<string, number> = { 우승: 0.3, 준우승: 0.15, 플레이오프: 0.08, 준플레이오프: 0.04, 승격: 0.1, "2부 우승": 0.05, 잔류: -0.2, 강등: -0.45 };
