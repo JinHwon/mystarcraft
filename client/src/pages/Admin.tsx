@@ -113,6 +113,29 @@ function RookieSwitch() {
   );
 }
 
+/** 선수 키우기: 실제 하루에 직접 고를 수 있는 횟수 */
+function RookiePicks() {
+  const utils = trpc.useUtils();
+  const q = trpc.admin.rookiePicks.useQuery();
+  const [v, setV] = useState<string | null>(null);
+  const set = trpc.admin.setRookiePicks.useMutation({
+    onSuccess: r => { utils.admin.rookiePicks.setData(undefined, r); setV(null); toast.success(r.picks ? `하루 ${r.picks}번으로 바꿨습니다` : "하루 제한을 없앴습니다"); },
+    onError: e => toast.error(e.message),
+  });
+  const cur = q.data?.picks;
+  const val = v ?? (cur === undefined ? "" : String(cur));
+  return (
+    <div className="rounded-2xl border bg-card border-border p-3.5 space-y-2">
+      <div className="font-black text-foreground">⏱️ 선수 키우기 하루 선택 횟수</div>
+      <div className="text-xs text-muted-foreground">실제 하루(한국 시간)에 직접 고를 수 있는 횟수입니다. 1번 ≈ 게임 3~4일 · 0이면 제한 없음 · 관리자는 제한 없음 (기본 {q.data?.fallback ?? "-"})</div>
+      <form className="flex gap-2" onSubmit={e => { e.preventDefault(); const n = Number(val); if (Number.isInteger(n) && n >= 0) set.mutate({ picks: n }); }}>
+        <input type="number" min={0} max={500} value={val} onChange={e => setV(e.target.value)} className="flex-1 min-w-0 rounded-xl bg-background border border-border px-3 py-1.5 text-sm" />
+        <button disabled={set.isPending || v === null} className="shrink-0 rounded-xl bg-amber-600 text-white px-3 py-1.5 text-sm font-black disabled:opacity-40">저장</button>
+      </form>
+    </div>
+  );
+}
+
 /** 선수 키우기 베타 테스터: 공개 전에도 들어갈 수 있는 사용자 */
 function RookieBeta() {
   const utils = trpc.useUtils();
@@ -282,6 +305,7 @@ export default function Admin() {
 
       <ServerStatus />
       <RookieSwitch />
+      <RookiePicks />
       <RookieBeta />
       <RookieStats />
       <AnalysisPanel onPick={setSel} />

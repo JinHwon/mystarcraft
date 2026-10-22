@@ -1066,7 +1066,8 @@ export function nextDay(s: RookieState) {
   // 프로: 가끔 다른 구단에서 스카웃 제안
   if (s.team && !s.team.loan && x.d === 15 && rand() < Math.min(0.7, ((sumStats(s.stats) - 4800) / 1500 + s.fame / 4000) * (agentOf(s)?.offers ?? 1))) {
     const t = pick(PRO_TEAMS.filter(t => t.id !== s.team!.team));
-    const salary = Math.round(s.team.salary * (1.2 + rand() * 0.4));
+    // 제안 월급은 지금 월급이 아니라 시장 가치 기준 (이적을 반복해 월급이 불어나지 않게)
+    const salary = Math.round(marketValue(s) * (1 + rand() * 0.25));
     s.offers.push({ team: t.id, salary, until: s.day + 7 });
     notify(s, "agent", `${ORIG_TEAMS[t.id].short} 스카우트`, `${ORIG_TEAMS[t.id].name} 영입 제안`, `월급 ${salary}만원으로 영입하고 싶다는 제안입니다. 일주일 안에 구단 화면에서 결정하세요.`);
     log(s, "📨", `${t.name}에서 스카웃 제안! 월급 ${salary}만원 (일주일 안에 결정)`);
@@ -1251,6 +1252,14 @@ const ACT_TITLE: Record<Activity["kind"], string> = {
  * 오늘 할 일 하나를 고르면 오늘이 끝나고, 다음 선택일까지 자동으로 지나간다
  * 결과: 고른 활동의 결과 + 날마다 리포트
  */
+/** 실제 하루 선택 횟수를 하나 씀 (다 썼으면 오류) */
+export function spendPick(s: RookieState, date: string, limit: number) {
+  if (limit <= 0) return;
+  if (s.quota?.date !== date) s.quota = { date, used: 0 };
+  if (s.quota.used >= limit) throw new RookieError(`오늘 고를 수 있는 ${limit}번을 모두 썼습니다. 내일(한국 시간 자정) 다시 이어서 할 수 있어요`);
+  s.quota.used++;
+}
+
 export function act(s: RookieState, a: Activity) {
   if (s.retired) throw new RookieError(s.retired);
   if (s.bracket) throw new RookieError("진행 중인 대회가 있습니다. 먼저 끝까지 치르세요");
