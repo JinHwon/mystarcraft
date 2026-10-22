@@ -19,6 +19,8 @@ import { LegacyImg, LegacyRadar, PlayerPhoto, TeamLogo } from "@/components/lega
 import { PersonaCard, SeasonTable } from "@/components/rookie/Persona";
 import { MailView } from "@/components/rookie/Inbox";
 import { AgentCard, SquadCard } from "@/components/rookie/Squad";
+import { GoalsCard, HofView, RetiredView, WorldView } from "@/components/rookie/World";
+import { RETIRE_MIN_DAYS } from "@shared/rookie/world";
 import { pendingMail } from "@shared/rookie/inbox";
 import { RookieCreate } from "@/components/rookie/Create";
 import { MatchViewer } from "@/components/rookie/MatchViewer";
@@ -33,16 +35,18 @@ import { BracketPanel } from "@/components/rookie/Bracket";
 import { ClanWarPanel } from "@/components/rookie/ClanWar";
 import type { Activity } from "../../../server/rookie/logic";
 
-type View = "home" | "shop" | "team" | "calendar" | "log" | "mentor" | "fans" | "ach" | "rank" | "mail";
+type View = "home" | "shop" | "team" | "calendar" | "log" | "mentor" | "fans" | "ach" | "rank" | "mail" | "world" | "hof";
 const PRO_TEAMS = ORIG_TEAMS.filter(t => t.id < 12);
 const price = (key: string) => Math.max(1, Math.round((ITEM_BY_KEY[key]?.price ?? 0) * ROOKIE_PRICE));
 
 export default function Rookie() {
   const { state, today, loading } = useRookie();
-  const [restart, setRestart] = useState(false);
+  const [restart, setRestart] = useState<false | "fresh" | "successor">(false);
   if (loading) return <div className="p-6 text-muted-foreground">불러오는 중...</div>;
-  if (!state || restart) return <Shell><RookieCreate replace={!!state} onCancel={state ? () => setRestart(false) : undefined} /></Shell>;
-  return <Hub s={state} today={today!} onRestart={() => setRestart(true)} />;
+  if (!state || restart) return <Shell><RookieCreate replace={!!state} successor={restart === "successor"} onCancel={state ? () => setRestart(false) : undefined} /></Shell>;
+  // 은퇴한 선수: 경력 요약 · 후배로 이어하기
+  if (state.retired) return <Shell><RetiredView s={state} onSuccessor={() => setRestart("successor")} onFresh={() => setRestart("fresh")} /></Shell>;
+  return <Hub s={state} today={today!} onRestart={() => setRestart("fresh")} />;
 }
 
 /** 위쪽 막대: 제목을 누르면 홈으로 */
@@ -67,7 +71,7 @@ function Shell({ children, onHome, sub, onBack }: { children: ReactNode; onHome?
 
 type Tab = "home" | "events" | "grow" | "shop" | "clan" | "more";
 const TABS: Array<[Tab, string, string]> = [["home", "🏠", "홈"], ["events", "🏆", "대회"], ["grow", "📈", "성장"], ["shop", "🛒", "상점"], ["clan", "🛡️", "클랜"], ["more", "☰", "더보기"]];
-const SUB_TITLES: Record<View, string> = { mail: "메일함", home: "", shop: "상점·가방", team: "구단", calendar: "달력", log: "기록", mentor: "멘토 과외", fans: "팬카페", ach: "업적·칭호", rank: "랭킹" };
+const SUB_TITLES: Record<View, string> = { world: "또래 세계", hof: "명예의 전당", mail: "메일함", home: "", shop: "상점·가방", team: "구단", calendar: "달력", log: "기록", mentor: "멘토 과외", fans: "팬카페", ach: "업적·칭호", rank: "랭킹" };
 
 function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRestart: () => void }) {
   const [tab, setTab] = useState<Tab>("home");
@@ -78,6 +82,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
   const sync = useRookieSync();
   const m = trpc.rookie;
   const ladderMaps = m.ladderMaps.useMutation(sync);
+  const retire = m.retire.useMutation(sync);
   const act = m.act.useMutation({
     onSuccess: r => {
       sync.onSuccess(r);
@@ -208,6 +213,8 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
       ach: <AchView s={s} />,
       rank: <RankView />,
       mail: <MailView s={s} />,
+      world: <WorldView s={s} />,
+      hof: <HofView />,
     };
     return (
       <Shell onHome={() => go("home")} sub={SUB_TITLES[view]} onBack={() => open("home")}>
@@ -229,6 +236,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
             {s.war ? <ClanWarPanel s={s} war={s.war} busy={busy} onEntry={names => warEntry.mutate({ names })} onPlay={quick => warPlay.mutate({ quick })} /> : s.bracket ? <BracketPanel s={s} b={s.bracket} busy={busy} onPlay={quick => bracketPlay.mutate({ quick })} /> : <TodayPanel s={s} today={today} busy={busy} onAct={a => doAct(a, ACT_NAMES[a.kind])} onLadderMaps={sel => ladderMaps.mutate({ sel })} onOpen={v => (v === "mentor" ? open("mentor") : go("events"))} />}
             {section("✨ 바로가기")}
             {actGrid(shortcuts, 4)}
+            <GoalsCard s={s} today={today} compact />
             <RivalCard s={s} />
             <div className="rounded-xl bg-card border border-border p-2.5 space-y-0.5">
               <button onClick={() => open("log")} className="w-full flex justify-between text-xs font-bold text-foreground mb-0.5"><span>📰 최근 소식</span><span className="text-muted-foreground font-normal">전체 ›</span></button>
@@ -264,6 +272,8 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
           <>
             {actGrid([
               { icon: "📬", label: "메일함", desc: `${(s.inbox ?? []).length}통`, onClick: () => open("mail") },
+              { icon: "🌍", label: "또래 세계", desc: today.peerRank ? `또래 ${today.peerRank}위` : "랭킹·소식", onClick: () => open("world") },
+              { icon: "🏛️", label: "명예의 전당", desc: "은퇴한 전설들", onClick: () => open("hof") },
               { icon: "🏢", label: "구단", desc: s.team ? `${ORIG_TEAMS[s.team.team].short} ${s.team.squad}군` : s.fa ? "FA · 구단 찾기" : "프로가 되면", onClick: () => open("team") },
               { icon: "💌", label: "팬카페", desc: `회원 ${s.fanCafe.members.toLocaleString()}명`, onClick: () => open("fans") },
               { icon: "🏅", label: "업적·칭호", desc: `${Object.keys(s.achievements).length}개 달성`, onClick: () => open("ach") },
@@ -272,6 +282,12 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
               { icon: "📜", label: "기록", desc: `${s.record.w}승 ${s.record.l}패`, onClick: () => open("log") },
             ], 3)}
             <UpcomingLine s={s} />
+            <GoalsCard s={s} today={today} />
+            <button disabled={retire.isPending || s.day < RETIRE_MIN_DAYS}
+              onClick={() => confirm("은퇴할까요? 경력 점수가 매겨져 명예의 전당에 오르고, 후배로 이어서 새 선수를 키울 수 있습니다. (되돌릴 수 없습니다)") && retire.mutate()}
+              className="w-full rounded-xl border border-amber-400/50 text-amber-200 text-[12px] py-2 disabled:opacity-40">
+              🎖️ 은퇴하기{s.day < RETIRE_MIN_DAYS ? ` (데뷔 1년 뒤 · ${RETIRE_MIN_DAYS - s.day}일 남음)` : ""}
+            </button>
             <button onClick={() => confirm("지금 선수를 그만두고 새 선수를 만들까요? (지금 기록은 사라집니다)") && onRestart()} className="w-full text-[11px] text-muted-foreground py-1">🔄 새 선수 만들기</button>
           </>
         )}
