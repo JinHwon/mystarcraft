@@ -2,7 +2,7 @@
  * 선수 키우기: 살아있는 세계(또래 선수의 성장·입단·이적·우승 소식), 시즌 목표·연말 평가·시상, 은퇴·후배 이어하기
  */
 import { ORIG_TEAMS } from "@shared/career/originalData";
-import { dateText, nickname, sumStats, ymd, type RookieState } from "@shared/rookie/model";
+import { dateText, dayOf, nickname, sumStats, ymd, type RookieState } from "@shared/rookie/model";
 import { TRAIT_KEYS } from "@shared/rookie/persona";
 import { ROLES } from "@shared/rookie/squad";
 import {
@@ -192,6 +192,19 @@ export function yearReview(s: RookieState) {
       body: `${g.list.map(x => `${x.done ? "✅" : "❌"} ${x.text}`).join("\n")}\n\n${grade === "A" ? "완벽한 한 해였다. 자랑스럽다!" : grade === "B" ? "좋은 한 해였다. 내년엔 더 높이." : grade === "C" ? "아쉬움이 남는 한 해였다." : "많이 힘들었지? 내년엔 다시 해 보자."}`,
     });
     log(s, "📋", `${prev}년 목표 평가 ${grade} (${done}/${g.list.length})`);
+  }
+  // 한 해 돌아보기: 전적·평균 평점·성장·명경기
+  const st = s.seasons?.[prev];
+  if (st && st.g > 0 && !(s.flags?.review === prev)) {
+    (s.flags ??= {}).review = prev;
+    const startDay = dayOf(prev, 1, 1);
+    const atStart = [...s.history].reverse().find(h => h[0] <= startDay)?.[1] ?? sumStats(s.startStats);
+    const grow = sumStats(s.stats) - atStart;
+    const best = (st.top ?? []).map((x, i) => `${["🥇", "🥈", "🥉"][i]} ${dateText(x.d)} ${x.t} (평점 ${x.r.toFixed(1)})`).join("\n");
+    sendMail(s, {
+      from: "media", sender: "연말 결산", title: `${prev}년 돌아보기`,
+      body: `${st.g}경기 ${st.w}승 ${st.g - st.w}패 (승률 ${Math.round((st.w / st.g) * 100)}%) · 평균 평점 ${(st.sum / st.g).toFixed(2)} · 경기 MVP ${st.mom}번\n능력치 ${grow >= 0 ? "+" : ""}${grow.toLocaleString()} (지금 ${sumStats(s.stats).toLocaleString()})\n\n올해의 명경기\n${best || "아직 없음"}`,
+    });
   }
   // 또래 시상: 올해의 신성 (또래 중 능력치 1위)
   const w = ensureWorld(s);

@@ -113,6 +113,55 @@ function RookieSwitch() {
   );
 }
 
+/** 선수 키우기 베타 테스터: 공개 전에도 들어갈 수 있는 사용자 */
+function RookieBeta() {
+  const utils = trpc.useUtils();
+  const q = trpc.admin.rookieBeta.useQuery();
+  const [who, setWho] = useState("");
+  const done = { onSuccess: () => { utils.admin.rookieBeta.invalidate(); setWho(""); }, onError: (e: { message: string }) => toast.error(e.message) };
+  const add = trpc.admin.rookieBetaAdd.useMutation(done);
+  const del = trpc.admin.rookieBetaRemove.useMutation(done);
+  return (
+    <div className="rounded-2xl border bg-card border-border p-3.5 space-y-2">
+      <div className="font-black text-foreground">🧪 선수 키우기 베타 테스터</div>
+      <div className="text-xs text-muted-foreground">비공개 중에도 이 사람들은 선수 키우기에 들어갈 수 있습니다</div>
+      <div className="flex flex-wrap gap-1.5">
+        {(q.data ?? []).map(u => (
+          <span key={u.id} className="inline-flex items-center gap-1 rounded-full bg-sky-500/15 border border-sky-400/40 text-sky-200 text-xs px-2 py-0.5">
+            {u.name} <span className="text-sky-300/60">#{u.id}</span>
+            <button disabled={del.isPending} onClick={() => del.mutate({ id: u.id })} className="ml-0.5 text-rose-300">✕</button>
+          </span>
+        ))}
+        {q.data?.length === 0 && <span className="text-xs text-muted-foreground">아직 없음</span>}
+      </div>
+      <form className="flex gap-2" onSubmit={e => { e.preventDefault(); if (who.trim()) add.mutate({ who: who.trim() }); }}>
+        <input value={who} onChange={e => setWho(e.target.value)} placeholder="사용자 번호 또는 감독명" className="flex-1 min-w-0 rounded-xl bg-background border border-border px-3 py-1.5 text-sm" />
+        <button disabled={add.isPending || !who.trim()} className="shrink-0 rounded-xl bg-sky-600 text-white px-3 py-1.5 text-sm font-black disabled:opacity-40">추가</button>
+      </form>
+    </div>
+  );
+}
+
+/** 선수 키우기 난이도 체감 통계 */
+function RookieStats() {
+  const q = trpc.admin.rookieStats.useQuery();
+  const d = q.data;
+  if (!d) return null;
+  const days = (x: number | null) => (x === null ? "-" : `${x}일 (${(x / 30).toFixed(1)}개월)`);
+  const Row = ({ k, v }: { k: string; v: string }) => <div className="flex justify-between gap-2"><span className="text-muted-foreground">{k}</span><span className="font-bold text-foreground text-right">{v}</span></div>;
+  return (
+    <div className="rounded-2xl border bg-card border-border p-3.5 space-y-1.5 text-xs">
+      <div className="font-black text-foreground text-sm">📊 선수 키우기 통계 ({d.n}명)</div>
+      <Row k="신분" v={`아마추어 ${d.by.amateur} · 준프로 ${d.by.semipro} · 프로 ${d.by.pro} · FA ${d.by.fa} · 은퇴 ${d.by.retired}`} />
+      <Row k="평균 능력치 · 래더" v={`${d.avgTotal.toLocaleString()} · ${d.avgLadder}점`} />
+      <Row k="평균 진행 · 승률" v={`${d.avgDays}일 · ${d.winRate}%`} />
+      <Row k="평균 피로 · 부상 중" v={`${d.avgFatigue} · ${d.injured}명`} />
+      <Row k={`준프로 달성 (${d.semipro.count}명)`} v={`중간값 ${days(d.semipro.median)} · 최단 ${days(d.semipro.fastest)}`} />
+      <Row k={`프로 입단 (${d.pro.count}명)`} v={`중간값 ${days(d.pro.median)} · 최단 ${days(d.pro.fastest)}`} />
+    </div>
+  );
+}
+
 /** 서버 상태: 디스크·DB 백업 (디스크가 가득 차 접속이 멈춘 일이 있어서 한눈에 보이게) */
 function ServerStatus() {
   const q = trpc.admin.serverStatus.useQuery(undefined, { refetchInterval: 60_000 });
@@ -233,6 +282,8 @@ export default function Admin() {
 
       <ServerStatus />
       <RookieSwitch />
+      <RookieBeta />
+      <RookieStats />
       <AnalysisPanel onPick={setSel} />
 
       {sel !== null && <EditPanel userId={sel} onDone={() => setSel(null)} />}

@@ -154,9 +154,10 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
           <div className="text-[10px] text-neutral-400">인지도 {s.fame}</div>
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-2 mt-2 text-[10px] text-neutral-300">
+      <div className="grid grid-cols-4 gap-2 mt-2 text-[10px] text-neutral-300">
         <Bar label="컨디션" v={s.cond} color={s.cond >= 65 ? "#8fe07a" : s.cond >= 40 ? "#f8e070" : "#ff6b6b"} />
         <Bar label="사기" v={s.morale} color="#8fd0ff" />
+        <Bar label={today.body.injury ? "🩹 피로" : "피로"} v={today.body.fatigue} color={today.body.fatigue >= 65 ? "#ff6b6b" : today.body.fatigue >= 50 ? "#f8e070" : "#9aa4b2"} />
         <Bar label={`능력 ${total.toLocaleString()}`} v={Math.round((total / today.cap) * 100)} color="#c9a0ff" />
       </div>
     </div>
@@ -166,6 +167,9 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
   const banners: ReactNode[] = [];
   const waitMail = (s.inbox ?? []).filter(pendingMail).length, newMail = (s.inbox ?? []).filter(m => !m.read).length;
   if (waitMail || newMail) banners.push(<Banner key="mail" icon="📬" title={waitMail ? `답장을 기다리는 메일 ${waitMail}통` : `새 메일 ${newMail}통`} desc={waitMail ? "기한 안에 답하지 않으면 무난한 답으로 자동 처리됩니다" : "코치·기자·팬에게서 연락이 왔습니다"} action="메일함" onClick={() => open("mail")} />);
+  if (today.body.injury) banners.push(<Banner key="inj" icon="🩹" title={`부상: ${today.body.injury.name} (${today.body.injury.left}일 남음)`} desc="연습 경기를 할 수 없고, 큰 경기에 나가도 경기력이 떨어집니다. 쉬면서 회복하세요" action="일정" onClick={() => go("home")} />);
+  else if (today.body.fatigue >= 60) banners.push(<Banner key="fat" icon="🥵" title={`피로 ${today.body.fatigue} · 무리하고 있어요`} desc="피로가 쌓이면 경기력이 떨어지고, 65를 넘으면 부상 위험이 생깁니다. 휴식으로 크게 풀 수 있어요" action="쉬기" onClick={() => go("home")} />);
+  if (today.semiproLeft !== null && today.semiproLeft <= 90) banners.push(<Banner key="sp" icon="⏳" title={`준프로 자격 ${today.semiproLeft}일 남음`} desc="그 전에 드래프트에 뽑히거나 입단 테스트를 통과하지 못하면 아마추어로 돌아갑니다" action="구단" onClick={() => go("more", "team")} />);
   if (s.bracket) banners.push(<Banner key="br" icon={s.bracket.kind === "courage" ? "🎓" : "🏆"} title={`${s.bracket.title} 진행 중`} desc={`${roundName(s.bracket.size, s.bracket.round)} · 내 경기를 한 판씩 치르세요`} action="이어서" onClick={() => go("home")} />);
   if (s.war) banners.push(<Banner key="wr" icon="⚔️" title="클랜전 진행 중" desc={s.war.phase === "entry" ? "길드장이 엔트리를 짜야 합니다" : `${s.war.score[0]} : ${s.war.score[1]} · 다음 세트를 진행하세요`} action="이어서" onClick={() => go("home")} />);
   if (today.openEvents > 0) banners.push(<Banner key="oe" icon="🎪" title={`신청할 수 있는 대회가 ${today.openEvents}개 있어요!`} desc="신청해 두면 그날 직접 참가합니다 (놓치면 불참)" action="대회 보기" onClick={() => go("events")} />);

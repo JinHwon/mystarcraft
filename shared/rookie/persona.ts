@@ -84,7 +84,11 @@ export const MOM_RATING = 8.5;
 /** 평점 색 (FM 처럼: 7.5 이상 초록, 6.5 이상 노랑, 그 아래 빨강) */
 export const ratingColor = (r: number) => (r >= 8.5 ? "#4ade80" : r >= 7.5 ? "#a3e635" : r >= 6.5 ? "#facc15" : r >= 5.5 ? "#fb923c" : "#f87171");
 
-export interface SeasonStat { g: number; w: number; sum: number; mom: number; best: number; by: Partial<Record<GameKind, [number, number]>> }
+export interface SeasonStat {
+  g: number; w: number; sum: number; mom: number; best: number; by: Partial<Record<GameKind, [number, number]>>;
+  /** 올해의 명경기 (이긴 경기 중 평점 상위 3) */
+  top?: Array<{ d: number; r: number; t: string }>;
+}
 export const emptySeason = (): SeasonStat => ({ g: 0, w: 0, sum: 0, mom: 0, best: 0, by: {} });
 
 /** 최근 폼: 최근 평점 5개 평균 (없으면 null) */

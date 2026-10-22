@@ -72,6 +72,13 @@ export const courageDays = (y: number) => Array.from({ length: 12 }, (_, i) => d
 export const draftDay = (y: number) => dayOf(y, 12, 27);
 /** 준프로 자격 기간 (드래프트 참가 가능) */
 export const SEMIPRO_DAYS = 730;
+/** 피로: 한 경기마다 · 하루 지나면 풀리는 양 · 쉬는 날 더 풀리는 양 · 자동 진행이 쉬기 시작하는 값 · 부상 위험이 생기는 값 */
+export const FATIGUE = { perGame: 1.4, daily: 4, rest: 20, autoRest: 60, risk: 65 } as const;
+/** 부상 중 큰 경기 경기력 배율 */
+export const INJURY_PERF = 0.88;
+/** 피로가 경기력을 깎는 정도: 50 넘는 만큼 (100이면 -10%) */
+export const fatiguePerf = (f: number | undefined) => 1 - Math.max(0, (f ?? 0) - 50) * 0.002;
+export const INJURIES = ["손목 통증", "어깨 결림", "허리 통증", "손가락 염좌", "안구 피로"] as const;
 /** 커리지 매치 우승 후 입단 경기를 제의받을 만한 능력치 합 */
 export const TRYOUT_MIN = 5000;
 
@@ -442,10 +449,6 @@ export interface RookieState {
   team?: RookieTeam;
   ladder: { score: number; w: number; l: number; best: number };
   record: { w: number; l: number };
-  /** 연습 상대를 강퇴한 수 (오늘) */
-  kicks: number;
-  /** 지금 매칭된 공방 상대 */
-  lobby?: { tier: Tier; mapId: number; opp: Opp };
   inventory: Record<string, number>;
   equip: Partial<Record<"mouse" | "keyboard" | "monitor" | "etc", { key: string; left: number }>>;
   events: RookieEvent[];
@@ -535,6 +538,12 @@ export interface RookieState {
   mailCd?: Record<string, number>;
   /** 잠깐 유지되는 상태 (라이벌전 과열 등: 이름 → 끝나는 날) */
   flags?: Record<string, number>;
+  /** 누적 피로 (0~100): 경기를 할수록 쌓이고 쉬면 풀림. 높으면 경기력↓ · 65 넘으면 부상 위험 */
+  fatigue?: number;
+  /** 부상 (이 날까지): 연습 경기를 못 하고 큰 경기에서 경기력↓ */
+  injury?: { until: number; name: string };
+  /** 처음 이룬 날 (관리자 통계·연말 리뷰용) */
+  milestones?: { semipro?: number; pro?: number };
   /** 에이전트 (고용한 날) */
   agent?: { tier: 1 | 2 | 3; since: number };
   /** 살아있는 세계 (또래 선수·소식) */
