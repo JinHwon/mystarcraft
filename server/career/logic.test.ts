@@ -1206,11 +1206,18 @@ describe("컨디션 난조", () => {
     expect(slumpCond(25)).toBe(10);
     const s = newCareer(0);
     for (const p of s.players) p.cond = 100;
-    s.burstWeek = undefined;
-    rollWeekBursts(s);
-    const slumped = s.players.filter(p => p.team >= 0 && slumpOn(s, p));
+    // 한 주만 뽑으면 기대값이 작아(≈12명) 가끔 기준 아래로 떨어짐 → 10주 합으로 확인 (기대 ≈ 120, 기준 ≈ 40)
+    const ROLLS = 10;
+    let total = 0, slumped: typeof s.players = [];
+    for (let r = 0; r < ROLLS; r++) {
+      s.burstWeek = undefined;
+      rollWeekBursts(s);
+      const now = s.players.filter(p => p.team >= 0 && slumpOn(s, p));
+      total += now.length;
+      if (now.length) slumped = now;
+    }
     const n = s.players.filter(p => p.team >= 0).length;
-    expect(slumped.length).toBeGreaterThan(n * SLUMP_CHANCE * 0.3);
+    expect(total).toBeGreaterThan(n * ROLLS * SLUMP_CHANCE * 0.3);
     const p = { ...slumped[0], equip: {} };
     expect(matchCond(p, s)).toBe(60);
     expect(effStats(p, { slump: true }).attack).toBeLessThan(effStats(p).attack);
