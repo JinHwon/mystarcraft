@@ -7,11 +7,13 @@ import { desc, eq, sql } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { rookieOpen } from "../settings";
 import { getDb } from "../db";
-import { rookieCareers } from "../../drizzle/schema";
+import { rookieCareers, rookieHof } from "../../drizzle/schema";
 import { STAT_KEYS, type StatKey } from "@shared/gameConstants";
 import { ACH_BY_ID, CONCEPTS, RANK_SORTS, TIERS, sumStats, type Concept, type RankSort, type RookieState, type Tier } from "@shared/rookie/model";
 import * as L from "./logic";
 import { answerMail, readMail } from "./inbox";
+import { applyLegacy, retire } from "./world";
+import type { HofEntry } from "@shared/rookie/world";
 
 const cache = new Map<number, RookieState>();
 const locks = new Map<number, Promise<unknown>>();
@@ -104,11 +106,14 @@ export const rookieRouter = router({
   create: p.input(z.object({
     name: z.string().max(20), race: z.enum(["terran", "zerg", "protoss"]), concept: z.enum(conceptKeys), stats: statsSchema, photo: z.string().max(70_000).optional(),
     replace: z.boolean().optional(),
+    /** 은퇴한 선배의 뒤를 이어서 (돈·인지도 일부·조언을 물려받음) */
+    successor: z.boolean().optional(),
   })).mutation(({ ctx, input }) => withLock(ctx.user.id, async () => {
     const old = await load(ctx.user.id);
-    if (old && !input.replace) throw new TRPCError({ code: "BAD_REQUEST", message: "이미 키우는 선수가 있습니다" });
+    if (old && !input.replace && !old.retired) throw new TRPCError({ code: "BAD_REQUEST", message: "이미 키우는 선수가 있습니다" });
     try {
       const s = L.newRookie(input);
+      if (input.successor && old?.retired) applyLegacy(s, old);
       await save(ctx.user.id, s);
       return { state: s, today: L.todayInfo(s) };
     } catch (e) {
@@ -164,6 +169,18 @@ export const rookieRouter = router({
   clanTest: p.input(z.object({ id: z.string().max(30) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.clanTest(s, input.id))),
   clanPractice: p.input(z.object({ target: z.string().max(40).optional() }).optional()).mutation(({ ctx, input }) => mutate(ctx.user.id, s => ({ games: [L.clanPractice(s, input?.target)] }))),
   clanFeedback: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.clanFeedback(s))),
+  /** 은퇴: 경력 점수를 매겨 명예의 전당에 올림 (데뷔 1년 뒤부터) */
+  retire: p.mutation(async ({ ctx }) => {
+    const r = await mutate(ctx.user.id, s => retire(s));
+    const e = r.result as HofEntry;
+    await (await db()).insert(rookieHof).values({ userId: ctx.user.id, name: e.name, race: e.race, score: e.score, data: JSON.stringify(e) });
+    return r;
+  }),
+  /** 명예의 전당 (점수 순 50명) */
+  hof: p.query(async () => {
+    const rows = await (await db()).select().from(rookieHof).orderBy(desc(rookieHof.score)).limit(50);
+    return rows.map(r => ({ id: r.id, userId: r.userId, at: String(r.createdAt), ...(JSON.parse(r.data) as HofEntry) }));
+  }),
   /** 메일 읽음 · 답장 (선택) */
   mailRead: p.input(z.object({ id: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => readMail(s, input.id))),
   mailAnswer: p.input(z.object({ id: z.number().int(), choice: z.string().min(1).max(20) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => answerMail(s, input.id, input.choice))),

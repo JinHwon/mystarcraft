@@ -718,3 +718,55 @@ describe("FM 3단계: 팀 내 입지·계약·에이전트·임대", () => {
     expect(s.team!.team).toBe(0);
   });
 });
+
+describe("FM 4단계: 살아있는 세계·시즌 목표·은퇴·후배", () => {
+  it("또래 24명이 만들어지고 매주 자라며 소식이 쌓임", () => {
+    const s = mk();
+    expect(s.world!.peers).toHaveLength(24);
+    const t0 = s.world!.peers.reduce((a, p) => a + p.total, 0);
+    for (let i = 0; i < 120; i++) L.nextDay(s);
+    const t1 = s.world!.peers.reduce((a, p) => a + p.total, 0);
+    expect(t1).toBeGreaterThan(t0);
+    expect(s.world!.news.length).toBeGreaterThan(0);
+    expect(L.todayInfo(s).peerRank).toBeGreaterThanOrEqual(1);
+  });
+
+  it("올해 목표 3개가 생기고, 조건을 채우면 보상과 함께 달성", async () => {
+    const W = await import("./world");
+    const s = mk();
+    expect(s.goals!.list).toHaveLength(3);
+    const g = s.goals!.list.find(x => x.kind === "ladder")!;
+    const fame = s.fame;
+    s.ladder.best = g.target;
+    W.checkGoals(s);
+    expect(g.done).toBe(true);
+    expect(s.fame).toBe(Math.min(1000, fame + g.reward.fame));
+    expect(L.todayInfo(s).goals.some(x => x.done)).toBe(true);
+  });
+
+  it("새해가 되면 지난해 목표를 평가하고 새 목표가 생김", () => {
+    const s = mk();
+    const y = s.goals!.year;
+    while (s.goals!.year === y) L.nextDay(s);
+    expect(s.goals!.year).toBe(y + 1);
+    expect((s.inbox ?? []).some(m => m.title.includes(`${y}년 평가`))).toBe(true);
+  });
+
+  it("은퇴는 1년 뒤부터, 경력 점수가 매겨지고 후배는 일부를 물려받음", async () => {
+    const W = await import("./world");
+    const s = mk();
+    expect(() => W.retire(s)).toThrow(L.RookieError);
+    s.day = 400; s.money = 1000; s.fame = 300;
+    const e = W.retire(s);
+    expect(e.score).toBeGreaterThan(0);
+    expect(s.retired).toContain("은퇴");
+    expect(() => L.nextDay(s)).toThrow(L.RookieError);
+    const kid = mk();
+    const m0 = kid.money, f0 = kid.fame;
+    W.applyLegacy(kid, s);
+    expect(kid.money).toBe(m0 + 200);
+    expect(kid.fame).toBe(f0 + 30);
+    expect(kid.legacy?.from).toBe(s.name);
+    expect(Object.keys(kid.known ?? {}).length).toBeGreaterThanOrEqual(1);
+  });
+});

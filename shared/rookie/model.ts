@@ -537,6 +537,12 @@ export interface RookieState {
   flags?: Record<string, number>;
   /** 에이전트 (고용한 날) */
   agent?: { tier: 1 | 2 | 3; since: number };
+  /** 살아있는 세계 (또래 선수·소식) */
+  world?: import("./world").World;
+  /** 올해 목표 */
+  goals?: import("./world").Goals;
+  /** 은퇴한 선배에게서 물려받음 */
+  legacy?: { from: string; score: number };
 }
 
 // ── 업적 · 칭호 ─────────────────────────────────────────────────

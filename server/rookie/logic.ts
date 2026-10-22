@@ -22,6 +22,7 @@ import type { SetTimeline } from "../gameSimulation";
 import { fanPosts, type FanKind } from "./fans";
 import { clanMembers, clanProIds, clanTagOfPro, proGamerId } from "@shared/rookie/pros";
 import { dailyMail, expireMails, notify, pressConference, rivalHeatResult, sendMail } from "./inbox";
+import { checkGoals, ensureGoals, ensureWorld, goalProgress, myPeerRank, weeklyWorld, yearReview } from "./world";
 import { AGENTS, CLAUSES, LOAN_DAYS, PROMISE_BONUS, PROMISE_MIN, ROLES, TALK_COOLDOWN, agentOf, roleOf, type Clause, type Role } from "@shared/rookie/squad";
 import { BIG_KINDS, MOM_RATING, TRAIT_KEYS, TRAITS, emptySeason, formAvg, kindOf, rollPersona, traitShown, type GameKind, type TraitKey } from "@shared/rookie/persona";
 
@@ -71,6 +72,8 @@ export function newRookie(input: { name: string; race: Race; concept: Concept; s
   log(s, "⚡", `같은 PC방에서 연습하는 ${s.rival.name}(${raceShort(s.rival.race)} · ${CONCEPTS[s.rival.concept].name})이(가) 라이벌을 선언했습니다! 래더·대회에서 자주 만나게 됩니다`);
   ensureEvents(s);
   noteStop(s);
+  ensureWorld(s);
+  ensureGoals(s);
   return s;
 }
 
@@ -101,6 +104,8 @@ export function upgrade(s: RookieState) {
   s.known ??= {};
   s.recent ??= [];
   s.seasons ??= {};
+  ensureWorld(s);
+  ensureGoals(s);
   if (!s.stopLog) { s.stopLog = {}; noteStop(s); }
   // 없어진 클랜 (클랜 목록이 바뀐 경우)
   if (s.clan && !CLAN_BY_ID[s.clan.id]) delete s.clan;
@@ -1942,6 +1947,11 @@ export function nextDay(s: RookieState) {
   s.tryouts = s.tryouts.filter(t => t.until >= s.day);
   s.offers = s.offers.filter(o => o.until >= s.day);
   ensureEvents(s);
+  // 새해: 지난해 목표 평가·또래 시상 → 올해 목표
+  if (x.m === 1 && x.d === 1) { yearReview(s); ensureGoals(s); }
+  checkGoals(s);
+  // 매주 일요일: 또래 세계가 움직임
+  if (x.dow === 0) weeklyWorld(s);
   // 메일함: 기한 지난 답장은 자동 처리, 새 메일 (하루 한 통 확률)
   expireMails(s);
   dailyMail(s);
@@ -2286,6 +2296,9 @@ export function todayInfo(s: RookieState) {
     clanRank: clanRank(s),
     /** 팀 내 입지: 역할·코치 신뢰도·나보다 강한 1군 동료 수 */
     squad: s.team ? { role: myRole(s), trust: trustOf(s), rank: squadRank(s) } : null,
+    /** 올해 목표 진행도 · 또래 순위 */
+    goals: (s.goals?.list ?? []).map(g => { const [now, target] = goalProgress(s, g); return { text: g.text, done: !!g.done, now, target, reward: g.reward }; }),
+    peerRank: s.retired ? 0 : myPeerRank(s),
     ...scheduleInfo(s),
   };
 }

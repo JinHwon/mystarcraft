@@ -29,7 +29,7 @@ function shrink(file: File): Promise<string> {
   });
 }
 
-export function RookieCreate({ replace, onCancel }: { replace?: boolean; onCancel?: () => void }) {
+export function RookieCreate({ replace, successor, onCancel }: { replace?: boolean; /** 은퇴한 선배의 뒤를 이어서 */ successor?: boolean; onCancel?: () => void }) {
   const [name, setName] = useState("");
   const [race, setRace] = useState<Race>("terran");
   const [concept, setConcept] = useState<Concept>("balance");
@@ -94,7 +94,7 @@ export function RookieCreate({ replace, onCancel }: { replace?: boolean; onCance
         <div className="text-[10.5px] text-neutral-500">주사위는 몇 번이든 굴릴 수 있습니다. 컨셉에 맞는 능력치가 조금 더 높게 나옵니다</div>
       </div>
 
-      <button disabled={create.isPending || name.trim().length < 2} onClick={() => create.mutate({ name, race, concept, stats, photo, replace })}
+      <button disabled={create.isPending || name.trim().length < 2} onClick={() => create.mutate({ name, race, concept, stats, photo, replace, successor })}
         className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-black disabled:opacity-50">
         {create.isPending ? "만드는 중..." : "이 선수로 시작하기"}
       </button>

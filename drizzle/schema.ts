@@ -345,3 +345,18 @@ export const auditLogs = mysqlTable("audit_logs", {
 	index("audit_logs_user_idx").on(table.userId, table.createdAt),
 	index("audit_logs_kind_idx").on(table.kind, table.createdAt),
 ]);
+
+/** 선수 키우기 명예의 전당 (은퇴한 선수, 모든 사용자가 함께 봄) */
+export const rookieHof = mysqlTable("rookie_hof", {
+	id: int().autoincrement().notNull().primaryKey(),
+	userId: int().notNull(),
+	name: varchar({ length: 20 }).notNull(),
+	race: varchar({ length: 10 }).notNull(),
+	score: int().notNull(),
+	/** HofEntry JSON */
+	data: text().notNull(),
+	createdAt: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+},
+(table) => [
+	index("rookie_hof_score_idx").on(table.score),
+]);
