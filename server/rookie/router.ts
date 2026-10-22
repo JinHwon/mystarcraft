@@ -11,6 +11,7 @@ import { rookieCareers } from "../../drizzle/schema";
 import { STAT_KEYS, type StatKey } from "@shared/gameConstants";
 import { ACH_BY_ID, CONCEPTS, RANK_SORTS, TIERS, sumStats, type Concept, type RankSort, type RookieState, type Tier } from "@shared/rookie/model";
 import * as L from "./logic";
+import { answerMail, readMail } from "./inbox";
 
 const cache = new Map<number, RookieState>();
 const locks = new Map<number, Promise<unknown>>();
@@ -158,6 +159,9 @@ export const rookieRouter = router({
   clanTest: p.input(z.object({ id: z.string().max(30) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.clanTest(s, input.id))),
   clanPractice: p.input(z.object({ target: z.string().max(40).optional() }).optional()).mutation(({ ctx, input }) => mutate(ctx.user.id, s => ({ games: [L.clanPractice(s, input?.target)] }))),
   clanFeedback: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.clanFeedback(s))),
+  /** 메일 읽음 · 답장 (선택) */
+  mailRead: p.input(z.object({ id: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => readMail(s, input.id))),
+  mailAnswer: p.input(z.object({ id: z.number().int(), choice: z.string().min(1).max(20) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => answerMail(s, input.id, input.choice))),
   leaveClan: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.leaveClan(s))),
   batch: p.input(z.object({ kind: z.enum(["lobby", "ladder", "clan", "internal", "friendly"]), tier: z.enum(tierKeys).optional(), mapId: z.number().int().min(0).optional() }))
     .mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.batch(s, input.kind, { tier: input.tier, mapId: input.mapId }))),
