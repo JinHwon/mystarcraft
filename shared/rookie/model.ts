@@ -73,7 +73,7 @@ export const draftDay = (y: number) => dayOf(y, 12, 27);
 /** 준프로 자격 기간 (드래프트 참가 가능) */
 export const SEMIPRO_DAYS = 730;
 /** 커리지 매치 우승 후 입단 경기를 제의받을 만한 능력치 합 */
-export const TRYOUT_MIN = 4100;
+export const TRYOUT_MIN = 5000;
 
 // ── 래더 ───────────────────────────────────────────────────────
 export const LADDER_START = 1500;
@@ -92,12 +92,12 @@ export const GRADE_COLOR: Record<string, string> = { S: "#ff6bd5", A: "#ffe45c",
 // ── 공방 (연습 게임) ─────────────────────────────────────────────
 export type Tier = "newbie" | "low" | "mid" | "high" | "elite" | "pro";
 export const TIERS: Record<Tier, { name: string; range: [number, number] }> = {
-  newbie: { name: "초보", range: [1900, 2600] },
-  low: { name: "하수", range: [2500, 3100] },
-  mid: { name: "중수", range: [3000, 3700] },
-  high: { name: "고수", range: [3600, 4300] },
-  elite: { name: "초고수", range: [4200, 5000] },
-  pro: { name: "프로급", range: [4800, 5900] },
+  newbie: { name: "초보", range: [2000, 2700] },
+  low: { name: "하수", range: [2600, 3300] },
+  mid: { name: "중수", range: [3200, 4000] },
+  high: { name: "고수", range: [3900, 4700] },
+  elite: { name: "초고수", range: [4600, 5500] },
+  pro: { name: "프로급", range: [5400, 6600] },
 };
 export const TIER_ORDER: Tier[] = ["newbie", "low", "mid", "high", "elite", "pro"];
 
@@ -236,7 +236,7 @@ export const CLANS: ClanDef[] = [
 ];
 export const CLAN_BY_ID = Object.fromEntries(CLANS.map(c => [c.id, c])) as Record<string, ClanDef>;
 /** 클랜원 수준 (능력치 합 범위) */
-export const CLAN_STRENGTH: Record<ClanDef["tier"], [number, number]> = { 1: [2000, 3200], 2: [3000, 4100], 3: [3800, 4900], 4: [4600, 5600], 5: [5400, 6500] };
+export const CLAN_STRENGTH: Record<ClanDef["tier"], [number, number]> = { 1: [2400, 3700], 2: [3500, 4700], 3: [4400, 5600], 4: [5200, 6300], 5: [6000, 7200] };
 export interface ClanMember {
   /** 게임 아이디 (프로는 게임 아이디, 모르면 본명) */
   name: string;
