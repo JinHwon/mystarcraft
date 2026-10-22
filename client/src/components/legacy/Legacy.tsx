@@ -9,6 +9,7 @@ import { STAT_LABELS, type StatKey } from "@shared/gameConstants";
 import { gradeColor, legacyGrade, totalOf } from "@shared/career/rules";
 import { mapView } from "@shared/career/view";
 import { ORIG_PLAYERS } from "@shared/career/originalData";
+import { LEGACY_FILES } from "@/lib/legacyFiles";
 
 export const LEGACY_FONT: CSSProperties = { fontFamily: '"Gulim","굴림","Dotum","돋움","Malgun Gothic","Apple SD Gothic Neo",sans-serif' };
 
@@ -37,7 +38,10 @@ function photoName(id: number | undefined, name: string) {
 }
 
 /** 원작 그림은 .gif (name 에 확장자가 있으면 그대로: 새로 그린 .svg 아이템 등) */
-export const legacySrc = (dir: string, name: string) => `/legacy/${encodeURIComponent(dir)}/${encodeURIComponent(name)}${/\.(svg|png)$/.test(name) ? "" : ".gif"}`;
+const fileOf = (name: string) => `${name}${/\.(svg|png)$/.test(name) ? "" : ".gif"}`;
+export const legacySrc = (dir: string, name: string) => `/legacy/${encodeURIComponent(dir)}/${encodeURIComponent(fileOf(name))}`;
+/** 그 그림 파일이 실제로 있는지 (없으면 요청하지 않고 대체 그림) */
+export const hasLegacy = (dir: string, name: string) => LEGACY_FILES.has(`${dir}/${fileOf(name)}`.normalize("NFC"));
 
 /** 원작 이미지. 불러오기에 실패하면 잠시 뒤 한 번 더 시도 (배포 중 서버 재시작 등 일시적 실패), 그래도 안 되면 대체 그림 */
 export function LegacyImg({ dir, name, className, style, fallback }: { dir: string; name: string; className?: string; style?: CSSProperties; fallback: ReactNode }) {
@@ -49,7 +53,7 @@ export function LegacyImg({ dir, name, className, style, fallback }: { dir: stri
     const id = setTimeout(() => setTries(2), 1500);
     return () => clearTimeout(id);
   }, [tries]);
-  if (tries === 1 || tries >= 3) return <>{fallback}</>;
+  if (!hasLegacy(dir, name) || tries === 1 || tries >= 3) return <>{fallback}</>;
   return <img key={tries} src={tries === 2 ? `${src}?retry=1` : src} alt={name} draggable={false} decoding="async" onError={() => setTries(n => n + 1)} className={className} style={style} />;
 }
 

@@ -61,7 +61,9 @@ export function serveStatic(app: Express) {
   // 빌드 산출물(파일 이름에 해시)은 영구 캐시
   app.use("/assets", express.static(path.join(distPath, "assets"), { immutable: true, maxAge: "365d", fallthrough: false }));
   // 원작 이미지(선수 사진·맵·아이템·로고)는 한 달 캐시 → 화면마다 서버에 다시 묻지 않음. 없는 파일은 바로 404
-  app.use("/legacy", express.static(path.join(distPath, "legacy"), { maxAge: "30d", fallthrough: false }));
+  app.use("/legacy", express.static(path.join(distPath, "legacy"), { maxAge: "30d" }));
+  // 없는 그림은 오류 로그 없이 404 (express.static 의 fallthrough:false 는 없는 파일마다 서버 오류 로그를 남겼음)
+  app.use("/legacy", (_req, res) => { res.setHeader("Cache-Control", "public, max-age=3600"); res.status(404).end(); });
   app.use(express.static(distPath, {
     maxAge: "1d",
     // 화면(html)·서비스 워커·매니페스트는 배포 뒤 바로 바뀌어야 하므로 캐시하지 않음
