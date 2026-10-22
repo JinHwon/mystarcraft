@@ -309,7 +309,10 @@ export function playSet(s: CareerState, a: CPlayer, b: CPlayer, mapId: number, w
   const snipe = snipeSide(mods);
   if (snipe && rand() < SNIPE_WIN && aWin !== (snipe === "a")) {
     // 실력 차이가 너무 크면 다시 뽑을 때마다 노린 쪽 경기력을 조금씩 올림
-    const boost = (side: "a" | "b", t: number) => side === snipe ? { mul: (mods?.[side]?.mul ?? 1) * (1 + t * 0.04) } : {};
+    // (실전 능력치 차이만큼 더 크게 올림 — 컨디션 난조처럼 차이가 아주 커도 65% 를 지키게)
+    const eff = (side: "a" | "b") => totalOf(effStats(side === "a" ? a : b, withWeek(s, side === "a" ? a : b, mods?.[side])));
+    const gap = Math.max(1, eff(snipe === "a" ? "b" : "a") / Math.max(1, eff(snipe)));
+    const boost = (side: "a" | "b", t: number) => side === snipe ? { mul: (mods?.[side]?.mul ?? 1) * (1 + t * 0.04 * gap) } : {};
     for (let t = 1; t <= 40 && aWin !== (snipe === "a"); t++) {
       r = simulateSet(
         { id: a.id + 1, name: a.name, race: a.race, stats: effStats(a, withWeek(s, a, { ...mods?.a, ...boost("a", t) })), fatigue: 100 },

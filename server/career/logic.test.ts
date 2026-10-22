@@ -1306,18 +1306,22 @@ describe("컨디션·스나이핑·스폰서 협상력", () => {
     const s = newCareer(0);
     const [a] = s.players.filter(p => p.team >= 0).sort((x, y) => totalOf(x.stats) - totalOf(y.stats));
     const strong = s.players.filter(p => p.team >= 0).sort((x, y) => totalOf(y.stats) - totalOf(x.stats))[0];
+    // 세트마다 능력치가 변하므로 매번 처음 능력치로 되돌려 같은 실력 차이로 반복
+    const base = { a: { ...a.stats }, strong: { ...strong.stats } };
+    const reset = () => { a.cond = 100; strong.cond = 100; a.stats = { ...base.a }; strong.stats = { ...base.strong }; };
+    // 표본: 기대 승률 65% 이상 → 빠른 판정 2000판(표준편차 ≈ 1%), 중계 200판(≈ 3.4%) 이면 기준선이 4σ 넘게 떨어짐
     let quick = 0, live = 0;
-    const N = 200;
+    const N = 2000, L = 200;
     for (let i = 0; i < N; i++) {
-      a.cond = 100; strong.cond = 100;
+      reset();
       if (quickWin(s, a, strong, 0, { a: { snipe: true } })) quick++;
     }
-    for (let i = 0; i < 60; i++) {
-      a.cond = 100; strong.cond = 100;
+    for (let i = 0; i < L; i++) {
+      reset();
       if (playSet(s, a, strong, 0, false, false, { a: { snipe: true } }).winner === "a") live++;
     }
-    expect(quick / N).toBeGreaterThan(0.57);
-    expect(live / 60).toBeGreaterThan(0.5);
+    expect(quick / N).toBeGreaterThan(0.6);
+    expect(live / L).toBeGreaterThan(0.5);
   });
 
   it("메인 스폰서 예산: 지난 시즌 우승·개인리그 우승이면 크게 오르고, 강등이면 크게 깎인다", async () => {
@@ -1481,9 +1485,14 @@ describe("컨디션 하락: 실력 차이·경기 길이", () => {
     const s = newCareer(0);
     const ps = s.players.filter(p => p.team >= 0 && p.team < 12).sort((x, y) => totalOf(y.stats) - totalOf(x.stats));
     const strong = ps[0], weak = ps.at(-1)!;
+    // 이번 주 포텐셜 폭발·컨디션 난조는 무작위 → 실력 차이만 보도록 지움
+    for (const p of [strong, weak]) { delete p.slump; delete p.burst; }
+    // 세트마다 능력치가 변해(강자 성장·약자 하락, 이변이면 반대로 크게) 실력 차이가 줄어들 수 있으므로 매번 처음 능력치로
+    const base = { strong: { ...strong.stats }, weak: { ...weak.stats } };
     const loss = { easyWin: [] as number[], bigLoss: [] as number[] };
     for (let i = 0; i < 40; i++) {
       strong.cond = 100; weak.cond = 100;
+      strong.stats = { ...base.strong }; weak.stats = { ...base.weak };
       const r = playSet(s, strong, weak, i % 10, false);
       if (r.winner === "a") { loss.easyWin.push(100 - strong.cond); loss.bigLoss.push(100 - weak.cond); }
     }
