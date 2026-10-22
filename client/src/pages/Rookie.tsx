@@ -16,6 +16,7 @@ import {
 import type { PlayedGame } from "../../../server/rookie/logic";
 import { useRookie, useRookieSync, type RookieToday } from "@/lib/rookie";
 import { LegacyImg, LegacyRadar, PlayerPhoto, TeamLogo } from "@/components/legacy/Legacy";
+import { PersonaCard, SeasonTable } from "@/components/rookie/Persona";
 import { RookieCreate } from "@/components/rookie/Create";
 import { MatchViewer } from "@/components/rookie/MatchViewer";
 import { RookieCalendar } from "@/components/rookie/Calendar";
@@ -247,6 +248,8 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
               <GrowthChart s={s} cap={today.cap} />
             </div>
             <StatsCard s={s} />
+            <SeasonTable s={s} />
+            <PersonaCard s={s} />
           </>
         )}
         {tab === "shop" && <ShopView s={s} />}

@@ -21,6 +21,7 @@ import { mapAdvantage } from "../career/core";
 import type { SetTimeline } from "../gameSimulation";
 import { fanPosts, type FanKind } from "./fans";
 import { clanMembers, clanProIds, clanTagOfPro, proGamerId } from "@shared/rookie/pros";
+import { BIG_KINDS, MOM_RATING, TRAIT_KEYS, TRAITS, emptySeason, kindOf, rollPersona, traitShown, type GameKind, type TraitKey } from "@shared/rookie/persona";
 
 /** 클랜 명단 버전 (바뀌면 불러올 때 새 명단으로 교체) */
 const ROSTER_VER = 3;
@@ -62,6 +63,7 @@ export function newRookie(input: { name: string; race: Race; concept: Concept; s
     tryouts: [], offers: [], titles: [], stream: { count: 0, best: 0, fans: 0 }, doneDays: [],
     rival: newRival(input.race, sumStats(input.stats)), streak: 0, fanCafe: { members: 0, posts: [] }, achievements: {}, counts: emptyCounts(),
     level: 1, exp: 0, history: [[0, total]], clanTried: {},
+    persona: rollPersona(rand), known: {}, recent: [], seasons: {},
   };
   log(s, "🎮", `${name} (${input.race === "terran" ? "테란" : input.race === "zerg" ? "저그" : "프로토스"} · ${CONCEPTS[input.concept].name}) 게이머의 꿈을 시작했습니다! 매달 마지막 날 열리는 커리지 매치에서 우승하면 준프로가 됩니다`);
   log(s, "⚡", `같은 PC방에서 연습하는 ${s.rival.name}(${raceShort(s.rival.race)} · ${CONCEPTS[s.rival.concept].name})이(가) 라이벌을 선언했습니다! 래더·대회에서 자주 만나게 됩니다`);
@@ -93,6 +95,10 @@ export function upgrade(s: RookieState) {
   s.exp ??= 0;
   s.history ??= [[s.day, sumStats(s.stats)]];
   s.clanTried ??= {};
+  s.persona ??= rollPersona(rand);
+  s.known ??= {};
+  s.recent ??= [];
+  s.seasons ??= {};
   if (!s.stopLog) { s.stopLog = {}; noteStop(s); }
   // 없어진 클랜 (클랜 목록이 바뀐 경우)
   if (s.clan && !CLAN_BY_ID[s.clan.id]) delete s.clan;
@@ -169,11 +175,11 @@ function gear(s: RookieState): Stats {
   return out;
 }
 /** 경기에 쓰는 능력치: 장비 + 컨디션 + 사기 */
-export function effective(s: RookieState): Stats {
+export function effective(s: RookieState, perf = 1): Stats {
   const g = gear(s);
   // 아마추어는 하루에 여러 판을 하므로 컨디션 영향은 감독 모드보다 완만하게 (50% → 0.8배)
   const form = s.form?.kind === "slump" ? 0.93 : s.form?.kind === "awake" ? 1.06 : 1;
-  const k = (0.6 + 0.4 * (s.cond / 100)) * (0.95 + s.morale / 2000) * form;
+  const k = (0.6 + 0.4 * (s.cond / 100)) * (0.95 + s.morale / 2000) * form * perf;
   return Object.fromEntries(STAT_KEYS.map(x => [x, Math.round((s.stats[x] + g[x]) * k)])) as Stats;
 }
 /** 상대도 컨디션이 들쭉날쭉 */
@@ -193,6 +199,9 @@ export interface PlayedGame {
   /** 경기 뒤 내 변화 */
   fx: { stats: Partial<Stats>; cond: [number, number]; ladder?: [number, number]; money?: number };
   label: string;
+  /** 내 경기 평점 (3.0~10.0) · 경기 종류 */
+  rating?: number;
+  kind?: GameKind;
 }
 
 /** 맵 이해도만큼 내 종족이 불리한 맵의 불리함을 덜어 줌 (이해도 55 → 불리함 55% 감소) */
@@ -210,8 +219,10 @@ let QUIET = false;
 function playOne(s: RookieState, opp: Opp, mapId: number, label: string, broadcastIn = true, growMul = 1): PlayedGame {
   const broadcast = broadcastIn && !QUIET;
   const m = mapView(mapId);
+  const kind = kindOf(label);
+  const perf = dayPerf(s, kind);
   const r = simulateSet(
-    { id: 1, name: myId(s), race: s.race, stats: effective(s), fatigue: 100 },
+    { id: 1, name: myId(s), race: s.race, stats: effective(s, perf), fatigue: 100 },
     { id: 2, name: opp.name, race: opp.race, stats: oppForm(opp), fatigue: 100 },
     understood(s, mapId, opp.race),
     { rushDistance: m.rush / 2, resources: m.res / 2, complexity: m.complexity / 2 },
@@ -224,13 +235,74 @@ function playOne(s: RookieState, opp: Opp, mapId: number, label: string, broadca
   const before = { stats: { ...s.stats }, cond: s.cond };
   grow(s, opp, won, growMul);
   s.cond = clampCond(s.cond - (won ? randInt(1, 3) : randInt(2, 5)));
-  s.morale = Math.max(0, Math.min(100, s.morale + (won ? 2 : -2)));
+  // 의지가 강하면 져도 사기가 덜 떨어짐
+  const det = s.persona?.det ?? 10;
+  s.morale = Math.max(0, Math.min(100, s.morale + (won ? 2 : det >= 15 ? -1 : det <= 6 ? -3 : -2)));
   s.record[won ? "w" : "l"]++;
   wearEquip(s);
   afterGame(s, opp, won);
+  const rating = rateGame(s, opp, won, r.duration, perf);
+  recordRating(s, kind, won, rating);
   const stats: Partial<Stats> = {};
   for (const k of STAT_KEYS) if (s.stats[k] !== before.stats[k]) stats[k] = s.stats[k] - before.stats[k];
-  return { mapId, winner: won ? "a" : "b", duration: r.duration, timeline: r.timeline, opp, fx: { stats, cond: [before.cond, s.cond] }, label };
+  return { mapId, winner: won ? "a" : "b", duration: r.duration, timeline: r.timeline, opp, fx: { stats, cond: [before.cond, s.cond] }, label, rating, kind };
+}
+
+/**
+ * 그날 경기력 배율 (숨은 성격)
+ * - 꾸준함: 낮을수록 경기마다 들쭉날쭉 (꾸준함 1 → ±9%, 20 → ±0.5%)
+ * - 강심장: 큰 경기(대회·클랜전·프로리그·테스트)에서 ±6%
+ */
+function dayPerf(s: RookieState, kind: GameKind) {
+  const P = s.persona;
+  const swing = P ? ((21 - P.cons) / 20) * 0.09 : 0.05;
+  let perf = 1 + (rand() * 2 - 1) * swing;
+  if (P && BIG_KINDS.has(kind)) perf *= 1 + (P.pres - 10) * 0.006;
+  return perf;
+}
+
+/**
+ * 경기 평점 (3.0~10.0): 이기면 7.0, 지면 5.7 에서 시작
+ * 강한 상대를 이기면 오르고 약한 상대에게 지면 내려감, 빠른 승리·접전 끝 패배는 가산, 그날 경기력(기복)도 반영
+ */
+function rateGame(s: RookieState, opp: Opp, won: boolean, duration: number, perf: number) {
+  const ratio = sumStats(opp.stats) / Math.max(1, sumStats(s.stats));
+  let r = won ? 7.0 : 5.7;
+  r += Math.max(-1.2, Math.min(1.2, (ratio - 1) * 4));
+  if (won && duration > 0 && duration < 600) r += 0.4;
+  if (!won && duration > 1200) r += 0.4;
+  r += (perf - 1) * 6 + (rand() - 0.5) * 0.6;
+  return Math.round(Math.max(3, Math.min(10, r)) * 10) / 10;
+}
+
+/** 평점 기록: 최근 20경기 · 연도별 시즌 기록 · MOM 이면 사기 조금 */
+function recordRating(s: RookieState, kind: GameKind, won: boolean, rating: number) {
+  (s.recent ??= []).unshift(rating);
+  if (s.recent.length > 20) s.recent.length = 20;
+  const y = ymd(s.day).y;
+  const st = ((s.seasons ??= {})[y] ??= emptySeason());
+  st.g++; if (won) st.w++;
+  st.sum = Math.round((st.sum + rating) * 10) / 10;
+  st.best = Math.max(st.best, rating);
+  const by = (st.by[kind] ??= [0, 0]);
+  by[0]++; if (won) by[1]++;
+  if (rating >= MOM_RATING) { st.mom++; s.morale = Math.min(100, s.morale + 1); }
+}
+
+/**
+ * 성격 리포트: 아직 모르는 성격 하나를 대략(±3) 알게 되거나, 대략 알던 것을 정확히 알게 됨
+ * 코치(프로)·클랜장 주간 리포트, 멘토 과외에서
+ */
+export function revealTrait(s: RookieState, who: string): TraitKey | null {
+  const known = (s.known ??= {});
+  const unknown = TRAIT_KEYS.filter(k => !known[k]);
+  const rough = TRAIT_KEYS.filter(k => known[k] === 1);
+  const k = unknown.length ? pick(unknown) : rough.length ? pick(rough) : null;
+  if (!k) return null;
+  known[k] = known[k] ? 2 : 1;
+  const shown = traitShown(s.persona, known, k);
+  log(s, "📋", `${who} 리포트: ${TRAITS[k].name}${known[k] === 2 ? " " + shown.text + " (정확)" : " 대략 " + shown.text}`);
+  return k;
 }
 
 /**
@@ -240,7 +312,9 @@ function grow(s: RookieState, opp: Opp, won: boolean, mul = 1) {
   const me = sumStats(s.stats), them = sumStats(opp.stats);
   const ratio = Math.max(0.5, Math.min(1.7, them / Math.max(1, me)));
   // 각성 중에는 1.5배로 배움
-  const room = Math.max(0.06, Math.min(1, (capOf(s) - me) / 700)) * (s.form?.kind === "awake" ? 1.5 : 1) * mul;
+  // 프로의식: 1 → 0.87배, 10 → 1배, 20 → 1.15배
+  const prof = s.persona ? 0.85 + s.persona.prof * 0.015 : 1;
+  const room = Math.max(0.06, Math.min(1, (capOf(s) - me) / 700)) * (s.form?.kind === "awake" ? 1.5 : 1) * mul * prof;
   const keys = [...STAT_KEYS].sort(() => rand() - 0.5);
   if (won) {
     const n = randInt(2, 3);
@@ -279,7 +353,8 @@ function afterGame(s: RookieState, opp: Opp, won: boolean) {
     const strong = sumStats(opp.stats) >= sumStats(s.stats) * 0.97;
     if (won && strong && rand() < 0.35) awaken(s, "슬럼프를 이겨내고");
   } else if (!s.form) {
-    if (s.streak <= -5 && rand() < 0.5) {
+    // 의지가 강할수록 슬럼프에 덜 빠짐 (의지 1 → 0.68, 10 → 0.48, 20 → 0.25)
+    if (s.streak <= -5 && rand() < 0.5 * (s.persona ? 1.4 - s.persona.det * 0.045 : 1)) {
       s.form = { kind: "slump", until: s.day + randInt(3, 6) };
       s.morale = Math.max(0, s.morale - 8);
       log(s, "😞", `${-s.streak}연패… 슬럼프에 빠졌습니다 (경기력 조금 하락 · 강한 상대를 꺾으면 벗어날 수도)`);
@@ -786,6 +861,7 @@ function joinTeam(s: RookieState, team: number, how: string) {
   s.titles.unshift(`${dateText(s.day)} ${ORIG_TEAMS[team].name} 입단 (${how})`);
   mark(s, "🏢");
   gainExp(s, 300);
+  revealTrait(s, "코치 첫인상");
 }
 
 // ── 프로 구단 ─────────────────────────────────────────────────
@@ -1034,6 +1110,8 @@ export function mentor(s: RookieState, stat: StatKey, proId: number) {
   for (const k of STAT_KEYS) if (s.stats[k] !== before[k]) delta[k] = s.stats[k] - before[k];
   log(s, "📚", `${ORIG_TEAMS[m.team].short} ${m.name} 선수에게 ${STAT_LABELS[stat]} 과외 (${STAT_LABELS[stat]} +${s.stats[stat] - before[stat]} · ${price}만원)`);
   mark(s, "📚");
+  // 멘토가 내 성격 하나를 짚어 줌 (반은 확률)
+  if (rand() < 0.5) revealTrait(s, `${m.name} 멘토`);
   return { mentor: m.name, delta, price };
 }
 
@@ -1119,6 +1197,7 @@ export function clanTest(s: RookieState, id: string) {
     s.fame += c.tier * 6;
     s.titles.unshift(`${dateText(s.day)} 클랜 ${c.name}[${c.tag}] 가입`);
     log(s, "🛡️", `${c.name} 입단 시험 통과! 클랜 [${c.tag}]에 들어갔습니다${from ? ` (${from} 탈퇴)` : ""}`);
+    revealTrait(s, "클랜장 첫인상");
     gainExp(s, 80 + c.tier * 40);
   } else log(s, "💧", `${c.name} 입단 시험에서 떨어졌습니다 (${CLAN_RETRY_DAYS}일 뒤 재도전)`);
   return { games: res.games, won: res.won };
@@ -1181,7 +1260,9 @@ export function clanPractice(s: RookieState, target?: string) {
 function addFriend(s: RookieState, name: string, n: number) {
   if (!s.clan) return;
   const fr = (s.clan.fr ??= {});
-  fr[name] = Math.min(100, (fr[name] ?? 0) + n);
+  // 사교성: 1 → 0.73배, 10 → 1배, 20 → 1.3배
+  const soc = s.persona ? 0.7 + s.persona.soc * 0.03 : 1;
+  fr[name] = Math.min(100, (fr[name] ?? 0) + Math.max(1, Math.round(n * soc)));
 }
 /** 피드백 받기: 클랜원에게 진 경기에서 떨어진 능력치 일부를 되찾는 대신 컨디션이 줄어듦 */
 export function clanFeedback(s: RookieState) {
@@ -1660,6 +1741,12 @@ export function nextDay(s: RookieState) {
     s.status = "amateur";
     delete s.semiproUntil;
     log(s, "⌛", "준프로 자격(2년)이 끝났습니다. 다시 커리지 매치에서 우승해야 합니다");
+  }
+  // 매주 일요일: 코치(프로) 또는 클랜장이 성격 리포트 (절반 확률) · 야망이 크면 인지도가 조금씩
+  if (x.dow === 0) {
+    if ((s.team || s.clan) && rand() < 0.5) { revealTrait(s, s.team ? "코치" : "클랜장"); s.reportDay = s.day; }
+    const amb = s.persona?.amb ?? 10;
+    if (amb >= 14) s.fame = Math.min(1000, s.fame + Math.round((amb - 12) / 3));
   }
   s.tryouts = s.tryouts.filter(t => t.until >= s.day);
   s.offers = s.offers.filter(o => o.until >= s.day);

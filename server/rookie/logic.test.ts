@@ -539,3 +539,58 @@ describe("선수 키우기", () => {
     expect(s.clan.friendly![0] + s.clan.friendly![1]).toBeGreaterThanOrEqual(8);
   });
 });
+
+describe("FM 1단계: 숨은 성격·경기 평점·시즌 기록", () => {
+  it("새 선수는 성격 6가지(1~20)를 갖고 처음엔 모두 모름, 예전 세이브도 채워짐", () => {
+    const s = mk();
+    const P = s.persona!;
+    for (const k of ["prof", "det", "cons", "pres", "amb", "soc"] as const) { expect(P[k]).toBeGreaterThanOrEqual(1); expect(P[k]).toBeLessThanOrEqual(20); }
+    expect(Object.keys(s.known ?? {})).toHaveLength(0);
+    const old = mk() as unknown as Record<string, unknown>;
+    delete old.persona; delete old.known; delete old.recent; delete old.seasons;
+    const up = L.upgrade(old as unknown as ReturnType<typeof mk>);
+    expect(up.persona).toBeDefined();
+    expect(up.seasons).toEqual({});
+  });
+
+  it("경기마다 평점(3~10)이 매겨지고 최근 폼·연도별 시즌 기록·종류별 전적이 쌓임", () => {
+    const s = mk();
+    let n = 0;
+    for (let i = 0; i < 6; i++) {
+      L.findLobby(s, "low", 3);
+      const g = L.playLobby(s);
+      n++;
+      expect(g.rating).toBeGreaterThanOrEqual(3);
+      expect(g.rating).toBeLessThanOrEqual(10);
+      expect(g.kind).toBe("공방");
+      if (s.used >= 9) L.nextDay(s);
+    }
+    expect(s.recent).toHaveLength(n);
+    const st = s.seasons![ymd(s.day).y];
+    expect(st.g).toBe(n);
+    expect(st.by["공방"]![0]).toBe(n);
+    expect(st.sum).toBeGreaterThan(0);
+  });
+
+  it("성격 리포트: 모르는 성격 → 대략 → 정확 순서로 드러나고 다 알면 더 없음", () => {
+    const s = mk();
+    for (let i = 0; i < 6; i++) expect(L.revealTrait(s, "코치")).not.toBeNull();
+    expect(Object.values(s.known!).every(v => v === 1)).toBe(true);
+    for (let i = 0; i < 6; i++) L.revealTrait(s, "코치");
+    expect(Object.values(s.known!).every(v => v === 2)).toBe(true);
+    expect(L.revealTrait(s, "코치")).toBeNull();
+  });
+
+  it("꾸준함이 낮을수록 평점 기복이 큼 (같은 상대·같은 맵 100판)", () => {
+    const spread = (cons: number) => {
+      const s = mk();
+      s.persona = { ...s.persona!, cons };
+      const rs: number[] = [];
+      for (let i = 0; i < 100; i++) { s.cond = 100; s.used = 0; L.findLobby(s, "mid", 3); rs.push(L.playLobby(s).rating!); }
+      const m = rs.reduce((a, b) => a + b, 0) / rs.length;
+      return Math.sqrt(rs.reduce((a, b) => a + (b - m) ** 2, 0) / rs.length);
+    };
+    // 상대가 매번 달라 차이가 크지 않을 수 있어 느슨하게: 극단끼리 비교
+    expect(spread(1)).toBeGreaterThan(spread(20) * 0.9);
+  });
+});

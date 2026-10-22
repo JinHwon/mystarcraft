@@ -12,6 +12,7 @@ import type { PlayedGame } from "../../../../server/rookie/logic";
 import { Broadcast } from "@/components/legacy/match/broadcast";
 import { useSpeed } from "@/components/legacy/match/common";
 import { LegacyFrame, TeamLogo } from "@/components/legacy/Legacy";
+import { RatingChip } from "./Persona";
 
 const ME_ID = 900_000;
 function asPlayer(o: { name: string; race: CPlayer["race"]; stats: CPlayer["stats"] }, id: number, extra: Partial<CPlayer> = {}): CPlayer {
@@ -59,6 +60,7 @@ export function MatchViewer({ s, games, title, extra, onClose }: { s: RookieStat
               <span className={cn("w-6 font-black", g.winner === "a" ? "text-[#bff5c6]" : "text-[#ffb8c8]")}>{g.winner === "a" ? "승" : "패"}</span>
               <span className="flex-1 min-w-0 truncate">{g.label} · vs {g.opp.pro ? `${ORIG_TEAMS[g.opp.pro.team].short} ` : g.opp.semipro ? "준프로 " : ""}{oppLabel(g.opp)} <span className="text-neutral-500">({mapView(g.mapId).name} · 능력치 약 {Math.round(sumStats(g.opp.stats) / 100) * 100})</span></span>
               {g.fx.ladder && <span className="text-[10.5px] text-neutral-300">{g.fx.ladder[0]}→{g.fx.ladder[1]}</span>}
+              <RatingChip r={g.rating} />
             </div>
           ))}
         </div>
