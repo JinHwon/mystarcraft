@@ -137,6 +137,9 @@ export function TodayPanel({ s, today, busy, onAct, onLadderMaps, onOpen }: {
   const todayEvents = s.events.filter(e => e.day === s.day && e.registered && !e.result);
   const pro = s.status === "pro";
   const next = today.stops.find(x => x.day > s.day);
+  // 실제 하루 선택 제한: 다 쓰면 내일(한국 시간 자정)까지 쉼
+  const left = today.picks.left;
+  const lock = busy || left === 0;
   const hurt = today.body.injury ? `부상 중 (${today.body.injury.left}일)` : undefined;
   const cards: Card[] = [
     { key: "lobby", icon: "🎮", label: "공방 연습", desc: pref ? `${TIERS[pref.tier].name}방 · ${ORIG_MAPS[pref.mapId]?.[0]} · ${DAY_GAMES}판` : `방·맵 고르기 · ${DAY_GAMES}판`, onClick: () => setSheet("lobby") },
@@ -161,20 +164,22 @@ export function TodayPanel({ s, today, busy, onAct, onLadderMaps, onOpen }: {
         </div>
         <div className="mt-1.5 flex flex-wrap gap-1 text-[10.5px]">
           <span className="rounded-full border border-primary/40 px-2 py-0.5 text-primary">이번 주 남은 선택 {picksLeft}번 (오늘 포함)</span>
+          {left !== null && <span className={cn("rounded-full border px-2 py-0.5", left === 0 ? "border-rose-400/60 text-rose-300" : "border-amber-400/50 text-amber-200")}>오늘(실제) 남은 선택 {left}/{today.picks.limit}</span>}
           {next && <span className="rounded-full border border-border px-2 py-0.5 text-muted-foreground">다음 선택일 {dayText(next.day)}{next.kind === "event" ? " · 이벤트" : ""}</span>}
           <span className="rounded-full border border-border px-2 py-0.5 text-muted-foreground">자동 진행 날은 {AUTO_GAMES}판씩</span>
         </div>
       </div>
-      {today.todayEvent === "courage" && s.status !== "pro" && <EventCard icon="🎓" title="오늘은 커리지 매치!" desc="32강 토너먼트 · 대진표를 보고 한 판씩 · 우승하면 준프로" disabled={busy} onClick={() => onAct({ kind: "courage" })} />}
-      {today.todayEvent === "war" && s.clan && today.clanWar?.schedule[0] && <EventCard icon="⚔️" title={`오늘은 클랜전! vs [${CLAN_BY_ID[today.clanWar.schedule[0].opp]?.tag}] ${CLAN_BY_ID[today.clanWar.schedule[0].opp]?.name}`} desc={`${s.clan.role === "master" ? "길드장이 직접 엔트리를 짭니다" : "엔트리에 들면 한 세트를 직접 뛰고, 아니면 관전합니다"} · 5세트 3선승${today.clanWar.schedule[0].opp === today.clanWar.rival ? " · 🔥 라이벌 클랜" : ""}`} disabled={busy} onClick={() => onAct({ kind: "war" })} />}
-      {today.todayEvent === "draft" && <EventCard icon="📋" title="오늘은 드래프트!" desc="준프로 16명 4라운드 · 상위 8명은 구단이 지명할 수도" disabled={busy} onClick={() => onAct({ kind: "draft" })} />}
-      {today.todayEvent === "promo" && s.team && <EventCard icon={s.team.squad === 2 ? "⬆️" : "🛡️"} title="팀 내 승강전 날" desc={s.team.squad === 2 ? `2군 1위면 1군 꼴찌와 3판 2선승 (이번 달 ${s.team.monthW}승 ${s.team.monthL}패)` : "1군 자리를 지키는 경기 (3판 2선승)"} disabled={busy} onClick={() => onAct({ kind: "promo" })} />}
-      {todayEvents.map(e => <EventCard key={e.id} icon="🏆" title={`오늘은 ${e.name}!`} desc={`${e.size}강 · 대진표를 보고 한 판씩 · 우승 ${e.prize[0]}만원`} disabled={busy} onClick={() => onAct({ kind: "event", id: e.id })} />)}
-      {!s.team && s.tryouts.map(t => <EventCard key={t.team} icon="📝" title={`${ORIG_TEAMS[t.team].name} 입단 테스트`} desc={`${t.from} · ${dateText(t.until).slice(5)}까지 · 3판 2선승`} action="테스트" disabled={busy} onClick={() => onAct({ kind: "tryout", team: t.team })} />)}
+      {left === 0 && <div className="rounded-xl border border-rose-400/50 bg-rose-500/10 px-3 py-2 text-[12px] text-rose-200">🌙 오늘 고를 수 있는 {today.picks.limit}번을 모두 썼습니다. 한국 시간 자정이 지나면 다시 이어서 할 수 있어요. (진행 중인 대회·클랜전은 끝까지 치를 수 있습니다)</div>}
+      {today.todayEvent === "courage" && s.status !== "pro" && <EventCard icon="🎓" title="오늘은 커리지 매치!" desc="32강 토너먼트 · 대진표를 보고 한 판씩 · 우승하면 준프로" disabled={lock} onClick={() => onAct({ kind: "courage" })} />}
+      {today.todayEvent === "war" && s.clan && today.clanWar?.schedule[0] && <EventCard icon="⚔️" title={`오늘은 클랜전! vs [${CLAN_BY_ID[today.clanWar.schedule[0].opp]?.tag}] ${CLAN_BY_ID[today.clanWar.schedule[0].opp]?.name}`} desc={`${s.clan.role === "master" ? "길드장이 직접 엔트리를 짭니다" : "엔트리에 들면 한 세트를 직접 뛰고, 아니면 관전합니다"} · 5세트 3선승${today.clanWar.schedule[0].opp === today.clanWar.rival ? " · 🔥 라이벌 클랜" : ""}`} disabled={lock} onClick={() => onAct({ kind: "war" })} />}
+      {today.todayEvent === "draft" && <EventCard icon="📋" title="오늘은 드래프트!" desc="준프로 16명 4라운드 · 상위 8명은 구단이 지명할 수도" disabled={lock} onClick={() => onAct({ kind: "draft" })} />}
+      {today.todayEvent === "promo" && s.team && <EventCard icon={s.team.squad === 2 ? "⬆️" : "🛡️"} title="팀 내 승강전 날" desc={s.team.squad === 2 ? `2군 1위면 1군 꼴찌와 3판 2선승 (이번 달 ${s.team.monthW}승 ${s.team.monthL}패)` : "1군 자리를 지키는 경기 (3판 2선승)"} disabled={lock} onClick={() => onAct({ kind: "promo" })} />}
+      {todayEvents.map(e => <EventCard key={e.id} icon="🏆" title={`오늘은 ${e.name}!`} desc={`${e.size}강 · 대진표를 보고 한 판씩 · 우승 ${e.prize[0]}만원`} disabled={lock} onClick={() => onAct({ kind: "event", id: e.id })} />)}
+      {!s.team && s.tryouts.map(t => <EventCard key={t.team} icon="📝" title={`${ORIG_TEAMS[t.team].name} 입단 테스트`} desc={`${t.from} · ${dateText(t.until).slice(5)}까지 · 3판 2선승`} action="테스트" disabled={lock} onClick={() => onAct({ kind: "tryout", team: t.team })} />)}
       {(todayEvents.length > 0 || today.todayEvent) && <div className="text-[10.5px] text-rose-300 px-1">⚠️ 다른 활동을 고르면 오늘 이벤트는 불참 처리됩니다</div>}
       <div className="grid grid-cols-2 gap-1.5">
         {cards.filter(c => !c.hide).map(c => ({ ...c, lock: c.lock ?? (hurt && ["lobby", "ladder", "clan", "internal", "friendly"].includes(c.key) ? hurt : undefined) })).map(c => (
-          <button key={c.key} onClick={c.onClick} disabled={busy || (!!hurt && c.lock === hurt)} className="rounded-2xl bg-card border border-border px-3 py-2.5 text-left disabled:opacity-40 active:scale-[0.98]">
+          <button key={c.key} onClick={c.onClick} disabled={lock || (!!hurt && c.lock === hurt)} className="rounded-2xl bg-card border border-border px-3 py-2.5 text-left disabled:opacity-40 active:scale-[0.98]">
             <div className="flex items-center gap-2"><span className="text-2xl leading-none">{c.icon}</span><span className="text-[14px] font-black text-foreground truncate">{c.label}</span></div>
             <div className={cn("text-[10.5px] truncate mt-1", c.lock ? "text-rose-300" : "text-muted-foreground")}>{c.lock ? `🔒 ${c.lock}` : c.desc}</div>
           </button>

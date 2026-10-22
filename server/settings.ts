@@ -30,6 +30,14 @@ export async function setSetting(key: string, value: string) {
 export const ROOKIE_OPEN_KEY = "rookie_open";
 export async function rookieOpen() { return (await getSetting(ROOKIE_OPEN_KEY)) === "1"; }
 
+/** 선수 키우기: 실제 하루에 직접 고를 수 있는 횟수 (없으면 기본값, 0 = 제한 없음) */
+export const ROOKIE_PICKS_KEY = "rookie_daily_picks";
+export async function rookiePicks(fallback: number) {
+  const v = await getSetting(ROOKIE_PICKS_KEY);
+  const n = v === null ? NaN : Number(v);
+  return Number.isInteger(n) && n >= 0 ? n : fallback;
+}
+
 /** 선수 키우기 베타 테스터 (공개 전에도 들어갈 수 있는 사용자 id, 쉼표로 구분) */
 export const ROOKIE_BETA_KEY = "rookie_beta";
 export async function rookieBeta(): Promise<number[]> {

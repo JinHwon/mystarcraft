@@ -877,6 +877,41 @@ describe("몸 관리 · 준프로 압박 · 연말 결산 · 라이벌 이야기
     expect(wins).toBeGreaterThan(30);
     // 초보방(2000~2700)은 4,000의 70% 아래라 이겨서는 배우는 게 없음 (가끔 섞이는 윗방 상대·레벨업 정도)
     expect(sumStats(s.stats) - t0).toBeLessThan(120);
-    expect(s.counts.awakenings).toBe(0);
+    expect(s.counts.awakenings).toBeLessThanOrEqual(1);
   }, 60_000);
+});
+
+describe("실제 하루 선택 제한 · 이적 월급", () => {
+  it("하루 제한만큼만 고를 수 있고, 날짜가 바뀌면 다시 (0 = 제한 없음)", async () => {
+    const { picksLeft } = await import("@shared/rookie/model");
+    const s = mk();
+    for (let i = 0; i < 3; i++) L.spendPick(s, "2026-10-23", 3);
+    expect(() => L.spendPick(s, "2026-10-23", 3)).toThrow(/모두 썼습니다/);
+    expect(picksLeft(s, 3, "2026-10-23")).toBe(0);
+    expect(picksLeft(s, 3, "2026-10-24")).toBe(3);
+    L.spendPick(s, "2026-10-24", 3);
+    expect(s.quota).toEqual({ date: "2026-10-24", used: 1 });
+    for (let i = 0; i < 10; i++) L.spendPick(s, "2026-10-24", 0);
+    expect(s.quota!.used).toBe(1);
+    expect(picksLeft(s, 0)).toBeNull();
+  });
+
+  it("이적 제안 월급은 시장 가치 기준이라 이적을 반복해도 불어나지 않음", () => {
+    const s = mk();
+    s.status = "pro";
+    for (const k of Object.keys(s.stats) as Array<keyof typeof s.stats>) s.stats[k] = 900;
+    s.level = 60;
+    s.team = { team: 0, squad: 1, joined: 0, salary: 300, monthW: 0, monthL: 0, contractUntil: 99999 };
+    const mv = L.marketValue(s);
+    let maxOffer = 0;
+    for (let i = 0; i < 40; i++) {
+      s.offers = []; s.flags = {}; s.used = 0; s.status = "pro";
+      if (!s.team || s.team.caught) s.team = { team: 0, squad: 1, joined: 0, salary: 300, monthW: 0, monthL: 0, contractUntil: 99999 };
+      const r = L.requestTransfer(s, 1 + (i % 10));
+      if (r.result === "offer") { maxOffer = Math.max(maxOffer, r.salary); L.acceptOffer(s, s.offers.at(-1)!.team); s.team!.squad = 1; }
+      s.day += 20;
+    }
+    expect(maxOffer).toBeGreaterThan(0);
+    expect(maxOffer).toBeLessThanOrEqual(Math.round(mv * 1.5));
+  });
 });

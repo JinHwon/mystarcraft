@@ -3,7 +3,8 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { ACH_BY_ID, type RookieState } from "@shared/rookie/model";
 
-export type RookieToday = ReturnType<typeof todayInfo>;
+/** 화면용 요약 + 오늘(실제 날짜) 남은 선택 (left null = 제한 없음) */
+export type RookieToday = ReturnType<typeof todayInfo> & { picks: { left: number | null; limit: number } };
 
 /** 선수 키우기 세이브 */
 export function useRookie() {

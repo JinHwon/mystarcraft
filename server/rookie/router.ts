@@ -5,11 +5,11 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { desc, eq, sql } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
-import { rookieAllowed, rookieOpen } from "../settings";
+import { rookieAllowed, rookieOpen, rookiePicks } from "../settings";
 import { getDb } from "../db";
 import { rookieCareers, rookieHof } from "../../drizzle/schema";
 import { STAT_KEYS, type StatKey } from "@shared/gameConstants";
-import { ACH_BY_ID, CONCEPTS, RANK_SORTS, TIERS, sumStats, type Concept, type RankSort, type RookieState, type Tier } from "@shared/rookie/model";
+import { ACH_BY_ID, CONCEPTS, DAILY_PICKS, kstDate, picksLeft, RANK_SORTS, TIERS, sumStats, type Concept, type RankSort, type RookieState, type Tier } from "@shared/rookie/model";
 import * as L from "./logic";
 import { answerMail, readMail } from "./inbox";
 import { applyLegacy, retire } from "./world";
@@ -51,17 +51,25 @@ async function save(userId: number, s: RookieState) {
   cache.set(userId, s);
 }
 
+type Who = { id: number; role: string };
+/** 실제 하루에 직접 고를 수 있는 횟수 (관리자는 제한 없음 = 0) */
+const limitOf = async (user: Who) => (user.role === "admin" ? 0 : await rookiePicks(DAILY_PICKS));
+/** 화면용 요약 + 오늘 남은 선택 */
+const todayOf = (s: RookieState, limit: number) => ({ ...L.todayInfo(s), picks: { left: picksLeft(s, limit), limit } });
+
 /** 세이브를 고치고 저장, 결과와 새 상태를 돌려줌 (규칙 오류면 되돌림) */
-function mutate<T>(userId: number, fn: (s: RookieState) => T) {
+function mutate<T>(user: Who, fn: (s: RookieState, limit: number) => T) {
+  const userId = user.id;
   return withLock(userId, async () => {
+    const limit = await limitOf(user);
     const s = await load(userId);
     if (!s) throw new TRPCError({ code: "NOT_FOUND", message: "키우는 선수가 없습니다. 새 선수를 만드세요" });
     const backup = JSON.stringify(s);
     try {
-      const result = fn(s);
+      const result = fn(s, limit);
       const gained = L.checkAchievements(s);
       await save(userId, s);
-      return { result, state: s, today: L.todayInfo(s), gained };
+      return { result, state: s, today: todayOf(s, limit), gained };
     } catch (e) {
       cache.set(userId, JSON.parse(backup) as RookieState);
       if (e instanceof L.RookieError) throw new TRPCError({ code: "BAD_REQUEST", message: e.message });
@@ -102,7 +110,7 @@ export const rookieRouter = router({
     const open = await rookieOpen();
     return { open, allowed: await rookieAllowed(ctx.user) };
   }),
-  get: p.query(async ({ ctx }) => { const state = await load(ctx.user.id); return { state, today: state ? L.todayInfo(state) : null }; }),
+  get: p.query(async ({ ctx }) => { const state = await load(ctx.user.id); return { state, today: state ? todayOf(state, await limitOf(ctx.user)) : null }; }),
   create: p.input(z.object({
     name: z.string().max(20), race: z.enum(["terran", "zerg", "protoss"]), concept: z.enum(conceptKeys), stats: statsSchema, photo: z.string().max(70_000).optional(),
     replace: z.boolean().optional(),
@@ -114,27 +122,29 @@ export const rookieRouter = router({
     try {
       const s = L.newRookie(input);
       if (input.successor && old?.retired) applyLegacy(s, old);
+      // 새로 만들어도 오늘 쓴 선택 횟수는 그대로 (다시 만들어서 제한을 피하지 못하게)
+      if (old?.quota) s.quota = old.quota;
       await save(ctx.user.id, s);
-      return { state: s, today: L.todayInfo(s) };
+      return { state: s, today: todayOf(s, await limitOf(ctx.user)) };
     } catch (e) {
       if (e instanceof L.RookieError) throw new TRPCError({ code: "BAD_REQUEST", message: e.message });
       throw e;
     }
   })),
-  ladderMaps: p.input(z.object({ sel: z.array(z.number().int()).min(1).max(5) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.setLadderMaps(s, input.sel))),
-  buy: p.input(z.object({ key: z.string(), qty: z.number().int().min(1).max(99) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.buy(s, input.key, input.qty))),
-  use: p.input(z.object({ key: z.string() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.useItem(s, input.key))),
-  register: p.input(z.object({ id: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.registerEvent(s, input.id))),
-  requestTransfer: p.input(z.object({ team: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.requestTransfer(s, input.team))),
-  acceptOffer: p.input(z.object({ team: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.acceptOffer(s, input.team))),
-  negotiate: p.input(z.object({ ask: z.number().int(), clause: z.enum(["none", "promise", "bonus"]).optional() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.negotiate(s, input.ask, input.clause))),
-  acceptNego: p.input(z.object({ clause: z.enum(["none", "promise", "bonus"]).optional() }).optional()).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.acceptNego(s, input?.clause))),
+  ladderMaps: p.input(z.object({ sel: z.array(z.number().int()).min(1).max(5) })).mutation(({ ctx, input }) => mutate(ctx.user, s => L.setLadderMaps(s, input.sel))),
+  buy: p.input(z.object({ key: z.string(), qty: z.number().int().min(1).max(99) })).mutation(({ ctx, input }) => mutate(ctx.user, s => L.buy(s, input.key, input.qty))),
+  use: p.input(z.object({ key: z.string() })).mutation(({ ctx, input }) => mutate(ctx.user, s => L.useItem(s, input.key))),
+  register: p.input(z.object({ id: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user, s => L.registerEvent(s, input.id))),
+  requestTransfer: p.input(z.object({ team: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user, s => L.requestTransfer(s, input.team))),
+  acceptOffer: p.input(z.object({ team: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user, s => L.acceptOffer(s, input.team))),
+  negotiate: p.input(z.object({ ask: z.number().int(), clause: z.enum(["none", "promise", "bonus"]).optional() })).mutation(({ ctx, input }) => mutate(ctx.user, s => L.negotiate(s, input.ask, input.clause))),
+  acceptNego: p.input(z.object({ clause: z.enum(["none", "promise", "bonus"]).optional() }).optional()).mutation(({ ctx, input }) => mutate(ctx.user, s => L.acceptNego(s, input?.clause))),
   /** 팀 내 입지: 감독 면담(출전 요구) · 임대 요청 · 에이전트 */
-  askPlayTime: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.askPlayTime(s))),
-  requestLoan: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.requestLoan(s))),
-  hireAgent: p.input(z.object({ tier: z.union([z.literal(1), z.literal(2), z.literal(3)]) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.hireAgent(s, input.tier))),
-  fireAgent: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.fireAgent(s))),
-  setTitle: p.input(z.object({ id: z.string().nullable() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.setTitle(s, input.id))),
+  askPlayTime: p.mutation(({ ctx }) => mutate(ctx.user, s => L.askPlayTime(s))),
+  requestLoan: p.mutation(({ ctx }) => mutate(ctx.user, s => L.requestLoan(s))),
+  hireAgent: p.input(z.object({ tier: z.union([z.literal(1), z.literal(2), z.literal(3)]) })).mutation(({ ctx, input }) => mutate(ctx.user, s => L.hireAgent(s, input.tier))),
+  fireAgent: p.mutation(({ ctx }) => mutate(ctx.user, s => L.fireAgent(s))),
+  setTitle: p.input(z.object({ id: z.string().nullable() })).mutation(({ ctx, input }) => mutate(ctx.user, s => L.setTitle(s, input.id))),
   /** 랭킹 보드: 다른 유저들의 키운 선수 (상위 50 + 내 순위) */
   ranking: p.input(z.object({ sort: z.enum(Object.keys(RANK_SORTS) as [RankSort, ...RankSort[]]) })).query(async ({ ctx, input }) => {
     const d = await db();
@@ -150,10 +160,10 @@ export const rookieRouter = router({
     const strip = ({ userId, ...r }: (typeof rows)[number]) => ({ ...r, me: userId === ctx.user.id });
     return { rows: rows.map(strip), me: mine[0] ? strip(mine[0]) : null, myRank };
   }),
-  clanFeedback: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.clanFeedback(s))),
+  clanFeedback: p.mutation(({ ctx }) => mutate(ctx.user, s => L.clanFeedback(s))),
   /** 은퇴: 경력 점수를 매겨 명예의 전당에 올림 (데뷔 1년 뒤부터) */
   retire: p.mutation(async ({ ctx }) => {
-    const r = await mutate(ctx.user.id, s => retire(s));
+    const r = await mutate(ctx.user, s => retire(s));
     const e = r.result as HofEntry;
     await (await db()).insert(rookieHof).values({ userId: ctx.user.id, name: e.name, race: e.race, score: e.score, data: JSON.stringify(e) });
     return r;
@@ -164,13 +174,13 @@ export const rookieRouter = router({
     return rows.map(r => ({ id: r.id, userId: r.userId, at: String(r.createdAt), ...(JSON.parse(r.data) as HofEntry) }));
   }),
   /** 메일 읽음 · 답장 (선택) */
-  mailRead: p.input(z.object({ id: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => readMail(s, input.id))),
-  mailAnswer: p.input(z.object({ id: z.number().int(), choice: z.string().min(1).max(20) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => answerMail(s, input.id, input.choice))),
-  leaveClan: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.leaveClan(s))),
-  act: p.input(activitySchema).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.act(s, input as L.Activity))),
+  mailRead: p.input(z.object({ id: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user, s => readMail(s, input.id))),
+  mailAnswer: p.input(z.object({ id: z.number().int(), choice: z.string().min(1).max(20) })).mutation(({ ctx, input }) => mutate(ctx.user, s => answerMail(s, input.id, input.choice))),
+  leaveClan: p.mutation(({ ctx }) => mutate(ctx.user, s => L.leaveClan(s))),
+  act: p.input(activitySchema).mutation(({ ctx, input }) => mutate(ctx.user, (s, limit) => { L.spendPick(s, kstDate(), limit); return L.act(s, input as L.Activity); })),
   /** 진행 중인 대회: 내 다음 경기 하나 (quick = 중계 없이 결과만) */
-  bracketPlay: p.input(z.object({ quick: z.boolean().optional() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.bracketPlay(s, input.quick))),
+  bracketPlay: p.input(z.object({ quick: z.boolean().optional() })).mutation(({ ctx, input }) => mutate(ctx.user, s => L.bracketPlay(s, input.quick))),
   /** 클랜전: 길드장이 엔트리 제출 · 다음 세트 진행 */
-  warEntry: p.input(z.object({ names: z.array(z.string().max(40)).length(5) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => { L.warEntry(s, input.names); return { war: s.war }; })),
-  warPlay: p.input(z.object({ quick: z.boolean().optional() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.warPlay(s, input.quick))),
+  warEntry: p.input(z.object({ names: z.array(z.string().max(40)).length(5) })).mutation(({ ctx, input }) => mutate(ctx.user, s => { L.warEntry(s, input.names); return { war: s.war }; })),
+  warPlay: p.input(z.object({ quick: z.boolean().optional() })).mutation(({ ctx, input }) => mutate(ctx.user, s => L.warPlay(s, input.quick))),
 });

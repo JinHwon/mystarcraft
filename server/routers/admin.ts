@@ -3,9 +3,9 @@ import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
 import { eq, inArray, or } from "drizzle-orm";
 import { getDb, getUserById, isConfiguredAdmin, updateUserRole } from "../db";
-import { ROOKIE_OPEN_KEY, rookieBeta, rookieOpen, setRookieBeta, setSetting } from "../settings";
+import { ROOKIE_OPEN_KEY, ROOKIE_PICKS_KEY, rookieBeta, rookieOpen, rookiePicks, setRookieBeta, setSetting } from "../settings";
 import { rookieCareers, users } from "../../drizzle/schema";
-import { dayOf, sumStats, type RookieState } from "@shared/rookie/model";
+import { DAILY_PICKS, dayOf, sumStats, type RookieState } from "@shared/rookie/model";
 import { backupStatus, diskStatus } from "../serverStatus";
 
 /** 사용자 계정 관리 (커리어 세이브 관리는 career.admin* 에 있음) */
@@ -17,6 +17,12 @@ export const adminRouter = router({
   setRookieOpen: adminProcedure.input(z.object({ open: z.boolean() })).mutation(async ({ input }) => {
     await setSetting(ROOKIE_OPEN_KEY, input.open ? "1" : "0");
     return { open: input.open };
+  }),
+  /** 선수 키우기: 실제 하루에 직접 고를 수 있는 횟수 (0 = 제한 없음) */
+  rookiePicks: adminProcedure.query(async () => ({ picks: await rookiePicks(DAILY_PICKS), fallback: DAILY_PICKS })),
+  setRookiePicks: adminProcedure.input(z.object({ picks: z.number().int().min(0).max(500) })).mutation(async ({ input }) => {
+    await setSetting(ROOKIE_PICKS_KEY, String(input.picks));
+    return { picks: input.picks, fallback: DAILY_PICKS };
   }),
   /** 선수 키우기 베타 테스터 명단 (공개 전에도 들어갈 수 있음) */
   rookieBeta: adminProcedure.query(async () => {

@@ -281,7 +281,8 @@ export function requestTransfer(s: RookieState, team: number) {
   }
   const p = Math.min(0.85, Math.max(0.05, (sumStats(s.stats) - 4300) / 2000 + s.fame / 3000) * (agentOf(s)?.offers ?? 1));
   if (rand() < p) {
-    const salary = Math.round(s.team.salary * (1.1 + rand() * 0.3 + (agentOf(s)?.nego ?? 0) / 2));
+    // 시장 가치 기준 (지금 월급 기준이면 이적할 때마다 월급이 불어남)
+    const salary = Math.round(marketValue(s) * (0.95 + rand() * 0.25 + (agentOf(s)?.nego ?? 0) / 2));
     s.offers.push({ team, salary, until: s.day + 7 });
     notify(s, "agent", `${ORIG_TEAMS[team].short} 스카우트`, `${ORIG_TEAMS[team].name} 영입 제안`, `월급 ${salary}만원으로 영입하고 싶다는 제안입니다. 일주일 안에 구단 화면에서 결정하세요.`);
     log(s, "📨", `${ORIG_TEAMS[team].name}: "좋습니다, 월급 ${salary}만원에 모시겠습니다" (일주일 안에 결정)`);

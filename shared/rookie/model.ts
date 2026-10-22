@@ -72,6 +72,13 @@ export const courageDays = (y: number) => Array.from({ length: 12 }, (_, i) => d
 export const draftDay = (y: number) => dayOf(y, 12, 27);
 /** 준프로 자격 기간 (드래프트 참가 가능) */
 export const SEMIPRO_DAYS = 730;
+/** 실제 하루에 직접 고를 수 있는 기본 횟수 (관리자 패널에서 바꿀 수 있음, 0 = 제한 없음). 선택 1번 ≈ 게임 3~4일 */
+export const DAILY_PICKS = 14;
+/** 한국 시간 날짜 (실제 하루 제한의 기준) */
+export const kstDate = (now = Date.now()) => new Date(now + 9 * 3_600_000).toISOString().slice(0, 10);
+/** 오늘 남은 선택 (limit 0 = 제한 없음 → null) */
+export const picksLeft = (s: { quota?: { date: string; used: number } }, limit: number, date = kstDate()) =>
+  limit > 0 ? Math.max(0, limit - (s.quota?.date === date ? s.quota.used : 0)) : null;
 /** 피로: 한 경기마다 · 하루 지나면 풀리는 양 · 쉬는 날 더 풀리는 양 · 자동 진행이 쉬기 시작하는 값 · 부상 위험이 생기는 값 */
 export const FATIGUE = { perGame: 1.4, daily: 4, rest: 20, autoRest: 60, risk: 65 } as const;
 /** 부상 중 큰 경기 경기력 배율 */
@@ -542,6 +549,8 @@ export interface RookieState {
   fatigue?: number;
   /** 부상 (이 날까지): 연습 경기를 못 하고 큰 경기에서 경기력↓ */
   injury?: { until: number; name: string };
+  /** 실제 하루(한국 시간)에 직접 고른 횟수 */
+  quota?: { date: string; used: number };
   /** 처음 이룬 날 (관리자 통계·연말 리뷰용) */
   milestones?: { semipro?: number; pro?: number };
   /** 에이전트 (고용한 날) */
