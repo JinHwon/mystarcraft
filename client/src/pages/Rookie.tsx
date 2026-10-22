@@ -18,6 +18,7 @@ import { useRookie, useRookieSync, type RookieToday } from "@/lib/rookie";
 import { LegacyImg, LegacyRadar, PlayerPhoto, TeamLogo } from "@/components/legacy/Legacy";
 import { PersonaCard, SeasonTable } from "@/components/rookie/Persona";
 import { MailView } from "@/components/rookie/Inbox";
+import { AgentCard, SquadCard } from "@/components/rookie/Squad";
 import { pendingMail } from "@shared/rookie/inbox";
 import { RookieCreate } from "@/components/rookie/Create";
 import { MatchViewer } from "@/components/rookie/MatchViewer";
@@ -199,7 +200,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
   if (view !== "home") {
     const sub: Record<string, ReactNode> = {
       shop: <ShopView s={s} />,
-      team: <TeamView s={s} />,
+      team: <TeamView s={s} today={today} />,
       calendar: <RookieCalendar s={s} />,
       log: <LogView s={s} />,
       mentor: <MentorView s={s} busy={busy} onAct={a => { open("home"); doAct(a, "📚 멘토 과외"); }} />,
@@ -463,7 +464,7 @@ function ItemIcon({ k }: { k: string }) {
 }
 
 // ── 구단 ─────────────────────────────────────────────────────
-function TeamView({ s }: { s: RookieState }) {
+function TeamView({ s, today }: { s: RookieState; today: RookieToday }) {
   const sync = useRookieSync();
   const req = trpc.rookie.requestTransfer.useMutation(sync);
   const accept = trpc.rookie.acceptOffer.useMutation(sync);
@@ -475,6 +476,7 @@ function TeamView({ s }: { s: RookieState }) {
           <div className="text-muted-foreground">{dateText(s.fa.until)}까지 새 구단을 찾아야 합니다. 못 찾으면 준프로로 돌아갑니다. 구단에 직접 연락해도 들킬 걱정은 없어요.</div>
         </div>
         <OfferList s={s} accept={team => accept.mutate({ team })} />
+        <AgentCard s={s} />
         <div className="rounded-2xl bg-card border border-border p-3 space-y-1.5">
           <div className="text-sm font-bold text-foreground">📞 구단에 연락하기 <span className="text-[10.5px] text-muted-foreground">(행동 1)</span></div>
           <div className="grid grid-cols-3 gap-1.5">
@@ -516,8 +518,10 @@ function TeamView({ s }: { s: RookieState }) {
         <div>· 매달 마지막 날 팀 내 승강전: 2군에서 내부 연습 성적이 좋으면(3승 이상) 1군 꼴찌와 3판 2선승</div>
         <div>· 1군은 프로리그 기간(3~6월, 9~12월) 주말에 엔트리에 들면 출전 · 승리 수당 30만원</div>
       </div>
+      <SquadCard s={s} today={today} />
       {s.nego && <NegoBox s={s} />}
       <OfferList s={s} accept={team => accept.mutate({ team })} />
+      <AgentCard s={s} />
       <div className="rounded-2xl bg-card border border-border p-3 space-y-1.5">
         <div className="text-sm font-bold text-foreground">✈️ 다른 구단에 이적 요청 <span className="text-[10.5px] text-rose-300">구단에 들키면 벌금·사기 하락, 두 번 들키면 방출!</span></div>
         <div className="grid grid-cols-3 gap-1.5">

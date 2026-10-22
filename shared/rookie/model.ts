@@ -378,6 +378,16 @@ export interface RookieTeam {
   seasonL?: number;
   /** 계약 끝나는 날 (그 다음 날 연봉 협상) */
   contractUntil?: number;
+  /** 코치 신뢰도 0~100 (평점·면담·메일 답장으로 변함) */
+  trust?: number;
+  /** 면담에서 받은 출전 약속 (이 날까지) */
+  promiseUntil?: number;
+  /** 계약 조건 (출전 보장 · 승리 수당) */
+  clause?: { kind: import("./squad").Clause; winBonus?: number };
+  /** 이번 달 프로리그 출전 수 */
+  monthPro?: number;
+  /** 임대 중: 원 소속 구단·돌아가는 날·임대 기간 평점 합·경기 수 */
+  loan?: { from: number; until: number; sum: number; n: number };
 }
 
 /** 같은 시기에 시작한 라이벌 (AI, 같이 성장) */
@@ -525,6 +535,8 @@ export interface RookieState {
   mailCd?: Record<string, number>;
   /** 잠깐 유지되는 상태 (라이벌전 과열 등: 이름 → 끝나는 날) */
   flags?: Record<string, number>;
+  /** 에이전트 (고용한 날) */
+  agent?: { tier: 1 | 2 | 3; since: number };
 }
 
 // ── 업적 · 칭호 ─────────────────────────────────────────────────

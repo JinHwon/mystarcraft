@@ -7,7 +7,8 @@ import { STAT_KEYS, STAT_LABELS, type StatKey } from "@shared/gameConstants";
 import { ORIG_TEAMS } from "@shared/career/originalData";
 import { CLAN_BY_ID, STAT_MAX_ONE, STAT_MIN_ONE, capOf, sumStats, ymd, type RookieState } from "@shared/rookie/model";
 import { TRAITS, formAvg, type TraitKey } from "@shared/rookie/persona";
-import { RookieError } from "./logic";
+import { RookieError, addTrust, hireAgent, myRole, trustOf } from "./logic";
+import { AGENTS, agentOf } from "@shared/rookie/squad";
 import { MAIL_FROM, pendingMail, type Mail, type MailChoice, type MailFrom } from "@shared/rookie/inbox";
 
 const rand = () => Math.random();
@@ -91,9 +92,10 @@ const TEMPLATES: Tpl[] = [
       if (c === "yes") {
         cond(s, -15);
         const keys = randomStats(2); const g = keys.map(k => { const v = randInt(3, 6); stat(s, k, v); return `${STAT_LABELS[k]} +${v}`; });
-        return `코치와 밤늦게까지 연습했습니다. ${g.join(", ")} · 컨디션 -15${nudge(s, "prof", 1, 0.3)}`;
+        addTrust(s, 3);
+        return `코치와 밤늦게까지 연습했습니다. ${g.join(", ")} · 컨디션 -15 · 코치 신뢰 ↑${nudge(s, "prof", 1, 0.3)}`;
       }
-      cond(s, 5);
+      cond(s, 5); addTrust(s, -1);
       return `"그래, 쉬는 것도 실력이다." 컨디션 +5`;
     },
   },
@@ -351,9 +353,58 @@ const TEMPLATES: Tpl[] = [
       days: 3,
     }),
     resolve: (s, c) => {
-      if (c === "work") { const k = weakest(s); const v = randInt(2, 4); stat(s, k, v); cond(s, -5); morale(s, -1); return `감독님과 약점을 짚어 봤습니다. ${STAT_LABELS[k]} +${v}, 컨디션 -5${nudge(s, "prof", 1, 0.2)}`; }
-      if (c === "honest") { morale(s, 6); cond(s, 8); return "\"그래, 며칠 쉬어 가자.\" 사기 +6, 컨디션 +8"; }
-      morale(s, 2); return `감독님 표정이 굳었습니다. 사기 +2${nudge(s, "det", -1, 0.15)}`;
+      if (c === "work") { const k = weakest(s); const v = randInt(2, 4); stat(s, k, v); cond(s, -5); morale(s, -1); addTrust(s, 2); return `감독님과 약점을 짚어 봤습니다. ${STAT_LABELS[k]} +${v}, 컨디션 -5 · 코치 신뢰 ↑${nudge(s, "prof", 1, 0.2)}`; }
+      if (c === "honest") { morale(s, 6); cond(s, 8); addTrust(s, 1); return "\"그래, 며칠 쉬어 가자.\" 사기 +6, 컨디션 +8"; }
+      morale(s, 2); addTrust(s, -4); return `감독님 표정이 굳었습니다. 사기 +2 · 코치 신뢰 ↓${nudge(s, "det", -1, 0.15)}`;
+    },
+  },
+  {
+    id: "agent_intro", from: "agent", weight: 2, when: s => !s.agent && s.fame >= AGENTS[0].fame && s.status !== "amateur",
+    make: () => ({
+      sender: AGENTS[0].name, title: "제가 선수님을 맡아 보고 싶습니다",
+      body: `요즘 눈여겨보고 있었습니다. 연봉 협상이나 이적 제안은 저 같은 사람이 있어야 유리하죠. 계약금 ${AGENTS[0].hire}만원에 월급의 ${Math.round(AGENTS[0].fee * 100)}%만 받겠습니다. (${AGENTS[0].desc})`,
+      choices: [{ id: "hire", label: `계약한다 (${AGENTS[0].hire}만원)`, hint: "협상·제안 ↑ · 수수료" }, { id: "no", label: "아직은 혼자 해 보겠다" }],
+      days: 7,
+    }),
+    resolve: (s, c) => {
+      if (c !== "hire") return "정중히 거절했습니다";
+      try { hireAgent(s, 1); return `${AGENTS[0].name}과(와) 계약했습니다`; } catch (e) { return `계약하지 못했습니다: ${(e as Error).message}`; }
+    },
+  },
+  {
+    id: "agent_pitch", from: "agent", weight: 3, when: s => !!s.agent && !!s.team && !s.team.loan && s.offers.length === 0,
+    make: s => {
+      const others = ORIG_TEAMS.filter(t => t.id < 12 && t.id !== s.team!.team);
+      const team = pick(others).id;
+      return {
+        sender: agentOf(s)!.name, title: `${ORIG_TEAMS[team].name}이(가) 관심을 보입니다`,
+        body: `${ORIG_TEAMS[team].name} 쪽에서 조용히 연락이 왔습니다. 지금보다 좋은 조건을 받아낼 수 있을 것 같은데, 정식으로 제안을 받아 볼까요? (지금 구단에는 들키지 않게 처리하겠습니다)`,
+        choices: [{ id: "yes", label: "제안을 받아 봐 주세요", hint: "이적 제안" }, { id: "no", label: "지금 팀에 집중하겠습니다", hint: "코치 신뢰 조금 ↑" }],
+        data: { team },
+      };
+    },
+    resolve: (s, c, d) => {
+      if (!s.team) return "지금은 소속 구단이 없어 넘겼습니다";
+      if (c === "yes") {
+        const team = Number(d.team), a = agentOf(s);
+        const salary = Math.round(s.team.salary * (1.15 + rand() * 0.25 + (a?.nego ?? 0) / 2));
+        s.offers.push({ team, salary, until: s.day + 7 });
+        return `${ORIG_TEAMS[team].name}이(가) 월급 ${salary}만원을 제시했습니다. 일주일 안에 구단 화면에서 결정하세요`;
+      }
+      addTrust(s, 2); morale(s, 1); return "지금 팀에서 증명하기로 했습니다. 코치 신뢰 ↑, 사기 +1";
+    },
+  },
+  {
+    id: "captain", from: "coach", weight: 3, when: s => myRole(s) === "ace" && trustOf(s) >= 80 && !(s.flags?.captain),
+    make: s => ({
+      sender: `${ORIG_TEAMS[s.team!.team].short} 감독`, title: "주장을 맡아 줄 수 있겠니?",
+      body: "팀 분위기를 잡아 줄 사람이 필요하다. 네가 주장을 맡아 줬으면 한다. 책임이 무거운 자리라 부담도 될 거다.",
+      choices: [{ id: "yes", label: "맡겠습니다", hint: "인지도·신뢰 ↑ · 부담" }, { id: "no", label: "아직은 경기에만 집중하고 싶습니다" }],
+      days: 5,
+    }),
+    resolve: (s, c) => {
+      if (c === "yes") { (s.flags ??= {}).captain = 99999; fame(s, 15); addTrust(s, 5); morale(s, (s.persona?.pres ?? 10) >= 12 ? 5 : -2); return `주장 완장을 찼습니다! 인지도 +15 · 코치 신뢰 ↑${nudge(s, "soc", 1, 0.25)}`; }
+      morale(s, 1); return "감독님이 이해해 주셨습니다";
     },
   },
 ];
