@@ -640,3 +640,81 @@ describe("FM 2단계: 메일함·선택 이벤트·기자회견", () => {
     expect(s.inbox![0].read).toBeFalsy();
   });
 });
+
+describe("FM 3단계: 팀 내 입지·계약·에이전트·임대", () => {
+  const pro = () => {
+    const s = mk();
+    s.status = "pro";
+    s.team = { team: 0, squad: 1, joined: s.day, salary: 100, monthW: 0, monthL: 0, contractUntil: s.day + 300, trust: 50 };
+    return s;
+  };
+  it("역할은 팀 내 순위·코치 신뢰도로 정해지고, 신뢰도가 높을수록 엔트리 확률이 높음", async () => {
+    const { roleOf, ROLES } = await import("@shared/rookie/squad");
+    expect(roleOf(0, 70)).toBe("ace");
+    expect(roleOf(2, 40)).toBe("starter");
+    expect(roleOf(7, 80)).toBe("starter");
+    expect(roleOf(7, 30)).toBe("backup");
+    expect(ROLES.ace.entry).toBeGreaterThan(ROLES.backup.entry);
+    const s = pro();
+    for (const k of Object.keys(s.stats)) (s.stats as Record<string, number>)[k] = 200;
+    s.team!.trust = 10;
+    expect(L.myRole(s)).toBe("backup");
+    L.addTrust(s, 200);
+    expect(L.trustOf(s)).toBe(100);
+    expect(L.myRole(s)).toBe("starter");
+  });
+
+  it("감독 면담은 2주에 한 번, 약속을 받으면 출전 약속 기간이 생김", () => {
+    const s = pro();
+    for (const k of Object.keys(s.stats)) (s.stats as Record<string, number>)[k] = 200;
+    s.team!.trust = 100;
+    s.recent = [9, 9, 9, 9, 9];
+    const r = L.askPlayTime(s);
+    expect(["promised", "already"]).toContain(r.result);
+    expect(() => L.askPlayTime(s)).toThrow(L.RookieError);
+  });
+
+  it("계약 조건: 출전 보장은 월급 10% 낮춤, 승리 수당은 1승마다 월급의 25%", () => {
+    const s = pro();
+    s.nego = { offer: 100, rounds: 0, until: s.day + 7, max: 120, old: 100 };
+    L.acceptNego(s, "promise");
+    expect(s.team!.salary).toBe(90);
+    expect(s.team!.clause?.kind).toBe("promise");
+    s.nego = { offer: 100, rounds: 0, until: s.day + 7, max: 120, old: 90 };
+    L.acceptNego(s, "bonus");
+    expect(s.team!.salary).toBe(95);
+    expect(s.team!.clause?.winBonus).toBe(24);
+  });
+
+  it("에이전트: 인지도·계약금 조건, 월급날 수수료, 협상 한도 상승", () => {
+    const s = pro();
+    s.fame = 10; s.money = 500;
+    expect(() => L.hireAgent(s, 1)).toThrow(L.RookieError);
+    s.fame = 50;
+    L.hireAgent(s, 1);
+    expect(s.money).toBe(470);
+    expect(s.agent?.tier).toBe(1);
+    // 다음 달 1일까지
+    const money0 = s.money;
+    for (let i = 0; i < 40; i++) L.nextDay(s);
+    expect(s.money).toBeGreaterThan(money0); // 월급 100 - 수수료 5
+    expect(s.log.some(l => l.text.includes("에이전트 수수료"))).toBe(true);
+    L.fireAgent(s);
+    expect(s.agent).toBeUndefined();
+  });
+
+  it("임대: 2군·30일 뒤에만, 임대 가면 다른 구단 1군, 기간이 끝나면 돌아옴", () => {
+    const s = pro();
+    s.team!.squad = 2;
+    expect(() => L.requestLoan(s)).toThrow(L.RookieError);
+    s.day += 31;
+    let ok = false;
+    for (let i = 0; i < 20 && !ok; i++) { delete s.flags?.loanTry; ok = L.requestLoan(s).result === "loaned"; }
+    expect(ok).toBe(true);
+    expect(s.team!.team).not.toBe(0);
+    expect(s.team!.squad).toBe(1);
+    for (let i = 0; i < 62; i++) L.nextDay(s);
+    expect(s.team!.loan).toBeUndefined();
+    expect(s.team!.team).toBe(0);
+  });
+});

@@ -138,8 +138,13 @@ export const rookieRouter = router({
   requestTransfer: p.input(z.object({ team: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.requestTransfer(s, input.team))),
   acceptOffer: p.input(z.object({ team: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.acceptOffer(s, input.team))),
   mentor: p.input(z.object({ stat: z.enum(STAT_KEYS as unknown as [StatKey, ...StatKey[]]), pro: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.mentor(s, input.stat, input.pro))),
-  negotiate: p.input(z.object({ ask: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.negotiate(s, input.ask))),
-  acceptNego: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.acceptNego(s))),
+  negotiate: p.input(z.object({ ask: z.number().int(), clause: z.enum(["none", "promise", "bonus"]).optional() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.negotiate(s, input.ask, input.clause))),
+  acceptNego: p.input(z.object({ clause: z.enum(["none", "promise", "bonus"]).optional() }).optional()).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.acceptNego(s, input?.clause))),
+  /** 팀 내 입지: 감독 면담(출전 요구) · 임대 요청 · 에이전트 */
+  askPlayTime: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.askPlayTime(s))),
+  requestLoan: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.requestLoan(s))),
+  hireAgent: p.input(z.object({ tier: z.union([z.literal(1), z.literal(2), z.literal(3)]) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.hireAgent(s, input.tier))),
+  fireAgent: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.fireAgent(s))),
   setTitle: p.input(z.object({ id: z.string().nullable() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.setTitle(s, input.id))),
   /** 랭킹 보드: 다른 유저들의 키운 선수 (상위 50 + 내 순위) */
   ranking: p.input(z.object({ sort: z.enum(Object.keys(RANK_SORTS) as [RankSort, ...RankSort[]]) })).query(async ({ ctx, input }) => {

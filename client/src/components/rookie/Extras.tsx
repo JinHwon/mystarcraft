@@ -12,6 +12,7 @@ import {
 } from "@shared/rookie/model";
 import { initialPlayers } from "@shared/career/init";
 import { useRookieSync } from "@/lib/rookie";
+import { CLAUSES, type Clause } from "@shared/rookie/squad";
 import { PlayerPhoto, TeamLogo } from "@/components/legacy/Legacy";
 
 const PROS = initialPlayers();
@@ -197,6 +198,7 @@ export function NegoBox({ s }: { s: RookieState }) {
   const sync = useRookieSync();
   const n = s.nego!;
   const [ask, setAsk] = useState(String(Math.round(n.offer * 1.15)));
+  const [clause, setClause] = useState<Clause>("none");
   const neg = trpc.rookie.negotiate.useMutation(sync);
   const accept = trpc.rookie.acceptNego.useMutation(sync);
   return (
@@ -204,13 +206,22 @@ export function NegoBox({ s }: { s: RookieState }) {
       <div className="text-sm font-black text-foreground">💼 연봉 협상 <span className="text-[11px] text-muted-foreground font-normal">· {dateText(n.until).slice(5)}까지 (답이 없으면 제시액으로 계약)</span></div>
       <div className="text-[12.5px] text-foreground">지금 월급 {n.old}만원 → 구단 제시 <b className="text-amber-300">{n.offer}만원</b></div>
       <div className="text-[11px] text-muted-foreground">더 달라고 할 수 있지만, 무리하게 3번 밀어붙이면 결렬되어 FA가 됩니다 (협상 {n.rounds}/3)</div>
+      <div className="grid grid-cols-3 gap-1">
+        {(Object.keys(CLAUSES) as Clause[]).map(k => (
+          <button key={k} onClick={() => setClause(k)} className={cn("rounded-lg border px-1.5 py-1 text-left", clause === k ? "border-amber-400 bg-amber-400/15" : "border-border")}>
+            <div className="text-[11.5px] font-bold text-foreground">{CLAUSES[k].name}</div>
+            <div className="text-[9.5px] text-muted-foreground leading-tight">{k === "none" ? "월급만" : k === "promise" ? "출전 확률↑ · 월급 -10%" : "1승마다 수당 · 월급 -5%"}</div>
+          </button>
+        ))}
+      </div>
+      <div className="text-[10.5px] text-muted-foreground">{CLAUSES[clause].desc}</div>
       <div className="flex gap-2">
-        <button onClick={() => accept.mutate()} disabled={accept.isPending} className="flex-1 rounded-xl bg-emerald-600 text-white text-sm font-black py-2">✍️ {n.offer}만원에 계약</button>
+        <button onClick={() => accept.mutate({ clause })} disabled={accept.isPending} className="flex-1 rounded-xl bg-emerald-600 text-white text-sm font-black py-2">✍️ {n.offer}만원에 계약</button>
       </div>
       <div className="flex gap-2 items-center">
         <input value={ask} onChange={e => setAsk(e.target.value.replace(/\D/g, ""))} inputMode="numeric" className="w-24 rounded-lg bg-background border border-border px-2 py-1.5 text-sm text-foreground text-right" />
         <span className="text-sm text-muted-foreground">만원</span>
-        <button onClick={() => neg.mutate({ ask: Number(ask) })} disabled={neg.isPending || !Number(ask)} className="flex-1 rounded-xl bg-amber-500 text-black text-sm font-black py-2 disabled:opacity-40">💬 이 금액 요구</button>
+        <button onClick={() => neg.mutate({ ask: Number(ask), clause })} disabled={neg.isPending || !Number(ask)} className="flex-1 rounded-xl bg-amber-500 text-black text-sm font-black py-2 disabled:opacity-40">💬 이 금액 요구</button>
       </div>
     </div>
   );
