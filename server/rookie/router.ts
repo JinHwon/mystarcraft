@@ -5,7 +5,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { desc, eq, sql } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
-import { rookieOpen } from "../settings";
+import { rookieAllowed, rookieOpen } from "../settings";
 import { getDb } from "../db";
 import { rookieCareers, rookieHof } from "../../drizzle/schema";
 import { STAT_KEYS, type StatKey } from "@shared/gameConstants";
@@ -73,9 +73,9 @@ function mutate<T>(userId: number, fn: (s: RookieState) => T) {
 const statsSchema = z.object(Object.fromEntries(STAT_KEYS.map(k => [k, z.number().int()])) as Record<(typeof STAT_KEYS)[number], z.ZodNumber>);
 const conceptKeys = Object.keys(CONCEPTS) as [Concept, ...Concept[]];
 const tierKeys = Object.keys(TIERS) as [Tier, ...Tier[]];
-/** 공개 전에는 관리자만 (관리자 패널에서 공개/비공개) */
+/** 공개 전에는 관리자·베타 테스터만 (관리자 패널에서 공개/비공개 · 베타 명단) */
 const p = protectedProcedure.use(async ({ ctx, next }) => {
-  if (ctx.user.role !== "admin" && !(await rookieOpen())) throw new TRPCError({ code: "FORBIDDEN", message: "선수 키우기 모드는 아직 준비 중입니다" });
+  if (!(await rookieAllowed(ctx.user))) throw new TRPCError({ code: "FORBIDDEN", message: "선수 키우기 모드는 아직 준비 중입니다" });
   return next();
 });
 
@@ -100,7 +100,7 @@ export const rookieRouter = router({
   /** 화면에 메뉴를 보여줄지 (누구나 물어볼 수 있음) */
   access: protectedProcedure.query(async ({ ctx }) => {
     const open = await rookieOpen();
-    return { open, allowed: open || ctx.user.role === "admin" };
+    return { open, allowed: await rookieAllowed(ctx.user) };
   }),
   get: p.query(async ({ ctx }) => { const state = await load(ctx.user.id); return { state, today: state ? L.todayInfo(state) : null }; }),
   create: p.input(z.object({
@@ -121,28 +121,12 @@ export const rookieRouter = router({
       throw e;
     }
   })),
-  findLobby: p.input(z.object({ tier: z.enum(tierKeys), mapId: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.findLobby(s, input.tier, input.mapId))),
-  kick: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.kickLobby(s))),
-  playLobby: p.mutation(({ ctx }) => mutate(ctx.user.id, s => ({ games: [L.playLobby(s)] }))),
-  ladder: p.mutation(({ ctx }) => mutate(ctx.user.id, s => ({ games: [L.playLadder(s)] }))),
   ladderMaps: p.input(z.object({ sel: z.array(z.number().int()).min(1).max(5) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.setLadderMaps(s, input.sel))),
-  rest: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.rest(s))),
-  stream: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.stream(s))),
-  partTime: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.partTime(s))),
-  allowance: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.allowance(s))),
   buy: p.input(z.object({ key: z.string(), qty: z.number().int().min(1).max(99) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.buy(s, input.key, input.qty))),
   use: p.input(z.object({ key: z.string() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.useItem(s, input.key))),
   register: p.input(z.object({ id: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.registerEvent(s, input.id))),
-  playEvent: p.input(z.object({ id: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.playEvent(s, input.id))),
-  courage: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.playCourage(s))),
-  draft: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.playDraft(s))),
-  tryout: p.input(z.object({ team: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.playTryout(s, input.team))),
-  internal: p.mutation(({ ctx }) => mutate(ctx.user.id, s => ({ games: [L.playInternal(s)] }))),
-  promo: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.playPromo(s))),
-  proleague: p.mutation(({ ctx }) => mutate(ctx.user.id, s => ({ games: [L.playProleague(s)] }))),
   requestTransfer: p.input(z.object({ team: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.requestTransfer(s, input.team))),
   acceptOffer: p.input(z.object({ team: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.acceptOffer(s, input.team))),
-  mentor: p.input(z.object({ stat: z.enum(STAT_KEYS as unknown as [StatKey, ...StatKey[]]), pro: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.mentor(s, input.stat, input.pro))),
   negotiate: p.input(z.object({ ask: z.number().int(), clause: z.enum(["none", "promise", "bonus"]).optional() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.negotiate(s, input.ask, input.clause))),
   acceptNego: p.input(z.object({ clause: z.enum(["none", "promise", "bonus"]).optional() }).optional()).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.acceptNego(s, input?.clause))),
   /** 팀 내 입지: 감독 면담(출전 요구) · 임대 요청 · 에이전트 */
@@ -166,8 +150,6 @@ export const rookieRouter = router({
     const strip = ({ userId, ...r }: (typeof rows)[number]) => ({ ...r, me: userId === ctx.user.id });
     return { rows: rows.map(strip), me: mine[0] ? strip(mine[0]) : null, myRank };
   }),
-  clanTest: p.input(z.object({ id: z.string().max(30) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.clanTest(s, input.id))),
-  clanPractice: p.input(z.object({ target: z.string().max(40).optional() }).optional()).mutation(({ ctx, input }) => mutate(ctx.user.id, s => ({ games: [L.clanPractice(s, input?.target)] }))),
   clanFeedback: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.clanFeedback(s))),
   /** 은퇴: 경력 점수를 매겨 명예의 전당에 올림 (데뷔 1년 뒤부터) */
   retire: p.mutation(async ({ ctx }) => {
@@ -185,13 +167,10 @@ export const rookieRouter = router({
   mailRead: p.input(z.object({ id: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => readMail(s, input.id))),
   mailAnswer: p.input(z.object({ id: z.number().int(), choice: z.string().min(1).max(20) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => answerMail(s, input.id, input.choice))),
   leaveClan: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.leaveClan(s))),
-  batch: p.input(z.object({ kind: z.enum(["lobby", "ladder", "clan", "internal", "friendly"]), tier: z.enum(tierKeys).optional(), mapId: z.number().int().min(0).optional() }))
-    .mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.batch(s, input.kind, { tier: input.tier, mapId: input.mapId }))),
   act: p.input(activitySchema).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.act(s, input as L.Activity))),
   /** 진행 중인 대회: 내 다음 경기 하나 (quick = 중계 없이 결과만) */
   bracketPlay: p.input(z.object({ quick: z.boolean().optional() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.bracketPlay(s, input.quick))),
   /** 클랜전: 길드장이 엔트리 제출 · 다음 세트 진행 */
   warEntry: p.input(z.object({ names: z.array(z.string().max(40)).length(5) })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => { L.warEntry(s, input.names); return { war: s.war }; })),
   warPlay: p.input(z.object({ quick: z.boolean().optional() })).mutation(({ ctx, input }) => mutate(ctx.user.id, s => L.warPlay(s, input.quick))),
-  nextDay: p.mutation(({ ctx }) => mutate(ctx.user.id, s => L.nextDay(s))),
 });
