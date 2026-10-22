@@ -594,3 +594,49 @@ describe("FM 1단계: 숨은 성격·경기 평점·시즌 기록", () => {
     expect(spread(1)).toBeGreaterThan(spread(20) * 0.9);
   });
 });
+
+describe("FM 2단계: 메일함·선택 이벤트·기자회견", () => {
+  it("하루하루 지나면 메일이 오고, 답장하면 결과가 남고, 같은 답장은 두 번 못 함", async () => {
+    const I = await import("./inbox");
+    const s = mk();
+    s.fame = 100; s.money = 10;
+    for (let i = 0; i < 80; i++) L.nextDay(s);
+    expect((s.inbox ?? []).length).toBeGreaterThan(3);
+    const m = I.sendMail(s, { from: "family", sender: "어머니", title: "t", body: "b", tpl: "family_worry", choices: [{ id: "talk", label: "a" }, { id: "prove", label: "b" }, { id: "study", label: "c" }], until: s.day + 3 });
+    const before = s.morale;
+    I.answerMail(s, m.id, "talk");
+    expect(s.morale).toBeGreaterThan(before - 1);
+    expect(m.result).toContain("사기");
+    expect(() => I.answerMail(s, m.id, "talk")).toThrow(L.RookieError);
+  });
+
+  it("기한이 지나면 마지막 선택으로 자동 처리", async () => {
+    const I = await import("./inbox");
+    const s = mk();
+    const m = I.sendMail(s, { from: "friend", sender: "x", title: "t", body: "b", tpl: "partjob", choices: [{ id: "yes", label: "a" }, { id: "no", label: "b" }], until: s.day + 1 });
+    L.nextDay(s); L.nextDay(s);
+    expect(m.picked).toBe("no");
+    expect(m.result).toContain("자동");
+  });
+
+  it("기자회견: 우승 뒤 도발하면 라이벌전이 과열되고, 라이벌을 이기면 화제", async () => {
+    const I = await import("./inbox");
+    const s = mk();
+    const m = I.pressConference(s, "테스트 대회", true);
+    expect(m.choices!.map(c => c.id)).toContain("bold");
+    I.answerMail(s, m.id, "bold");
+    expect(s.flags?.rivalHeat).toBeGreaterThan(s.day);
+    const fame = s.fame;
+    expect(I.rivalHeatResult(s, true)).toContain("이겼습니다");
+    expect(s.fame).toBe(Math.min(1000, fame + 15));
+    expect(s.flags?.rivalHeat).toBeUndefined();
+  });
+
+  it("입단 테스트 제의·이적 제안은 메일로도 옴", async () => {
+    const I = await import("./inbox");
+    const s = mk();
+    I.notify(s, "agent", "담당자", "입단 테스트 제의", "본문");
+    expect(s.inbox![0].choices).toBeUndefined();
+    expect(s.inbox![0].read).toBeFalsy();
+  });
+});

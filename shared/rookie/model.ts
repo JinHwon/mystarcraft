@@ -519,6 +519,12 @@ export interface RookieState {
   seasons?: Record<number, import("./persona").SeasonStat>;
   /** 마지막 코치·클랜장 리포트 날 */
   reportDay?: number;
+  /** 메일함 (최근 순) · 다음 메일 번호 · 메일 틀별 마지막으로 보낸 날 */
+  inbox?: import("./inbox").Mail[];
+  nextMailId?: number;
+  mailCd?: Record<string, number>;
+  /** 잠깐 유지되는 상태 (라이벌전 과열 등: 이름 → 끝나는 날) */
+  flags?: Record<string, number>;
 }
 
 // ── 업적 · 칭호 ─────────────────────────────────────────────────

@@ -17,6 +17,8 @@ import type { PlayedGame } from "../../../server/rookie/logic";
 import { useRookie, useRookieSync, type RookieToday } from "@/lib/rookie";
 import { LegacyImg, LegacyRadar, PlayerPhoto, TeamLogo } from "@/components/legacy/Legacy";
 import { PersonaCard, SeasonTable } from "@/components/rookie/Persona";
+import { MailView } from "@/components/rookie/Inbox";
+import { pendingMail } from "@shared/rookie/inbox";
 import { RookieCreate } from "@/components/rookie/Create";
 import { MatchViewer } from "@/components/rookie/MatchViewer";
 import { RookieCalendar } from "@/components/rookie/Calendar";
@@ -30,7 +32,7 @@ import { BracketPanel } from "@/components/rookie/Bracket";
 import { ClanWarPanel } from "@/components/rookie/ClanWar";
 import type { Activity } from "../../../server/rookie/logic";
 
-type View = "home" | "shop" | "team" | "calendar" | "log" | "mentor" | "fans" | "ach" | "rank";
+type View = "home" | "shop" | "team" | "calendar" | "log" | "mentor" | "fans" | "ach" | "rank" | "mail";
 const PRO_TEAMS = ORIG_TEAMS.filter(t => t.id < 12);
 const price = (key: string) => Math.max(1, Math.round((ITEM_BY_KEY[key]?.price ?? 0) * ROOKIE_PRICE));
 
@@ -64,7 +66,7 @@ function Shell({ children, onHome, sub, onBack }: { children: ReactNode; onHome?
 
 type Tab = "home" | "events" | "grow" | "shop" | "clan" | "more";
 const TABS: Array<[Tab, string, string]> = [["home", "🏠", "홈"], ["events", "🏆", "대회"], ["grow", "📈", "성장"], ["shop", "🛒", "상점"], ["clan", "🛡️", "클랜"], ["more", "☰", "더보기"]];
-const SUB_TITLES: Record<View, string> = { home: "", shop: "상점·가방", team: "구단", calendar: "달력", log: "기록", mentor: "멘토 과외", fans: "팬카페", ach: "업적·칭호", rank: "랭킹" };
+const SUB_TITLES: Record<View, string> = { mail: "메일함", home: "", shop: "상점·가방", team: "구단", calendar: "달력", log: "기록", mentor: "멘토 과외", fans: "팬카페", ach: "업적·칭호", rank: "랭킹" };
 
 function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRestart: () => void }) {
   const [tab, setTab] = useState<Tab>("home");
@@ -156,6 +158,8 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
 
   // 알림 띠
   const banners: ReactNode[] = [];
+  const waitMail = (s.inbox ?? []).filter(pendingMail).length, newMail = (s.inbox ?? []).filter(m => !m.read).length;
+  if (waitMail || newMail) banners.push(<Banner key="mail" icon="📬" title={waitMail ? `답장을 기다리는 메일 ${waitMail}통` : `새 메일 ${newMail}통`} desc={waitMail ? "기한 안에 답하지 않으면 무난한 답으로 자동 처리됩니다" : "코치·기자·팬에게서 연락이 왔습니다"} action="메일함" onClick={() => open("mail")} />);
   if (s.bracket) banners.push(<Banner key="br" icon={s.bracket.kind === "courage" ? "🎓" : "🏆"} title={`${s.bracket.title} 진행 중`} desc={`${roundName(s.bracket.size, s.bracket.round)} · 내 경기를 한 판씩 치르세요`} action="이어서" onClick={() => go("home")} />);
   if (s.war) banners.push(<Banner key="wr" icon="⚔️" title="클랜전 진행 중" desc={s.war.phase === "entry" ? "길드장이 엔트리를 짜야 합니다" : `${s.war.score[0]} : ${s.war.score[1]} · 다음 세트를 진행하세요`} action="이어서" onClick={() => go("home")} />);
   if (today.openEvents > 0) banners.push(<Banner key="oe" icon="🎪" title={`신청할 수 있는 대회가 ${today.openEvents}개 있어요!`} desc="신청해 두면 그날 직접 참가합니다 (놓치면 불참)" action="대회 보기" onClick={() => go("events")} />);
@@ -181,7 +185,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
     { icon: "🛒", label: "상점", desc: "비타·장비", onClick: () => go("shop") },
     { icon: "🏆", label: "대회", desc: today.openEvents ? `신청 가능 ${today.openEvents}` : `${s.events.filter(e => e.day >= s.day && !e.result).length}개 예정`, onClick: () => go("events") },
     { icon: "🛡️", label: "클랜", desc: s.clan ? `${today.clanRank}위` : "가입하기", onClick: () => go("clan") },
-    { icon: "📅", label: "달력", desc: "일정", onClick: () => open("calendar") },
+    { icon: "📬", label: "메일함", desc: (s.inbox ?? []).some(pendingMail) ? "답장 필요" : `${(s.inbox ?? []).filter(m => !m.read).length}통 새 메일`, onClick: () => open("mail") },
   ];
   const section = (title: string, extra?: ReactNode) => <div className="flex items-center justify-between px-0.5 pt-1"><span className="text-[12px] font-black text-foreground">{title}</span>{extra}</div>;
   const overlays = (
@@ -202,6 +206,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
       fans: <FanView s={s} />,
       ach: <AchView s={s} />,
       rank: <RankView />,
+      mail: <MailView s={s} />,
     };
     return (
       <Shell onHome={() => go("home")} sub={SUB_TITLES[view]} onBack={() => open("home")}>
@@ -257,6 +262,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
         {tab === "more" && (
           <>
             {actGrid([
+              { icon: "📬", label: "메일함", desc: `${(s.inbox ?? []).length}통`, onClick: () => open("mail") },
               { icon: "🏢", label: "구단", desc: s.team ? `${ORIG_TEAMS[s.team.team].short} ${s.team.squad}군` : s.fa ? "FA · 구단 찾기" : "프로가 되면", onClick: () => open("team") },
               { icon: "💌", label: "팬카페", desc: `회원 ${s.fanCafe.members.toLocaleString()}명`, onClick: () => open("fans") },
               { icon: "🏅", label: "업적·칭호", desc: `${Object.keys(s.achievements).length}개 달성`, onClick: () => open("ach") },
