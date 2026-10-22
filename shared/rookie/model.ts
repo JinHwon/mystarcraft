@@ -510,6 +510,15 @@ export interface RookieState {
   mapGames?: Record<number, number>;
   /** 클랜 입단 시험 본 날 (재시험 대기) */
   clanTried: Record<string, number>;
+  /** 숨은 성격 (1~20) · 알려진 정도 */
+  persona?: import("./persona").Persona;
+  known?: import("./persona").Known;
+  /** 최근 경기 평점 (최근 순, 최대 20) */
+  recent?: number[];
+  /** 연도별 시즌 기록 (경기·승·평점 합·MOM·최고 평점·종류별 [경기, 승]) */
+  seasons?: Record<number, import("./persona").SeasonStat>;
+  /** 마지막 코치·클랜장 리포트 날 */
+  reportDay?: number;
 }
 
 // ── 업적 · 칭호 ─────────────────────────────────────────────────
