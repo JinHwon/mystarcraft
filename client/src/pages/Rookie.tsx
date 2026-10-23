@@ -12,6 +12,7 @@ import { ITEMS, ITEM_BY_KEY, itemImg, slotOf, SLOT_NAMES } from "@shared/career/
 import {
   CONCEPTS, DOW, GRADE_COLOR, RACE_NAMES, ROOKIE_PRICE, STATUS_NAMES, TIERS, VITA_PER_DAY, CLAN_BY_ID, DAY_SLOTS, eventReq,
   courageDays, dateText, draftDay, ladderGrade, sumStats, ymd, type RookieState, oppLabel, withTag, roundName,
+  PRO_RULES, TRYOUT_MIN,
 } from "@shared/rookie/model";
 import type { PlayedGame } from "../../../server/rookie/logic";
 import { useRookie, useRookieSync, type RookieToday } from "@/lib/rookie";
@@ -209,7 +210,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
   if (view !== "home") {
     const sub: Record<string, ReactNode> = {
       shop: <ShopView s={s} />,
-      team: <TeamView s={s} today={today} />,
+      team: <TeamView s={s} today={today} onWatch={(g, title) => setWatch({ games: [g], title })} />,
       calendar: <RookieCalendar s={s} />,
       log: <LogView s={s} />,
       mentor: <MentorView s={s} busy={busy} onAct={a => { open("home"); doAct(a, "📚 멘토 과외"); }} />,
@@ -257,7 +258,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
         {tab === "grow" && (
           <>
             {actGrid([
-              { icon: "📚", label: "멘토 과외", desc: s.mentorDay === s.day ? "오늘은 받았음" : "프로에게 배우기", onClick: () => open("mentor") },
+              { icon: "📚", label: "멘토 과외", desc: s.mentorDay !== undefined && s.day - s.mentorDay < 7 ? `${7 - (s.day - s.mentorDay)}일 뒤 가능` : "프로에게 배우기", onClick: () => open("mentor") },
               { icon: "🛒", label: "상점·가방", desc: "비타·장비·포션", onClick: () => go("shop") },
             ], 2)}
             <div className="rounded-2xl bg-card border border-border p-3 space-y-2">
@@ -395,6 +396,7 @@ function EventsView({ s }: { s: RookieState }) {
   const total = sumStats(s.stats);
   return (
     <div className="space-y-2">
+      {s.team && <div className="rounded-xl border border-rose-400/50 bg-rose-500/10 px-3 py-2 text-[12px] text-rose-200">프로게이머는 아마추어 대회에 나갈 수 없습니다</div>}
       <div className="text-[12px] text-muted-foreground">신청해 둔 대회는 그날이 직접 고르는 날이 되어 참가합니다 (다른 활동을 고르면 불참). 3위까지 상금! 참가비는 신청할 때 내고, 취소하면 돌려받습니다.</div>
       {list.map(e => {
         const r = eventReq(e);
@@ -411,7 +413,7 @@ function EventsView({ s }: { s: RookieState }) {
               {r.ladder && <span className={cn("text-[10px] rounded-full px-1.5 py-0.5 border", s.ladder.best >= r.ladder ? "border-emerald-400/50 text-emerald-300" : "border-rose-400/50 text-rose-300")}>{s.ladder.best >= r.ladder ? "✓" : "✗"} 래더 최고 {r.ladder}+</span>}
             </div>
             {e.result ? <div className="text-xs text-amber-300 font-bold">결과: {e.result}</div> : (
-              <button onClick={() => reg.mutate({ id: e.id })} disabled={reg.isPending || (!e.registered && (!!lock || s.money < (e.fee ?? 0)))} className={cn("w-full rounded-xl py-1.5 text-xs font-black border disabled:opacity-40", e.registered ? "border-rose-400/60 text-rose-300" : "bg-amber-500 text-black border-amber-500")}>
+              <button onClick={() => reg.mutate({ id: e.id })} disabled={reg.isPending || (!e.registered && (!!s.team || !!lock || s.money < (e.fee ?? 0)))} className={cn("w-full rounded-xl py-1.5 text-xs font-black border disabled:opacity-40", e.registered ? "border-rose-400/60 text-rose-300" : "bg-amber-500 text-black border-amber-500")}>
                 {e.registered ? `신청 취소${e.fee ? ` (참가비 ${e.fee}만 환불)` : ""}` : lock ? `🔒 ${lock}` : s.money < (e.fee ?? 0) ? `참가비 ${e.fee}만원 부족` : `참가 신청${e.fee ? ` (-${e.fee}만)` : ""}`}
               </button>
             )}
@@ -484,10 +486,27 @@ function ItemIcon({ k }: { k: string }) {
 }
 
 // ── 구단 ─────────────────────────────────────────────────────
-function TeamView({ s, today }: { s: RookieState; today: RookieToday }) {
+function TeamView({ s, today, onWatch }: { s: RookieState; today: RookieToday; onWatch: (g: PlayedGame, title: string) => void }) {
   const sync = useRookieSync();
   const req = trpc.rookie.requestTransfer.useMutation(sync);
   const accept = trpc.rookie.acceptOffer.useMutation(sync);
+  const apply = trpc.rookie.applyTryout.useMutation(sync);
+  // 준프로·FA: 프로팀에 입단 테스트 신청 (한 달에 한 번)
+  const applyBox = today.applyIn !== null && (
+    <div className="rounded-2xl bg-card border border-border p-3 space-y-1.5">
+      <div className="text-sm font-bold text-foreground">📝 입단 테스트 신청 <span className="text-[10.5px] text-muted-foreground">{today.applyIn > 0 ? `${today.applyIn}일 뒤 다시 신청 가능` : `한 달에 한 번 · 능력치 ${TRYOUT_MIN.toLocaleString()} 넘어야 가능성이 생김`}</span></div>
+      <div className="text-[11px] text-muted-foreground">받아 주면 2주 안에 그 팀 2군 선수와 3판 2선승. 이기면 입단합니다.</div>
+      <div className="grid grid-cols-3 gap-1.5">
+        {PRO_TEAMS.map(x => (
+          <button key={x.id} onClick={() => apply.mutate({ team: x.id })} disabled={apply.isPending || (today.applyIn ?? 0) > 0 || s.tryouts.some(t => t.team === x.id)}
+            className="rounded-xl bg-muted/40 border border-border p-1.5 flex flex-col items-center disabled:opacity-40">
+            <TeamLogo team={x} className="w-[46px] h-[27px]" />
+            <span className="text-[10px] text-foreground truncate w-full text-center">{x.name}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
   if (s.fa) {
     return (
       <div className="space-y-3">
@@ -496,6 +515,7 @@ function TeamView({ s, today }: { s: RookieState; today: RookieToday }) {
           <div className="text-muted-foreground">{dateText(s.fa.until)}까지 새 구단을 찾아야 합니다. 못 찾으면 준프로로 돌아갑니다. 구단에 직접 연락해도 들킬 걱정은 없어요.</div>
         </div>
         <OfferList s={s} accept={team => accept.mutate({ team })} />
+        {applyBox}
         <AgentCard s={s} />
         <div className="rounded-2xl bg-card border border-border p-3 space-y-1.5">
           <div className="text-sm font-bold text-foreground">📞 구단에 연락하기 <span className="text-[10.5px] text-muted-foreground">(행동 1)</span></div>
@@ -514,11 +534,15 @@ function TeamView({ s, today }: { s: RookieState; today: RookieToday }) {
   }
   if (!s.team) {
     return (
-      <div className="rounded-2xl bg-card border border-border p-4 text-sm text-muted-foreground space-y-1.5">
-        <div className="text-base font-black text-foreground">🏢 아직 프로가 아닙니다</div>
-        <div>· 매달 마지막 날 열리는 커리지 매치(32강 토너먼트)에서 우승하면 준프로 (능력치가 정말 높으면 구단이 입단 경기를 제의)</div>
-        <div>· 준프로는 2년 동안 12월 드래프트에 나갈 수 있고, 상위 8명은 구단이 지명할 수도 있습니다</div>
-        <div>· 래더에서 프로게이머를 이기면 그 팀에서 입단 테스트를 제의하기도 합니다</div>
+      <div className="space-y-3">
+        <div className="rounded-2xl bg-card border border-border p-4 text-sm text-muted-foreground space-y-1.5">
+          <div className="text-base font-black text-foreground">🏢 아직 프로가 아닙니다</div>
+          <div>· 매달 마지막 날 열리는 커리지 매치(32강 토너먼트)에서 우승하면 준프로 (능력치가 정말 높으면 구단이 입단 경기를 제의)</div>
+          <div>· 준프로는 2년 동안 12월 드래프트에 나가고, 한 달에 한 번 프로팀에 입단 테스트를 신청할 수 있습니다</div>
+          <div>· 준프로가 래더에서 프로게이머를 이기면 그 팀에서 입단 테스트를 제의하기도 합니다</div>
+          <div>· 프로의 문은 좁습니다: 대개 몇 년은 걸리고, 준프로가 돼도 입단까지 한참 걸릴 수 있어요</div>
+        </div>
+        {applyBox}
       </div>
     );
   }
@@ -535,18 +559,22 @@ function TeamView({ s, today }: { s: RookieState; today: RookieToday }) {
         </div>
       </div>
       <div className="rounded-xl bg-muted/40 border border-border p-2.5 text-[11.5px] text-muted-foreground space-y-0.5">
-        <div>· 매달 마지막 날 팀 내 승강전: 2군에서 내부 연습 성적이 좋으면(3승 이상) 1군 꼴찌와 3판 2선승</div>
-        <div>· 1군은 프로리그 기간(3~6월, 9~12월) 주말에 엔트리에 들면 출전 · 승리 수당 30만원</div>
+        <div>· 1군 승격: 2군에서 60일 이상 + 이번 달 내부 연습 {PRO_RULES.promoW}승 이상·승률 {PRO_RULES.promoRate * 100}% 이상 + 코치 신뢰도 {PRO_RULES.promoTrust} 이상이면 월말에 1군 꼴찌와 3판 2선승{today.pro && t.squad === 2 ? (today.pro.promoDue ? " · ✅ 이번 달 도전 가능" : ` · 지금 2군 ${today.pro.squadDays}일째`) : ""}</div>
+        <div>· 1군: 프로리그 기간(3~6월, 9~12월) 주말에 엔트리에 들면 출전(승리 수당 20만원), 못 들어도 벤치에 앉으면 관전·사기↑</div>
+        <div>· 엔트리·벤치에 오래 못 들면 사기·능력치가 떨어지고, {PRO_RULES.releaseMissed}경기일이 쌓이면 방출(FA) → {PRO_RULES.faDays}일 안에 새 팀을 못 찾으면 준프로</div>
+        <div>· 2군에서 1년 넘게 못 올라오고 신뢰도가 낮아도 방출될 수 있습니다</div>
+        {today.pro && t.squad === 1 && today.pro.missed > 0 && <div className={today.pro.missed >= PRO_RULES.warnMissed ? "text-rose-300" : "text-amber-200"}>· 지금 {today.pro.missed}경기일째 명단 제외 (방출까지 {PRO_RULES.releaseMissed - today.pro.missed})</div>}
       </div>
+      {t.bench && <button onClick={() => onWatch(t.bench!.game as PlayedGame, t.bench!.label)} className="w-full rounded-xl border border-sky-400/50 bg-sky-500/10 py-2 text-sm font-bold text-sky-200">🪑 {dateText(t.bench.day).slice(5)} 벤치에서 본 경기 다시 보기</button>}
       <SquadCard s={s} today={today} />
       {s.nego && <NegoBox s={s} />}
       <OfferList s={s} accept={team => accept.mutate({ team })} />
       <AgentCard s={s} />
       <div className="rounded-2xl bg-card border border-border p-3 space-y-1.5">
-        <div className="text-sm font-bold text-foreground">✈️ 다른 구단에 이적 요청 <span className="text-[10.5px] text-rose-300">구단에 들키면 벌금·사기 하락, 두 번 들키면 방출!</span></div>
+        <div className="text-sm font-bold text-foreground">✈️ 다른 구단에 이적 요청 <span className="text-[10.5px] text-rose-300">{today.pro?.transferIn ? `입단·이적 뒤 반년은 불가 (${today.pro.transferIn}일 남음)` : "구단에 들키면 벌금·사기 하락, 두 번 들키면 방출!"}</span></div>
         <div className="grid grid-cols-3 gap-1.5">
           {PRO_TEAMS.filter(x => x.id !== t.team).map(x => (
-            <button key={x.id} onClick={() => confirm(`${x.name}에 몰래 이적을 알아볼까요? (25% 확률로 구단에 들킴)`) && req.mutate({ team: x.id })} disabled={req.isPending || s.used >= DAY_SLOTS}
+            <button key={x.id} onClick={() => confirm(`${x.name}에 몰래 이적을 알아볼까요? (25% 확률로 구단에 들킴)`) && req.mutate({ team: x.id })} disabled={req.isPending || s.used >= DAY_SLOTS || !!today.pro?.transferIn}
               className="rounded-xl bg-muted/40 border border-border p-1.5 flex flex-col items-center disabled:opacity-40">
               <TeamLogo team={x} className="w-[46px] h-[27px]" />
               <span className="text-[10px] text-foreground truncate w-full text-center">{x.name}</span>

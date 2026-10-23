@@ -63,11 +63,11 @@ export function MentorView({ s, busy, onAct }: { s: RookieState; busy: boolean; 
   const pool = s.team ? PROS.filter(p => p.team === s.team!.team) : PROS.filter(p => p.team < 12);
   const mentors = [...pool].sort((a, b) => b.stats[stat] - a.stats[stat]).slice(0, 3);
   const price = s.team ? MENTOR_PRICE.teammate : MENTOR_PRICE.outside;
-  const doneToday = s.mentorDay === s.day;
+  const doneToday = s.mentorDay !== undefined && s.day - s.mentorDay < 7;
   return (
     <div className="space-y-3">
       <div className="text-sm text-muted-foreground">
-        프로 선수에게 과외를 받아 원하는 능력치를 집중적으로 올립니다 (오늘 하루 · {price}만원{s.team ? " · 같은 팀 선배라 싸게" : ""}).
+        프로 선수에게 과외를 받아 원하는 능력치를 집중적으로 올립니다 (일주일에 한 번 · 오늘 하루 · {price}만원{s.team ? " · 같은 팀 선배라 싸게" : ""}).
         성장 한계 근처에서도 조금은 오르고, 그만큼 가장 높은 다른 능력치가 깎여 균형이 바뀝니다.
       </div>
       <div className="grid grid-cols-4 gap-1.5">
@@ -90,7 +90,7 @@ export function MentorView({ s, busy, onAct }: { s: RookieState; busy: boolean; 
           </div>
         ))}
       </div>
-      {doneToday && <div className="text-xs text-amber-300 text-center">오늘은 이미 과외를 받았습니다</div>}
+      {doneToday && <div className="text-xs text-amber-300 text-center">과외는 일주일에 한 번 · {7 - (s.day - (s.mentorDay ?? s.day))}일 뒤 다시 받을 수 있습니다</div>}
       <div className="text-[11px] text-muted-foreground text-center">지금까지 과외 {s.counts.mentors}번</div>
     </div>
   );
