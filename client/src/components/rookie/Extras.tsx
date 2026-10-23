@@ -160,6 +160,17 @@ export function AchView({ s }: { s: RookieState }) {
 }
 
 // ── 랭킹 보드 ─────────────────────────────────────────────────
+/** 한국 시간으로 "오늘 14:05" · "어제 09:10" · "10/21" */
+function whenText(ms: number | null) {
+  if (ms === null) return "-";
+  const kst = (x: number) => new Date(x + 9 * 3_600_000);
+  const d = kst(ms), now = kst(Date.now());
+  const day = (x: Date) => x.toISOString().slice(0, 10);
+  const hm = d.toISOString().slice(11, 16);
+  if (day(d) === day(now)) return `오늘 ${hm}`;
+  if (day(d) === day(new Date(now.getTime() - 86_400_000))) return `어제 ${hm}`;
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+}
 export function RankView() {
   const [sort, setSort] = useState<RankSort>("ladder");
   const q = trpc.rookie.ranking.useQuery({ sort }, { staleTime: 30_000 });
@@ -184,6 +195,7 @@ export function RankView() {
             <div className="flex-1 min-w-0">
               <div className="text-sm font-bold text-foreground truncate">{r.name}{r.me ? " (나)" : ""} <span className="text-[10.5px] text-muted-foreground font-normal">{RACE_NAMES[r.race as keyof typeof RACE_NAMES]?.slice(0, 1)}</span></div>
               {r.title && <div className="text-[10px] text-amber-300 truncate">「{r.title}」</div>}
+              <div className="text-[10px] text-muted-foreground leading-snug">감독 {r.manager ?? "-"} · 접속 {whenText(r.lastSeen)} · 게임 {whenText(r.lastPlay)}</div>
             </div>
             <span className="text-sm font-black shrink-0" style={sort === "ladder" ? { color: GRADE_COLOR[ladderGrade(r.ladder)] } : undefined}>{val(r)}</span>
           </div>

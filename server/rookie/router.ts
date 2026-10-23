@@ -7,7 +7,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { rookieAllowed, rookieOpen, rookiePicks } from "../settings";
 import { getDb } from "../db";
-import { rookieCareers, rookieHof } from "../../drizzle/schema";
+import { rookieCareers, rookieHof, users } from "../../drizzle/schema";
 import { STAT_KEYS, type StatKey } from "@shared/gameConstants";
 import { ACH_BY_ID, CONCEPTS, DAILY_PICKS, kstDate, picksLeft, RANK_SORTS, TIERS, sumStats, type Concept, type RankSort, type RookieState, type Tier } from "@shared/rookie/model";
 import * as L from "./logic";
@@ -151,15 +151,22 @@ export const rookieRouter = router({
   ranking: p.input(z.object({ sort: z.enum(Object.keys(RANK_SORTS) as [RankSort, ...RankSort[]]) })).query(async ({ ctx, input }) => {
     const d = await db();
     const col = rookieCareers[input.sort];
-    const cols = { userId: rookieCareers.userId, name: rookieCareers.name, race: rookieCareers.race, status: rookieCareers.status, team: rookieCareers.team, ladder: rookieCareers.ladder, total: rookieCareers.total, fame: rookieCareers.fame, badges: rookieCareers.badges, title: rookieCareers.title };
-    const rows = await d.select(cols).from(rookieCareers).orderBy(desc(col), rookieCareers.id).limit(50);
-    const mine = await d.select(cols).from(rookieCareers).where(eq(rookieCareers.userId, ctx.user.id)).limit(1);
+    // 감독 이름 · 마지막 접속(로그인) · 마지막 게임(세이브가 마지막으로 바뀐 때)
+    const cols = {
+      userId: rookieCareers.userId, name: rookieCareers.name, race: rookieCareers.race, status: rookieCareers.status, team: rookieCareers.team, ladder: rookieCareers.ladder, total: rookieCareers.total, fame: rookieCareers.fame, badges: rookieCareers.badges, title: rookieCareers.title,
+      manager: users.managerName, lastSeen: users.lastSignedIn, lastPlay: rookieCareers.updatedAt,
+    };
+    const base = () => d.select(cols).from(rookieCareers).leftJoin(users, eq(users.id, rookieCareers.userId));
+    const rows = await base().orderBy(desc(col), rookieCareers.id).limit(50);
+    const mine = await base().where(eq(rookieCareers.userId, ctx.user.id)).limit(1);
     let myRank: number | null = null;
     if (mine[0]) {
       const [{ n }] = await d.select({ n: sql<number>`count(*)` }).from(rookieCareers).where(sql`${col} > ${mine[0][input.sort]}`);
       myRank = Number(n) + 1;
     }
-    const strip = ({ userId, ...r }: (typeof rows)[number]) => ({ ...r, me: userId === ctx.user.id });
+    // 시각은 숫자(ms)로: 세이브 시각은 DB 문자열(UTC)
+    const ms = (v: Date | string | null) => (v === null ? null : v instanceof Date ? v.getTime() : Date.parse(v.replace(" ", "T") + "Z"));
+    const strip = ({ userId, lastSeen, lastPlay, ...r }: (typeof rows)[number]) => ({ ...r, lastSeen: ms(lastSeen), lastPlay: ms(lastPlay), me: userId === ctx.user.id });
     return { rows: rows.map(strip), me: mine[0] ? strip(mine[0]) : null, myRank };
   }),
   clanFeedback: p.mutation(({ ctx }) => mutate(ctx.user, s => L.clanFeedback(s))),
