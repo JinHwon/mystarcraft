@@ -135,6 +135,8 @@ export const rookieRouter = router({
   buy: p.input(z.object({ key: z.string(), qty: z.number().int().min(1).max(99) })).mutation(({ ctx, input }) => mutate(ctx.user, s => L.buy(s, input.key, input.qty))),
   use: p.input(z.object({ key: z.string() })).mutation(({ ctx, input }) => mutate(ctx.user, s => L.useItem(s, input.key))),
   register: p.input(z.object({ id: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user, s => L.registerEvent(s, input.id))),
+  /** 준프로·FA: 프로팀에 입단 테스트 신청 (한 달에 한 번) */
+  applyTryout: p.input(z.object({ team: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user, s => L.applyTryout(s, input.team))),
   requestTransfer: p.input(z.object({ team: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user, s => L.requestTransfer(s, input.team))),
   acceptOffer: p.input(z.object({ team: z.number().int() })).mutation(({ ctx, input }) => mutate(ctx.user, s => L.acceptOffer(s, input.team))),
   negotiate: p.input(z.object({ ask: z.number().int(), clause: z.enum(["none", "promise", "bonus"]).optional() })).mutation(({ ctx, input }) => mutate(ctx.user, s => L.negotiate(s, input.ask, input.clause))),

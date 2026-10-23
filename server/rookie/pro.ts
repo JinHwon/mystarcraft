@@ -3,12 +3,13 @@
  */
 import { STAT_KEYS, STAT_LABELS, type StatKey } from "@shared/gameConstants";
 import { ORIG_TEAMS } from "@shared/career/originalData";
-import { RACES, SEMIPRO_DAYS, capOf, dateText, isMonthEnd, nickname, statsAround, sumStats, ymd, MENTOR_PRICE, dayOf, withTag, type Opp, type RookieState, type Stats } from "@shared/rookie/model";
+import { PRO_RULES, TRYOUT_MIN, RACES, SEMIPRO_DAYS, capOf, dateText, isMonthEnd, nickname, statsAround, sumStats, ymd, MENTOR_PRICE, dayOf, withTag, type Opp, type RookieState, type Stats } from "@shared/rookie/model";
 import { clanProIds } from "@shared/rookie/pros";
 import { notify, sendMail } from "./inbox";
 import { AGENTS, CLAUSES, LOAN_DAYS, PROMISE_BONUS, PROMISE_MIN, ROLES, TALK_COOLDOWN, agentOf, roleOf, type Clause, type Role } from "@shared/rookie/squad";
 import { formAvg } from "@shared/rookie/persona";
-import { PROS, PRO_TEAMS, RookieError, clampCond, clampStat, fan, gainExp, log, mark, pick, playOne, proOpp, prosOf, rand, randInt, randomMap, revealTrait, rivalOpp, series, useSlots, withCond, injured } from "./logic";
+import { PROS, PRO_TEAMS, RookieError, clampCond, clampStat, fan, gainExp, log, mark, pick, playOne, proOpp, prosOf, rand, randInt, randomMap, revealTrait, rivalOpp, series, useSlots, withCond, injured, nearMe } from "./logic";
+import { spectateSet } from "./clan";
 
 // ── 프로 구단 ─────────────────────────────────────────────────
 /** 팀 동료 (1군은 원작 선수, 2군은 연습생) */
@@ -32,6 +33,26 @@ export function playInternal(s: RookieState) {
   return g;
 }
 
+/** 2군 1위로 승강전에 나갈 수 있는지 (내부 연습 승 수·승률 + 코치 신뢰도) */
+export function promoReady(s: RookieState) {
+  const t = s.team;
+  if (!t || t.squad !== 2) return false;
+  const n = t.monthW + t.monthL;
+  return t.monthW >= PRO_RULES.promoW && n > 0 && t.monthW / n >= PRO_RULES.promoRate && trustOf(s) >= PRO_RULES.promoTrust;
+}
+
+/**
+ * 이번 달 승강전이 있는지
+ * - 2군: 2군 1위 조건(promoReady) + 2군에서 60일 이상
+ * - 1군: 코치 신뢰도가 45 미만이거나 오래 명단에 못 들면 2군 1위의 도전을 받음
+ */
+export function promoDue(s: RookieState) {
+  const t = s.team;
+  if (!t || t.loan) return false;
+  if (t.squad === 2) return promoReady(s) && s.day - (t.squadSince ?? t.joined) >= 60;
+  return trustOf(s) < 45 || (t.missed ?? 0) >= PRO_RULES.warnMissed;
+}
+
 /** 1군 꼴찌 (능력치 기준) */
 const weakestFirst = (team: number) => [...prosOf(team)].sort((a, b) => sumStats(a.stats) - sumStats(b.stats))[0];
 
@@ -41,15 +62,16 @@ export function playPromo(s: RookieState) {
   if (s.doneDays.includes(s.day)) throw new RookieError("이미 치렀습니다");
   const t = s.team;
   if (t.loan) throw new RookieError("임대 중에는 팀 내 승강전이 없습니다");
-  if (t.squad === 2 && !(t.monthW >= 3 && t.monthW > t.monthL)) throw new RookieError("이번 달 내부 연습에서 2군 1위를 해야 승강전에 나갈 수 있습니다 (3승 이상, 승이 패보다 많게)");
+  if (!promoDue(s)) throw new RookieError(t.squad === 2 ? `2군에서 60일 이상 지내고, 이번 달 내부 연습에서 2군 1위를 해야 승강전에 나갈 수 있습니다 (${PRO_RULES.promoW}승 이상 · 승률 ${PRO_RULES.promoRate * 100}% 이상 · 코치 신뢰도 ${PRO_RULES.promoTrust} 이상)` : "1군 자리가 안정적이라 이번 달 승강전은 없습니다");
+  if (t.squad === 2 && !promoReady(s)) throw new RookieError(`이번 달 내부 연습에서 2군 1위를 해야 승강전에 나갈 수 있습니다 (${PRO_RULES.promoW}승 이상 · 승률 ${PRO_RULES.promoRate * 100}% 이상 · 코치 신뢰도 ${PRO_RULES.promoTrust} 이상)`);
   useSlots(s, 3);
   s.doneDays.push(s.day);
-  const opp = t.squad === 2 ? proOpp(weakestFirst(t.team).id) : withCond({ name: withTag(nickname(), ORIG_TEAMS[t.team].short), real: "2군 1위", race: pick(RACES), stats: statsAround(randInt(5700, 6500)) } as Opp);
+  const opp = t.squad === 2 ? proOpp(weakestFirst(t.team).id) : withCond({ name: withTag(nickname(), ORIG_TEAMS[t.team].short), real: "2군 1위", race: pick(RACES), stats: statsAround(nearMe(s, randInt(5900, 6700), 0.95, 1.1)) } as Opp);
   const res = series(s, opp, 2, `${ORIG_TEAMS[t.team].short} 승강전`);
   for (const g of res.games) mark(s, "⬆️", g.winner === "a");
   addTrust(s, res.won ? 6 : -4);
-  if (t.squad === 2 && res.won) { gainExp(s, 250); t.squad = 1; t.salary = Math.max(t.salary, 120); s.fame += 30; log(s, "⬆️", `승강전 승리! 1군으로 올라갔습니다 (월급 ${t.salary}만원)`); fan(s, "promoUp", ORIG_TEAMS[t.team].short); }
-  else if (t.squad === 1 && !res.won) { t.squad = 2; t.salary = Math.min(t.salary, 60); log(s, "⬇️", `승강전 패배… 2군으로 내려갔습니다 (월급 ${t.salary}만원)`); fan(s, "promoDown"); }
+  if (t.squad === 2 && res.won) { gainExp(s, 250); t.squad = 1; t.squadSince = s.day; t.missed = 0; t.lastCalled = s.day; t.salary = Math.max(t.salary, 120); s.fame += 30; log(s, "⬆️", `승강전 승리! 1군으로 올라갔습니다 (월급 ${t.salary}만원)`); fan(s, "promoUp", ORIG_TEAMS[t.team].short); }
+  else if (t.squad === 1 && !res.won) { t.squad = 2; t.squadSince = s.day; t.salary = Math.min(t.salary, 60); log(s, "⬇️", `승강전 패배… 2군으로 내려갔습니다 (월급 ${t.salary}만원)`); fan(s, "promoDown"); }
   else log(s, t.squad === 1 ? "🛡️" : "💧", t.squad === 1 ? "승강전에서 1군 자리를 지켰습니다" : "승강전 패배, 2군에 남습니다");
   return { games: res.games, won: res.won, squad: t.squad };
 }
@@ -239,17 +261,26 @@ export function playProleague(s: RookieState, auto = false) {
   s.team!.seasonW = (s.team!.seasonW ?? 0) + (won ? 1 : 0);
   s.team!.seasonL = (s.team!.seasonL ?? 0) + (won ? 0 : 1);
   gainExp(s, won ? 40 : 10);
-  if (won) { s.money += 30; s.fame += 10; g.fx.money = 30; s.counts.proW++; }
+  if (won) { s.money += 20; s.fame += 8; g.fx.money = 20; s.counts.proW++; }
   // 계약 조건: 승리 수당
   const bonus = won ? s.team!.clause?.winBonus ?? 0 : 0;
-  if (bonus) { s.money += bonus; g.fx.money = 30 + bonus; }
+  if (bonus) { s.money += bonus; g.fx.money = 20 + bonus; }
   s.team!.monthPro = (s.team!.monthPro ?? 0) + 1;
+  s.team!.missed = 0; s.team!.lastCalled = s.day;
   trustFromRating(s, g.rating, true);
   if (s.team!.loan && g.rating !== undefined) { s.team!.loan.sum += g.rating; s.team!.loan.n++; }
   if (!opp.rival) fan(s, won ? "plWin" : "plLose", vsTeam.name);
   mark(s, "🏟️", won);
-  log(s, "🏟️", `프로리그 vs ${vsTeam.name} ${opp.name} ${won ? "승리! (승리 수당 30만원)" : "패배"}`);
+  log(s, "🏟️", `프로리그 vs ${vsTeam.name} ${opp.name} ${won ? "승리! (승리 수당 20만원)" : "패배"}`);
   return g;
+}
+
+/** 이적을 알아볼 수 없는 기간인지 (입단·이적 뒤 반년, 단 출전 약속 위반·오래 기회를 못 받았으면 풀림) */
+export function transferLocked(s: RookieState) {
+  const t = s.team;
+  if (!t) return false;
+  if ((s.flags?.freeTransfer ?? -1) >= s.day || (t.missed ?? 0) >= PRO_RULES.warnMissed) return false;
+  return s.day - t.joined < PRO_RULES.transferLock;
 }
 
 /** 다른 구단에 직접 이적 요청 (구단에 들키면 벌금·사기 하락, 두 번 들키면 방출) */
@@ -258,6 +289,7 @@ export function requestTransfer(s: RookieState, team: number) {
   if (!s.team) throw new RookieError("구단 소속이 아닙니다");
   if (team === s.team.team || !PRO_TEAMS.some(t => t.id === team)) throw new RookieError("이적할 구단을 고르세요");
   if (s.team.loan) throw new RookieError("임대 중에는 이적을 알아볼 수 없습니다");
+  if (transferLocked(s)) throw new RookieError(`입단·이적하고 ${PRO_RULES.transferLock}일이 지나야 이적을 알아볼 수 있습니다 (${s.team.joined + PRO_RULES.transferLock - s.day}일 남음 · 1군에서 오래 기회를 못 받으면 바로 가능)`);
   useSlots(s, 1);
   // 출전 보장 약속을 어긴 구단이면 들킬 걱정 없음, 에이전트가 있으면 덜 들킴
   const free = (s.flags?.freeTransfer ?? -1) >= s.day;
@@ -295,7 +327,7 @@ export function acceptOffer(s: RookieState, team: number) {
   const o = s.offers.find(x => x.team === team && x.until >= s.day);
   if (!o || (!s.team && !s.fa)) throw new RookieError("받은 이적 제안이 아닙니다");
   const from = s.team ? ORIG_TEAMS[s.team.team].name : "FA";
-  s.team = { team, squad: 2, joined: s.day, salary: o.salary, monthW: 0, monthL: 0, contractUntil: contractEnd(s.day), trust: 50 };
+  s.team = { team, squad: 2, joined: s.day, salary: o.salary, monthW: 0, monthL: 0, contractUntil: contractEnd(s.day), trust: 50, squadSince: s.day };
   s.status = "pro";
   s.offers = [];
   delete s.fa;
@@ -359,10 +391,10 @@ export function negotiate(s: RookieState, ask: number, clause: Clause = "none") 
     const from = ORIG_TEAMS[s.team.team].name;
     delete s.team;
     delete s.nego;
-    s.fa = { until: s.day + 30 };
+    s.fa = { until: s.day + PRO_RULES.faDays };
     s.morale = Math.max(0, s.morale - 10);
     s.titles.unshift(`${dateText(s.day)} ${from}와 협상 결렬 (FA)`);
-    log(s, "💔", `${from}와의 연봉 협상이 결렬되었습니다. FA가 되어 30일 안에 새 구단을 찾아야 합니다 (못 찾으면 준프로로)`);
+    log(s, "💔", `${from}와의 연봉 협상이 결렬되었습니다. FA가 되어 ${PRO_RULES.faDays}일 안에 새 구단을 찾아야 합니다 (못 찾으면 준프로로)`);
     fan(s, "fa");
     mark(s, "💔");
     return { result: "fa" as const };
@@ -403,12 +435,14 @@ export function mentorsFor(s: RookieState, stat: StatKey) {
 }
 /** 같은 팀 선배 · 명문 클랜(프로 소속) 이면 싸게 */
 export function mentorPrice(s: RookieState) { return s.team || (s.clan && clanProIds(s.clan.id).length > 0) ? MENTOR_PRICE.teammate : MENTOR_PRICE.outside; }
-/** 프로에게 과외: 고른 능력치를 집중적으로 (하루 한 번 · 행동 3) */
+/** 과외는 일주일에 한 번 */
+export const MENTOR_COOLDOWN = 7;
+/** 프로에게 과외: 고른 능력치를 집중적으로 (일주일에 한 번 · 행동 3) */
 export function mentor(s: RookieState, stat: StatKey, proId: number) {
   if (!STAT_KEYS.includes(stat)) throw new RookieError("배울 능력치를 고르세요");
   const m = mentorsFor(s, stat).find(x => x.id === proId);
   if (!m) throw new RookieError("과외 받을 선수를 고르세요");
-  if (s.mentorDay === s.day) throw new RookieError("과외는 하루 한 번만 받을 수 있습니다");
+  if (s.mentorDay !== undefined && s.day - s.mentorDay < MENTOR_COOLDOWN) throw new RookieError(`과외는 일주일에 한 번 받을 수 있습니다 (${MENTOR_COOLDOWN - (s.day - s.mentorDay)}일 뒤)`);
   const price = mentorPrice(s);
   if (s.money < price) throw new RookieError(`과외비가 부족합니다 (${price}만원)`);
   useSlots(s, 3);
@@ -418,9 +452,9 @@ export function mentor(s: RookieState, stat: StatKey, proId: number) {
   gainExp(s, 8);
   const me = sumStats(s.stats);
   // 한계 근처에서도 조금은 오르고, 대신 가장 높은 다른 능력치가 깎여 균형이 바뀜
-  const room = Math.max(0.3, Math.min(1, (capOf(s) - me) / 700));
+  const room = Math.max(0.2, Math.min(1, (capOf(s) - me) / 1200)) * (s.status === "pro" ? 0.7 : 1);
   const gap = Math.max(0, m.value - s.stats[stat]);
-  const gain = Math.max(2, Math.round((randInt(5, 9) + gap / 60) * room));
+  const gain = Math.max(1, Math.round((randInt(2, 5) + gap / 120) * room));
   const before = { ...s.stats };
   s.stats[stat] = clampStat(s.stats[stat] + gain);
   let over = sumStats(s.stats) - capOf(s);
@@ -433,4 +467,96 @@ export function mentor(s: RookieState, stat: StatKey, proId: number) {
   // 멘토가 내 성격 하나를 짚어 줌 (반은 확률)
   if (rand() < 0.5) revealTrait(s, `${m.name} 멘토`);
   return { mentor: m.name, delta, price };
+}
+
+// ── 벤치 · 방출 · 준프로 입단 신청 ──────────────────────────────
+/** 1군 벤치에 앉을 확률 (엔트리에 못 들었을 때, 역할별) */
+const BENCH_P: Record<Role, number> = { ace: 0.95, starter: 0.85, rotation: 0.6, backup: 0.3 };
+
+/**
+ * 프로리그 경기일인데 엔트리에 못 든 1군: 벤치에 들면 관전(다시 보기)·사기↑,
+ * 아니면 명단 제외가 쌓여 사기·능력치가 떨어지고 끝내 방출
+ */
+export function benchDay(s: RookieState) {
+  const t = s.team;
+  if (!t || t.squad !== 1 || t.loan || !proleagueDay(s.day) || s.doneDays.includes(s.day)) return;
+  if (injured(s)) return;
+  const role = myRole(s)!;
+  const p = Math.min(1, BENCH_P[role] + ((t.promiseUntil ?? -1) >= s.day || t.clause?.kind === "promise" ? 0.2 : 0));
+  if (rand() < p) {
+    t.missed = 0; t.lastCalled = s.day;
+    s.morale = Math.min(100, s.morale + 2);
+    addTrust(s, 0.5);
+    const others = PRO_TEAMS.filter(x => x.id !== t.team);
+    const vs = others[s.day % others.length];
+    const mate = proOpp(pick(prosOf(t.team)).id), foe = proOpp(pick(prosOf(vs.id)).id);
+    const label = `프로리그 vs ${vs.name} (벤치 관전)`;
+    const game = spectateSet(mate, foe, randomMap(), label, true, false);
+    t.bench = { day: s.day, label, game };
+    log(s, "🪑", `벤치에서 동료 ${mate.name} vs ${foe.name} 경기를 지켜봤습니다 (${game.winner === "a" ? "동료 승리" : "동료 패배"} · 사기 +2 · 구단 화면에서 다시 보기)`);
+    return;
+  }
+  t.missed = (t.missed ?? 0) + 1;
+  const m = t.missed;
+  s.morale = Math.max(0, s.morale - 1);
+  // 오래 기회를 못 받으면 감이 떨어짐
+  if (m >= PRO_RULES.warnMissed && rand() < 0.3) { const k = pick([...STAT_KEYS]); s.stats[k] = clampStat(s.stats[k] - 1); }
+  if (m === PRO_RULES.warnMissed) {
+    s.morale = Math.max(0, s.morale - 5);
+    sendMail(s, { from: "agent", sender: agentOf(s)?.name ?? "선배 선수", title: "벤치에도 못 들고 있어요", body: `프로리그 ${m}경기째 엔트리·벤치에 들지 못했습니다. 이대로면 방출될 수 있어요. 감독 면담으로 기회를 요구하거나, 지금은 이적을 바로 알아볼 수 있습니다.` });
+    log(s, "⚠️", `프로리그 ${m}경기째 명단에서 빠졌습니다 (사기 -5 · 이적 요청 가능)`);
+  }
+  if (m >= PRO_RULES.releaseMissed) release(s, "오랫동안 명단에 들지 못해");
+}
+
+/** 방출 → FA (기간 안에 새 구단을 못 찾으면 준프로) */
+export function release(s: RookieState, why: string) {
+  const t = s.team;
+  if (!t) return;
+  const from = ORIG_TEAMS[t.team].name;
+  delete s.team;
+  delete s.nego;
+  s.offers = [];
+  s.fa = { until: s.day + PRO_RULES.faDays };
+  s.morale = Math.max(0, s.morale - 12);
+  s.titles.unshift(`${dateText(s.day)} ${from} 방출 (FA)`);
+  sendMail(s, { from: "coach", sender: `${ORIG_TEAMS[t.team].short} 사무국`, title: "방출 통보", body: `${why} 구단과의 계약을 끝내기로 했습니다. ${PRO_RULES.faDays}일 안에 다른 구단을 찾지 못하면 준프로로 돌아갑니다. 구단 화면에서 다른 팀에 연락해 보세요.` });
+  log(s, "💔", `${from}에서 방출되었습니다 (${why}) — FA가 되어 ${PRO_RULES.faDays}일 안에 새 구단을 찾아야 합니다`);
+  fan(s, "fa");
+  mark(s, "💔");
+}
+
+/** 매달 1일: 2군에 너무 오래 있고 신뢰도가 낮으면 방출 */
+export function squadReview(s: RookieState) {
+  const t = s.team;
+  if (!t || t.squad !== 2 || t.loan) return;
+  const since = t.squadSince ?? t.joined;
+  if (s.day - since >= PRO_RULES.squad2Max && trustOf(s) < 45) release(s, "2군에서 1년 넘게 올라오지 못해");
+  else if (s.day - since >= PRO_RULES.squad2Max - 60 && trustOf(s) < 50 && ymd(s.day).d === 1) {
+    sendMail(s, { from: "coach", sender: `${ORIG_TEAMS[t.team].short} 2군 코치`, title: "이대로면 어렵다", body: "2군 생활이 길어지고 있다. 이번 시즌 안에 1군에 올라오지 못하면 구단도 결정을 내릴 수밖에 없다." });
+  }
+}
+
+/**
+ * 준프로·FA가 직접 프로팀에 입단 테스트를 신청 (2주에 한 번).
+ * 능력치·인지도가 높을수록 받아 줄 확률이 높고, 받아 주면 2주 안에 입단 테스트(3판 2선승)
+ */
+export function applyTryout(s: RookieState, team: number) {
+  if (s.team) throw new RookieError("이미 구단 소속입니다");
+  if (s.status === "amateur") throw new RookieError("입단 테스트 신청은 준프로(커리지 매치 우승)부터 할 수 있습니다");
+  if (!PRO_TEAMS.some(t => t.id === team)) throw new RookieError("구단을 고르세요");
+  if (s.tryouts.some(t => t.team === team)) throw new RookieError("이미 그 구단의 입단 테스트가 잡혀 있습니다");
+  const last = s.flags?.applyDay ?? -999;
+  if (s.day - last < PRO_RULES.applyCooldown) throw new RookieError(`입단 테스트 신청은 ${PRO_RULES.applyCooldown}일에 한 번 할 수 있습니다 (${last + PRO_RULES.applyCooldown - s.day}일 뒤)`);
+  (s.flags ??= {}).applyDay = s.day;
+  const total = sumStats(s.stats);
+  const p = Math.max(0.03, Math.min(0.3, (total - TRYOUT_MIN - 200) / 3000 + s.fame / 6000 + (s.fa ? 0.08 : 0)));
+  if (rand() < p) {
+    s.tryouts.push({ team, until: s.day + 14, from: "입단 테스트 신청" });
+    notify(s, "agent", `${ORIG_TEAMS[team].short} 사무국`, "입단 테스트 기회", `${ORIG_TEAMS[team].name}에서 입단 테스트를 보자고 합니다. 2주 안에 오늘 할 일에서 입단 테스트를 치르세요 (2군 선수와 3판 2선승).`);
+    log(s, "📝", `${ORIG_TEAMS[team].name}이(가) 입단 테스트 신청을 받아 줬습니다! (2주 안에)`);
+    return { result: "accepted" as const };
+  }
+  log(s, "📝", `${ORIG_TEAMS[team].name}: "지금은 테스트를 볼 자리가 없습니다" (${PRO_RULES.applyCooldown}일 뒤 다시 신청 가능)`);
+  return { result: "rejected" as const };
 }

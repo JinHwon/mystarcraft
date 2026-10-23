@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ymd, rollStats, sumStats, isMonthEnd, courageDays, draftDay, DAY_SLOTS, STAT_CAP, ladderGrade, capOf, mapUnd } from "@shared/rookie/model";
+import { TIERS, TIER_ORDER, ymd, rollStats, sumStats, isMonthEnd, courageDays, draftDay, DAY_SLOTS, STAT_CAP, ladderGrade, capOf, mapUnd } from "@shared/rookie/model";
 import * as L from "./logic";
 
 /** 대진표를 끝까지 (결과만) 치르고 순위를 돌려줌 */
@@ -12,6 +12,8 @@ const runBracket = (s: ReturnType<typeof L.newRookie>) => {
   }
   throw new Error("대진표가 끝나지 않음");
 };
+/** 흐름 확인용: 큰 경기 상대가 내 실력에 맞춰 강해지지 않게 (fn 동안만) */
+const noScale = <T>(fn: () => T): T => { L.OPP_SCALE.on = false; try { return fn(); } finally { L.OPP_SCALE.on = true; } };
 const mk = () => L.newRookie({ name: "테스트", race: "zerg", concept: "control", stats: rollStats("control") });
 /** 래더 조건 채우기 */
 const veteran = <T extends { record: { w: number; l: number }; stats: Record<string, number> }>(s: T) => { s.record.w = Math.max(s.record.w, 10); for (const k of Object.keys(s.stats)) s.stats[k] = Math.max(s.stats[k], 400); return s; };
@@ -56,7 +58,8 @@ describe("선수 키우기", () => {
       for (let i = 0; i < 8 && s.used < DAY_SLOTS; i++) {
         // 지치면 쉼 (실제 자동 진행처럼 피로 60 이상이면 휴식)
         if (s.cond < 50 || (s.fatigue ?? 0) >= 60) { s.cond += 12; s.fatigue = Math.max(0, (s.fatigue ?? 0) - 10); s.used++; }
-        else { const tot = sumStats(s.stats); L.playLobby(s, tot > 4400 ? "elite" : tot > 3700 ? "high" : tot > 3100 ? "mid" : tot > 2600 ? "low" : "newbie", 0); }
+        // 내 능력치에 맞는 방 (방 평균이 내 능력치 이하인 곳 중 가장 높은 방 — 너무 센 방만 고르면 지는 게 많아 떨어짐)
+        else { const tot = sumStats(s.stats); L.playLobby(s, [...TIER_ORDER].reverse().find(x => (TIERS[x].range[0] + TIERS[x].range[1]) / 2 <= tot) ?? "newbie", 0); }
       }
       L.nextDay(s);
     }
@@ -79,7 +82,7 @@ describe("선수 키우기", () => {
       // 커리지 매치 참가자는 4,300~5,600 (흐름 확인용으로 넉넉히 강하게)
       s.level = 30;
       for (const k of Object.keys(s.stats) as Array<keyof typeof s.stats>) s.stats[k] = 700;
-      L.act(s, { kind: "courage" });
+      noScale(() => L.act(s, { kind: "courage" }));
       expect(s.bracket?.kind).toBe("courage");
       const r = runBracket(s);
       won = r.place === 1;
@@ -89,7 +92,7 @@ describe("선수 키우기", () => {
     expect(won).toBe(true);
     expect(s.status).toBe("semipro");
     s.day = draftDay(2026); s.used = 0; s.cond = 100;
-    const d = L.playDraft(s);
+    const d = noScale(() => L.playDraft(s));
     expect(d.rank).toBeGreaterThanOrEqual(1);
     expect(d.games).toHaveLength(4);
   }, 60_000);
@@ -118,12 +121,15 @@ describe("선수 키우기", () => {
     let joined = false;
     for (let i = 0; i < 20 && !joined; i++) {
       s.tryouts = [{ team: 3, until: s.day + 5, from: "test" }]; s.used = 0; s.cond = 100;
-      joined = L.playTryout(s, 3).won;
+      joined = noScale(() => L.playTryout(s, 3).won);
     }
     expect(joined).toBe(true);
     expect(s.team?.squad).toBe(2);
     L.playInternal(s);
     expect((s.team!.monthW + s.team!.monthL)).toBe(1);
+    // 입단 직후 반년은 이적을 알아볼 수 없음
+    expect(() => L.requestTransfer(s, 5)).toThrow(/일이 지나야/);
+    s.day += 181;
     let released = false;
     for (let i = 0; i < 60 && !released; i++) {
       s.used = 0;
@@ -176,7 +182,7 @@ describe("선수 키우기", () => {
     expect(s.form).toBeUndefined();
   });
 
-  it("멘토 과외: 돈을 내고 고른 능력치가 오름, 하루 한 번", () => {
+  it("멘토 과외: 돈을 내고 고른 능력치가 오름, 일주일에 한 번", () => {
     const s = mk();
     s.money = 100;
     const m = L.mentorsFor(s, "control")[0];
@@ -184,7 +190,9 @@ describe("선수 키우기", () => {
     L.mentor(s, "control", m.id);
     expect(s.stats.control).toBeGreaterThan(before);
     expect(s.money).toBe(80);
-    expect(() => L.mentor(s, "control", m.id)).toThrow(/하루/);
+    expect(() => L.mentor(s, "control", m.id)).toThrow(/일주일/);
+    s.day += 7; s.used = 0;
+    expect(() => L.mentor(s, "control", m.id)).not.toThrow();
   });
 
   it("팬카페: 좋은 일이 있으면 글이 올라오고 회원이 늚", () => {
@@ -215,7 +223,7 @@ describe("선수 키우기", () => {
     expect(s.team).toBeUndefined();
     expect(s.fa).toBeDefined();
     s.offers = [];
-    for (let d = 0; d < 32 && s.fa; d++) { L.nextDay(s); s.offers = []; }
+    for (let d = 0; d < 62 && s.fa; d++) { L.nextDay(s); s.offers = []; }
     expect(s.status).toBe("semipro");
   });
 
@@ -840,7 +848,7 @@ describe("몸 관리 · 준프로 압박 · 연말 결산 · 라이벌 이야기
     for (let i = 0; i < 40 && !won; i++) {
       s.day = day; s.doneDays = []; s.status = "amateur"; s.cond = 100; s.fatigue = 0; delete s.injury;
       for (const k of Object.keys(s.stats) as Array<keyof typeof s.stats>) s.stats[k] = 700;
-      L.act(s, { kind: "courage" });
+      noScale(() => L.act(s, { kind: "courage" }));
       won = runBracket(s).place === 1;
     }
     expect(s.milestones?.semipro).toBe(day);
@@ -902,16 +910,124 @@ describe("실제 하루 선택 제한 · 이적 월급", () => {
     for (const k of Object.keys(s.stats) as Array<keyof typeof s.stats>) s.stats[k] = 900;
     s.level = 60;
     s.team = { team: 0, squad: 1, joined: 0, salary: 300, monthW: 0, monthL: 0, contractUntil: 99999 };
+    s.day = 400;
     const mv = L.marketValue(s);
     let maxOffer = 0;
     for (let i = 0; i < 40; i++) {
       s.offers = []; s.flags = {}; s.used = 0; s.status = "pro";
-      if (!s.team || s.team.caught) s.team = { team: 0, squad: 1, joined: 0, salary: 300, monthW: 0, monthL: 0, contractUntil: 99999 };
+      if (!s.team || s.team.caught || s.day - s.team.joined < 181) s.team = { team: 0, squad: 1, joined: 0, salary: 300, monthW: 0, monthL: 0, contractUntil: 99999 };
       const r = L.requestTransfer(s, 1 + (i % 10));
       if (r.result === "offer") { maxOffer = Math.max(maxOffer, r.salary); L.acceptOffer(s, s.offers.at(-1)!.team); s.team!.squad = 1; }
       s.day += 20;
     }
     expect(maxOffer).toBeGreaterThan(0);
     expect(maxOffer).toBeLessThanOrEqual(Math.round(mv * 1.5));
+  });
+});
+
+describe("프로 생활 · 성장 개편", () => {
+  const pro = (squad: 1 | 2 = 1) => {
+    const s = mk();
+    s.status = "pro"; s.level = 40;
+    for (const k of Object.keys(s.stats) as Array<keyof typeof s.stats>) s.stats[k] = 700;
+    s.day = 400;
+    s.team = { team: 2, squad, joined: 0, salary: 120, monthW: 0, monthL: 0, contractUntil: 99999, trust: 50, squadSince: 0 };
+    return s;
+  };
+
+  it("구단 소속 프로는 공방·래더·방송·아마추어 대회를 할 수 없음", () => {
+    const s = pro();
+    for (const kind of ["lobby", "ladder", "stream"] as const) expect(() => L.act(s, { kind } as L.Activity)).toThrow(/프로게이머는/);
+    s.events = [{ id: 999, name: "테스트 대회", day: s.day + 3, size: 8, prize: [10, 5, 2], level: "newbie" }];
+    expect(() => L.registerEvent(s, 999)).toThrow(/아마추어 대회/);
+  });
+
+  it("1군이 엔트리·벤치에 오래 못 들면 경고 → 방출(FA) → 기간이 지나면 준프로", async () => {
+    const { PRO_RULES } = await import("@shared/rookie/model");
+    const s = pro(1);
+    s.team!.trust = 0; // 역할: 후보
+    // 프로리그 경기일마다 벤치 판정: 방출 직전까지 쌓인 상태에서 한 번 더 못 들면 방출
+    let guard = 0;
+    while (s.team && guard++ < 2000) {
+      if (L.proleagueDay(s.day)) { s.team.missed = PRO_RULES.releaseMissed - 1; L.benchDay(s); }
+      s.day++;
+    }
+    expect(s.team).toBeUndefined();
+    expect(s.fa).toBeDefined();
+    expect((s.inbox ?? []).some(m => m.title === "방출 통보")).toBe(true);
+    s.offers = [];
+    for (let d = 0; d <= PRO_RULES.faDays + 1 && s.fa; d++) { L.nextDay(s); s.offers = []; }
+    expect(s.status).toBe("semipro");
+  });
+
+  it("벤치에 들면 관전 경기가 남고 사기가 오름", () => {
+    const s = pro(1);
+    s.team!.trust = 90;
+    let benched = false;
+    for (let i = 0; i < 400 && !benched; i++) {
+      s.day++;
+      if (!L.proleagueDay(s.day)) continue;
+      const m = s.morale;
+      L.benchDay(s);
+      if (s.team!.bench?.day === s.day) { benched = true; expect(s.morale).toBeGreaterThanOrEqual(Math.min(100, m)); }
+    }
+    expect(benched).toBe(true);
+    expect((s.team!.bench!.game as { timeline?: unknown }).timeline).toBeDefined();
+  });
+
+  it("2군 승강전: 60일 이상 + 8승·승률 60%·신뢰도 55 이상이어야", () => {
+    const s = pro(2);
+    s.team!.squadSince = s.day - 10;
+    s.team!.monthW = 10; s.team!.monthL = 2; s.team!.trust = 70;
+    expect(L.promoDue(s)).toBe(false);
+    s.team!.squadSince = s.day - 61;
+    expect(L.promoDue(s)).toBe(true);
+    s.team!.trust = 40;
+    expect(L.promoDue(s)).toBe(false);
+    s.team!.trust = 70; s.team!.monthL = 9;
+    expect(L.promoDue(s)).toBe(false);
+  });
+
+  it("입단 뒤 반년은 이적 요청 불가 · 준프로는 한 달에 한 번 입단 테스트 신청", () => {
+    const s = pro(2);
+    s.team!.joined = s.day - 10;
+    expect(L.transferLocked(s)).toBe(true);
+    expect(() => L.requestTransfer(s, 5)).toThrow(/일이 지나야/);
+    const a = mk();
+    expect(() => L.applyTryout(a, 3)).toThrow(/준프로/);
+    a.status = "semipro";
+    L.applyTryout(a, 3);
+    expect(() => L.applyTryout(a, 4)).toThrow(/한 번/);
+  });
+
+  it("클랜은 가입·탈퇴 뒤 60일 동안 못 옮김 · 포션은 사흘에 한 번이고 한계를 못 넘음", async () => {
+    const s = mk();
+    const { CLANS } = await import("@shared/rookie/model");
+    const c = CLANS[0];
+    // 입단 조건은 다 채움
+    s.record.w = 5000; s.ladder.w = 500; s.ladder.best = 3000;
+    for (const k of Object.keys(s.stats) as Array<keyof typeof s.stats>) s.stats[k] = 900;
+    expect(L.clanLocked(s, c.id)).toBeNull();
+    s.flags = { clanLeft: s.day - 5 };
+    expect(L.clanLocked(s, c.id)).toMatch(/옮길 수 있습니다/);
+    s.day += 60;
+    expect(L.clanLocked(s, c.id)).toBeNull();
+    s.money = 10_000;
+    L.buy(s, "p_att", 3);
+    L.useItem(s, "p_att");
+    expect(() => L.useItem(s, "p_att")).toThrow(/일에 한 번/);
+    for (const k of Object.keys(s.stats) as Array<keyof typeof s.stats>) s.stats[k] = 600;
+    s.day += 3;
+    L.useItem(s, "p_att");
+    expect(sumStats(s.stats)).toBeLessThanOrEqual(capOf(s));
+  });
+
+  it("지는 일이 많아도 최고 기록의 80% 아래로는 잘 안 떨어짐 (나이 제외)", () => {
+    const s = mk();
+    for (const k of Object.keys(s.stats) as Array<keyof typeof s.stats>) s.stats[k] = 500;
+    s.level = 30;
+    s.flags = { peak: 4000 };
+    for (let i = 0; i < 300; i++) { s.cond = 100; s.morale = 60; s.used = 0; delete s.form; L.playOne(s, { name: "x", race: "zerg", stats: Object.fromEntries(Object.keys(s.stats).map(k => [k, 700])) as typeof s.stats, cond: 100 }, i % 10, "공방", false); }
+    expect(sumStats(s.stats)).toBeGreaterThanOrEqual(3200 - 60);
   });
 });

@@ -142,15 +142,15 @@ export function TodayPanel({ s, today, busy, onAct, onLadderMaps, onOpen }: {
   const lock = busy || left === 0;
   const hurt = today.body.injury ? `부상 중 (${today.body.injury.left}일)` : undefined;
   const cards: Card[] = [
-    { key: "lobby", icon: "🎮", label: "공방 연습", desc: pref ? `${TIERS[pref.tier].name}방 · ${ORIG_MAPS[pref.mapId]?.[0]} · ${DAY_GAMES}판` : `방·맵 고르기 · ${DAY_GAMES}판`, onClick: () => setSheet("lobby") },
-    { key: "ladder", icon: "⚔️", label: "래더", desc: today.ladderLock ?? `${ladderGrade(s.ladder.score)} · ${s.ladder.score}점 · 이번 달 맵 보기`, lock: today.ladderLock ?? undefined, onClick: () => setSheet("ladder") },
+    { key: "lobby", icon: "🎮", label: "공방 연습", hide: !!s.team, desc: pref ? `${TIERS[pref.tier].name}방 · ${ORIG_MAPS[pref.mapId]?.[0]} · ${DAY_GAMES}판` : `방·맵 고르기 · ${DAY_GAMES}판`, onClick: () => setSheet("lobby") },
+    { key: "ladder", icon: "⚔️", label: "래더", hide: !!s.team, desc: today.ladderLock ?? `${ladderGrade(s.ladder.score)} · ${s.ladder.score}점 · 이번 달 맵 보기`, lock: today.ladderLock ?? undefined, onClick: () => setSheet("ladder") },
     { key: "clan", icon: "🛡️", label: "클랜 연습", desc: s.clan ? `[${CLAN_BY_ID[s.clan.id]?.tag}] ${today.clanRank}위 · ${DAY_GAMES}판` : "", hide: !s.clan, onClick: () => onAct({ kind: "clan" }) },
     { key: "internal", icon: "🏢", label: "팀 내부 연습", desc: s.team ? `이번 달 ${s.team.monthW}승 ${s.team.monthL}패 · ${DAY_GAMES}판` : "", hide: !s.team, onClick: () => onAct({ kind: "internal" }) },
     { key: "friendly", icon: "🤝", label: "친선경기", desc: s.clan ? `친한 클랜 [${CLAN_BY_ID[clanRelations(s.clan.id).friend]?.tag}] · ${DAY_GAMES}판` : "", hide: !s.clan, onClick: () => onAct({ kind: "friendly" }) },
-    { key: "stream", icon: "📺", label: "방송", desc: "별풍선 · 인지도", onClick: () => onAct({ kind: "stream" }) },
+    { key: "stream", icon: "📺", label: "방송", desc: "별풍선 · 인지도", hide: !!s.team, onClick: () => onAct({ kind: "stream" }) },
     { key: "rest", icon: "💤", label: "휴식", desc: today.body.fatigue >= 40 ? `피로 ${today.body.fatigue} 풀기 · 컨디션 회복` : s.cond >= 100 ? "컨디션 가득 참" : "컨디션 크게 회복", onClick: () => onAct({ kind: "rest" }) },
     { key: "work", icon: "💼", label: "아르바이트", desc: "컨디션을 쓰고 돈 벌기", hide: pro, onClick: () => onAct({ kind: "work" }) },
-    { key: "mentor", icon: "📚", label: "멘토 과외", desc: s.mentorDay === s.day ? "오늘은 받았음" : "프로에게 능력치 배우기", onClick: () => onOpen("mentor") },
+    { key: "mentor", icon: "📚", label: "멘토 과외", desc: s.mentorDay !== undefined && s.day - s.mentorDay < 7 ? `${7 - (s.day - s.mentorDay)}일 뒤 가능` : "프로에게 능력치 배우기", onClick: () => onOpen("mentor") },
   ];
   return (
     <div className="space-y-2">
@@ -177,6 +177,7 @@ export function TodayPanel({ s, today, busy, onAct, onLadderMaps, onOpen }: {
       {todayEvents.map(e => <EventCard key={e.id} icon="🏆" title={`오늘은 ${e.name}!`} desc={`${e.size}강 · 대진표를 보고 한 판씩 · 우승 ${e.prize[0]}만원`} disabled={lock} onClick={() => onAct({ kind: "event", id: e.id })} />)}
       {!s.team && s.tryouts.map(t => <EventCard key={t.team} icon="📝" title={`${ORIG_TEAMS[t.team].name} 입단 테스트`} desc={`${t.from} · ${dateText(t.until).slice(5)}까지 · 3판 2선승`} action="테스트" disabled={lock} onClick={() => onAct({ kind: "tryout", team: t.team })} />)}
       {(todayEvents.length > 0 || today.todayEvent) && <div className="text-[10.5px] text-rose-300 px-1">⚠️ 다른 활동을 고르면 오늘 이벤트는 불참 처리됩니다</div>}
+      {s.team && <div className="text-[10.5px] text-muted-foreground px-1">🏢 프로게이머는 팀 연습·클랜 활동·휴식 위주로 생활합니다 (공방·래더·방송·아마추어 대회 불가)</div>}
       <div className="grid grid-cols-2 gap-1.5">
         {cards.filter(c => !c.hide).map(c => ({ ...c, lock: c.lock ?? (hurt && ["lobby", "ladder", "clan", "internal", "friendly"].includes(c.key) ? hurt : undefined) })).map(c => (
           <button key={c.key} onClick={c.onClick} disabled={lock || (!!hurt && c.lock === hurt)} className="rounded-2xl bg-card border border-border px-3 py-2.5 text-left disabled:opacity-40 active:scale-[0.98]">

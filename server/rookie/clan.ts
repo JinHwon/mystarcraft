@@ -9,10 +9,12 @@ import { simulateSet } from "../gameSimulation";
 import { mapAdvantage } from "../career/core";
 import { clanMembers } from "@shared/rookie/pros";
 import { notify, pressConference } from "./inbox";
-import { PROS, ROSTER_VER, RookieError, aiWins, clampCond, clampStat, endDay, fan, gainExp, log, mark, oppForm, pick, playOne, proOpp, raceGrowth, rand, randomMap, revealTrait, series, setQuiet, useSlots, withCond } from "./logic";
+import { PROS, ROSTER_VER, RookieError, aiWins, clampCond, clampStat, endDay, fan, gainExp, log, mark, oppForm, pick, playOne, proOpp, raceGrowth, rand, randomMap, revealTrait, series, setQuiet, useSlots, withCond, proScale } from "./logic";
 import type { PlayedGame, Snap } from "./logic";
 
 // ── 클랜 ─────────────────────────────────────────────────────
+/** 클랜 가입·탈퇴 뒤 다른 클랜으로 옮기기까지 (일) */
+export const CLAN_MOVE_DAYS = 60;
 /** 클랜원 명단 (프로는 원작 선수 정보로 채움) */
 export function rosterOf(id: string): ClanMember[] {
   return clanMembers(id);
@@ -23,9 +25,13 @@ export function clanLocked(s: RookieState, id: string): string | null {
   if (!c) return "없는 클랜입니다";
   const games = s.record.w + s.record.l, lg = s.ladder.w + s.ladder.l;
   if (games < c.req.games) return `전체 ${c.req.games}경기 이상 (지금 ${games})`;
-  if (lg < c.req.ladderGames) return `래더 ${c.req.ladderGames}경기 이상 (지금 ${lg})`;
-  if (c.req.ladder && s.ladder.best < c.req.ladder) return `래더 최고 ${c.req.ladder}점 이상 (지금 ${s.ladder.best})`;
+  // 구단 소속 프로는 래더를 하지 않으므로 래더 조건은 없음
+  if (!s.team && lg < c.req.ladderGames) return `래더 ${c.req.ladderGames}경기 이상 (지금 ${lg})`;
+  if (!s.team && c.req.ladder && s.ladder.best < c.req.ladder) return `래더 최고 ${c.req.ladder}점 이상 (지금 ${s.ladder.best})`;
   if (sumStats(s.stats) < c.req.total) return `능력치 합 ${c.req.total.toLocaleString()} 이상`;
+  // 클랜을 자주 옮기지 못하게: 가입·탈퇴 뒤 60일
+  const moved = Math.max(s.flags?.clanLeft ?? -999, s.clan?.joined ?? -999);
+  if (s.day - moved < CLAN_MOVE_DAYS) return `클랜은 가입·탈퇴하고 ${CLAN_MOVE_DAYS}일이 지나야 옮길 수 있습니다 (${moved + CLAN_MOVE_DAYS - s.day}일 뒤)`;
   const tried = s.clanTried[id];
   if (tried !== undefined && s.day - tried < CLAN_RETRY_DAYS) return `${CLAN_RETRY_DAYS - (s.day - tried)}일 뒤 다시 도전할 수 있습니다`;
   return null;
@@ -67,6 +73,7 @@ export function leaveClan(s: RookieState) {
   }
   log(s, "🚪", `클랜 ${c?.name}에서 탈퇴했습니다${successor ? ` — 부길드장 ${successor} 님이 새 길드장이 되었습니다` : ""}`);
   delete s.clan;
+  (s.flags ??= {}).clanLeft = s.day;
   return { ok: true, successor };
 }
 /** 클랜 연습 상대: 클랜 안에서 나와 비슷하거나 더 강한 쪽을 자주 만남 (높은 단계 클랜일수록 강한 상대) */
@@ -294,14 +301,15 @@ export function warEntrySuggest(s: RookieState): string[] {
   return [...s.clan.members, meMember(s)].sort((a, b) => strengthOf(b) - strengthOf(a)).slice(0, WAR_SETS).map(m => m.name);
 }
 /** AI 끼리의 세트를 중계로 볼 수 있는 경기로 */
-function spectateSet(a: Opp, b: Opp, mapId: number, label: string, broadcast: boolean): PlayedGame {
+export function spectateSet(a: Opp, b: Opp, mapId: number, label: string, broadcast: boolean, online = true): PlayedGame {
   const m = mapView(mapId);
+  const [sa, sb] = proScale(oppForm(a), oppForm(b));
   const r = simulateSet(
-    { id: 1, name: a.name, race: a.race, stats: oppForm(a), fatigue: 100 },
-    { id: 2, name: b.name, race: b.race, stats: oppForm(b), fatigue: 100 },
+    { id: 1, name: a.name, race: a.race, stats: sa, fatigue: 100 },
+    { id: 2, name: b.name, race: b.race, stats: sb, fatigue: 100 },
     mapAdvantage(mapId, a.race, b.race),
     { rushDistance: m.rush / 2, resources: m.res / 2, complexity: m.complexity / 2 },
-    false, broadcast, true,
+    false, broadcast, online,
   );
   return { left: a, mapId, winner: r.winnerId === 1 ? "a" : "b", duration: r.duration, timeline: r.timeline, opp: b, fx: { stats: {}, cond: [0, 0] }, label };
 }
@@ -354,7 +362,7 @@ function finishWar(s: RookieState, extraNote?: string, end = true) {
   gainExp(s, played ? (myWon ? 50 : 15) : 6);
   if (win) {
     s.fame += my.tier + (played ? 2 : 0);
-    const pay = 3 * my.tier + (myWon ? 5 : 0);
+    const pay = my.tier + (myWon ? 3 : 0);
     s.money += pay;
     for (const m of w.my) if (m.name !== s.name) addFriend(s, m.name, played ? 3 : 1);
     fan(s, "plWin", `클랜전 vs ${oc.name}`);

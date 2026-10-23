@@ -87,7 +87,24 @@ export const INJURY_PERF = 0.88;
 export const fatiguePerf = (f: number | undefined) => 1 - Math.max(0, (f ?? 0) - 50) * 0.002;
 export const INJURIES = ["손목 통증", "어깨 결림", "허리 통증", "손가락 염좌", "안구 피로"] as const;
 /** 커리지 매치 우승 후 입단 경기를 제의받을 만한 능력치 합 */
-export const TRYOUT_MIN = 5000;
+export const TRYOUT_MIN = 5600;
+/** 프로 생활 규칙 */
+export const PRO_RULES = {
+  /** 1군: 엔트리·벤치에 못 든 프로리그 경기일이 이만큼 쌓이면 경고 (주말 2일 × 약 한 달) */
+  warnMissed: 8,
+  /** 이만큼 쌓이면 방출 (약 2달 반) */
+  releaseMissed: 20,
+  /** 2군에 이만큼(일) 머물고 신뢰도가 낮으면 방출 */
+  squad2Max: 365,
+  /** FA 기간 (일): 이 안에 새 구단을 못 찾으면 준프로 */
+  faDays: 60,
+  /** 입단·이적 뒤 이만큼(일)은 이적 요청·스카웃 제안 없음 */
+  transferLock: 180,
+  /** 2군 → 1군 승강전 조건: 이번 달 내부 연습 승 수 · 승률 · 코치 신뢰도 */
+  promoW: 8, promoRate: 0.6, promoTrust: 55,
+  /** 준프로 입단 테스트 신청: 다시 신청까지 (일) */
+  applyCooldown: 30,
+} as const;
 
 // ── 래더 ───────────────────────────────────────────────────────
 export const LADDER_START = 1500;
@@ -402,6 +419,13 @@ export interface RookieTeam {
   monthPro?: number;
   /** 임대 중: 원 소속 구단·돌아가는 날·임대 기간 평점 합·경기 수 */
   loan?: { from: number; until: number; sum: number; n: number };
+  /** 1군: 엔트리·벤치에 들지 못한 프로리그 경기일 수 (불리면 0으로) · 마지막으로 불린 날 */
+  missed?: number;
+  lastCalled?: number;
+  /** 지금 군에 있게 된 날 (2군에 너무 오래 있으면 방출 위험) */
+  squadSince?: number;
+  /** 최근 벤치에서 본 프로리그 경기 (다시 보기) */
+  bench?: { day: number; label: string; game: unknown };
 }
 
 /** 같은 시기에 시작한 라이벌 (AI, 같이 성장) */
