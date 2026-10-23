@@ -9,6 +9,7 @@ import { STAT_LABELS, type StatKey } from "@shared/gameConstants";
 import { gradeColor, legacyGrade, totalOf } from "@shared/career/rules";
 import { mapView } from "@shared/career/view";
 import { ORIG_PLAYERS } from "@shared/career/originalData";
+import { proGamerId } from "@shared/rookie/pros";
 import { LEGACY_FILES } from "@/lib/legacyFiles";
 
 export const LEGACY_FONT: CSSProperties = { fontFamily: '"Gulim","굴림","Dotum","돋움","Malgun Gothic","Apple SD Gothic Neo",sans-serif' };
@@ -31,6 +32,9 @@ const PHOTO_OVERRIDE: Record<string, string> = {
 function photoName(id: number | undefined, name: string) {
   if (id === undefined) return name;
   const row = ORIG_PLAYERS[id];
+  // 선수 키우기에서는 프로가 게임 아이디[클랜 태그]로 나옴 → 그 프로가 맞으면 본명으로 사진을 찾음
+  const base = name.replace(/\[[^\]]*\]$/, "");
+  if (row && row[1] !== name && (row[1] === base || proGamerId(id) === base)) name = row[1];
   const fixed = row && row[1] === name ? PHOTO_OVERRIDE[`${name}:${row[2]}`] : undefined;
   if (fixed) return fixed;
   const first = ORIG_PLAYERS.findIndex(r => r[1] === name);
