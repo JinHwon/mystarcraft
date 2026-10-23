@@ -72,8 +72,8 @@ export const courageDays = (y: number) => Array.from({ length: 12 }, (_, i) => d
 export const draftDay = (y: number) => dayOf(y, 12, 27);
 /** 준프로 자격 기간 (드래프트 참가 가능) */
 export const SEMIPRO_DAYS = 730;
-/** 실제 하루에 직접 고를 수 있는 기본 횟수 (관리자 패널에서 바꿀 수 있음, 0 = 제한 없음). 선택 1번 ≈ 게임 3~4일 */
-export const DAILY_PICKS = 14;
+/** 실제 하루에 직접 고를 수 있는 기본 횟수: 기본은 제한 없음(0). 관리자 패널에서 정하면 그 값 (선택 1번 ≈ 게임 3~4일) */
+export const DAILY_PICKS = 0;
 /** 한국 시간 날짜 (실제 하루 제한의 기준) */
 export const kstDate = (now = Date.now()) => new Date(now + 9 * 3_600_000).toISOString().slice(0, 10);
 /** 오늘 남은 선택 (limit 0 = 제한 없음 → null) */
