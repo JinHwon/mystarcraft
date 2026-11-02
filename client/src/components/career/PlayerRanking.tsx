@@ -17,12 +17,15 @@ export function PlayerRanking({ s }: { s: CareerState }) {
   const [kind, setKind] = useState<Kind>("best");
   const [scope, setScope] = useState<"season" | "career">("season");
   const [mineOnly, setMineOnly] = useState(false);
+  // 1부(A팀) · 2부(B팀) 나눠 보기 (전체는 무소속 포함)
+  const [div, setDiv] = useState<"a" | "b" | "all">("a");
+  const inDiv = (p: CPlayer) => div === "all" || (s.teams[p.team]?.div === (div === "a" ? 1 : 2));
   const rec = (p: CPlayer, k: Kind): [number, number] => {
     if (k === "best") return scope === "season" ? [p.sWins, p.sLosses] : [p.wins, p.losses];
     return (scope === "season" ? p.sVs?.[k] : p.vs?.[k]) ?? [0, 0];
   };
   const rows = useMemo(() => {
-    const list = activePlayers(s).filter(p => !mineOnly || p.team === s.myTeam);
+    const list = activePlayers(s).filter(p => (mineOnly ? p.team === s.myTeam : inDiv(p)));
     const score = (p: CPlayer) => {
       const [w, l] = rec(p, kind);
       // 베스트: 승수 → 승률 → (통산이면 우승 횟수 먼저)
@@ -35,7 +38,7 @@ export function PlayerRanking({ s }: { s: CareerState }) {
       .sort((a, b) => { for (let i = 0; i < a.k.length; i++) if (a.k[i] !== b.k[i]) return b.k[i] - a.k[i]; return a.p.name.localeCompare(b.p.name, "ko"); })
       .slice(0, mineOnly ? 40 : 30)
       .map(x => x.p);
-  }, [s, kind, scope, mineOnly]);
+  }, [s, kind, scope, mineOnly, div]);
   const races: Race[] = ["terran", "zerg", "protoss"];
   return (
     <div className="rounded-2xl bg-black border border-neutral-700 overflow-hidden text-white">
@@ -51,6 +54,13 @@ export function PlayerRanking({ s }: { s: CareerState }) {
           </div>
         </div>
       </div>
+      {!mineOnly && (
+        <div className="grid grid-cols-3 gap-1 px-2.5 pt-2">
+          {([["a", "1부 (A팀)"], ["b", "2부 (B팀)"], ["all", "전체"]] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setDiv(k)} className={cn("py-1 text-[11.5px] border", div === k ? "border-[#ffe45c] text-[#ffe45c] font-bold" : "border-neutral-700 text-neutral-400")}>{l}</button>
+          ))}
+        </div>
+      )}
       <div className="grid grid-cols-4 gap-1 px-2.5 pt-2">
         {KINDS.map(([k, l]) => (
           <button key={k} onClick={() => setKind(k)} className={cn("py-1 text-[12px] border", kind === k ? "text-black border-white font-bold" : "text-neutral-300 border-neutral-700")}
@@ -106,7 +116,7 @@ export function PlayerRanking({ s }: { s: CareerState }) {
         </tbody>
       </table>
       <p className="text-[10px] text-neutral-500 px-2.5 py-2">
-        {kind === "best" ? "베스트: 승수 → 승률 순" + (scope === "career" ? " (통산은 개인리그 우승 횟수 먼저)" : "") : "그 종족 상대 승수 → 승률 순"} · 프로리그·개인리그 모든 경기 · 상위 {mineOnly ? 40 : 30}명
+        {kind === "best" ? "베스트: 승수 → 승률 순" + (scope === "career" ? " (통산은 개인리그 우승 횟수 먼저)" : "") : "그 종족 상대 승수 → 승률 순"} · 프로리그·개인리그 경기 (PC방 예선 제외) · 상위 {mineOnly ? 40 : 30}명
         {scope === "season" && kind !== "best" ? " · 종족별 시즌 전적은 이번 업데이트부터 기록됩니다" : ""}
       </p>
     </div>

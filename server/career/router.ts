@@ -476,10 +476,14 @@ export const careerRouter = router({
   }),
 
   newGame: protectedProcedure
-    .input(z.object({ teamId: z.number().int(), difficulty: z.enum(["easy", "normal", "hard"]).optional() }))
+    .input(z.object({
+      teamId: z.number().int(), difficulty: z.enum(["easy", "normal", "hard"]).optional(),
+      /** 새 게임 옵션: 가상 선수 빼기 · 임의 선수 빼기 */
+      options: z.object({ noVirtual: z.boolean().optional(), noRandom: z.boolean().optional() }).optional(),
+    }))
     .mutation(({ ctx, input }) => withLock(ctx.user.id, async () => {
       try {
-        const state = newCareer(input.teamId, input.difficulty ?? "normal");
+        const state = newCareer(input.teamId, input.difficulty ?? "normal", input.options ?? {});
         save(ctx.user.id, state);
         return { state: withoutMarket(state) };
       } catch (e) {

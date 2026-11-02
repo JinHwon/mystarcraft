@@ -11,6 +11,8 @@ import {
   DIFFICULTIES,
   difficultyOf,
   type Difficulty,
+  type CareerOptions,
+  VIRTUAL_PLAYERS,
   type OutRequest,
   CMatch,
   COND_MAX,
@@ -63,7 +65,7 @@ import { dormBonus, trainMul } from "@shared/career/facilities";
 import { aiShopping } from "./aiShop";
 import { broadcastRights, gateIncome, regularSeasonPrize, weeklyGoods } from "./income";
 import { applyPromo, ensureDivisions, fillBRosters, fmt, promoMoves, rosterLimits, scheduleDivision, schedulePromo } from "./divisions";
-import { createMsl, mslDueThisWeek, mslPlayersThisWeek, nominationPending, runMslWeek, type MslReport } from "./msl";
+import { createMsl, prevIndivRank, mslDueThisWeek, mslPlayersThisWeek, nominationPending, runMslWeek, type MslReport } from "./msl";
 import { CONSUMABLE_STACK_MAX, ITEM_BY_KEY, isStackable, matchCond, packOf, slotOf, stackMax } from "@shared/career/items";
 import { ensurePotential, retirements, rookies } from "./generation";
 import { midweekMarket } from "./club";
@@ -77,15 +79,19 @@ const RACE: Record<string, Race> = { T: "terran", Z: "zerg", P: "protoss" };
 
 
 
-import { pendingMoveOf, rosterOf, proRosterOf, proTeams, standings, myPendingMatch, evaluateTrade, activePlayers, divOf, divTeams, leagueName, myDiv } from "@shared/career/view";
+import { RETIRED, pendingMoveOf, rosterOf, proRosterOf, proTeams, standings, myPendingMatch, evaluateTrade, activePlayers, divOf, divTeams, leagueName, myDiv } from "@shared/career/view";
 export { rosterOf, proTeams, standings, myPendingMatch };
 
 // ── 새 게임 ─────────────────────────────────────────────────────
 
-export function newCareer(myTeam: number, difficulty: Difficulty = "normal"): CareerState {
+export function newCareer(myTeam: number, difficulty: Difficulty = "normal", options: CareerOptions = {}): CareerState {
   const teams = initialTeams();
   if (!teams[myTeam] || myTeam === FREE_AGENT_TEAM) throw new CareerError("팀을 선택해주세요");
   const players = initialPlayers(() => COND_MAX);
+  // 가상 선수 제외: 처음부터 리그에 없는 선수로 (선수 번호는 그대로 두고, 은퇴 상태 · 재림하지 않음)
+  if (options.noVirtual) {
+    for (const p of players) if (VIRTUAL_PLAYERS.includes(p.name) && p.birth >= 1995) { p.team = RETIRED; p.retired = 0; p.reborn = true; p.action = null; }
+  }
   const s: CareerState = {
     version: 1,
     myTeam,
@@ -102,6 +108,7 @@ export function newCareer(myTeam: number, difficulty: Difficulty = "normal"): Ca
     mapPool: drawMapPool(),
     condScale: 100,
     ...(difficulty !== "normal" ? { difficulty } : {}),
+    ...(options.noVirtual || options.noRandom ? { options: { ...(options.noVirtual ? { noVirtual: true } : {}), ...(options.noRandom ? { noRandom: true } : {}) } } : {}),
   };
   // 난이도: 시작 자금
   teams[myTeam].money = Math.round((teams[myTeam].money * DIFFICULTIES[difficulty].startMoney) / 10) * 10;
@@ -111,8 +118,10 @@ export function newCareer(myTeam: number, difficulty: Difficulty = "normal"): Ca
   ensurePotential(s);
   scheduleRegularSeason(s);
   // 개인리그 시드를 미리 정해 두어 일정표에서 볼 수 있게
-  s.msl = createMsl(s);
-  if (s.msl.v2) s.msl2 = createMsl(s, secondLeagueOf(s.season)); else delete s.msl2;
+  // 시드는 지난 시즌 개인리그 순위로 (새 대회를 만들기 전에 지난 기록을 읽어 둠)
+  const prevRank = prevIndivRank(s);
+  s.msl = createMsl(s, "mysl", prevRank);
+  if (s.msl.v2) s.msl2 = createMsl(s, secondLeagueOf(s.season), prevRank); else delete s.msl2;
   rollWeekBursts(s);
   recordMarket(s, s.season * 100);
   news(s, `${s.teams[myTeam].name} 감독으로 부임했습니다. ${s.season}시즌 ${leagueName(myDiv(s))}가 곧 개막합니다!`);
@@ -981,8 +990,10 @@ export function startNextSeason(s: CareerState, opts: { releaseExpiring?: boolea
   s.matches = [];
   scheduleRegularSeason(s);
   // 개인리그 시드를 미리 정해 두어 일정표에서 볼 수 있게 (지난 대회 성적은 createMsl 이 참고)
-  s.msl = createMsl(s);
-  if (s.msl.v2) s.msl2 = createMsl(s, secondLeagueOf(s.season)); else delete s.msl2;
+  // 시드는 지난 시즌 개인리그 순위로 (새 대회를 만들기 전에 지난 기록을 읽어 둠)
+  const prevRank = prevIndivRank(s);
+  s.msl = createMsl(s, "mysl", prevRank);
+  if (s.msl.v2) s.msl2 = createMsl(s, secondLeagueOf(s.season), prevRank); else delete s.msl2;
   rollWeekBursts(s);
   recordMarket(s, s.season * 100);
   news(s, `${s.season}시즌 ${leagueName(myDiv(s))} 개막!`);

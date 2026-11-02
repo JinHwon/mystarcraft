@@ -9,7 +9,7 @@ import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ORIG_TEAMS, FREE_AGENT_TEAM } from "@shared/career/originalData";
-import { DIFFICULTIES, WEEKLY_AP, actionOf, difficultyOf, totalOf, type CareerState, type Difficulty } from "@shared/career/rules";
+import { DIFFICULTIES, NO_RANDOM_B_ROSTER, VIRTUAL_PLAYERS, WEEKLY_AP, actionOf, difficultyOf, totalOf, type CareerState, type Difficulty } from "@shared/career/rules";
 import { leagueName, myDiv, myPendingMatch, rosterOf, standings, teamPower, STAGE_NAMES } from "@shared/career/view";
 import { useCareer, useCareerUpdater } from "@/lib/career";
 import { RaceBadge, TeamBadge } from "@/components/career/Bits";
@@ -35,6 +35,9 @@ function TeamSelect({ onCancel, onStarted }: { onCancel?: () => void; /** 시작
   const preview = useMemo(() => previewWorld(), []);
   const [picked, setPicked] = useState<number | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>("normal");
+  // 새 게임 옵션 (시작한 뒤에는 바꿀 수 없음)
+  const [noVirtual, setNoVirtual] = useState(false);
+  const [noRandom, setNoRandom] = useState(false);
   const start = trpc.career.newGame.useMutation({
     ...updater,
     onSuccess: r => { updater.onSuccess(r); toast.success(`${r.state.teams[r.state.myTeam]?.name ?? ""} 감독 부임!`); onStarted?.(); navigate("/lobby"); window.scrollTo(0, 0); },
@@ -57,6 +60,18 @@ function TeamSelect({ onCancel, onStarted }: { onCancel?: () => void; /** 시작
         ))}
       </div>
       <p className="text-[11px] text-muted-foreground -mt-2">{DIFFICULTIES[difficulty].desc} · 감독 랭킹은 난이도별로도 볼 수 있습니다</p>
+      <div className="text-sm font-bold text-foreground">⚙️ 선수 옵션 <span className="text-[11px] font-normal text-muted-foreground">(시작한 뒤에는 바꿀 수 없어요)</span></div>
+      <div className="space-y-1.5 -mt-2">
+        {([
+          [noVirtual, setNoVirtual, "가상 선수 빼기", `${VIRTUAL_PLAYERS.join("·")} 처럼 실존하지 않는 선수를 리그에서 뺍니다`],
+          [noRandom, setNoRandom, "임의 선수 빼기", `새 이름 신인·2부 신예를 만들지 않고 원작 선수만으로 진행합니다 (2부 팀은 ${NO_RANDOM_B_ROSTER}명씩 · 은퇴한 원작 선수가 어린 신인으로 다시 등장)`],
+        ] as const).map(([on, set, title, desc]) => (
+          <button key={title} onClick={() => set(!on)} className={cn("w-full flex items-start gap-2 rounded-xl border-2 px-3 py-2 text-left", on ? "border-amber-400 bg-amber-500/15" : "border-border bg-card")}>
+            <span className={cn("mt-0.5 w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center text-[11px] font-black", on ? "border-amber-400 bg-amber-400 text-black" : "border-muted-foreground")}>{on ? "✓" : ""}</span>
+            <span className="min-w-0"><span className="block text-sm font-black text-foreground">{title}</span><span className="block text-[11px] text-muted-foreground">{desc}</span></span>
+          </button>
+        ))}
+      </div>
       <div className="text-sm font-bold text-foreground">🏆 1부 리그</div>
       <div className="grid grid-cols-2 gap-2.5">
         {ORIG_TEAMS.filter(t => t.id !== FREE_AGENT_TEAM).map(t => {
@@ -91,7 +106,7 @@ function TeamSelect({ onCancel, onStarted }: { onCancel?: () => void; /** 시작
       </div>
       <button
         disabled={picked === null || start.isPending}
-        onClick={() => picked !== null && start.mutate({ teamId: picked, difficulty })}
+        onClick={() => picked !== null && start.mutate({ teamId: picked, difficulty, options: { noVirtual, noRandom } })}
         className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black text-base disabled:opacity-40 active:scale-[0.99]"
       >
         {picked === null ? "팀을 선택하세요" : `${preview.teams[picked]?.name} 감독으로 시작 (${DIFFICULTIES[difficulty].name})`}

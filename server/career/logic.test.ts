@@ -794,6 +794,8 @@ describe("선수 행동 진행", () => {
     const before = r.map(p => p.wins + p.losses);
     advanceWeek(s, front);
     r.forEach((p, i) => { if (p.wins + p.losses !== before[i]) played.add(p.id); });
+    // PC방 예선은 전적에 안 들어가므로 예선 기록으로 (예선에 나가도 경기에 나간 것)
+    for (const m of [s.msl, s.msl2]) for (const g of m?.pcGames ?? []) { played.add(g.a); played.add(g.b); }
     const rested = r.filter(p => !played.has(p.id));
     expect(rested.length).toBeGreaterThan(0);
     for (const p of rested) expect(p.cond).toBe(50);
@@ -1946,4 +1948,96 @@ describe("구단 시설 투자·활동 기록·세이브 분석", () => {
     expect(byId.has(5)).toBe(false);
     expect(a.total).toBe(5);
   });
+});
+
+describe("새 게임 옵션 · 개인리그 시드 · 예선 전적 · MSL/OSL 조 지명식", () => {
+  it("가상 선수 빼기: 카이·별·신모군은 리그에 없고 재림도 하지 않음", async () => {
+    const { VIRTUAL_PLAYERS } = await import("@shared/career/rules");
+    const { activePlayers } = await import("@shared/career/view");
+    const { rookies } = await import("./generation");
+    const s = newCareer(0, "normal", { noVirtual: true });
+    expect(s.options?.noVirtual).toBe(true);
+    expect(activePlayers(s).some(p => VIRTUAL_PLAYERS.includes(p.name))).toBe(false);
+    s.season += 5;
+    rookies(s, 0);
+    expect(activePlayers(s).some(p => VIRTUAL_PLAYERS.includes(p.name))).toBe(false);
+    // 옵션이 없으면 그대로 있음
+    expect(activePlayers(newCareer(0)).some(p => VIRTUAL_PLAYERS.includes(p.name))).toBe(true);
+  });
+
+  it("임의 선수 빼기: 시작할 때 만든 선수가 없고 2부 팀은 7명씩, 해마다 새 이름 신인도 없음", async () => {
+    const { ORIG_PLAYERS } = await import("@shared/career/originalData");
+    const { NO_RANDOM_B_ROSTER } = await import("@shared/career/rules");
+    const { divTeams } = await import("@shared/career/view");
+    const { rookies } = await import("./generation");
+    const s = newCareer(0, "normal", { noRandom: true, noVirtual: true });
+    expect(s.players.length).toBe(ORIG_PLAYERS.length);
+    for (const t of divTeams(s, 2)) expect(rosterOf(s, t.id).length).toBe(NO_RANDOM_B_ROSTER);
+    const n = s.players.length;
+    rookies(s, 8);
+    // 은퇴한 지 3시즌 지난 원작 선수가 없으면 아무도 안 나옴
+    expect(s.players.length).toBe(n);
+    // 보통 게임은 2부를 채우려고 신예를 만듦
+    expect(newCareer(0).players.length).toBeGreaterThan(ORIG_PLAYERS.length);
+  });
+
+  it("개인리그 시드는 지난 시즌 순위대로 (우승자가 맨 앞 = 조장)", async () => {
+    const { createMsl, prevIndivRank } = await import("./msl");
+    const s = newCareer(0);
+    const pros = s.players.filter(p => p.team >= 0 && p.team < 12);
+    const weakest = [...pros].sort((a, b) => totalOf(a.stats) - totalOf(b.stats));
+    const champ = weakest[0].id, runner = weakest[1].id;
+    s.msl = { ...s.msl!, season: s.season, placements: { [champ]: "우승", [runner]: "준우승" }, champion: champ, runnerUp: runner };
+    s.season += 1;
+    const prev = prevIndivRank(s);
+    const m = createMsl(s, "mysl", prev);
+    expect(m.seeds[0]).toBe(champ);
+    expect(m.seeds[1]).toBe(runner);
+    const m2 = createMsl(s, "osl", prev);
+    expect(m2.seeds[0]).toBe(champ);
+    expect(m2.seeds).toHaveLength(16);
+  });
+
+  it("PC방 예선 경기는 선수 전적에 들어가지 않음", async () => {
+    const { withoutRecord, quickSet } = await import("./core");
+    const s = newCareer(0);
+    const [a, b] = rosterOf(s, 1);
+    const before = [a.wins + a.losses, b.wins + b.losses, a.sWins + a.sLosses];
+    withoutRecord(() => quickSet(s, a, b, 0));
+    expect([a.wins + a.losses, b.wins + b.losses, a.sWins + a.sLosses]).toEqual(before);
+    quickSet(s, a, b, 0);
+    expect(a.wins + a.losses).toBe(before[0] + 1);
+  });
+
+  it("MSL·OSL도 우리 선수가 있으면 조 지명식에서 직접 지명", async () => {
+    const { nominate, nominationPending, nomLeague, draftWaiting } = await import("./msl");
+    let checked = false;
+    for (let t = 0; t < 12 && !checked; t++) {
+      const s = newCareer(t);
+      const m2 = s.msl2;
+      if (!m2) return;
+      let guard = 0;
+      // MSL·OSL 듀얼이 끝나 지명식이 열릴 때까지
+      while (m2.stage !== "nom" && m2.groups.length === 0 && guard++ < 30) {
+        const pm = myPendingMatch(s);
+        advanceOnly(s, pm ? aiEntry(s, s.myTeam, PRO_SETS) : undefined);
+        if (s.weekHold) completeWeek(s);
+      }
+      if (m2.stage !== "nom") continue; // 우리 선수가 없어 바로 자동 편성됨
+      expect(m2.draft).toBeDefined();
+      // 다음 주 경기 뒤 지명식에서 멈춤
+      const pm = myPendingMatch(s);
+      advanceOnly(s, pm ? aiEntry(s, s.myTeam, PRO_SETS) : undefined);
+      expect(nominationPending(s) || !!s.weekHold).toBe(true);
+      expect(nomLeague(s)).toBe(m2);
+      nominate(s);
+      const w = draftWaiting(s);
+      if (w) { expect(w.league).toBe(m2.league); nominate(s, m2.draft!.pool[0]); }
+      completeWeek(s);
+      expect(m2.stage).not.toBe("nom");
+      expect(m2.groups).toHaveLength(8);
+      checked = true;
+    }
+    expect(checked).toBe(true);
+  }, 120_000);
 });

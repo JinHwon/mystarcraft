@@ -24,7 +24,7 @@ import {
 } from "@shared/career/rules";
 import { addManagerExp, book, mainSponsorPay } from "./club";
 import { activePlayers } from "@shared/career/view";
-import { CareerError, STAGE_GROWTH, news, pickMaps, playSet, quickSet, rand, rerollAfterMatch, shuffle, withEvenFatigue, withStageGrowth, type PlayedSet } from "./core";
+import { CareerError, withoutRecord, STAGE_GROWTH, news, pickMaps, playSet, quickSet, rand, rerollAfterMatch, shuffle, withEvenFatigue, withStageGrowth, type PlayedSet } from "./core";
 
 const GROUP_NAMES = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
@@ -41,21 +41,44 @@ const nm = (m: MslState) => INDIV_SHORT[m.league ?? "mysl"];
 
 // ── 시즌 시작 ──────────────────────────────────────────────────
 
-export function createMsl(s: CareerState, league: IndivLeague = "mysl"): MslState {
+/** 개인리그 성적 순서 (작을수록 높음) */
+const PLACE_RANK: Record<string, number> = { "우승": 1, "준우승": 2, "4강": 3, "8강": 4, "16강": 5, "32강": 6, "듀얼 탈락": 7, "PC방 탈락": 8 };
+/**
+ * 지난 시즌 개인리그 순위: 선수마다 지난 시즌 대회들(마이스타리그 · MSL/OSL) 중 가장 좋은 성적
+ * 새 시즌 대회를 만들기 전에 불러야 함 (만들면 지난 대회 기록이 바뀜)
+ */
+export function prevIndivRank(s: CareerState): Map<number, number> {
+  const out = new Map<number, number>();
+  for (const m of [s.msl, s.msl2]) {
+    if (!m || m.season !== s.season - 1) continue;
+    for (const [id, r] of Object.entries(m.placements)) {
+      const k = PLACE_RANK[r];
+      if (k !== undefined) out.set(Number(id), Math.min(out.get(Number(id)) ?? 99, k));
+    }
+    if (m.champion !== undefined) out.set(m.champion, 1);
+    if (m.runnerUp !== undefined) out.set(m.runnerUp, Math.min(out.get(m.runnerUp) ?? 99, 2));
+  }
+  return out;
+}
+
+/**
+ * 시드 16명: 지난 시즌 개인리그 순위대로 (우승 → 준우승 → 4강 → …), 같은 순위·기록 없음은 능력치 순
+ * 맨 앞 8명이 조 지명식의 조장
+ */
+function seedsOf(s: CareerState, prev: Map<number, number>) {
+  const pros = activePlayers(s).filter(p => p.team !== FREE_AGENT_TEAM).map(p => p.id);
+  return [...pros].sort((a, b) => (prev.get(a) ?? 99) - (prev.get(b) ?? 99) || strength(s, b) - strength(s, a)).slice(0, 16);
+}
+
+export function createMsl(s: CareerState, league: IndivLeague = "mysl", prev: Map<number, number> = prevIndivRank(s)): MslState {
   const v2 = regularWeeksOf(s) !== OLD_REGULAR_WEEKS;
+  const seeds = seedsOf(s, prev);
   if (league !== "mysl") {
-    // MSL·OSL: 시드는 지금 능력치 상위 16명 (2시즌마다 열리므로 지난 대회 성적 대신)
-    const pros = activePlayers(s).filter(p => p.team !== FREE_AGENT_TEAM).map(p => p.id);
     return {
-      season: s.season, stage: "pc", seeds: byStrength(s, pros).slice(0, 16), pcQualifiers: [], pcEntrants: 0,
+      season: s.season, stage: "pc", seeds, pcQualifiers: [], pcEntrants: 0,
       duals: [], nominations: [], groups: [], bracket: [], placements: {}, league, v2: true,
     };
   }
-  const prev = s.msl && s.msl.season === s.season - 1 ? s.msl : undefined;
-  // 시드: 지난 대회 16강 진출자 → 부족하면 능력치 상위 프로 선수
-  const prevSeeds = prev ? Object.entries(prev.placements).filter(([, r]) => ["우승", "준우승", "4강", "8강", "16강"].includes(r)).map(([id]) => Number(id)) : [];
-  const pros = activePlayers(s).filter(p => p.team !== FREE_AGENT_TEAM).map(p => p.id);
-  const seeds = byStrength(s, [...new Set([...prevSeeds.filter(id => (s.players[id]?.team ?? -1) >= 0), ...byStrength(s, pros)])]).slice(0, 16);
   return {
     season: s.season, stage: "pc", seeds, pcQualifiers: [], pcEntrants: 0,
     duals: [], nominations: [], groups: [], bracket: [], placements: {}, ...(v2 ? { v2: true } : {}),
@@ -125,7 +148,8 @@ function runPc(s: CareerState, m: MslState) {
     const next: number[] = pool.slice(games * 2);
     for (let i = 0; i < games * 2; i += 2) {
       // 참가자가 많아 하나씩 중계하지 않고, 결과 화면에서 우리 선수 전적을 보여준다
-      const r = series(s, pool[i], pool[i + 1], 1, `${round}회전`, [], "PC방 예선", true);
+      // 예선 경기는 선수 전적(순위표)에 넣지 않음
+      const r = withoutRecord(() => series(s, pool[i], pool[i + 1], 1, `${round}회전`, [], "PC방 예선", true));
       next.push(r.winner);
       if (isMine(s, r.a) || isMine(s, r.b)) m.pcGames.push(r);
       m.placements[r.winner === pool[i] ? pool[i + 1] : pool[i]] = "PC방 탈락";
@@ -199,14 +223,32 @@ function draftRun(s: CareerState, m: MslState, auto: boolean) {
   }
 }
 
+/**
+ * 지금 조 지명식이 열린 대회: 마이스타리그는 지명식 주가 되었을 때, MSL·OSL은 듀얼이 끝나고 32강 전까지
+ * (우리 선수가 나가면 직접 지명, 아니면 듀얼이 끝날 때 바로 자동 편성되므로 여기 오지 않음)
+ */
+export function nomLeague(s: CareerState): MslState | undefined {
+  for (const m of [s.msl, s.msl2]) {
+    if (!m || m.season !== s.season || m.stage !== "nom") continue;
+    if (!m.league) {
+      const plan = planOf(m)[m.planIdx ?? 0];
+      if (!plan || plan.stage !== "nom" || plan.week > s.week) continue;
+    }
+    return m;
+  }
+  return undefined;
+}
+/** 조 지명식에 우리 선수(시드·듀얼 통과)가 있는지 */
+const mineInDraft = (s: CareerState, m: MslState) => [...m.seeds, ...m.duals.flatMap(g => g.qualified)].some(id => isMine(s, id));
+
 /** 지금 지명할 우리 선수 (없으면 undefined) — head 는 지명하는 선수 */
-export function draftWaiting(s: CareerState): { head: number; group: string; round: number } | undefined {
-  const m = s.msl;
+export function draftWaiting(s: CareerState): { head: number; group: string; round: number; league?: IndivLeague } | undefined {
+  const m = nomLeague(s);
   const d = m?.draft;
-  if (!m || !d || d.step >= DRAFT_STEPS || m.stage !== "nom") return undefined;
+  if (!m || !d || d.step >= DRAFT_STEPS) return undefined;
   const { round, g } = draftTurn(d.step);
   const head = draftChooser(d);
-  return isMine(s, head) ? { head, group: GROUP_NAMES[g], round: round + 1 } : undefined;
+  return isMine(s, head) ? { head, group: GROUP_NAMES[g], round: round + 1, ...(m.league ? { league: m.league } : {}) } : undefined;
 }
 
 /**
@@ -214,12 +256,9 @@ export function draftWaiting(s: CareerState): { head: number; group: string; rou
  * 다른 선수 차례는 여기서 미리 진행해 두고, 우리 차례가 없으면 멈추지 않음
  */
 export function nominationPending(s: CareerState): boolean {
-  const m = s.msl;
-  if (!m || m.season !== s.season || m.stage !== "nom" || s.phase === "offseason") return false;
-  const plan = planOf(m)[m.planIdx ?? 0];
-  if (!plan || plan.stage !== "nom" || plan.week > s.week) return false;
-  const inDraft = [...m.seeds, ...m.duals.flatMap(g => g.qualified)].some(id => isMine(s, id));
-  if (!inDraft) return false;
+  const m = nomLeague(s);
+  if (!m || s.phase === "offseason") return false;
+  if (!mineInDraft(s, m)) return false;
   draftRun(s, m, false);
   return m.draft!.step < DRAFT_STEPS;
 }
@@ -229,8 +268,8 @@ export function nominationPending(s: CareerState): boolean {
  * 우리 조장 차례가 오면 멈추고, 아니면 끝까지 진행
  */
 export function nominate(s: CareerState, pick?: number) {
-  const m = s.msl;
-  if (!m || m.season !== s.season || m.stage !== "nom") throw new CareerError("지금은 조 지명식 기간이 아닙니다");
+  const m = nomLeague(s);
+  if (!m) throw new CareerError("지금은 조 지명식 기간이 아닙니다");
   startDraft(s, m);
   if (pick !== undefined) {
     const w = draftWaiting(s);
@@ -239,7 +278,7 @@ export function nominate(s: CareerState, pick?: number) {
     draftPick(s, m, pick);
   }
   draftRun(s, m, false);
-  return { waiting: draftWaiting(s) ?? null, done: m.draft!.step >= DRAFT_STEPS };
+  return { waiting: draftWaiting(s) ?? null, done: m.draft!.step >= DRAFT_STEPS, league: m.league ?? "mysl" };
 }
 
 /** draw: MSL·OSL 은 지명식 없이 자동으로 조 편성 (같은 방식으로 AI 가 지명) */
@@ -256,7 +295,7 @@ function runNomination(s: CareerState, m: MslState, draw = false) {
     news(s, `🎲 ${nm(m)} 32강 조 편성 완료${my.length ? ` — 우리 선수 ${my.join("·")}` : ""}`);
     return;
   }
-  news(s, `🎤 조 지명식: ${s.players[top.by].name} 선수가 ${s.players[top.pick].name} 선수를 지명!${mine.length > 0 && mine[0] !== top ? ` (${s.players[mine[0].by].name} → ${s.players[mine[0].pick].name})` : ""}`);
+  news(s, `🎤 ${nm(m)} 조 지명식: ${s.players[top.by].name} 선수가 ${s.players[top.pick].name} 선수를 지명!${mine.length > 0 && mine[0] !== top ? ` (${s.players[mine[0].by].name} → ${s.players[mine[0].pick].name})` : ""}`);
 }
 
 function runGroups(s: CareerState, m: MslState, report: MslReport[], part: number) {
@@ -358,6 +397,8 @@ function runLeagueWeek(s: CareerState, m: MslState, report: MslReport[], plans: 
     plans.push(base + m.planIdx);
     const before = report.length;
     const last = !PLAN[m.planIdx + 1] || PLAN[m.planIdx + 1].stage !== plan.stage;
+    // MSL·OSL: 우리 선수가 조 지명식을 마치지 않았으면 32강 전에 남은 지명은 자동으로
+    if (plan.stage === "group" && m.stage === "nom") { runNomination(s, m); m.stage = "group"; }
     switch (plan.stage) {
       case "pc": runPc(s, m); break;
       case "dual": runDual(s, m, report, plan.part); break;
@@ -370,8 +411,11 @@ function runLeagueWeek(s: CareerState, m: MslState, report: MslReport[], plans: 
     }
     if (m.league) for (const r of report.slice(before)) r.league = m.league;
     if (last) m.stage = NEXT_STAGE[plan.stage];
-    // MSL·OSL: 듀얼이 끝나면 바로 조 추첨
-    if (m.league && m.stage === "nom") { runNomination(s, m, true); m.stage = "group"; }
+    // MSL·OSL: 듀얼이 끝나면 조 지명식 — 우리 선수가 있으면 다음 주 경기 뒤 직접 지명, 없으면 바로 자동 편성
+    if (m.league && m.stage === "nom" && last && plan.stage === "dual") {
+      if (mineInDraft(s, m)) { startDraft(s, m); news(s, `🎤 ${nm(m)} 조 지명식이 열립니다 — 다음 주 경기 뒤 우리 선수가 직접 지명합니다`); }
+      else { runNomination(s, m, true); m.stage = "group"; }
+    }
     m.planIdx++;
   }
 }
