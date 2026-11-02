@@ -30,7 +30,7 @@ export interface Mail {
   /** 틀이 기억해 둘 값 (능력치·상대 이름 등) */
   data?: Record<string, string | number>;
   choices?: MailChoice[];
-  /** 이 날까지 답하지 않으면 자동으로 마지막 선택 */
+  /** 이 날까지 답하지 않으면 답하지 않은 것으로 (picked = "_none", 아무 영향 없음) */
   until?: number;
   picked?: string;
   /** 답장 결과 */

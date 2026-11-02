@@ -175,8 +175,14 @@ export function TodayPanel({ s, today, busy, onAct, onLadderMaps, onOpen }: {
       {today.todayEvent === "draft" && <EventCard icon="📋" title="오늘은 드래프트!" desc="준프로 16명 4라운드 · 상위 8명은 구단이 지명할 수도" disabled={lock} onClick={() => onAct({ kind: "draft" })} />}
       {today.todayEvent === "promo" && s.team && <EventCard icon={s.team.squad === 2 ? "⬆️" : "🛡️"} title="팀 내 승강전 날" desc={s.team.squad === 2 ? `2군 1위면 1군 꼴찌와 3판 2선승 (이번 달 ${s.team.monthW}승 ${s.team.monthL}패)` : "1군 자리를 지키는 경기 (3판 2선승)"} disabled={lock} onClick={() => onAct({ kind: "promo" })} />}
       {todayEvents.map(e => <EventCard key={e.id} icon="🏆" title={`오늘은 ${e.name}!`} desc={`${e.size}강 · 대진표를 보고 한 판씩 · 우승 ${e.prize[0]}만원`} disabled={lock} onClick={() => onAct({ kind: "event", id: e.id })} />)}
+      {today.todayEvent === "proleague" && s.team && (() => {
+        // 상대 구단은 서버와 같은 규칙 (날짜로 정해짐)
+        const others = ORIG_TEAMS.filter(x => x.id < 12 && x.id !== s.team!.team);
+        const vs = others[s.day % others.length];
+        return <EventCard icon="🏟️" title={`오늘은 프로리그! vs ${vs?.name ?? "상대 팀"}`} desc="엔트리에 들었습니다 · 직접 출전해 경기를 봅니다 (다른 활동을 고르면 결과만 자동으로) · 승리 수당 20만원" action="출전" disabled={lock} onClick={() => onAct({ kind: "proleague" })} />;
+      })()}
       {!s.team && s.tryouts.map(t => <EventCard key={t.team} icon="📝" title={`${ORIG_TEAMS[t.team].name} 입단 테스트`} desc={`${t.from} · ${dateText(t.until).slice(5)}까지 · 3판 2선승`} action="테스트" disabled={lock} onClick={() => onAct({ kind: "tryout", team: t.team })} />)}
-      {(todayEvents.length > 0 || today.todayEvent) && <div className="text-[10.5px] text-rose-300 px-1">⚠️ 다른 활동을 고르면 오늘 이벤트는 불참 처리됩니다</div>}
+      {(todayEvents.length > 0 || (today.todayEvent && today.todayEvent !== "proleague")) && <div className="text-[10.5px] text-rose-300 px-1">⚠️ 다른 활동을 고르면 오늘 이벤트는 불참 처리됩니다</div>}
       {s.team && <div className="text-[10.5px] text-muted-foreground px-1">🏢 프로게이머는 팀 연습·클랜 활동·휴식 위주로 생활합니다 (공방·래더·방송·아마추어 대회 불가)</div>}
       <div className="grid grid-cols-2 gap-1.5">
         {cards.filter(c => !c.hide).map(c => ({ ...c, lock: c.lock ?? (hurt && ["lobby", "ladder", "clan", "internal", "friendly"].includes(c.key) ? hurt : undefined) })).map(c => (

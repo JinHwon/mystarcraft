@@ -64,7 +64,7 @@ export function MailView({ s }: { s: RookieState }) {
                 )}
                 {m.picked && (
                   <div className="rounded-xl border border-emerald-400/40 bg-emerald-500/10 p-2.5 text-[12px]">
-                    <div className="text-[10.5px] text-emerald-300 font-bold">내 답장 · {m.choices?.find(c => c.id === m.picked)?.label}</div>
+                    <div className="text-[10.5px] text-emerald-300 font-bold">{m.picked === "_none" ? "답장하지 않음" : `내 답장 · ${m.choices?.find(c => c.id === m.picked)?.label ?? ""}`}</div>
                     <div className="text-foreground mt-0.5">{m.result}</div>
                   </div>
                 )}

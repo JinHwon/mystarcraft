@@ -127,9 +127,9 @@ describe("선수 키우기", () => {
     expect(s.team?.squad).toBe(2);
     L.playInternal(s);
     expect((s.team!.monthW + s.team!.monthL)).toBe(1);
-    // 입단 직후 반년은 이적을 알아볼 수 없음
-    expect(() => L.requestTransfer(s, 5)).toThrow(/일이 지나야/);
-    s.day += 181;
+    // 입단 직후 1년은 다른 구단 제안이 오지 않지만 직접 지원은 가능 (지금 팀 신뢰도 -10)
+    expect(L.transferLocked(s)).toBe(true);
+    s.day += 366;
     let released = false;
     for (let i = 0; i < 60 && !released; i++) {
       s.used = 0;
@@ -634,13 +634,19 @@ describe("FM 2단계: 메일함·선택 이벤트·기자회견", () => {
     expect(() => I.answerMail(s, m.id, "talk")).toThrow(L.RookieError);
   });
 
-  it("기한이 지나면 마지막 선택으로 자동 처리", async () => {
+  it("기한이 지나면 답하지 않은 것으로 처리되고 아무 영향이 없음 (코치 신뢰도가 저절로 깎이지 않게)", async () => {
     const I = await import("./inbox");
     const s = mk();
-    const m = I.sendMail(s, { from: "friend", sender: "x", title: "t", body: "b", tpl: "partjob", choices: [{ id: "yes", label: "a" }, { id: "no", label: "b" }], until: s.day + 1 });
+    s.status = "pro";
+    s.team = { team: 2, squad: 2, joined: 0, salary: 40, monthW: 0, monthL: 0, contractUntil: 99999, trust: 60 };
+    // 감독 면담 메일: 마지막 선택("운이 없었다")은 신뢰 -4 — 답하지 않으면 그대로
+    const m = I.sendMail(s, { from: "coach", sender: "x", title: "t", body: "b", tpl: "coach_talk", choices: [{ id: "work", label: "a" }, { id: "honest", label: "b" }, { id: "excuse", label: "c" }], until: s.day + 1 });
     L.nextDay(s); L.nextDay(s);
-    expect(m.picked).toBe("no");
-    expect(m.result).toContain("자동");
+    expect(m.picked).toBe(I.NO_REPLY);
+    expect(m.result).toContain("답하지 않고");
+    const { pendingMail } = await import("@shared/rookie/inbox");
+    expect(pendingMail(m)).toBe(false);
+    expect(s.team!.trust).toBeGreaterThanOrEqual(60);
   });
 
   it("기자회견: 우승 뒤 도발하면 라이벌전이 과열되고, 라이벌을 이기면 화제", async () => {
@@ -988,11 +994,20 @@ describe("프로 생활 · 성장 개편", () => {
     expect(L.promoDue(s)).toBe(false);
   });
 
-  it("입단 뒤 반년은 이적 요청 불가 · 준프로는 한 달에 한 번 입단 테스트 신청", () => {
+  it("입단 뒤 1년은 다른 구단 제안이 없고, 직접 지원은 가능하지만 신뢰도가 깎임 · 준프로는 한 달에 한 번 입단 테스트 신청", async () => {
+    const { PRO_RULES } = await import("@shared/rookie/model");
     const s = pro(2);
     s.team!.joined = s.day - 10;
+    s.team!.trust = 60;
     expect(L.transferLocked(s)).toBe(true);
-    expect(() => L.requestTransfer(s, 5)).toThrow(/일이 지나야/);
+    const r = L.requestTransfer(s, 5);
+    if (r.result !== "released") expect(s.team!.trust).toBe(60 - PRO_RULES.requestTrustEarly);
+    // 1년 동안은 매달 15일 스카웃 제안이 오지 않음
+    const t2 = pro(2);
+    for (const k of Object.keys(t2.stats) as Array<keyof typeof t2.stats>) t2.stats[k] = 1000;
+    t2.fame = 1000; t2.team!.joined = t2.day; t2.offers = [];
+    for (let i = 0; i < 360; i++) { L.nextDay(t2); t2.inbox = []; if (!t2.team) break; }
+    expect(t2.offers.length).toBe(0);
     const a = mk();
     expect(() => L.applyTryout(a, 3)).toThrow(/준프로/);
     a.status = "semipro";
@@ -1029,5 +1044,98 @@ describe("프로 생활 · 성장 개편", () => {
     s.flags = { peak: 4000 };
     for (let i = 0; i < 300; i++) { s.cond = 100; s.morale = 60; s.used = 0; delete s.form; L.playOne(s, { name: "x", race: "zerg", stats: Object.fromEntries(Object.keys(s.stats).map(k => [k, 700])) as typeof s.stats, cond: 100 }, i % 10, "공방", false); }
     expect(sumStats(s.stats)).toBeGreaterThanOrEqual(3200 - 60);
+  });
+});
+
+describe("코치 신뢰도 · 프로리그 직접 출전 · 이적 군", () => {
+  const pro = (squad: 1 | 2) => {
+    const s = mk();
+    s.status = "pro"; s.level = 40; s.day = 400;
+    for (const k of Object.keys(s.stats) as Array<keyof typeof s.stats>) s.stats[k] = 720;
+    s.team = { team: 2, squad, joined: 0, salary: 120, monthW: 0, monthL: 0, contractUntil: 99999, trust: 50, squadSince: s.day };
+    return s;
+  };
+
+  it("팀 내부 연습은 판마다가 아니라 한 달 성적으로 신뢰도 평가", () => {
+    const s = pro(2);
+    for (let i = 0; i < 30; i++) { s.used = 0; s.cond = 100; L.playInternal(s); }
+    expect(s.team!.trust).toBe(50);
+    s.team!.monthW = 14; s.team!.monthL = 6;
+    L.monthlyTrust(s);
+    expect(s.team!.trust).toBe(58);
+    s.team!.monthW = 3; s.team!.monthL = 12;
+    L.monthlyTrust(s);
+    expect(s.team!.trust).toBe(53);
+    // 10판 미만은 평가하지 않음
+    s.team!.monthW = 5; s.team!.monthL = 0;
+    L.monthlyTrust(s);
+    expect(s.team!.trust).toBe(53);
+  });
+
+  it("50 넘은 신뢰도는 저절로 내려가지 않고, 50 아래는 조금씩 회복", () => {
+    const s = pro(2);
+    s.team!.trust = 70;
+    for (let i = 0; i < 28; i++) { L.nextDay(s); s.inbox = []; }
+    expect(s.team!.trust).toBeGreaterThanOrEqual(70);
+    s.team!.trust = 20;
+    for (let i = 0; i < 28; i++) { L.nextDay(s); s.inbox = []; }
+    expect(s.team!.trust).toBeGreaterThan(20);
+  });
+
+  it("1군 프로리그 엔트리 날은 직접 고르는 날이 되고, 출전하면 중계 경기가 나옴", () => {
+    const s = pro(1);
+    s.team!.trust = 90;
+    let day = -1;
+    for (let d = s.day; d < s.day + 120; d++) if (L.inEntry(s, d)) { day = d; break; }
+    expect(day).toBeGreaterThan(0);
+    expect(L.eventStop(s, day)).toBe("proleague");
+    s.day = day;
+    const r = L.act(s, { kind: "proleague" }) as { games?: Array<{ timeline?: unknown; label: string }> };
+    expect(r.games).toHaveLength(1);
+    expect(r.games![0].timeline).toBeDefined();
+    expect(r.games![0].label).toMatch(/프로리그/);
+    expect(s.doneDays).toContain(day);
+  });
+
+  it("이적할 때 그 팀 1군 꼴찌만큼 강하면 1군으로, 아니면 2군", () => {
+    const s = pro(2);
+    for (const k of Object.keys(s.stats) as Array<keyof typeof s.stats>) s.stats[k] = 1000;
+    s.offers = [{ team: 5, salary: 100, until: s.day + 5 }];
+    L.acceptOffer(s, 5);
+    expect(s.team!.squad).toBe(1);
+    const w = pro(2);
+    for (const k of Object.keys(w.stats) as Array<keyof typeof w.stats>) w.stats[k] = 300;
+    w.offers = [{ team: 5, salary: 50, until: w.day + 5 }];
+    L.acceptOffer(w, 5);
+    expect(w.team!.squad).toBe(2);
+  });
+});
+
+describe("메일 빈도 · 클랜 영입 제안", () => {
+  it("메일은 대략 일주일에 한 통 정도 (예전보다 훨씬 덜 옴)", async () => {
+    const I = await import("./inbox");
+    const s = mk();
+    s.fame = 300;
+    let n = 0;
+    for (let i = 0; i < 364; i++) { if (I.dailyMail(s)) n++; s.day++; }
+    expect(n).toBeLessThan(80);
+    expect(n).toBeGreaterThan(15);
+  });
+
+  it("더 높은 단계 클랜이 영입 제안을 보내고, 받아들이면 시험 없이 이적", async () => {
+    const I = await import("./inbox");
+    const { CLANS, CLAN_BY_ID } = await import("@shared/rookie/model");
+    const s = mk();
+    for (const k of Object.keys(s.stats) as Array<keyof typeof s.stats>) s.stats[k] = 900;
+    const low = [...CLANS].sort((a, b) => a.tier - b.tier)[0];
+    s.clan = { id: low.id, joined: s.day - 100, points: 0, w: 0, l: 0, members: L.rosterOf(low.id) };
+    const target = L.clanScoutTarget(s);
+    expect(target).not.toBeNull();
+    expect(CLAN_BY_ID[target!].tier).toBeGreaterThan(low.tier);
+    const m = I.sendMail(s, { from: "clan", sender: "x", title: "t", body: "b", tpl: "clan_offer", data: { clan: target! }, choices: [{ id: "join", label: "a" }, { id: "no", label: "b" }], until: s.day + 7 });
+    I.answerMail(s, m.id, "join");
+    expect(s.clan!.id).toBe(target);
+    // 옮긴 지 60일이 안 됐으면 제안 없음
+    expect(L.clanScoutTarget(s)).toBeNull();
   });
 });
