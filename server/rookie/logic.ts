@@ -13,7 +13,7 @@ import {
   LADDER_START, RACES, ROOKIE_BONUS, ROOKIE_PRICE, ROOKIE_USES, SEMIPRO_DAYS, STATUS_NAMES, STAT_MAX_ONE, STAT_MIN_ONE, TIERS, TIER_ORDER, TRYOUT_MIN,
   VITA_PER_DAY, capOf, courageDays, dateText, draftDay, isMonthEnd, ladderGrade, nickname, statsAround, sumStats, ymd, ACHIEVEMENTS, STAT_CAP,
   emptyCounts, rollStats, CLAN_BY_ID, mapUnd, LADDER_REQ, MAX_LEVEL, eventReq, levelNeed, withTag, LEVEL_CAP_BONUS, type Concept, type Opp,
-  PRO_RULES, FATIGUE, INJURY_PERF, INJURIES, fatiguePerf, type RookieEvent, type RookieState, type Stats, type Tier, type Rival,
+  gearPenalty, weekFormOf, PRO_RULES, FATIGUE, INJURY_PERF, INJURIES, fatiguePerf, type RookieEvent, type RookieState, type Stats, type Tier, type Rival,
 } from "@shared/rookie/model";
 import { simulateSet } from "../gameSimulation";
 import { mapAdvantage } from "../career/core";
@@ -25,7 +25,7 @@ import { checkGoals, ensureGoals, ensureWorld, goalProgress, myPeerRank, weeklyW
 import { agentOf } from "@shared/rookie/squad";
 import { BIG_KINDS, MOM_RATING, TRAIT_KEYS, TRAITS, emptySeason, kindOf, rollPersona, traitShown, type GameKind, type TraitKey } from "@shared/rookie/persona";
 import {
-  benchDay, promoDue, promoReady, squadReview, transferLocked, contractEnd, inEntry, loanReturn, marketValue, mentor, monthlySquad, myRole, playInternal, playProleague, playPromo, signContract, squadRank,
+  benchDay, monthlyTrust, promoDue, promoReady, squadReview, transferLocked, contractEnd, inEntry, loanReturn, marketValue, mentor, monthlySquad, myRole, playInternal, playProleague, playPromo, signContract, squadRank,
   startNego, trustOf,
 } from "./pro";
 import { autoWar, clanDay, clanPractice, clanRank, clanTest, friendlyGame, rosterOf, startWar, warAt, warSchedule } from "./clan";
@@ -192,8 +192,10 @@ function gear(s: RookieState): Stats {
   const out = Object.fromEntries(STAT_KEYS.map(k => [k, 0])) as Stats;
   for (const e of Object.values(s.equip)) {
     const it = e && ITEM_BY_KEY[e.key];
-    if (!it?.bonus) continue;
-    for (const [k, v] of Object.entries(it.bonus)) out[k as StatKey] += Math.round((v ?? 0) * ROOKIE_BONUS);
+    if (!it) continue;
+    // 전체 능력치 장비(반지·목걸이 등)도 반영
+    if (it.all) for (const k of STAT_KEYS) out[k] += Math.round(it.all * ROOKIE_BONUS);
+    for (const [k, v] of Object.entries(it.bonus ?? {})) out[k as StatKey] += Math.round((v ?? 0) * ROOKIE_BONUS);
   }
   return out;
 }
@@ -306,7 +308,6 @@ export function playOne(s: RookieState, opp: Opp, mapId: number, label: string, 
   const det = s.persona?.det ?? 10;
   s.morale = Math.max(0, Math.min(100, s.morale + (won ? 2 : det >= 15 ? -1 : det <= 6 ? -3 : -2)));
   s.record[won ? "w" : "l"]++;
-  wearEquip(s);
   afterGame(s, opp, won);
   const rating = rateGame(s, opp, won, r.duration, perf);
   recordRating(s, kind, won, rating, `${label} vs ${opp.name}`);
@@ -329,6 +330,8 @@ function dayPerf(s: RookieState, kind: GameKind) {
   // 혹사: 피로가 쌓이면 경기력↓, 부상 중이면 더
   perf *= fatiguePerf(s.fatigue);
   if (injured(s)) perf *= INJURY_PERF;
+  // 장비가 없으면 · 이번 주 컨디션 난조/포텐셜 폭발
+  perf *= gearPenalty(s) * weekFormOf(s);
   return perf;
 }
 
@@ -492,6 +495,7 @@ function awaken(s: RookieState, how: string) {
   mark(s, "🦅");
 }
 
+/** 장비는 경기한 날마다 하루씩 닳음 (판마다 닳으면 며칠 만에 없어져 너무 비쌌음) */
 function wearEquip(s: RookieState) {
   for (const [slot, e] of Object.entries(s.equip)) {
     if (!e) continue;
@@ -1046,6 +1050,19 @@ export function setTitle(s: RookieState, id: string | null) {
 }
 
 // ── 다음 날 ───────────────────────────────────────────────────
+/** 주마다 컨디션: 12% 난조 (경기력 -8~15%) · 7% 포텐셜 폭발 (+6~10%) — 그 주 내내, 프로리그 엔트리에도 반영 */
+export function rollWeekForm(s: RookieState) {
+  const r = rand();
+  const week = weekStartOf(s.day);
+  if (r < 0.12) {
+    s.weekForm = { week, mul: 1 - randInt(8, 15) / 100 };
+    log(s, "🥶", `이번 주는 컨디션 난조입니다 (경기력 -${Math.round((1 - s.weekForm.mul) * 100)}%)${s.team ? " · 감독이 엔트리에서 뺄 수도 있어요" : ""}`);
+  } else if (r < 0.19) {
+    s.weekForm = { week, mul: 1 + randInt(6, 10) / 100 };
+    log(s, "🔥", `이번 주는 포텐셜 폭발! (경기력 +${Math.round((s.weekForm.mul - 1) * 100)}%)`);
+  } else delete s.weekForm;
+}
+
 /**
  * 능력치가 떨어지는 흐름
  * - 감각: 4일 넘게 경기를 안 하면 가끔 능력치 하나 -1
@@ -1097,6 +1114,8 @@ export function nextDay(s: RookieState) {
   // 오늘 1군 프로리그 엔트리였는데 안 했으면 자동으로 치름
   if (inEntry(s) && !s.doneDays.includes(s.day)) playProleague(s, true);
   else benchDay(s);
+  // 오늘 경기를 했으면 장비가 하루 닳음
+  if (s.flags?.lastGame === s.day) wearEquip(s);
   s.day++;
   s.used = 0;
   s.vitaToday = 0;
@@ -1143,11 +1162,11 @@ export function nextDay(s: RookieState) {
     log(s, "🤝", `인지도 ${s.fame}: 후원금 ${sponsor}만원이 들어왔습니다`);
   }
   // 월급 (매달 1일)
-  if (s.team && x.d === 1) { s.money += s.team.salary; s.team.monthW = 0; s.team.monthL = 0; log(s, "💰", `월급 ${s.team.salary}만원 (${ORIG_TEAMS[s.team.team].name})`); }
+  if (s.team && x.d === 1) { monthlyTrust(s); s.money += s.team.salary; s.team.monthW = 0; s.team.monthL = 0; log(s, "💰", `월급 ${s.team.salary}만원 (${ORIG_TEAMS[s.team.team].name})`); }
   if (x.d === 1) { monthlySquad(s, ymd(s.day - 1).m); squadReview(s); }
   if (s.team?.loan && s.day > s.team.loan.until) loanReturn(s);
-  // 코치 신뢰도는 매주 조금씩 50 쪽으로
-  if (s.team && x.dow === 0) s.team.trust = Math.round(trustOf(s) + (50 - trustOf(s)) * 0.05);
+  // 코치 신뢰도가 50 아래면 매주 조금씩 회복 (위로는 내리지 않음 — 쌓은 신뢰가 저절로 깎이지 않게)
+  if (s.team && x.dow === 0 && trustOf(s) < 50) s.team.trust = Math.round(trustOf(s) + (50 - trustOf(s)) * 0.1);
   // 계약 만료 → 연봉 협상 (기한 안에 답이 없으면 구단 제시액으로)
   if (s.team && !s.nego && s.day > (s.team.contractUntil ?? Infinity)) startNego(s);
   if (s.nego && s.day > s.nego.until) signContract(s, s.nego.offer, "답을 미루다");
@@ -1171,8 +1190,8 @@ export function nextDay(s: RookieState) {
     }
   }
   // 프로: 가끔 다른 구단에서 스카웃 제안
-  // 프로: 가끔 다른 구단에서 스카웃 제안 (입단·이적 뒤 반년은 없음, 많아야 달마다 20%)
-  if (s.team && !s.team.loan && x.d === 15 && !transferLocked(s) && rand() < Math.min(0.2, ((sumStats(s.stats) - 5500) / 4000 + s.fame / 8000) * (agentOf(s)?.offers ?? 1))) {
+  // 프로: 가끔 다른 구단에서 스카웃 제안 (입단·이적 뒤 1년은 없음, 많아야 달마다 8%)
+  if (s.team && !s.team.loan && x.d === 15 && !transferLocked(s) && rand() < Math.min(0.08, ((sumStats(s.stats) - 5500) / 4000 + s.fame / 8000) * (agentOf(s)?.offers ?? 1))) {
     const t = pick(PRO_TEAMS.filter(t => t.id !== s.team!.team));
     // 제안 월급은 지금 월급이 아니라 시장 가치 기준 (이적을 반복해 월급이 불어나지 않게)
     const salary = Math.round(marketValue(s) * (1 + rand() * 0.25));
@@ -1182,6 +1201,7 @@ export function nextDay(s: RookieState) {
   }
   bodyCare(s);
   decline(s);
+  if (ymd(s.day).dow === 0) rollWeekForm(s);
   // 준프로 기간이 얼마 안 남았으면 미리 알림 (90·30·7일 전)
   if (s.status === "semipro" && s.semiproUntil !== undefined) {
     const left = s.semiproUntil - s.day;
@@ -1229,13 +1249,15 @@ export function nextDay(s: RookieState) {
  */
 export type StopKind = "event" | "free";
 /** 직접 나가야 하는 이벤트가 있는 날인지 (대회·커리지 매치·드래프트·팀 내 승강전) */
-export function eventStop(s: RookieState, day: number): "event" | "courage" | "draft" | "promo" | "war" | null {
+export function eventStop(s: RookieState, day: number): "event" | "courage" | "draft" | "promo" | "war" | "proleague" | null {
   if (s.events.some(e => e.day === day && e.registered && !e.result)) return "event";
   if (warAt(s, day)) return "war";
   const y = ymd(day).y;
   if (s.status !== "pro" && courageDays(y).includes(day) && !s.doneDays.includes(day)) return "courage";
   if (s.status === "semipro" && draftDay(y) === day && !s.doneDays.includes(day)) return "draft";
   if (s.team && isMonthEnd(day) && !s.doneDays.includes(day) && promoDue(s)) return "promo";
+  // 1군 프로리그 엔트리에 든 날: 직접 출전 (다른 걸 고르면 결과만 자동으로)
+  if (inEntry(s, day) && !s.doneDays.includes(day)) return "proleague";
   return null;
 }
 /** 이벤트가 없는 주에 직접 고르게 되는 요일 (수·토 먼저). 맨 처음 주는 월·목 */
@@ -1351,10 +1373,10 @@ export type Activity =
   | { kind: "clanTest"; id: string }
   | { kind: "tryout"; team: number }
   | { kind: "friendly"; watch?: number }
-  | { kind: "event"; id: number } | { kind: "courage" } | { kind: "draft" } | { kind: "promo" } | { kind: "war" };
+  | { kind: "event"; id: number } | { kind: "courage" } | { kind: "draft" } | { kind: "promo" } | { kind: "war" } | { kind: "proleague" };
 const ACT_TITLE: Record<Activity["kind"], string> = {
   lobby: "🎮 공방 연습", ladder: "⚔️ 래더", clan: "🛡️ 클랜 연습", internal: "🏢 팀 내부 연습", stream: "📺 방송", rest: "💤 휴식", work: "💼 아르바이트",
-  mentor: "📚 멘토 과외", clanTest: "📝 클랜 입단 시험", tryout: "📝 입단 테스트", event: "🏆 대회", courage: "🎓 커리지 매치", draft: "📋 드래프트", promo: "⬆️ 팀 내 승강전",
+  mentor: "📚 멘토 과외", clanTest: "📝 클랜 입단 시험", tryout: "📝 입단 테스트", event: "🏆 대회", courage: "🎓 커리지 매치", draft: "📋 드래프트", promo: "⬆️ 팀 내 승강전", proleague: "🏟️ 프로리그 출전",
   friendly: "🤝 친선경기", war: "⚔️ 클랜전",
 };
 
@@ -1415,13 +1437,14 @@ export function act(s: RookieState, a: Activity) {
     case "tryout": { const r = playTryout(s, a.team); res = { games: r.games, won: r.won }; break; }
     case "draft": res = playDraft(s) as unknown as Record<string, unknown>; break;
     case "promo": res = playPromo(s) as unknown as Record<string, unknown>; break;
+    case "proleague": res = { games: [playProleague(s)] }; break;
   }
   s.used = 0;
   // 클랜전 날 다른 걸 골랐으면 불참 (엔트리에 들었으면 기권패)
   if (warAt(s, day)) { autoWar(s); }
   // 오늘 열리는 대회에 신청해 놓고 다른 걸 골랐으면 불참 처리
   for (const e of s.events.filter(x => x.day === day && x.registered && !x.result)) { e.result = "불참"; log(s, "🚫", `${e.name}에 나가지 않았습니다 (불참)`); }
-  const reports = endDay(s, b, day, ["draft", "promo"].includes(a.kind) ? "event" : "chosen", ACT_TITLE[a.kind]);
+  const reports = endDay(s, b, day, ["draft", "promo", "proleague"].includes(a.kind) ? "event" : "chosen", ACT_TITLE[a.kind]);
   return { activity: a.kind, title: ACT_TITLE[a.kind], ...res, reports };
 }
 /** 오늘을 마치고 다음 선택일까지 자동으로 지나감 (날마다 리포트) */
@@ -1578,7 +1601,7 @@ export function todayInfo(s: RookieState) {
     goals: (s.goals?.list ?? []).map(g => { const [now, target] = goalProgress(s, g); return { text: g.text, done: !!g.done, now, target, reward: g.reward }; }),
     peerRank: s.retired ? 0 : myPeerRank(s),
     /** 몸 상태: 피로 · 부상 (남은 날) · 준프로 남은 날 */
-    body: { fatigue: Math.round(s.fatigue ?? 0), injury: injured(s) ? { name: s.injury!.name, left: s.injury!.until - s.day + 1 } : null },
+    body: { fatigue: Math.round(s.fatigue ?? 0), injury: injured(s) ? { name: s.injury!.name, left: s.injury!.until - s.day + 1 } : null, gear: gearPenalty(s), weekForm: weekFormOf(s) },
     semiproLeft: s.status === "semipro" && s.semiproUntil !== undefined ? s.semiproUntil - s.day : null,
     /** 프로 생활: 승강전 조건 · 명단 제외 누적 · 이적 가능까지 남은 날 */
     pro: s.team ? { promoDue: promoDue(s), promoReady: promoReady(s), missed: s.team.missed ?? 0, transferIn: transferLocked(s) ? s.team.joined + PRO_RULES.transferLock - s.day : 0, squadDays: s.day - (s.team.squadSince ?? s.team.joined) } : null,

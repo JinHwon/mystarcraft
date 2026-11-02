@@ -7,7 +7,7 @@ import { STAT_KEYS, STAT_LABELS, type StatKey } from "@shared/gameConstants";
 import { ORIG_TEAMS } from "@shared/career/originalData";
 import { CLAN_BY_ID, STAT_MAX_ONE, STAT_MIN_ONE, capOf, sumStats, ymd, type RookieState } from "@shared/rookie/model";
 import { TRAITS, formAvg, type TraitKey } from "@shared/rookie/persona";
-import { RookieError, addTrust, hireAgent, myRole, trustOf } from "./logic";
+import { RookieError, addTrust, clanScoutTarget, hireAgent, joinClan, marketValue, myRole, transferLocked, trustOf } from "./logic";
 import { AGENTS, agentOf } from "@shared/rookie/squad";
 import { MAIL_FROM, pendingMail, type Mail, type MailChoice, type MailFrom } from "@shared/rookie/inbox";
 
@@ -18,7 +18,8 @@ const pick = <T>(arr: T[]) => arr[Math.floor(rand() * arr.length)];
 /** 메일함 최대 보관 수 (답을 기다리는 메일은 지우지 않음) */
 const INBOX_MAX = 60;
 /** 같은 틀이 다시 오기까지 (일) */
-const COOLDOWN = 21;
+/** 같은 종류 메일이 다시 오기까지 (일) */
+const COOLDOWN = 30;
 
 // ── 효과 ──────────────────────────────────────────────────────
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(v)));
@@ -81,6 +82,28 @@ const weakest = (s: RookieState) => [...STAT_KEYS].sort((a, b) => s.stats[a] - s
 const randomStats = (n: number) => [...STAT_KEYS].sort(() => rand() - 0.5).slice(0, n);
 
 const TEMPLATES: Tpl[] = [
+  {
+    // 다른 클랜의 영입 제안: 더 높은 단계 클랜이 먼저 연락 (받으면 시험 없이 바로 이적)
+    id: "clan_offer", from: "clan", weight: 2, when: s => clanScoutTarget(s) !== null,
+    make: s => {
+      const id = clanScoutTarget(s)!, c = CLAN_BY_ID[id];
+      return {
+        sender: `${c.name}[${c.tag}] 길드장`, title: `${c.name}에서 영입 제안`,
+        body: `요즘 경기 잘 보고 있습니다. 우리 ${c.name}(${c.tier}단계)에 들어올 생각 없어요? 입단 시험 없이 바로 받아 줄게요.${s.clan ? ` (지금 클랜 ${CLAN_BY_ID[s.clan.id]?.name}에서는 탈퇴하게 됩니다)` : ""}`,
+        choices: [{ id: "join", label: "들어가겠습니다", hint: "클랜 이적" }, { id: "no", label: "지금은 괜찮습니다" }],
+        data: { clan: id },
+        days: 7,
+      };
+    },
+    resolve: (s, c, d) => {
+      const id = String(d.clan);
+      if (c !== "join") { morale(s, 1); return "정중히 거절했습니다. 사기 +1"; }
+      if (s.war) return "클랜전 중이라 지금은 옮길 수 없었습니다";
+      if (s.clan?.id === id) return "이미 그 클랜 소속입니다";
+      joinClan(s, id, "영입 제안을 받아들여");
+      return `${CLAN_BY_ID[id]?.name}[${CLAN_BY_ID[id]?.tag}]에 들어갔습니다!`;
+    },
+  },
   {
     id: "coach_night", from: "coach", weight: 3, when: s => !!s.team,
     make: s => ({
@@ -372,7 +395,7 @@ const TEMPLATES: Tpl[] = [
     },
   },
   {
-    id: "agent_pitch", from: "agent", weight: 3, when: s => !!s.agent && !!s.team && !s.team.loan && s.offers.length === 0,
+    id: "agent_pitch", from: "agent", weight: 2, when: s => !!s.agent && !!s.team && !s.team.loan && s.offers.length === 0 && !transferLocked(s),
     make: s => {
       const others = ORIG_TEAMS.filter(t => t.id < 12 && t.id !== s.team!.team);
       const team = pick(others).id;
@@ -387,7 +410,7 @@ const TEMPLATES: Tpl[] = [
       if (!s.team) return "지금은 소속 구단이 없어 넘겼습니다";
       if (c === "yes") {
         const team = Number(d.team), a = agentOf(s);
-        const salary = Math.round(s.team.salary * (1.15 + rand() * 0.25 + (a?.nego ?? 0) / 2));
+        const salary = Math.round(marketValue(s) * (1 + rand() * 0.2 + (a?.nego ?? 0) / 2));
         s.offers.push({ team, salary, until: s.day + 7 });
         return `${ORIG_TEAMS[team].name}이(가) 월급 ${salary}만원을 제시했습니다. 일주일 안에 구단 화면에서 결정하세요`;
       }
@@ -417,7 +440,8 @@ function applyNoChoice(s: RookieState, id: string) {
 
 /** 하루에 한 번: 조건이 맞는 메일 하나 (확률). 같은 메일은 3주 안에 다시 오지 않음 */
 export function dailyMail(s: RookieState) {
-  const busy = s.team || s.clan ? 0.42 : 0.32;
+  // 하루에 메일이 올 확률 (예전 0.32~0.42 → 너무 잦아서 줄임: 대략 일주일에 한 통)
+  const busy = s.team || s.clan ? 0.17 : 0.13;
   if (rand() >= busy) return null;
   const cd = (s.mailCd ??= {});
   const ok = TEMPLATES.filter(t => (cd[t.id] ?? -999) + COOLDOWN <= s.day && t.when(s));
@@ -454,10 +478,17 @@ export function answerMail(s: RookieState, id: number, choice: string, auto = fa
   return m;
 }
 
-/** 기한이 지난 메일은 마지막 선택으로 자동 처리 */
+/** 답하지 않고 기한이 지난 메일 (선택 id) */
+export const NO_REPLY = "_none";
+/**
+ * 기한이 지난 메일은 답하지 않은 것으로: 아무 영향 없음
+ * (예전에는 마지막 선택으로 자동 처리해서, 메일을 안 열면 코치 신뢰도 등이 저절로 깎였음)
+ */
 export function expireMails(s: RookieState) {
   for (const m of s.inbox ?? []) {
-    if (pendingMail(m) && m.until !== undefined && s.day > m.until) answerMail(s, m.id, m.choices![m.choices!.length - 1].id, true);
+    if (!pendingMail(m) || m.until === undefined || s.day <= m.until) continue;
+    m.picked = NO_REPLY;
+    m.result = "답하지 않고 넘어갔습니다";
   }
 }
 

@@ -101,7 +101,7 @@ const activitySchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("clanTest"), id: z.string().max(30) }),
   z.object({ kind: z.literal("tryout"), team: z.number().int() }),
   z.object({ kind: z.literal("event"), id: z.number().int() }),
-  z.object({ kind: z.literal("courage") }), z.object({ kind: z.literal("draft") }), z.object({ kind: z.literal("promo") }),
+  z.object({ kind: z.literal("courage") }), z.object({ kind: z.literal("draft") }), z.object({ kind: z.literal("promo") }), z.object({ kind: z.literal("proleague") }),
 ]);
 
 export const rookieRouter = router({

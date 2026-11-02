@@ -3,7 +3,7 @@
  */
 import { STAT_KEYS, STAT_LABELS, type StatKey } from "@shared/gameConstants";
 import { ORIG_TEAMS } from "@shared/career/originalData";
-import { PRO_RULES, TRYOUT_MIN, RACES, SEMIPRO_DAYS, capOf, dateText, isMonthEnd, nickname, statsAround, sumStats, ymd, MENTOR_PRICE, dayOf, withTag, type Opp, type RookieState, type Stats } from "@shared/rookie/model";
+import { PRO_RULES, TRYOUT_MIN, weekFormOf, RACES, SEMIPRO_DAYS, capOf, dateText, isMonthEnd, nickname, statsAround, sumStats, ymd, MENTOR_PRICE, dayOf, withTag, type Opp, type RookieState, type Stats } from "@shared/rookie/model";
 import { clanProIds } from "@shared/rookie/pros";
 import { notify, sendMail } from "./inbox";
 import { AGENTS, CLAUSES, LOAN_DAYS, PROMISE_BONUS, PROMISE_MIN, ROLES, TALK_COOLDOWN, agentOf, roleOf, type Clause, type Role } from "@shared/rookie/squad";
@@ -26,7 +26,6 @@ export function playInternal(s: RookieState) {
   const opp = teammate(s);
   const g = playOne(s, opp, randomMap(), "팀 내부 연습");
   s.team[g.winner === "a" ? "monthW" : "monthL"]++;
-  trustFromRating(s, g.rating, false);
   gainExp(s, g.winner === "a" ? 10 : 3);
   mark(s, "🏢", g.winner === "a");
   log(s, g.winner === "a" ? "🏢" : "💧", `내부 연습 vs ${opp.name} ${g.winner === "a" ? "승리" : "패배"}`);
@@ -82,16 +81,20 @@ export function proleagueDay(day: number) {
   return [3, 4, 5, 6, 9, 10, 11, 12].includes(x.m) && (x.dow === 0 || x.dow === 6);
 }
 /** 1군이면 오늘 프로리그 엔트리에 드는지 (능력치·컨디션 순위 + 운) */
-export function inEntry(s: RookieState) {
-  if (!s.team || s.team.squad !== 1 || !proleagueDay(s.day)) return false;
+export function inEntry(s: RookieState, day = s.day) {
+  if (!s.team || s.team.squad !== 1 || !proleagueDay(day)) return false;
   // 역할(신뢰도·팀 내 순위)에 따른 출전 확률 + 출전 보장 조항·면담 약속, 컨디션이 바닥이면 빠짐
   let p = ROLES[myRole(s)!].entry;
-  if (s.team.clause?.kind === "promise" || (s.team.promiseUntil ?? -1) >= s.day) p += PROMISE_BONUS;
+  if (s.team.clause?.kind === "promise" || (s.team.promiseUntil ?? -1) >= day) p += PROMISE_BONUS;
   if (s.cond < 35) p -= 0.25;
+  // 이번 주 컨디션 난조면 빠지기 쉽고, 포텐셜 폭발이면 들기 쉬움 · 슬럼프도
+  const wf = weekFormOf({ weekForm: s.weekForm, day });
+  if (wf < 1) p -= 0.25; else if (wf > 1) p += 0.15;
+  if (s.form?.kind === "slump") p -= 0.15;
   // 부상 중이면 감독이 빼 줌
   if (injured(s)) return false;
   // 같은 날 다시 물어도 같은 답 (날짜로 고정)
-  const luck = ((s.day * 9301 + 49297) % 233280) / 233280;
+  const luck = ((day * 9301 + 49297) % 233280) / 233280;
   return luck < p;
 }
 
@@ -114,11 +117,28 @@ export function myRole(s: RookieState): Role | null {
   if (!s.team || s.team.squad !== 1) return null;
   return roleOf(squadRank(s), trustOf(s));
 }
-/** 경기 평점으로 신뢰도 (프로리그는 크게, 내부 연습은 작게) */
-function trustFromRating(s: RookieState, rating: number | undefined, big: boolean) {
+/**
+ * 프로리그 한 경기의 평점으로 신뢰도 (이기면 적어도 +1)
+ * 내부 연습은 판마다가 아니라 한 달 성적으로 평가 (monthlyTrust) — 판마다 하면 연습량이 많아 오르내림이 너무 큼
+ */
+function trustFromRating(s: RookieState, rating: number | undefined, won: boolean) {
   if (rating === undefined || !s.team) return;
-  const k = big ? 1 : 0.5;
-  addTrust(s, (rating >= 8 ? 5 : rating >= 7.2 ? 3 : rating >= 6.3 ? 0 : rating >= 5.5 ? -2 : -4) * k);
+  const d = rating >= 8 ? 5 : rating >= 7.2 ? 3 : rating >= 6.3 ? 1 : rating >= 5.5 ? -1 : -3;
+  addTrust(s, won ? Math.max(1, d) : Math.min(0, d));
+}
+/**
+ * 매달 1일, 지난달 팀 내부 연습 성적으로 코치 평가 (월말 승강전 뒤, 전적을 지우기 전에)
+ * 승률 65%↑ +8 · 55%↑ +5 · 45%↑ +2 · 35%↑ -2 · 그 아래 -5 (10판 미만은 평가 안 함)
+ */
+export function monthlyTrust(s: RookieState) {
+  const t = s.team;
+  if (!t || t.loan) return;
+  const n = t.monthW + t.monthL;
+  if (n < 10) return;
+  const r = t.monthW / n;
+  const d = r >= 0.65 ? 8 : r >= 0.55 ? 5 : r >= 0.45 ? 2 : r >= 0.35 ? -2 : -5;
+  addTrust(s, d);
+  log(s, d > 0 ? "📈" : "📉", `코치 월간 평가: 지난달 팀 연습 ${t.monthW}승 ${t.monthL}패 (${Math.round(r * 100)}%) → 신뢰도 ${d > 0 ? "+" : ""}${d} (지금 ${trustOf(s)})`);
 }
 
 /** 감독 면담: 출전 기회 요구 (2주에 한 번). 신뢰·폼이 좋으면 한 달 출전 약속, 아니면 신뢰·사기 하락 */
@@ -267,7 +287,7 @@ export function playProleague(s: RookieState, auto = false) {
   if (bonus) { s.money += bonus; g.fx.money = 20 + bonus; }
   s.team!.monthPro = (s.team!.monthPro ?? 0) + 1;
   s.team!.missed = 0; s.team!.lastCalled = s.day;
-  trustFromRating(s, g.rating, true);
+  trustFromRating(s, g.rating, won);
   if (s.team!.loan && g.rating !== undefined) { s.team!.loan.sum += g.rating; s.team!.loan.n++; }
   if (!opp.rival) fan(s, won ? "plWin" : "plLose", vsTeam.name);
   mark(s, "🏟️", won);
@@ -275,7 +295,7 @@ export function playProleague(s: RookieState, auto = false) {
   return g;
 }
 
-/** 이적을 알아볼 수 없는 기간인지 (입단·이적 뒤 반년, 단 출전 약속 위반·오래 기회를 못 받았으면 풀림) */
+/** 다른 구단의 이적 제안이 오지 않는 기간인지 (입단·이적 뒤 1년, 단 출전 약속 위반·오래 기회를 못 받았으면 풀림) */
 export function transferLocked(s: RookieState) {
   const t = s.team;
   if (!t) return false;
@@ -289,10 +309,15 @@ export function requestTransfer(s: RookieState, team: number) {
   if (!s.team) throw new RookieError("구단 소속이 아닙니다");
   if (team === s.team.team || !PRO_TEAMS.some(t => t.id === team)) throw new RookieError("이적할 구단을 고르세요");
   if (s.team.loan) throw new RookieError("임대 중에는 이적을 알아볼 수 없습니다");
-  if (transferLocked(s)) throw new RookieError(`입단·이적하고 ${PRO_RULES.transferLock}일이 지나야 이적을 알아볼 수 있습니다 (${s.team.joined + PRO_RULES.transferLock - s.day}일 남음 · 1군에서 오래 기회를 못 받으면 바로 가능)`);
   useSlots(s, 1);
   // 출전 보장 약속을 어긴 구단이면 들킬 걱정 없음, 에이전트가 있으면 덜 들킴
   const free = (s.flags?.freeTransfer ?? -1) >= s.day;
+  // 직접 이적을 알아보면 지금 팀이 서운해함 (입단 1년 안이면 더, 약속을 어긴 구단이면 없음)
+  if (!free) {
+    const hurt = transferLocked(s) ? PRO_RULES.requestTrustEarly : PRO_RULES.requestTrust;
+    addTrust(s, -hurt);
+    log(s, "😒", `다른 구단을 알아보는 걸 코치진이 눈치챘습니다 · 코치 신뢰도 -${hurt}`);
+  }
   const caught = !free && rand() < (s.agent ? 0.12 : 0.25);
   if (caught) {
     s.team.caught = (s.team.caught ?? 0) + 1;
@@ -327,13 +352,15 @@ export function acceptOffer(s: RookieState, team: number) {
   const o = s.offers.find(x => x.team === team && x.until >= s.day);
   if (!o || (!s.team && !s.fa)) throw new RookieError("받은 이적 제안이 아닙니다");
   const from = s.team ? ORIG_TEAMS[s.team.team].name : "FA";
-  s.team = { team, squad: 2, joined: s.day, salary: o.salary, monthW: 0, monthL: 0, contractUntil: contractEnd(s.day), trust: 50, squadSince: s.day };
+  // 그 팀 1군 꼴찌만큼 강하면 1군으로 영입 (아니면 2군부터)
+  const squad: 1 | 2 = sumStats(s.stats) >= sumStats(weakestFirst(team).stats) ? 1 : 2;
+  s.team = { team, squad, joined: s.day, salary: o.salary, monthW: 0, monthL: 0, contractUntil: contractEnd(s.day), trust: squad === 1 ? 55 : 50, squadSince: s.day, ...(squad === 1 ? { lastCalled: s.day, missed: 0 } : {}) };
   s.status = "pro";
   s.offers = [];
   delete s.fa;
   delete s.nego;
   s.titles.unshift(`${dateText(s.day)} ${from} → ${ORIG_TEAMS[team].name} ${from === "FA" ? "입단" : "이적"}`);
-  log(s, "✈️", `${ORIG_TEAMS[team].name}(으)로 ${from === "FA" ? "입단" : "이적"}했습니다 (월급 ${o.salary}만원 · 2군부터)`);
+  log(s, "✈️", `${ORIG_TEAMS[team].name}(으)로 ${from === "FA" ? "입단" : "이적"}했습니다 (월급 ${o.salary}만원 · ${squad}군)`);
   fan(s, "transfer", ORIG_TEAMS[team].name);
   mark(s, "✈️");
   return { ok: true };

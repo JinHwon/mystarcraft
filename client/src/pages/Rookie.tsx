@@ -167,7 +167,10 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
   // 알림 띠
   const banners: ReactNode[] = [];
   const waitMail = (s.inbox ?? []).filter(pendingMail).length, newMail = (s.inbox ?? []).filter(m => !m.read).length;
-  if (waitMail || newMail) banners.push(<Banner key="mail" icon="📬" title={waitMail ? `답장을 기다리는 메일 ${waitMail}통` : `새 메일 ${newMail}통`} desc={waitMail ? "기한 안에 답하지 않으면 무난한 답으로 자동 처리됩니다" : "코치·기자·팬에게서 연락이 왔습니다"} action="메일함" onClick={() => open("mail")} />);
+  if (waitMail || newMail) banners.push(<Banner key="mail" icon="📬" title={waitMail ? `답장을 기다리는 메일 ${waitMail}통` : `새 메일 ${newMail}통`} desc={waitMail ? "기한 안에 답하지 않으면 그냥 넘어갑니다 (답장해야 보상·신뢰가 생겨요)" : "코치·기자·팬에게서 연락이 왔습니다"} action="메일함" onClick={() => open("mail")} />);
+  // 장비가 없으면 경기력이 떨어짐 (돈 쓸 곳) · 이번 주 컨디션
+  if (today.body.gear < 1) banners.push(<Banner key="gear" icon="🖱️" title={`장비 부족: 경기력 -${Math.round((1 - today.body.gear) * 100)}%`} desc={`마우스 -4% · 키보드 -3% · 모니터 -1%${s.team ? "" : " (아마추어는 PC방 장비라 절반)"} · 상점에서 장비를 사 착용하세요 (경기한 날마다 닳음)`} action="상점" onClick={() => go("shop")} />);
+  if (today.body.weekForm !== 1) banners.push(<Banner key="wf" icon={today.body.weekForm < 1 ? "🥶" : "🔥"} title={today.body.weekForm < 1 ? `이번 주 컨디션 난조 (경기력 -${Math.round((1 - today.body.weekForm) * 100)}%)` : `이번 주 포텐셜 폭발! (경기력 +${Math.round((today.body.weekForm - 1) * 100)}%)`} desc={today.body.weekForm < 1 ? `일요일에 새로 정해집니다${s.team ? " · 감독이 프로리그 엔트리에서 뺄 수도 있어요" : ""}` : `이번 주 중요한 경기를 노려 보세요${s.team ? " · 프로리그 엔트리에 들기 쉬워요" : ""}`} action="확인" onClick={() => go("home")} />);
   if (today.body.injury) banners.push(<Banner key="inj" icon="🩹" title={`부상: ${today.body.injury.name} (${today.body.injury.left}일 남음)`} desc="연습 경기를 할 수 없고, 큰 경기에 나가도 경기력이 떨어집니다. 쉬면서 회복하세요" action="일정" onClick={() => go("home")} />);
   else if (today.body.fatigue >= 60) banners.push(<Banner key="fat" icon="🥵" title={`피로 ${today.body.fatigue} · 무리하고 있어요`} desc="피로가 쌓이면 경기력이 떨어지고, 65를 넘으면 부상 위험이 생깁니다. 휴식으로 크게 풀 수 있어요" action="쉬기" onClick={() => go("home")} />);
   if (today.semiproLeft !== null && today.semiproLeft <= 90) banners.push(<Banner key="sp" icon="⏳" title={`준프로 자격 ${today.semiproLeft}일 남음`} desc="그 전에 드래프트에 뽑히거나 입단 테스트를 통과하지 못하면 아마추어로 돌아갑니다" action="구단" onClick={() => go("more", "team")} />);
@@ -304,7 +307,7 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
 }
 const ACT_NAMES: Record<Activity["kind"], string> = {
   lobby: "공방 연습", ladder: "래더", clan: "클랜 연습", internal: "팀 내부 연습", stream: "방송", rest: "휴식", work: "아르바이트",
-  mentor: "멘토 과외", clanTest: "클랜 입단 시험", tryout: "입단 테스트", event: "대회", courage: "커리지 매치", draft: "드래프트", promo: "승강전", friendly: "친선경기", war: "클랜전",
+  mentor: "멘토 과외", clanTest: "클랜 입단 시험", tryout: "입단 테스트", event: "대회", courage: "커리지 매치", draft: "드래프트", promo: "승강전", friendly: "친선경기", war: "클랜전", proleague: "프로리그 출전",
 };
 
 /** 아래 탭 */
@@ -447,7 +450,7 @@ function ShopView({ s }: { s: RookieState }) {
       <input value={q} onChange={e => setQ(e.target.value)} placeholder="🔍 아이템 이름·효과 검색" className="w-full rounded-xl bg-card border border-border px-3 py-1.5 text-sm text-foreground" />
       {isEquipTab && (
         <div className="rounded-xl bg-sky-500/10 border border-sky-400/40 px-3 py-2 text-[12px] text-foreground flex items-center gap-2">
-          {eq ? <><ItemIcon k={eq.key} /><span className="flex-1">착용 중: <b>{ITEM_BY_KEY[eq.key]?.name}</b> <span className="text-muted-foreground">({eq.left}판 남음)</span></span></> : <span className="text-muted-foreground">{SLOT_NAMES[tab as keyof typeof SLOT_NAMES]} 착용 안 함</span>}
+          {eq ? <><ItemIcon k={eq.key} /><span className="flex-1">착용 중: <b>{ITEM_BY_KEY[eq.key]?.name}</b> <span className="text-muted-foreground">(경기한 날 기준 {eq.left}일 남음)</span></span></> : <span className="text-muted-foreground">{SLOT_NAMES[tab as keyof typeof SLOT_NAMES]} 착용 안 함</span>}
         </div>
       )}
       <div className="rounded-2xl bg-card border border-border p-2.5 space-y-1.5">
@@ -470,7 +473,7 @@ function ShopView({ s }: { s: RookieState }) {
             <ItemIcon k={it.key} />
             <div className="flex-1 min-w-0">
               <div className="text-[13px] font-bold text-foreground truncate">{it.name}</div>
-              <div className="text-[10.5px] text-muted-foreground truncate">{isEquipTab ? `${it.effect.join(" ")} (효과 절반 · ${(it.uses ?? 10) * 2}판)` : tab === "stock" ? `컨디션 +${(it.cond ?? 3) * 2}` : `${it.effect.join(" ")} (효과 절반)`}</div>
+              <div className="text-[10.5px] text-muted-foreground truncate">{isEquipTab ? `${it.effect.join(" ")} (효과 70% · 경기한 날 ${(it.uses ?? 10) * 2}일)` : tab === "stock" ? `컨디션 +${(it.cond ?? 3) * 2}` : `${it.effect.join(" ")} (효과 절반)`}</div>
             </div>
             <button onClick={() => buy.mutate({ key: it.key, qty: 1 })} disabled={buy.isPending || s.money < price(it.key)} className="shrink-0 rounded-lg bg-amber-500 text-black text-xs font-black px-2.5 py-1.5 disabled:opacity-40">{price(it.key)}만</button>
           </div>
@@ -563,6 +566,8 @@ function TeamView({ s, today, onWatch }: { s: RookieState; today: RookieToday; o
         <div>· 1군: 프로리그 기간(3~6월, 9~12월) 주말에 엔트리에 들면 출전(승리 수당 20만원), 못 들어도 벤치에 앉으면 관전·사기↑</div>
         <div>· 엔트리·벤치에 오래 못 들면 사기·능력치가 떨어지고, {PRO_RULES.releaseMissed}경기일이 쌓이면 방출(FA) → {PRO_RULES.faDays}일 안에 새 팀을 못 찾으면 준프로</div>
         <div>· 2군에서 1년 넘게 못 올라오고 신뢰도가 낮아도 방출될 수 있습니다</div>
+        <div>· 코치 신뢰도: 매달 팀 연습 승률로 평가 (65%↑ +8 · 55%↑ +5 · 45%↑ +2 · 35%↑ -2 · 그 아래 -5), 프로리그 경기 평점, 메일 답장 · 50 아래면 조금씩 회복</div>
+        <div>· 다른 구단의 이적 제안은 입단·이적 뒤 1년 동안 오지 않습니다{today.pro?.transferIn ? ` (${today.pro.transferIn}일 남음)` : ""} · 직접 지원은 언제든 가능</div>
         {today.pro && t.squad === 1 && today.pro.missed > 0 && <div className={today.pro.missed >= PRO_RULES.warnMissed ? "text-rose-300" : "text-amber-200"}>· 지금 {today.pro.missed}경기일째 명단 제외 (방출까지 {PRO_RULES.releaseMissed - today.pro.missed})</div>}
       </div>
       {t.bench && <button onClick={() => onWatch(t.bench!.game as PlayedGame, t.bench!.label)} className="w-full rounded-xl border border-sky-400/50 bg-sky-500/10 py-2 text-sm font-bold text-sky-200">🪑 {dateText(t.bench.day).slice(5)} 벤치에서 본 경기 다시 보기</button>}
@@ -571,10 +576,10 @@ function TeamView({ s, today, onWatch }: { s: RookieState; today: RookieToday; o
       <OfferList s={s} accept={team => accept.mutate({ team })} />
       <AgentCard s={s} />
       <div className="rounded-2xl bg-card border border-border p-3 space-y-1.5">
-        <div className="text-sm font-bold text-foreground">✈️ 다른 구단에 이적 요청 <span className="text-[10.5px] text-rose-300">{today.pro?.transferIn ? `입단·이적 뒤 반년은 불가 (${today.pro.transferIn}일 남음)` : "구단에 들키면 벌금·사기 하락, 두 번 들키면 방출!"}</span></div>
+        <div className="text-sm font-bold text-foreground">✈️ 다른 구단에 이적 요청 <span className="text-[10.5px] text-rose-300">{`직접 알아보면 코치 신뢰도 -${today.pro?.transferIn ? PRO_RULES.requestTrustEarly : PRO_RULES.requestTrust} · 구단에 들키면 벌금, 두 번이면 방출!`}</span></div>
         <div className="grid grid-cols-3 gap-1.5">
           {PRO_TEAMS.filter(x => x.id !== t.team).map(x => (
-            <button key={x.id} onClick={() => confirm(`${x.name}에 몰래 이적을 알아볼까요? (25% 확률로 구단에 들킴)`) && req.mutate({ team: x.id })} disabled={req.isPending || s.used >= DAY_SLOTS || !!today.pro?.transferIn}
+            <button key={x.id} onClick={() => confirm(`${x.name}에 몰래 이적을 알아볼까요? (지금 팀 코치 신뢰도 -${today.pro?.transferIn ? PRO_RULES.requestTrustEarly : PRO_RULES.requestTrust} · 25% 확률로 구단에 들킴)`) && req.mutate({ team: x.id })} disabled={req.isPending || s.used >= DAY_SLOTS}
               className="rounded-xl bg-muted/40 border border-border p-1.5 flex flex-col items-center disabled:opacity-40">
               <TeamLogo team={x} className="w-[46px] h-[27px]" />
               <span className="text-[10px] text-foreground truncate w-full text-center">{x.name}</span>

@@ -50,17 +50,37 @@ export function clanTest(s: RookieState, id: string) {
   const opp: Opp = withCond({ name: withTag(ex.name, c.tag), race: ex.race, stats: { ...ex.stats } });
   const res = series(s, opp, 2, `${c.name} 입단 시험`);
   for (const g of res.games) mark(s, "🛡️", g.winner === "a");
-  if (res.won) {
-    const from = s.clan ? CLAN_BY_ID[s.clan.id]?.name : undefined;
-    s.clan = { id, joined: s.day, points: 0, w: 0, l: 0, members: rosterOf(id), ...({ rv: ROSTER_VER } as object) };
-    s.fame += c.tier * 6;
-    s.titles.unshift(`${dateText(s.day)} 클랜 ${c.name}[${c.tag}] 가입`);
-    log(s, "🛡️", `${c.name} 입단 시험 통과! 클랜 [${c.tag}]에 들어갔습니다${from ? ` (${from} 탈퇴)` : ""}`);
-    revealTrait(s, "클랜장 첫인상");
-    gainExp(s, 80 + c.tier * 40);
-  } else log(s, "💧", `${c.name} 입단 시험에서 떨어졌습니다 (${CLAN_RETRY_DAYS}일 뒤 재도전)`);
+  if (res.won) joinClan(s, id, "입단 시험 통과!");
+  else log(s, "💧", `${c.name} 입단 시험에서 떨어졌습니다 (${CLAN_RETRY_DAYS}일 뒤 재도전)`);
   return { games: res.games, won: res.won };
 }
+/** 클랜 가입 (입단 시험 통과 · 다른 클랜의 영입 제안 수락) — 있던 클랜은 탈퇴 */
+export function joinClan(s: RookieState, id: string, how: string) {
+  const c = CLAN_BY_ID[id];
+  const from = s.clan ? CLAN_BY_ID[s.clan.id]?.name : undefined;
+  if (s.clan) (s.flags ??= {}).clanLeft = s.day;
+  s.clan = { id, joined: s.day, points: 0, w: 0, l: 0, members: rosterOf(id), ...({ rv: ROSTER_VER } as object) };
+  s.fame += c.tier * 6;
+  s.titles.unshift(`${dateText(s.day)} 클랜 ${c.name}[${c.tag}] 가입`);
+  log(s, "🛡️", `${how} 클랜 ${c.name}[${c.tag}]에 들어갔습니다${from ? ` (${from} 탈퇴)` : ""}`);
+  revealTrait(s, "클랜장 첫인상");
+  gainExp(s, 80 + c.tier * 40);
+}
+
+/**
+ * 다른 클랜의 영입 제안 후보: 지금 클랜보다 높은 단계(없으면 아무 단계)이고, 능력치가 그 클랜 기준에 거의 닿는 곳
+ * 클랜을 옮긴 지 60일이 안 됐거나 클랜전 중이면 없음
+ */
+export function clanScoutTarget(s: RookieState): string | null {
+  if (s.war) return null;
+  const moved = Math.max(s.flags?.clanLeft ?? -999, s.clan?.joined ?? -999);
+  if (s.day - moved < CLAN_MOVE_DAYS) return null;
+  const myTier = s.clan ? CLAN_BY_ID[s.clan.id]?.tier ?? 0 : 0;
+  const total = sumStats(s.stats);
+  const ok = CLANS.filter(c => c.id !== s.clan?.id && c.tier > myTier && total >= c.req.total * 0.95);
+  return ok.length ? ok[Math.floor(rand() * ok.length)].id : null;
+}
+
 export function leaveClan(s: RookieState) {
   if (!s.clan) throw new RookieError("클랜 소속이 아닙니다");
   if (s.war) throw new RookieError("클랜전이 진행 중일 때는 탈퇴할 수 없습니다");
