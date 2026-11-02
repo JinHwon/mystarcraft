@@ -138,6 +138,13 @@ export function withEvenFatigue<T>(fn: () => T): T {
   evenFatigue = true;
   try { return fn(); } finally { evenFatigue = prev; }
 }
+/** 개인리그 PC방 예선: 전적(승패·종족전·상대 전적)에 넣지 않음 */
+let noRecord = false;
+export function withoutRecord<T>(fn: () => T): T {
+  const prev = noRecord;
+  noRecord = true;
+  try { return fn(); } finally { noRecord = prev; }
+}
 /** 2부 리그 경기: 오르는 폭에 나이별 배율 (어릴수록 크게), 어린 선수는 져도 덜 떨어짐 */
 let youthMode = false;
 export function withStageGrowth<T>(mul: number, fn: () => T, youth = false): T {
@@ -163,15 +170,17 @@ function afterSet(s: CareerState, a: CPlayer, b: CPlayer, aWin: boolean, mods?: 
   // 능력치 변동은 세트 전 능력치로 계산 (두 선수 동시에)
   const da = setDeltas(a, b, aWin, content?.[0], duration, !aWin && !!mods?.a?.gum);
   const db = setDeltas(b, a, !aWin, content?.[1], duration, aWin && !!mods?.b?.gum);
-  w.wins++; w.sWins++; l.losses++; l.sLosses++;
-  w.vs = { ...w.vs, [l.race]: [(w.vs?.[l.race]?.[0] ?? 0) + 1, w.vs?.[l.race]?.[1] ?? 0] };
-  l.vs = { ...l.vs, [w.race]: [l.vs?.[w.race]?.[0] ?? 0, (l.vs?.[w.race]?.[1] ?? 0) + 1] };
-  w.sVs = { ...w.sVs, [l.race]: [(w.sVs?.[l.race]?.[0] ?? 0) + 1, w.sVs?.[l.race]?.[1] ?? 0] };
-  l.sVs = { ...l.sVs, [w.race]: [l.sVs?.[w.race]?.[0] ?? 0, (l.sVs?.[w.race]?.[1] ?? 0) + 1] };
-  if (w.team === s.myTeam) w.h2h = { ...w.h2h, [l.id]: [(w.h2h?.[l.id]?.[0] ?? 0) + 1, w.h2h?.[l.id]?.[1] ?? 0] };
-  if (l.team === s.myTeam) l.h2h = { ...l.h2h, [w.id]: [l.h2h?.[w.id]?.[0] ?? 0, (l.h2h?.[w.id]?.[1] ?? 0) + 1] };
-  if (w.team === s.myTeam) addSeasonH2h(s, w, l.id, 0);
-  if (l.team === s.myTeam) addSeasonH2h(s, l, w.id, 1);
+  if (!noRecord) {
+    w.wins++; w.sWins++; l.losses++; l.sLosses++;
+    w.vs = { ...w.vs, [l.race]: [(w.vs?.[l.race]?.[0] ?? 0) + 1, w.vs?.[l.race]?.[1] ?? 0] };
+    l.vs = { ...l.vs, [w.race]: [l.vs?.[w.race]?.[0] ?? 0, (l.vs?.[w.race]?.[1] ?? 0) + 1] };
+    w.sVs = { ...w.sVs, [l.race]: [(w.sVs?.[l.race]?.[0] ?? 0) + 1, w.sVs?.[l.race]?.[1] ?? 0] };
+    l.sVs = { ...l.sVs, [w.race]: [l.sVs?.[w.race]?.[0] ?? 0, (l.sVs?.[w.race]?.[1] ?? 0) + 1] };
+    if (w.team === s.myTeam) w.h2h = { ...w.h2h, [l.id]: [(w.h2h?.[l.id]?.[0] ?? 0) + 1, w.h2h?.[l.id]?.[1] ?? 0] };
+    if (l.team === s.myTeam) l.h2h = { ...l.h2h, [w.id]: [l.h2h?.[w.id]?.[0] ?? 0, (l.h2h?.[w.id]?.[1] ?? 0) + 1] };
+    if (w.team === s.myTeam) addSeasonH2h(s, w, l.id, 0);
+    if (l.team === s.myTeam) addSeasonH2h(s, l, w.id, 1);
+  }
   // 컨디션 유지 이벤트: 우리 선수는 지치지 않음
   // 포텐셜 폭발(예: 114%)도 떨어진 컨디션만큼 줄어듦 (100% 이하가 되면 끝)
   const burstBefore = { a: burstOf(s, a), b: burstOf(s, b) };

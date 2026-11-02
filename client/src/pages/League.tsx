@@ -238,7 +238,7 @@ function MatchTab({ s }: { s: CareerState }) {
       <div className="space-y-3">
         <div className="rounded-2xl bg-violet-500/15 border border-violet-400/40 p-4 text-center space-y-1">
           <div className="text-3xl">🎤</div>
-          <div className="font-black text-foreground">마이스타리그 조 지명식</div>
+          <div className="font-black text-foreground">{s.msl2?.season === s.season && s.msl2.stage === "nom" && s.msl2.draft ? INDIV_SHORT[s.msl2.league ?? "msl"] : "마이스타리그"} 조 지명식</div>
           <div className="text-xs text-muted-foreground">우리 선수가 조장입니다. 차례가 오면 같은 조에 넣을 선수를 직접 지명하세요.</div>
         </div>
         <button onClick={() => setShowNom(true)} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-violet-500 to-fuchsia-600 text-white font-black">🎤 조 지명식 진행</button>

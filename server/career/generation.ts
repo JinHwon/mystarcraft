@@ -94,7 +94,9 @@ function originalStats(id: number): Record<StatKey, number> | undefined {
 /** 신인 등장: 은퇴 3시즌이 지난 선수는 어린 신인으로 다시, 모자라면 새 이름 신인 */
 export function rookies(s: CareerState, retiredNow: number) {
   const out: CPlayer[] = [];
-  const legends = shuffle(s.players.filter(p => p.retired !== undefined && p.retired <= s.season - 3 && !p.reborn)).slice(0, 6);
+  // 임의 선수 제외 게임: 새 이름 신인 없이 원작 선수의 재림만 (그만큼 재림을 더 많이)
+  const noRandom = !!s.options?.noRandom;
+  const legends = shuffle(s.players.filter(p => p.retired !== undefined && p.retired <= s.season - 3 && !p.reborn)).slice(0, noRandom ? 12 : 6);
   for (const old of legends) {
     old.reborn = true;
     const photo = old.photoOf ?? old.id;
@@ -102,13 +104,14 @@ export function rookies(s: CareerState, retiredNow: number) {
     const stats = Object.fromEntries(STAT_KEYS.map(k => [k, clampStat(orig[k] * (0.62 + rand() * 0.12))])) as Record<StatKey, number>;
     out.push(makeRookie(s, { name: old.name, race: old.race, gender: old.gender, stats, photoOf: photo, potential: Math.round(totalOf(orig) * (0.92 + rand() * 0.2)) }));
   }
-  const fresh = Math.max(4, retiredNow + 2 - out.length);
+  const fresh = noRandom ? 0 : Math.max(4, retiredNow + 2 - out.length);
   for (let i = 0; i < fresh; i++) {
     const races: Race[] = ["terran", "zerg", "protoss"];
     const stats = Object.fromEntries(STAT_KEYS.map(k => [k, randInt(380, 600)])) as Record<StatKey, number>;
     out.push(makeRookie(s, { name: newName(s), race: races[randInt(0, 2)], stats, potential: randInt(4700, 6900) }));
   }
   const best = [...out].sort((a, b) => (b.potential ?? 0) - (a.potential ?? 0)).slice(0, 3);
+  if (!out.length) return out;
   news(s, `🌱 신인 ${out.length}명 등장! 주목할 유망주: ${best.map(p => `${p.name}(${p.rookie === s.season && p.photoOf !== undefined ? "레전드의 재림" : "신예"})`).join(", ")} — 이적시장 스카웃에서 확인`);
   return out;
 }

@@ -678,7 +678,7 @@ export function ScheduleScreen({ s, onClose }: { s: CareerState; onClose: () => 
   );
 }
 
-/** 마이스타리그 조 지명식: 우리 조장 차례에 직접 지명 (다른 조장은 자동) */
+/** 조 지명식 (마이스타리그 · MSL · OSL): 우리 조장 차례에 직접 지명 (다른 조장은 자동) */
 /** onClose: ✕ (나중에 계속), onDone: 지명이 끝나고 확인 (없으면 onClose) */
 export function NominationScreen({ s, onClose, onDone }: { s: CareerState; onClose: () => void; onDone?: () => void }) {
   const patch = useCareerPatch();
@@ -690,8 +690,10 @@ export function NominationScreen({ s, onClose, onDone }: { s: CareerState; onClo
   });
   // 들어오면 우리 차례까지 진행
   useEffect(() => { nom.mutate(undefined); }, []);
-  const m = s.msl;
+  // 지명식이 열린 대회 (MSL·OSL 지명식이 진행 중이면 그쪽, 아니면 마이스타리그)
+  const m = [s.msl2, s.msl].find(x => x && x.season === s.season && x.stage === "nom" && x.draft) ?? s.msl;
   const d = m?.draft;
+  const lname = INDIV_SHORT[m?.league ?? "mysl"];
   if (!m || !d) return (
     <LegacyFrame season={s.season} onBack={onClose}><div className="p-6 text-center text-neutral-400 text-[13px]">{err ?? "조 지명식을 준비하고 있습니다..."}</div></LegacyFrame>
   );
@@ -712,8 +714,8 @@ export function NominationScreen({ s, onClose, onDone }: { s: CareerState; onClo
       nextLabel={done ? "확인 ▷▷" : myTurn ? (sel !== undefined ? `${s.players[sel].name} 지명 ▷▷` : "지명할 선수를 고르세요") : "진행 ▷▷"}>
       <div className="px-3 pt-3 pb-4">
         <div className="flex flex-col items-center gap-1">
-          <LegacyImg dir="로고" name="MySL" className="max-h-12 object-contain" fallback={<div className="text-[18px] italic font-black text-[#c9a0ff]">MySL</div>} />
-          <div className="text-[15px] tracking-[0.2em]">마이스타리그 조 지명식</div>
+          {m.league ? <div className="text-[22px] italic font-black text-[#ffe45c]">{lname}</div> : <LegacyImg dir="로고" name="MySL" className="max-h-12 object-contain" fallback={<div className="text-[18px] italic font-black text-[#c9a0ff]">MySL</div>} />}
+          <div className="text-[15px] tracking-[0.2em]">{lname} 조 지명식</div>
           <div className="text-[12px] text-[#ffe45c]">{done ? "지명 완료 — 32강 조 편성" : `${round + 1}라운드 · ${G[gi]}조 ${s.players[head!].name} 선수 차례${myTurn ? " (우리 선수!)" : ""}`}</div>
         </div>
         {err && <div className="mt-2 border border-[#ff6b6b] text-[#ffb8c8] text-center text-[12px] py-1">{err}</div>}

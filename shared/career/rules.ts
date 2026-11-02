@@ -58,6 +58,12 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyRule> = {
   normal: { name: "중급", startMoney: 1, income: 1, cost: 1, debtWeeks: 3, aiItem: 1, desc: "기본 난이도 (지금까지의 규칙)" },
   hard: { name: "고급", startMoney: 0.6, income: 0.8, cost: 1.15, debtWeeks: 2, vitaPerMatch: 1, aiItem: 1.4, desc: "시작 자금 0.6배 · 수입 0.8배 · 연봉·운영비 15% 증가 · 적자 2주면 해체 · 비타비타는 경기 전 선수당 1개 · 다른 팀 아이템 더 씀" },
 };
+/** 새 게임에서만 정하는 옵션 (진행 중인 게임은 바꿀 수 없음) */
+export interface CareerOptions { noVirtual?: boolean; noRandom?: boolean }
+/** 원작 데이터에 들어 있는 가상 선수 (실존 프로게이머가 아님) */
+export const VIRTUAL_PLAYERS = ["카이", "별", "신모군"];
+/** 임의 선수 제외 게임의 2부 팀 인원 (원작 무소속 선수만으로 채울 수 있게: 12팀 × 7명) */
+export const NO_RANDOM_B_ROSTER = 7;
 export const difficultyOf = (s: { difficulty?: Difficulty }): DifficultyRule => DIFFICULTIES[s.difficulty ?? "normal"];
 export const START_MONEY = 3000;
 export const WEEKLY_SPONSOR = 100;
@@ -697,6 +703,8 @@ export interface CareerState {
   outbox?: OutRequest[];
   /** 난이도 (없으면 중급) */
   difficulty?: Difficulty;
+  /** 새 게임 옵션: 가상 선수(카이·별·신모군) 제외 · 임의로 만든 선수(새 이름 신인·2부 신예) 제외 */
+  options?: CareerOptions;
   /** 구단 시설 단계 (훈련장·숙소·분석실·팬 서비스, 0~5) */
   facilities?: Partial<Record<import("./facilities").FacilityKey, number>>;
   /** 이적료 합의된 영입 대상 (선수 → 합의 내용, 이번 주만 유효) */

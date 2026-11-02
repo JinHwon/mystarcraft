@@ -15,6 +15,7 @@ import {
   B_DEVELOPMENT_BONUS_OTHER,
   B_MAX_ROSTER,
   B_MIN_ROSTER,
+  NO_RANDOM_B_ROSTER,
   B_ROSTER_TARGET,
   B_TEAM_OFFSET,
   MAX_ROSTER,
@@ -38,7 +39,8 @@ const KEEP_FREE_AGENTS = 18;
 
 /** 팀 인원 한도 (2부는 최소 8명) */
 export function rosterLimits(s: CareerState, team: number) {
-  return divOf(s, team) === 2 ? { min: B_MIN_ROSTER, max: B_MAX_ROSTER } : { min: SQUAD_MIN, max: MAX_ROSTER };
+  // 임의 선수를 빼고 시작한 게임은 원작 선수만으로 2부를 채우므로 최소 인원이 7명
+  return divOf(s, team) === 2 ? { min: s.options?.noRandom ? NO_RANDOM_B_ROSTER : B_MIN_ROSTER, max: B_MAX_ROSTER } : { min: SQUAD_MIN, max: MAX_ROSTER };
 }
 
 /** 우리 구단의 B팀 (1부 구단 감독일 때) */
@@ -123,7 +125,7 @@ export function fillBRosters(s: CareerState, initial = false) {
   // 우리 1부 팀도 최소 인원(계약 만료·은퇴로 줄었을 때)까지
   const mine1 = !initial && divOf(s, s.myTeam) === 1 ? [s.teams[s.myTeam]] : [];
   for (const t of [...divTeams(s, 2), ...mine1]) {
-    const target = t.id === s.myTeam && !initial ? rosterLimits(s, t.id).min : B_ROSTER_TARGET;
+    const target = t.id === s.myTeam && !initial ? rosterLimits(s, t.id).min : s.options?.noRandom ? NO_RANDOM_B_ROSTER : B_ROSTER_TARGET;
     const n = target - rosterOf(s, t.id).length;
     if (n > 0) need.set(t.id, n);
   }
@@ -132,7 +134,8 @@ export function fillBRosters(s: CareerState, initial = false) {
   // 우리가 영입 연락을 보내 답을 기다리는 무소속 선수는 남겨 둠
   const contacted = new Set((s.outbox ?? []).filter(r => r.kind === "scout" && !r.reply).map(r => r.player));
   const free = () => s.players.filter(p => p.team === FREE_AGENT_TEAM && !contacted.has(p.id));
-  const short = total + KEEP_FREE_AGENTS - free().length;
+  // 임의 선수 제외: 무소속 여유분 없이, 정말 모자랄 때(인원 미달)만 신예를 만듦
+  const short = total + (s.options?.noRandom ? 0 : KEEP_FREE_AGENTS) - free().length;
   if (short > 0) prospects(s, short);
   // 어린 선수 우선 (2부는 육성 리그), 같은 나이면 강한 순
   const pool = free()
