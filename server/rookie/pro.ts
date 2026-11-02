@@ -3,7 +3,7 @@
  */
 import { STAT_KEYS, STAT_LABELS, type StatKey } from "@shared/gameConstants";
 import { ORIG_TEAMS } from "@shared/career/originalData";
-import { PRO_RULES, TRYOUT_MIN, RACES, SEMIPRO_DAYS, capOf, dateText, isMonthEnd, nickname, statsAround, sumStats, ymd, MENTOR_PRICE, dayOf, withTag, type Opp, type RookieState, type Stats } from "@shared/rookie/model";
+import { PRO_RULES, TRYOUT_MIN, weekFormOf, RACES, SEMIPRO_DAYS, capOf, dateText, isMonthEnd, nickname, statsAround, sumStats, ymd, MENTOR_PRICE, dayOf, withTag, type Opp, type RookieState, type Stats } from "@shared/rookie/model";
 import { clanProIds } from "@shared/rookie/pros";
 import { notify, sendMail } from "./inbox";
 import { AGENTS, CLAUSES, LOAN_DAYS, PROMISE_BONUS, PROMISE_MIN, ROLES, TALK_COOLDOWN, agentOf, roleOf, type Clause, type Role } from "@shared/rookie/squad";
@@ -87,6 +87,10 @@ export function inEntry(s: RookieState, day = s.day) {
   let p = ROLES[myRole(s)!].entry;
   if (s.team.clause?.kind === "promise" || (s.team.promiseUntil ?? -1) >= day) p += PROMISE_BONUS;
   if (s.cond < 35) p -= 0.25;
+  // 이번 주 컨디션 난조면 빠지기 쉽고, 포텐셜 폭발이면 들기 쉬움 · 슬럼프도
+  const wf = weekFormOf({ weekForm: s.weekForm, day });
+  if (wf < 1) p -= 0.25; else if (wf > 1) p += 0.15;
+  if (s.form?.kind === "slump") p -= 0.15;
   // 부상 중이면 감독이 빼 줌
   if (injured(s)) return false;
   // 같은 날 다시 물어도 같은 답 (날짜로 고정)

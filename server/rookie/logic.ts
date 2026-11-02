@@ -13,7 +13,7 @@ import {
   LADDER_START, RACES, ROOKIE_BONUS, ROOKIE_PRICE, ROOKIE_USES, SEMIPRO_DAYS, STATUS_NAMES, STAT_MAX_ONE, STAT_MIN_ONE, TIERS, TIER_ORDER, TRYOUT_MIN,
   VITA_PER_DAY, capOf, courageDays, dateText, draftDay, isMonthEnd, ladderGrade, nickname, statsAround, sumStats, ymd, ACHIEVEMENTS, STAT_CAP,
   emptyCounts, rollStats, CLAN_BY_ID, mapUnd, LADDER_REQ, MAX_LEVEL, eventReq, levelNeed, withTag, LEVEL_CAP_BONUS, type Concept, type Opp,
-  PRO_RULES, FATIGUE, INJURY_PERF, INJURIES, fatiguePerf, type RookieEvent, type RookieState, type Stats, type Tier, type Rival,
+  gearPenalty, weekFormOf, PRO_RULES, FATIGUE, INJURY_PERF, INJURIES, fatiguePerf, type RookieEvent, type RookieState, type Stats, type Tier, type Rival,
 } from "@shared/rookie/model";
 import { simulateSet } from "../gameSimulation";
 import { mapAdvantage } from "../career/core";
@@ -192,8 +192,10 @@ function gear(s: RookieState): Stats {
   const out = Object.fromEntries(STAT_KEYS.map(k => [k, 0])) as Stats;
   for (const e of Object.values(s.equip)) {
     const it = e && ITEM_BY_KEY[e.key];
-    if (!it?.bonus) continue;
-    for (const [k, v] of Object.entries(it.bonus)) out[k as StatKey] += Math.round((v ?? 0) * ROOKIE_BONUS);
+    if (!it) continue;
+    // 전체 능력치 장비(반지·목걸이 등)도 반영
+    if (it.all) for (const k of STAT_KEYS) out[k] += Math.round(it.all * ROOKIE_BONUS);
+    for (const [k, v] of Object.entries(it.bonus ?? {})) out[k as StatKey] += Math.round((v ?? 0) * ROOKIE_BONUS);
   }
   return out;
 }
@@ -306,7 +308,6 @@ export function playOne(s: RookieState, opp: Opp, mapId: number, label: string, 
   const det = s.persona?.det ?? 10;
   s.morale = Math.max(0, Math.min(100, s.morale + (won ? 2 : det >= 15 ? -1 : det <= 6 ? -3 : -2)));
   s.record[won ? "w" : "l"]++;
-  wearEquip(s);
   afterGame(s, opp, won);
   const rating = rateGame(s, opp, won, r.duration, perf);
   recordRating(s, kind, won, rating, `${label} vs ${opp.name}`);
@@ -329,6 +330,8 @@ function dayPerf(s: RookieState, kind: GameKind) {
   // 혹사: 피로가 쌓이면 경기력↓, 부상 중이면 더
   perf *= fatiguePerf(s.fatigue);
   if (injured(s)) perf *= INJURY_PERF;
+  // 장비가 없으면 · 이번 주 컨디션 난조/포텐셜 폭발
+  perf *= gearPenalty(s) * weekFormOf(s);
   return perf;
 }
 
@@ -492,6 +495,7 @@ function awaken(s: RookieState, how: string) {
   mark(s, "🦅");
 }
 
+/** 장비는 경기한 날마다 하루씩 닳음 (판마다 닳으면 며칠 만에 없어져 너무 비쌌음) */
 function wearEquip(s: RookieState) {
   for (const [slot, e] of Object.entries(s.equip)) {
     if (!e) continue;
@@ -1046,6 +1050,19 @@ export function setTitle(s: RookieState, id: string | null) {
 }
 
 // ── 다음 날 ───────────────────────────────────────────────────
+/** 주마다 컨디션: 12% 난조 (경기력 -8~15%) · 7% 포텐셜 폭발 (+6~10%) — 그 주 내내, 프로리그 엔트리에도 반영 */
+export function rollWeekForm(s: RookieState) {
+  const r = rand();
+  const week = weekStartOf(s.day);
+  if (r < 0.12) {
+    s.weekForm = { week, mul: 1 - randInt(8, 15) / 100 };
+    log(s, "🥶", `이번 주는 컨디션 난조입니다 (경기력 -${Math.round((1 - s.weekForm.mul) * 100)}%)${s.team ? " · 감독이 엔트리에서 뺄 수도 있어요" : ""}`);
+  } else if (r < 0.19) {
+    s.weekForm = { week, mul: 1 + randInt(6, 10) / 100 };
+    log(s, "🔥", `이번 주는 포텐셜 폭발! (경기력 +${Math.round((s.weekForm.mul - 1) * 100)}%)`);
+  } else delete s.weekForm;
+}
+
 /**
  * 능력치가 떨어지는 흐름
  * - 감각: 4일 넘게 경기를 안 하면 가끔 능력치 하나 -1
@@ -1097,6 +1114,8 @@ export function nextDay(s: RookieState) {
   // 오늘 1군 프로리그 엔트리였는데 안 했으면 자동으로 치름
   if (inEntry(s) && !s.doneDays.includes(s.day)) playProleague(s, true);
   else benchDay(s);
+  // 오늘 경기를 했으면 장비가 하루 닳음
+  if (s.flags?.lastGame === s.day) wearEquip(s);
   s.day++;
   s.used = 0;
   s.vitaToday = 0;
@@ -1182,6 +1201,7 @@ export function nextDay(s: RookieState) {
   }
   bodyCare(s);
   decline(s);
+  if (ymd(s.day).dow === 0) rollWeekForm(s);
   // 준프로 기간이 얼마 안 남았으면 미리 알림 (90·30·7일 전)
   if (s.status === "semipro" && s.semiproUntil !== undefined) {
     const left = s.semiproUntil - s.day;
@@ -1581,7 +1601,7 @@ export function todayInfo(s: RookieState) {
     goals: (s.goals?.list ?? []).map(g => { const [now, target] = goalProgress(s, g); return { text: g.text, done: !!g.done, now, target, reward: g.reward }; }),
     peerRank: s.retired ? 0 : myPeerRank(s),
     /** 몸 상태: 피로 · 부상 (남은 날) · 준프로 남은 날 */
-    body: { fatigue: Math.round(s.fatigue ?? 0), injury: injured(s) ? { name: s.injury!.name, left: s.injury!.until - s.day + 1 } : null },
+    body: { fatigue: Math.round(s.fatigue ?? 0), injury: injured(s) ? { name: s.injury!.name, left: s.injury!.until - s.day + 1 } : null, gear: gearPenalty(s), weekForm: weekFormOf(s) },
     semiproLeft: s.status === "semipro" && s.semiproUntil !== undefined ? s.semiproUntil - s.day : null,
     /** 프로 생활: 승강전 조건 · 명단 제외 누적 · 이적 가능까지 남은 날 */
     pro: s.team ? { promoDue: promoDue(s), promoReady: promoReady(s), missed: s.team.missed ?? 0, transferIn: transferLocked(s) ? s.team.joined + PRO_RULES.transferLock - s.day : 0, squadDays: s.day - (s.team.squadSince ?? s.team.joined) } : null,

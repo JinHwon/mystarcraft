@@ -168,6 +168,9 @@ function Hub({ s, today, onRestart }: { s: RookieState; today: RookieToday; onRe
   const banners: ReactNode[] = [];
   const waitMail = (s.inbox ?? []).filter(pendingMail).length, newMail = (s.inbox ?? []).filter(m => !m.read).length;
   if (waitMail || newMail) banners.push(<Banner key="mail" icon="📬" title={waitMail ? `답장을 기다리는 메일 ${waitMail}통` : `새 메일 ${newMail}통`} desc={waitMail ? "기한 안에 답하지 않으면 그냥 넘어갑니다 (답장해야 보상·신뢰가 생겨요)" : "코치·기자·팬에게서 연락이 왔습니다"} action="메일함" onClick={() => open("mail")} />);
+  // 장비가 없으면 경기력이 떨어짐 (돈 쓸 곳) · 이번 주 컨디션
+  if (today.body.gear < 1) banners.push(<Banner key="gear" icon="🖱️" title={`장비 부족: 경기력 -${Math.round((1 - today.body.gear) * 100)}%`} desc={`마우스 -4% · 키보드 -3% · 모니터 -1%${s.team ? "" : " (아마추어는 PC방 장비라 절반)"} · 상점에서 장비를 사 착용하세요 (경기한 날마다 닳음)`} action="상점" onClick={() => go("shop")} />);
+  if (today.body.weekForm !== 1) banners.push(<Banner key="wf" icon={today.body.weekForm < 1 ? "🥶" : "🔥"} title={today.body.weekForm < 1 ? `이번 주 컨디션 난조 (경기력 -${Math.round((1 - today.body.weekForm) * 100)}%)` : `이번 주 포텐셜 폭발! (경기력 +${Math.round((today.body.weekForm - 1) * 100)}%)`} desc={today.body.weekForm < 1 ? `일요일에 새로 정해집니다${s.team ? " · 감독이 프로리그 엔트리에서 뺄 수도 있어요" : ""}` : `이번 주 중요한 경기를 노려 보세요${s.team ? " · 프로리그 엔트리에 들기 쉬워요" : ""}`} action="확인" onClick={() => go("home")} />);
   if (today.body.injury) banners.push(<Banner key="inj" icon="🩹" title={`부상: ${today.body.injury.name} (${today.body.injury.left}일 남음)`} desc="연습 경기를 할 수 없고, 큰 경기에 나가도 경기력이 떨어집니다. 쉬면서 회복하세요" action="일정" onClick={() => go("home")} />);
   else if (today.body.fatigue >= 60) banners.push(<Banner key="fat" icon="🥵" title={`피로 ${today.body.fatigue} · 무리하고 있어요`} desc="피로가 쌓이면 경기력이 떨어지고, 65를 넘으면 부상 위험이 생깁니다. 휴식으로 크게 풀 수 있어요" action="쉬기" onClick={() => go("home")} />);
   if (today.semiproLeft !== null && today.semiproLeft <= 90) banners.push(<Banner key="sp" icon="⏳" title={`준프로 자격 ${today.semiproLeft}일 남음`} desc="그 전에 드래프트에 뽑히거나 입단 테스트를 통과하지 못하면 아마추어로 돌아갑니다" action="구단" onClick={() => go("more", "team")} />);
@@ -447,7 +450,7 @@ function ShopView({ s }: { s: RookieState }) {
       <input value={q} onChange={e => setQ(e.target.value)} placeholder="🔍 아이템 이름·효과 검색" className="w-full rounded-xl bg-card border border-border px-3 py-1.5 text-sm text-foreground" />
       {isEquipTab && (
         <div className="rounded-xl bg-sky-500/10 border border-sky-400/40 px-3 py-2 text-[12px] text-foreground flex items-center gap-2">
-          {eq ? <><ItemIcon k={eq.key} /><span className="flex-1">착용 중: <b>{ITEM_BY_KEY[eq.key]?.name}</b> <span className="text-muted-foreground">({eq.left}판 남음)</span></span></> : <span className="text-muted-foreground">{SLOT_NAMES[tab as keyof typeof SLOT_NAMES]} 착용 안 함</span>}
+          {eq ? <><ItemIcon k={eq.key} /><span className="flex-1">착용 중: <b>{ITEM_BY_KEY[eq.key]?.name}</b> <span className="text-muted-foreground">(경기한 날 기준 {eq.left}일 남음)</span></span></> : <span className="text-muted-foreground">{SLOT_NAMES[tab as keyof typeof SLOT_NAMES]} 착용 안 함</span>}
         </div>
       )}
       <div className="rounded-2xl bg-card border border-border p-2.5 space-y-1.5">
@@ -470,7 +473,7 @@ function ShopView({ s }: { s: RookieState }) {
             <ItemIcon k={it.key} />
             <div className="flex-1 min-w-0">
               <div className="text-[13px] font-bold text-foreground truncate">{it.name}</div>
-              <div className="text-[10.5px] text-muted-foreground truncate">{isEquipTab ? `${it.effect.join(" ")} (효과 절반 · ${(it.uses ?? 10) * 2}판)` : tab === "stock" ? `컨디션 +${(it.cond ?? 3) * 2}` : `${it.effect.join(" ")} (효과 절반)`}</div>
+              <div className="text-[10.5px] text-muted-foreground truncate">{isEquipTab ? `${it.effect.join(" ")} (효과 70% · 경기한 날 ${(it.uses ?? 10) * 2}일)` : tab === "stock" ? `컨디션 +${(it.cond ?? 3) * 2}` : `${it.effect.join(" ")} (효과 절반)`}</div>
             </div>
             <button onClick={() => buy.mutate({ key: it.key, qty: 1 })} disabled={buy.isPending || s.money < price(it.key)} className="shrink-0 rounded-lg bg-amber-500 text-black text-xs font-black px-2.5 py-1.5 disabled:opacity-40">{price(it.key)}만</button>
           </div>

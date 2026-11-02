@@ -1139,3 +1139,50 @@ describe("메일 빈도 · 클랜 영입 제안", () => {
     expect(L.clanScoutTarget(s)).toBeNull();
   });
 });
+
+describe("장비 (돈 쓸 곳) · 주간 컨디션", () => {
+  it("장비가 없으면 경기력 감소 (프로 -8%, 아마추어는 PC방 장비라 절반)", async () => {
+    const { gearPenalty } = await import("@shared/rookie/model");
+    const s = mk();
+    s.equip = {};
+    expect(gearPenalty(s)).toBeCloseTo(0.96);
+    s.team = { team: 2, squad: 2, joined: 0, salary: 40, monthW: 0, monthL: 0 };
+    expect(gearPenalty(s)).toBeCloseTo(0.92);
+    s.equip = { mouse: { key: "m0", left: 5 }, keyboard: { key: "k0", left: 5 }, monitor: { key: "mon0", left: 5 } };
+    expect(gearPenalty(s)).toBe(1);
+  });
+
+  it("장비는 판마다가 아니라 경기한 날마다 하루씩 닳음", () => {
+    const s = mk();
+    s.equip = { mouse: { key: "m0", left: 2 } };
+    for (let i = 0; i < 6; i++) { s.used = 0; s.cond = 100; L.playLobby(s, "newbie", 0); }
+    expect(s.equip.mouse?.left).toBe(2);
+    L.nextDay(s);
+    expect(s.equip.mouse?.left).toBe(1);
+    L.nextDay(s); // 경기 안 한 날은 그대로
+    expect(s.equip.mouse?.left).toBe(1);
+  });
+
+  it("전체 능력치 장비도 효과가 있음", () => {
+    const s = mk();
+    const before = L.effective(s);
+    s.equip = { etc: { key: "e4", left: 10 } };
+    const after = L.effective(s);
+    expect(after.attack).toBeGreaterThan(before.attack);
+  });
+
+  it("주간 컨디션 난조면 프로리그 엔트리에 덜 듦", async () => {
+    const { weekStartOf } = await import("@shared/rookie/model");
+    const s = mk();
+    s.status = "pro"; s.day = 400;
+    s.team = { team: 2, squad: 1, joined: 0, salary: 120, monthW: 0, monthL: 0, trust: 65 };
+    const days = Array.from({ length: 400 }, (_, i) => 400 + i).filter(d => L.proleagueDay(d));
+    const count = (mul?: number) => days.filter(d => { s.weekForm = mul ? { week: weekStartOf(d), mul } : undefined; return L.inEntry(s, d); }).length;
+    expect(count(0.88)).toBeLessThan(count());
+    expect(count(1.08)).toBeGreaterThanOrEqual(count());
+    let n = 0;
+    for (let i = 0; i < 400; i++) { L.rollWeekForm(s); if (s.weekForm) n++; }
+    expect(n).toBeGreaterThan(30);
+    expect(n).toBeLessThan(140);
+  });
+});

@@ -353,7 +353,19 @@ export function clanRoster(c: ClanDef, proIds: number[]): ClanMember[] {
 /** 선수 키우기 상점 가격 배율 · 장비 사용 횟수 배율 · 장비 효과 배율 */
 export const ROOKIE_PRICE = 0.3;
 export const ROOKIE_USES = 2;
-export const ROOKIE_BONUS = 0.5;
+export const ROOKIE_BONUS = 0.7;
+/**
+ * 장비 없이 경기하면 경기력이 떨어짐 (돈 쓸 곳): 마우스 -4% · 키보드 -3% · 모니터 -1%
+ * 구단 소속이 아니면 PC방 장비를 쓰므로 절반만
+ */
+export const GEAR_MISSING = { mouse: 0.04, keyboard: 0.03, monitor: 0.01 } as const;
+export function gearPenalty(s: Pick<RookieState, "equip" | "team">): number {
+  let p = 0;
+  for (const [slot, v] of Object.entries(GEAR_MISSING)) if (!s.equip[slot as keyof typeof GEAR_MISSING]) p += v;
+  return 1 - (s.team ? p : p / 2);
+}
+/** 이번 주 컨디션 (감독 모드처럼): 난조면 경기력 -8~15%, 포텐셜 폭발이면 +6~10% */
+export const weekFormOf = (s: Pick<RookieState, "weekForm" | "day">) => (s.weekForm && s.weekForm.week === weekStartOf(s.day) ? s.weekForm.mul : 1);
 /** 하루에 먹을 수 있는 컨디션 회복 아이템 수 */
 export const VITA_PER_DAY = 10;
 
@@ -575,6 +587,8 @@ export interface RookieState {
   fatigue?: number;
   /** 부상 (이 날까지): 연습 경기를 못 하고 큰 경기에서 경기력↓ */
   injury?: { until: number; name: string };
+  /** 이번 주 컨디션 난조(1 미만)·포텐셜 폭발(1 초과): 그 주(일요일 시작) 동안 경기력 배율 */
+  weekForm?: { week: number; mul: number };
   /** 실제 하루(한국 시간)에 직접 고른 횟수 */
   quota?: { date: string; used: number };
   /** 처음 이룬 날 (관리자 통계·연말 리뷰용) */
